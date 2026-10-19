@@ -1,6 +1,7 @@
 <template>
-  <div class="gitmgr">
-    <div class="gcols">
+  <!-- Lấp đầy host: cột .page (route /git) hoặc thân modal Git của phiên. -->
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div class="flex min-h-0 flex-1 overflow-hidden">
       <GitSidebar
         v-if="!store.notARepo"
         :section="section"
@@ -32,7 +33,9 @@
         @resize="(w) => (sideW = w)"
       />
 
-      <div class="gmain">
+      <!-- Pane chính (phải sidebar): nền --background sâu nhất. Container query
+           `gitmain`: toolbar GitPageHeader co/wrap theo bề rộng PANE, không theo cửa sổ. -->
+      <div class="@container/gitmain flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
         <GitPageHeader
           :projects="store.projects"
           :current-project-id="store.currentProjectId"
@@ -66,12 +69,15 @@
           @skip="() => store.skipRebaseCommit()"
         />
 
-        <div v-if="store.isDetached" class="gbanner">
-          <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div
+          v-if="store.isDetached"
+          class="flex flex-none items-center gap-2 border-b border-warning/40 bg-warning/10 px-3.5 py-2 text-sm text-warning"
+        >
+          <Icon name="alert" class="size-3.5" />
           <span>{{ t('git.banner.detached', { at: store.detachedAt ?? '' }) }}</span>
         </div>
 
-        <div class="gbody">
+        <div class="flex min-h-0 flex-1 overflow-hidden">
           <!-- Not a git repository → offer `git init` + identity setup -->
           <GitInitEmptyState v-if="store.notARepo" />
 
@@ -97,8 +103,15 @@
               @context-file="(e, f, s) => openMenu(e, { kind: 'file', file: f, staged: s })"
               @context-folder="(e, p, s) => openMenu(e, { kind: 'folder', path: p, staged: s })"
             />
-            <div class="grsz" :class="{ drag: midDragging }" @pointerdown="onMidResize" />
-            <div class="detail">
+            <!-- Grip kéo đổi bề rộng cột danh sách (không phải control). -->
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              class="relative w-1.5 flex-none cursor-col-resize self-stretch after:absolute after:inset-y-0 after:left-0.5 after:w-px after:bg-border hover:after:w-0.5 hover:after:bg-primary"
+              :class="{ 'after:w-0.5 after:bg-primary': midDragging }"
+              @pointerdown="onMidResize"
+            />
+            <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
               <!-- Conflicted file → 2-way resolver (replaces the diff viewer). A
                    normal file row keeps the diff viewer + commit panel below. -->
               <GitConflictResolver
@@ -184,7 +197,9 @@
           />
 
           <!-- Fallback (submodule / unknown) -->
-          <div v-else class="gsecempty" style="padding: 40px">{{ t('git.sidebar.empty') }}</div>
+          <div v-else class="p-10 text-sm text-muted-foreground italic">
+            {{ t('git.sidebar.empty') }}
+          </div>
         </div>
       </div>
     </div>
@@ -1274,15 +1289,3 @@ onUnmounted(() => {
   store.unsubscribe()
 })
 </script>
-
-<style scoped>
-/* Fills its host: the .page column (full /git route) or the modal body. .gcols
-   already flexes to fill, so this just carries the height chain down. */
-.gitmgr {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-</style>

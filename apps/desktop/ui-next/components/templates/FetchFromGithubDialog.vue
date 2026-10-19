@@ -6,25 +6,30 @@
     :width="520"
     @close="emit('close')"
   >
-    <div class="tpd">
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.fetchDialog.url') }}</label>
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.fetchDialog.url') }}</Label>
         <Input
           v-model="url"
           :placeholder="t('templates.fetchDialog.urlPh')"
           spellcheck="false"
-          class="mono"
+          class="font-mono"
           @keydown.enter="onFetch"
         />
-        <div class="tpd-hint">{{ t('templates.fetchDialog.hint') }}</div>
+        <div class="text-xs text-dim">{{ t('templates.fetchDialog.hint') }}</div>
       </div>
 
-      <label class="tpd-check">
-        <input v-model="overwrite" type="checkbox" />
+      <label class="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+        <Checkbox :model-value="overwrite" @update:model-value="overwrite = $event === true" />
         <span>{{ t('templates.fetchDialog.overwrite') }}</span>
       </label>
 
-      <div v-if="error" class="tpd-error">{{ error }}</div>
+      <div
+        v-if="error"
+        class="rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
+        {{ error }}
+      </div>
     </div>
 
     <template #footer>
@@ -38,8 +43,7 @@
 
 <script setup lang="ts">
 // Fetch-from-GitHub dialog — import template bundle(s) from a public GitHub
-// folder (ADR 0037). Port of the old UI FetchFromGithubDialog, rendered in
-// prototype CSS inside LibraryEntityModal. Errors surface inline; requires the
+// folder (ADR 0037), rendered inside LibraryEntityModal. Errors surface inline; requires the
 // desktop app (no browser-dev network path — the store throws).
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
@@ -87,67 +91,3 @@ const onFetch = async () => {
   }
 }
 </script>
-
-<style scoped>
-.tpd {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.tpd-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tpd-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.tpd-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.tpd-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — repo slug / path */
-  font-family: var(--code);
-}
-.tpd-input:focus {
-  border-color: var(--accent);
-}
-.tpd-hint {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-.tpd-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.tpd-check input {
-  accent-color: var(--accent);
-}
-.tpd-error {
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

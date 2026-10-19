@@ -14,98 +14,134 @@
     @cancel="settle(false)"
   />
 
-  <Teleport to="body">
-    <div v-if="isOpen" class="ovl on icd-ovl" @click.self="settle(false)">
-      <div
-        class="icd-card"
-        :class="{ prod: isProduction }"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="titleText"
-      >
-        <!-- 1 — action + target -->
-        <div class="icd-head">
-          <Icon :name="isBlocked ? 'shield' : 'alert'" class="icd-icn" :class="{ dgr: isDanger }" />
-          <span class="icd-title">{{ titleText }}</span>
-        </div>
+  <!-- Hộp xác nhận hạ tầng: shadcn Dialog (role=dialog ⇒ OVERLAYS đã phủ). Esc / bấm
+       ngoài / nút X = huỷ qua `update:open`. z-580: confirm là lớp trên cùng — chạm
+       tới được cả khi đang mở preview (480), zoom ảnh (540) hay action-menu (570). -->
+  <Dialog :open="isOpen" @update:open="(v: boolean) => !v && settle(false)">
+    <DialogContent
+      class="z-580 flex w-120 max-w-[92vw] flex-col gap-3 bg-card p-4.5"
+      :class="{ 'border-destructive ring-1 ring-destructive': isProduction }"
+      :aria-label="titleText"
+      @open-auto-focus.prevent
+    >
+      <!-- 1 — action + target -->
+      <DialogHeader class="flex-row items-center gap-2 pr-8">
+        <Icon
+          :name="isBlocked ? 'shield' : 'alert'"
+          class="size-4 shrink-0"
+          :class="isDanger ? 'text-destructive' : 'text-primary'"
+        />
+        <DialogTitle class="text-lg font-semibold">{{ titleText }}</DialogTitle>
+      </DialogHeader>
 
-        <!-- 2 — the consequence, in plain language. Never a command line. -->
-        <p class="icd-conseq">{{ consequence }}</p>
+      <!-- 2 — the consequence, in plain language. Never a command line. -->
+      <DialogDescription class="text-base leading-relaxed text-foreground">
+        {{ consequence }}
+      </DialogDescription>
 
-        <!-- 3 — pinned context + the always-on "this gets logged" chip -->
-        <div class="icd-chips">
-          <span v-if="isProduction" class="icd-chip dgr">
-            <Icon name="alert" class="icd-chip-icn" />
-            {{ t('infra.confirm.production') }}
-          </span>
-          <span v-for="chip in contextChips" :key="chip.key" class="icd-chip">
-            <span class="icd-chip-k">{{ chip.label }}</span>
-            {{ chip.value }}
-          </span>
-          <span class="icd-chip">
-            <Icon name="book" class="icd-chip-icn" />
-            {{ t('infra.confirm.logged') }}
-          </span>
-        </div>
-
-        <p v-if="isBlocked" class="icd-blocked">{{ t('infra.confirm.blocked') }}</p>
-
-        <!-- 4 — the command itself, collapsed -->
-        <details class="icd-tech">
-          <summary class="icd-tech-sum">
-            <Icon name="chev-right" class="icd-tech-chev" />
-            {{ t('infra.confirm.tech') }}
-          </summary>
-          <pre class="icd-cmd">{{ command }}</pre>
-        </details>
-
-        <div v-if="needsTyping" class="icd-type">
-          <label class="icd-type-lbl" for="icd-type-input">
-            {{ t('infra.confirm.typeToConfirm', { name: typeWord }) }}
-          </label>
-          <Input
-            id="icd-type-input"
-            ref="typeInput"
-            v-model="typed"
-            autocomplete="off"
-            spellcheck="false"
-            :placeholder="typeWord"
-            @keydown.enter.prevent="onPrimary"
-          />
-        </div>
-
-        <!-- 5 — footer per variant -->
-        <div class="icd-foot">
-          <template v-if="isBlocked">
-            <Button variant="outline" @click="copyCommand">
-              <Icon name="copy" />
-              {{ copied ? t('common.copied') : t('infra.confirm.copyCommand') }}
-            </Button>
-            <Button ref="primaryBtn" variant="default" @click="settle(false)">
-              {{ t('common.close') }}
-            </Button>
-          </template>
-          <template v-else-if="isRead">
-            <Button ref="primaryBtn" variant="default" @click="settle(true)">
-              {{ t('infra.confirm.run') }}
-            </Button>
-          </template>
-          <template v-else>
-            <Button variant="outline" @click="settle(false)">{{ t('common.cancel') }}</Button>
-            <Button
-              ref="primaryBtn"
-              :class="isDanger ? 'icd-dgr-btn' : 'pri'"
-              :disabled="!canConfirm"
-              variant="outline"
-              @click="onPrimary"
-            >
-              {{ t('common.confirm') }}
-            </Button>
-          </template>
-        </div>
+      <!-- 3 — pinned context + the always-on "this gets logged" chip -->
+      <div class="flex flex-wrap gap-1.5">
+        <Badge
+          v-if="isProduction"
+          variant="outline"
+          class="rounded-md border-destructive/40 bg-destructive/10 font-semibold text-destructive"
+        >
+          <Icon name="alert" />
+          {{ t('infra.confirm.production') }}
+        </Badge>
+        <Badge
+          v-for="chip in contextChips"
+          :key="chip.key"
+          variant="outline"
+          class="rounded-md bg-muted font-normal text-muted-foreground"
+        >
+          <span class="text-dim">{{ chip.label }}</span>
+          {{ chip.value }}
+        </Badge>
+        <Badge variant="outline" class="rounded-md bg-muted font-normal text-muted-foreground">
+          <Icon name="book" />
+          {{ t('infra.confirm.logged') }}
+        </Badge>
       </div>
-    </div>
-  </Teleport>
+
+      <Alert
+        v-if="isBlocked"
+        variant="destructive"
+        class="border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm font-semibold"
+      >
+        <AlertDescription class="text-destructive">
+          {{ t('infra.confirm.blocked') }}
+        </AlertDescription>
+      </Alert>
+
+      <!-- 4 — the command itself, collapsed -->
+      <Collapsible v-model:open="techOpen" class="rounded-md border bg-muted">
+        <CollapsibleTrigger
+          class="flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-2 text-sm text-muted-foreground"
+        >
+          <Icon
+            name="chev-right"
+            class="size-3.5 shrink-0 transition-transform"
+            :class="{ 'rotate-90': techOpen }"
+          />
+          {{ t('infra.confirm.tech') }}
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <!-- mono: dòng lệnh CLI thật — người dùng copy thẳng vào terminal khi bị chặn -->
+          <pre
+            class="m-0 px-2.5 pb-2.5 font-mono text-sm break-all whitespace-pre-wrap text-foreground select-text"
+            >{{ command }}</pre
+          >
+        </CollapsibleContent>
+      </Collapsible>
+
+      <div v-if="needsTyping" class="flex flex-col gap-1.5">
+        <Label for="icd-type-input" class="font-normal text-muted-foreground">
+          {{ t('infra.confirm.typeToConfirm', { name: typeWord }) }}
+        </Label>
+        <!-- Retype-to-confirm giữ focus màu DANGER — ô này là một phần của cổng chặn. -->
+        <Input
+          id="icd-type-input"
+          ref="typeInput"
+          v-model="typed"
+          class="focus-visible:border-destructive focus-visible:ring-destructive"
+          autocomplete="off"
+          spellcheck="false"
+          :placeholder="typeWord"
+          @keydown.enter.prevent="onPrimary"
+        />
+      </div>
+
+      <!-- 5 — footer per variant -->
+      <DialogFooter>
+        <template v-if="isBlocked">
+          <Button variant="outline" @click="copyCommand">
+            <Icon name="copy" />
+            {{ copied ? t('common.copied') : t('infra.confirm.copyCommand') }}
+          </Button>
+          <Button ref="primaryBtn" variant="default" @click="settle(false)">
+            {{ t('common.close') }}
+          </Button>
+        </template>
+        <template v-else-if="isRead">
+          <Button ref="primaryBtn" variant="default" @click="settle(true)">
+            {{ t('infra.confirm.run') }}
+          </Button>
+        </template>
+        <template v-else>
+          <Button variant="outline" @click="settle(false)">{{ t('common.cancel') }}</Button>
+          <Button
+            ref="primaryBtn"
+            :variant="isDanger ? 'destructive' : 'default'"
+            :disabled="!canConfirm"
+            @click="onPrimary"
+          >
+            {{ t('common.confirm') }}
+          </Button>
+        </template>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -117,10 +153,8 @@
 // The footer is the only thing the command class changes:
 //   read        → one Run button        write       → Confirm + Cancel
 //   destructive → retype the name first  blocked     → copy the command, no run
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 const { state, settle } = useConfirm()
 const { t } = useI18n()
@@ -187,8 +221,10 @@ async function copyCommand() {
   }, 1600)
 }
 
-const typeInput = useTemplateRef<HTMLInputElement>('typeInput')
-const primaryBtn = useTemplateRef<HTMLButtonElement>('primaryBtn')
+const typeInput = useTemplateRef<{ focus: () => void }>('typeInput')
+// Button shadcn là component ⇒ template ref là instance, phần tử nằm ở `$el`.
+const primaryBtn = useTemplateRef<{ $el: HTMLElement }>('primaryBtn')
+const techOpen = ref(false)
 
 // Reset the per-open state, then park focus where the next keystroke belongs: the
 // retype field when there is one, the safe default button otherwise. Keyed on the
@@ -199,200 +235,11 @@ watch(infra, (payload) => {
   if (!payload) return
   typed.value = ''
   copied.value = false
-  nextTick(() => (needsTyping.value ? typeInput.value?.focus() : primaryBtn.value?.focus()))
+  techOpen.value = false
+  // Focus tự đặt ở đây (DialogContent chặn `open-auto-focus` của reka).
+  nextTick(() => (needsTyping.value ? typeInput.value?.focus() : primaryBtn.value?.$el?.focus()))
 })
 
-// Esc closes. LibraryConfirmDelete owns its own listener but only while ITS `open`
-// prop is true, so the two never both fire.
-function onKey(e: KeyboardEvent) {
-  if (isOpen.value && e.key === 'Escape') settle(false)
-}
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKey)
-  window.clearTimeout(copyTimer)
-})
+// Esc đóng qua reka Dialog (`update:open` → settle(false)), như LibraryConfirmDelete.
+onBeforeUnmount(() => window.clearTimeout(copyTimer))
 </script>
-
-<style scoped>
-/* Center the card (the shared .ovl aligns to top for the command palette), and match
-   LibraryConfirmDelete's z-index so an infra confirm raised from inside another modal
-   stacks above it. */
-.icd-ovl {
-  align-items: center;
-  padding-top: 0;
-  /* Confirm là lớp trên cùng: chạm tới được cả khi đang mở preview (480), zoom
-     ảnh (540) hay action-menu (570) — vượt hết band "trên-modal". */
-  z-index: 580;
-}
-.icd-card {
-  width: 480px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-lg);
-}
-/* Production: the whole box is outlined red, not just a word inside it. */
-.icd-card.prod {
-  border-color: var(--destructive);
-  /* Ring + elevation: the 1px danger outline is a STATE marker, not depth, so it
-     stays hardcoded and keeps its place in the list; only the shadow half migrates. */
-  box-shadow:
-    0 0 0 1px var(--destructive),
-    var(--shadow-lg);
-}
-.icd-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.icd-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-  color: var(--primary);
-}
-.icd-icn.dgr {
-  color: var(--destructive);
-}
-.icd-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--foreground);
-}
-.icd-conseq {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-  color: var(--foreground);
-}
-.icd-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.icd-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.icd-chip.dgr {
-  border-color: rgb(from var(--destructive) r g b / 0.42);
-  background: rgb(from var(--destructive) r g b / 0.1);
-  color: var(--destructive);
-  font-weight: 650;
-}
-.icd-chip-k {
-  color: var(--textDim);
-}
-.icd-chip-icn {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
-}
-.icd-blocked {
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid rgb(from var(--destructive) r g b / 0.42);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: rgb(from var(--destructive) r g b / 0.1);
-  color: var(--destructive);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-.icd-tech {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-}
-.icd-tech-sum {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
-  cursor: pointer;
-  list-style: none;
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.icd-tech-sum::-webkit-details-marker {
-  display: none;
-}
-.icd-tech-chev {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  transition: transform var(--dur-fast) var(--ease);
-}
-.icd-tech[open] .icd-tech-chev {
-  transform: rotate(90deg);
-}
-.icd-cmd {
-  margin: 0;
-  padding: 0 10px 10px;
-  /* mono-ok: dòng lệnh CLI thật — người dùng copy thẳng vào terminal khi bị chặn */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  color: var(--foreground);
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-}
-.icd-type {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.icd-type-lbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.icd-input {
-  width: 100%;
-  padding: 8px 11px;
-  background: var(--muted);
-  border: 1px solid var(--input);
-  border-radius: var(--r-sm); /* rounded-md */
-  outline: none;
-  color: var(--foreground);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-/* Retype-to-confirm keeps the DANGER focus — the field is part of the gate. */
-.icd-input:focus {
-  border-color: var(--destructive);
-}
-.icd-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.icd-foot .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.icd-dgr-btn {
-  background: var(--destructive);
-  color: var(--destructive-foreground);
-  border-color: transparent;
-  font-weight: 650;
-}
-</style>

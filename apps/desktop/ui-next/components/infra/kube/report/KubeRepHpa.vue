@@ -10,33 +10,47 @@
        `<unknown>` ở cột TARGETS cũng là một trạng thái riêng: HPA đang KHÔNG lái gì
        cả (metrics-server không trả số), tức số bản sao đang đứng im vì mù, không
        phải vì tải thấp. -->
-  <div class="ikrh">
-    <div class="ikrh-head">
-      <span class="ikrh-t">{{ t('infra.kube.report.hpa') }}</span>
-      <span v-if="list.length" class="ihint">{{ list.length }}</span>
+  <div class="flex min-w-0 flex-col gap-1.5">
+    <div class="flex flex-wrap items-baseline gap-2">
+      <span class="text-xs text-muted-foreground">{{ t('infra.kube.report.hpa') }}</span>
+      <span v-if="list.length" class="text-xs text-faint">{{ list.length }}</span>
     </div>
 
-    <p v-if="gap" class="ikrh-gap">
+    <p v-if="gap" class="flex flex-col gap-0.5 text-sm text-foreground">
       {{ t('infra.kube.report.gap.hpa') }}
-      <span class="ihint">{{ gap }}</span>
+      <span class="text-xs text-faint">{{ gap }}</span>
     </p>
-    <span v-else-if="list.length === 0" class="ihint">
+    <span v-else-if="list.length === 0" class="text-xs text-faint">
       {{ t('infra.kube.report.hpaNone') }}
     </span>
 
-    <ul v-else class="ikrh-list">
-      <li v-for="h in list" :key="h.name" class="ikrh-i" :class="rateOf(h)">
-        <code class="ikrh-name" :title="h.reference">{{ h.name }}</code>
-        <span class="ikrh-rep">
-          <b>{{ h.replicas ?? '—' }}</b>
-          <span class="ikrh-range">{{ h.min ?? '—' }}–{{ h.max ?? '—' }}</span>
+    <ul v-else class="flex flex-col gap-1.5">
+      <li
+        v-for="h in list"
+        :key="h.name"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_3.875rem_minmax(3.125rem,5.625rem)_auto] items-center gap-2.5"
+      >
+        <!-- mono-ok: tên HPA là thứ dán vào kubectl -->
+        <code class="truncate font-mono text-xs text-foreground" :title="h.reference">
+          {{ h.name }}
+        </code>
+        <span class="inline-flex items-baseline gap-1 text-xs tabular-nums">
+          <b :class="rateOf(h) === 'bad' ? 'text-destructive' : 'text-foreground'">
+            {{ h.replicas ?? '—' }}
+          </b>
+          <span class="text-faint">{{ h.min ?? '—' }}–{{ h.max ?? '—' }}</span>
         </span>
         <!-- Dải: số bản sao hiện tại nằm ở đâu giữa min và max. Một cụm đang giãn
              tới 9/10 nhìn ra ngay, không phải đọc hai con số rồi tự chia. -->
-        <div class="ikrh-bar">
-          <span class="ikrh-fill" :style="{ width: fillOf(h) }" />
+        <div class="h-1.5 overflow-hidden rounded-full bg-border">
+          <span class="block h-full" :class="FILL[rateOf(h)]" :style="{ width: fillOf(h) }" />
         </div>
-        <span class="ikrh-tg" :class="{ unk: h.unknown }">{{ h.targets || '—' }}</span>
+        <span
+          class="truncate text-right text-xs"
+          :class="h.unknown ? 'text-warning' : 'text-muted-foreground'"
+        >
+          {{ h.targets || '—' }}
+        </span>
       </li>
     </ul>
   </div>
@@ -49,9 +63,18 @@ defineProps<{ list: HpaStat[]; gap: string }>()
 
 const { t } = useI18n()
 
-function rateOf(h: HpaStat): string {
-  if (h.atMax) return 'h-bad'
-  return h.unknown ? 'h-warn' : 'h-ok'
+type HpaRate = 'ok' | 'warn' | 'bad'
+
+/** Chạm trần = hỏng; TARGETS `<unknown>` = HPA đang mù (cảnh báo). */
+function rateOf(h: HpaStat): HpaRate {
+  if (h.atMax) return 'bad'
+  return h.unknown ? 'warn' : 'ok'
+}
+
+const FILL: Record<HpaRate, string> = {
+  ok: 'bg-success',
+  warn: 'bg-warning',
+  bad: 'bg-destructive',
 }
 
 /** Vị trí của `replicas` trong khoảng min–max. Thiếu số ⇒ dải rỗng, không phải 0. */
@@ -63,102 +86,3 @@ function fillOf(h: HpaStat): string {
   return `${Math.min(100, Math.max(0, pct))}%`
 }
 </script>
-
-<style scoped>
-.ikrh {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.ikrh-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ikrh-t {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrh-gap {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ikrh-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ikrh-i {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 62px minmax(50px, 90px) auto;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.ikrh-name {
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: tên HPA là thứ dán vào kubectl */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ikrh-rep {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-.ikrh-rep b {
-  color: var(--text);
-}
-.h-bad .ikrh-rep b {
-  color: var(--danger);
-}
-.ikrh-range {
-  color: var(--textFaint);
-}
-.ikrh-bar {
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--r-full);
-  background: var(--bgActive);
-}
-.ikrh-fill {
-  display: block;
-  height: 100%;
-  background: var(--green);
-}
-.h-warn .ikrh-fill {
-  background: var(--amber);
-}
-.h-bad .ikrh-fill {
-  background: var(--danger);
-}
-.ikrh-tg {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ikrh-tg.unk {
-  color: var(--amber);
-}
-</style>

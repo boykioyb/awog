@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="tasks">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="tasks">
     <LibraryView
       :items="tasks"
       :item-key="(task) => task.id"

@@ -5,24 +5,30 @@
     :width="660"
     @close="emit('cancel')"
   >
-    <div class="hke">
+    <div class="flex flex-col gap-4">
       <!-- Save location (tier) — locked once a hook exists (moving tiers = a new file). -->
-      <div v-if="!isImported" class="hke-field">
-        <label class="hke-label">{{ t('hooks.editor.saveLocation') }}</label>
-        <div class="hke-tiers">
-          <button
+      <div v-if="!isImported" class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('hooks.editor.saveLocation') }}
+        </Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="self-start rounded-lg bg-muted p-0.5"
+          :model-value="draft.source"
+          :disabled="isExisting"
+          @update:model-value="(v) => v && (draft.source = v as HookSource)"
+        >
+          <ToggleGroupItem
             v-for="opt in sourceOptions"
             :key="opt.value"
-            type="button"
-            class="chip hke-tier"
-            :class="{ on: draft.source === opt.value }"
-            :disabled="isExisting"
-            @click="draft.source = opt.value"
+            :value="opt.value"
+            :class="SEG_ITEM"
           >
             {{ opt.label }}
-          </button>
-        </div>
-        <div v-if="draft.source === 'project'" class="hke-project">
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <div v-if="draft.source === 'project'">
           <AppSelect
             v-model="draft.projectId"
             :options="projectOptions"
@@ -30,27 +36,29 @@
             width="100%"
           />
         </div>
-        <div class="hke-hint">{{ sourceHint }}</div>
+        <div class="text-xs text-dim">{{ sourceHint }}</div>
       </div>
 
-      <div v-if="!isImported" class="hke-field">
-        <label class="hke-label">{{ t('hooks.editor.name') }}</label>
+      <div v-if="!isImported" class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('hooks.editor.name') }}</Label>
         <Input v-model="draft.name" :placeholder="t('hooks.editor.namePh')" />
       </div>
 
-      <div v-if="!isImported" class="hke-field">
-        <label class="hke-label">{{ t('hooks.editor.description') }}</label>
-        <textarea
+      <div v-if="!isImported" class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('hooks.editor.description') }}
+        </Label>
+        <Textarea
           v-model="draft.description"
-          class="hke-input hke-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('hooks.editor.descPh')"
         />
       </div>
 
-      <div class="hke-grid">
-        <div class="hke-field">
-          <label class="hke-label">{{ t('hooks.editor.event') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('hooks.editor.event') }}</Label>
           <AppSelect
             v-model="eventModel"
             :options="eventOptions"
@@ -58,19 +66,19 @@
             :placeholder="t('hooks.editor.event')"
           />
         </div>
-        <div class="hke-field">
-          <label class="hke-label">{{ t('hooks.editor.runMode') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('hooks.editor.runMode') }}</Label>
           <AppSelect v-model="runModeModel" :options="runModeOptions" width="100%" />
         </div>
       </div>
 
-      <div class="hke-field">
+      <div class="flex flex-col gap-1.5">
         <LibraryKvEditor v-model="matcherEntries" :label="t('hooks.editor.matcher')" />
       </div>
 
-      <div class="hke-field">
-        <div class="hke-cmdhead">
-          <label class="hke-label">{{ t('hooks.editor.command') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between gap-2">
+          <Label class="text-sm font-medium text-foreground">{{ t('hooks.editor.command') }}</Label>
           <Button
             :title="t('hooks.editor.editLlm')"
             variant="outline"
@@ -81,9 +89,10 @@
             {{ t('hooks.editor.editLlm') }}
           </Button>
         </div>
-        <textarea
+        <!-- mono-ok: nội dung dạng file/code người dùng sửa như code -->
+        <Textarea
           v-model="draft.command"
-          class="hke-input hke-ta mono"
+          class="min-h-12 resize-y font-mono"
           rows="3"
           placeholder="pnpm exec prettier --write {{event.payload.path}}"
         />
@@ -92,11 +101,12 @@
       <!-- Script file the command runs (e.g. format-after-edit.sh) — edited via a
            Monaco viewer in edit mode. Shown only when the command references a
            recognised script. -->
-      <div v-if="script" class="hke-field">
-        <div class="hke-cmdhead">
-          <label class="hke-label mono">
+      <div v-if="script" class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between gap-2">
+          <!-- mono-ok: đường dẫn script -->
+          <Label class="font-mono text-sm font-medium text-foreground">
             {{ t('hooks.editor.script', { path: script.path }) }}
-          </label>
+          </Label>
           <Button
             :title="t('hooks.editor.scriptEditLlm')"
             variant="outline"
@@ -107,7 +117,7 @@
             {{ t('hooks.editor.scriptEditLlm') }}
           </Button>
         </div>
-        <div class="hke-mono">
+        <div class="h-70 overflow-hidden rounded-md border">
           <MonacoViewer
             :value="script.content"
             language="shell"
@@ -115,31 +125,27 @@
             @change="onScriptChange"
           />
         </div>
-        <div v-if="!script.exists" class="hke-hint">{{ t('hooks.editor.scriptNew') }}</div>
+        <div v-if="!script.exists" class="text-xs text-dim">{{ t('hooks.editor.scriptNew') }}</div>
       </div>
 
-      <div class="hke-grid">
-        <div v-if="!isImported" class="hke-field">
-          <label class="hke-label">{{ t('hooks.editor.cwd') }}</label>
-          <Input v-model="draft.cwd" placeholder="${workspace}" class="mono" />
+      <div class="grid grid-cols-2 gap-3.5">
+        <div v-if="!isImported" class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('hooks.editor.cwd') }}</Label>
+          <Input v-model="draft.cwd" placeholder="${workspace}" class="font-mono" />
         </div>
-        <div class="hke-field">
-          <label class="hke-label">{{ t('hooks.editor.timeout') }}</label>
-          <Input v-model.number="draft.timeoutMs" type="number" class="mono" />
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('hooks.editor.timeout') }}</Label>
+          <Input v-model.number="draft.timeoutMs" type="number" class="font-mono" />
         </div>
       </div>
 
-      <div v-if="!isImported" class="hke-field">
+      <div v-if="!isImported" class="flex flex-col gap-1.5">
         <LibraryKvEditor v-model="envEntries" :label="t('hooks.editor.env')" />
       </div>
 
-      <div v-if="!isImported" class="hke-toggle">
-        <span class="hke-label">{{ t('hooks.editor.enabled') }}</span>
-        <span
-          class="tog2"
-          :class="{ off: !draft.enabled }"
-          @click="draft.enabled = !draft.enabled"
-        />
+      <div v-if="!isImported" class="flex items-center justify-between">
+        <span class="text-sm font-medium text-foreground">{{ t('hooks.editor.enabled') }}</span>
+        <Switch :checked="draft.enabled" @update:checked="(v: boolean) => (draft.enabled = v)" />
       </div>
     </div>
 
@@ -153,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-// Hook form editor — config + inline script editing in prototype CSS inside
+// Hook form editor — config + inline script editing inside
 // LibraryEntityModal. Save-location tier is locked once the hook exists.
 // References the script file the command runs (e.g. format-after-edit.sh) and
 // edits it in a Monaco viewer; persists the script content on save when the
@@ -214,6 +220,10 @@ const HOOK_EVENTS: HookEvent[] = [
   'mcp.server-error',
   'session.reset',
 ]
+
+// Segmented control chọn tier (cùng kiểu LibraryMarkdownBody).
+const SEG_ITEM =
+  'h-6 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 const sourceOptions: { value: HookSource; label: string }[] = [
   { value: 'global', label: '~/.awog/hooks' },
@@ -525,91 +535,3 @@ defineExpose({
   scriptContent: computed(() => script.value?.content ?? ''),
 })
 </script>
-
-<style scoped>
-.hke {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.hke-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.hke-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.hke-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.hke-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.hke-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — matcher / command */
-  font-family: var(--code);
-}
-.hke-input:focus {
-  border-color: var(--accent);
-}
-.hke-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.hke-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.hke-tiers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.hke-tier {
-  cursor: pointer;
-  background: var(--bgInput);
-}
-.hke-tier.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.hke-tier:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.hke-cmdhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.hke-mono {
-  height: 280px;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-.hke-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-</style>

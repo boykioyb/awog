@@ -1,16 +1,30 @@
 <template>
-  <div class="lmb">
-    <div class="lmb-head">
-      <div class="sech lmb-title">{{ title }}</div>
-      <div class="lmb-actions">
-        <div class="seg lmb-seg">
-          <span :class="{ on: viewMode === 'preview' }" @click="viewMode = 'preview'">
+  <div>
+    <!-- hook-ok: `lmb-head`/`lmb-title` — pages/agents.vue + ConnectionDetail.vue :deep() bỏ margin/ẩn tiêu đề -->
+    <div class="lmb-head mt-5 mb-2 flex items-center justify-between gap-2.5">
+      <!-- hook-ok: xem trên -->
+      <div class="lmb-title text-xs font-semibold text-dim">{{ title }}</div>
+      <div class="flex items-center gap-1.5">
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="rounded-lg bg-muted p-0.5"
+          :model-value="viewMode"
+          @update:model-value="(v) => v && (viewMode = v as ViewMode)"
+        >
+          <ToggleGroupItem
+            value="preview"
+            class="h-6 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+          >
             {{ t('common.render') }}
-          </span>
-          <span :class="{ on: viewMode === 'raw' }" @click="viewMode = 'raw'">
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="raw"
+            class="h-6 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+          >
             {{ t('common.raw') }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
         <Button
           v-if="content"
           :title="copied ? t('library.md.copied') : t('common.copy')"
@@ -34,13 +48,16 @@
       </div>
     </div>
 
-    <div v-if="!content" class="lmb-empty">{{ emptyText || t('library.md.empty') }}</div>
+    <div v-if="!content" class="rounded-lg border bg-muted p-3 text-sm text-faint italic">
+      {{ emptyText || t('library.md.empty') }}
+    </div>
     <!-- A file-path link in the body opens in the shared preview when a workspace root is
-         known; either way the SPA router never sees it (dead route → 404). -->
+         known; either way the SPA router never sees it (dead route → 404).
+         `mdbody` = prose markdown toàn cục (assets/css/markdown.css). -->
     <div
       v-else-if="viewMode === 'preview'"
       ref="mdBody"
-      class="lmb-render mdbody"
+      class="mdbody rounded-lg border bg-muted px-4 py-3 text-foreground"
       @click="onMdLinkClick"
     >
       <template v-for="(seg, i) in segments" :key="i">
@@ -50,7 +67,12 @@
         <div v-else v-html="seg.html" />
       </template>
     </div>
-    <pre v-else class="codeblk lmb-raw">{{ content }}</pre>
+    <!-- mono-ok: nội dung markdown thô của file -->
+    <pre
+      v-else
+      class="m-0 rounded-lg border bg-muted p-3 font-mono text-sm whitespace-pre-wrap text-muted-foreground"
+      >{{ content }}</pre
+    >
   </div>
 </template>
 
@@ -59,13 +81,15 @@
 // optional edit trigger. Port of the old UI MarkdownBodyView — used by every
 // library detail (Skill SKILL.md, Agent system prompt, …). Renders via the
 // ui-next useMarkdown composable (sanitized AST → :deep prose, mermaid blocks
-// live), styled in prototype CSS.
+// live); prose đi qua `.mdbody` toàn cục (assets/css/markdown.css).
 import { computed, ref } from 'vue'
 import MermaidView from '~/components/common/MermaidView.vue'
 import { useCodeBlockControls } from '~/composables/useCodeBlockControls'
 import { useMarkdown } from '~/composables/useMarkdown'
 import { useMdFileLink } from '~/composables/useMdFileLink'
 import Button from '~/components/ui/button/Button.vue'
+import ToggleGroup from '~/components/ui/toggle-group/ToggleGroup.vue'
+import ToggleGroupItem from '~/components/ui/toggle-group/ToggleGroupItem.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -132,136 +156,3 @@ const onEdit = (e: MouseEvent) => {
   emit('edit-body', { top: rect.bottom + 8, left: rect.left })
 }
 </script>
-
-<style scoped>
-.lmb-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 20px 0 9px;
-}
-.lmb-title {
-  margin: 0;
-}
-.lmb-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.lmb-seg span {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  padding: 4px 9px;
-}
-.lmb-empty {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 13px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-  font-style: italic;
-}
-.lmb-render {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 13px 15px;
-  line-height: var(--lh-prose);
-  color: var(--text);
-}
-.lmb-raw {
-  margin: 0;
-}
-
-/* Rendered markdown prose (v-html → :deep), mirrors PreviewModal's .mdbody. */
-.mdbody :deep(h1),
-.mdbody :deep(h2),
-.mdbody :deep(h3) {
-  font-weight: 700;
-  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
-     no single whole-pixel leading exists for the whole h1…h6 group. */
-  line-height: 1.3;
-  margin: 1.1em 0 0.5em;
-}
-.mdbody :deep(h1) {
-  font-size: 1.4em;
-}
-.mdbody :deep(h2) {
-  font-size: 1.2em;
-}
-.mdbody :deep(h3) {
-  font-size: 1.08em;
-}
-.mdbody :deep(p),
-.mdbody :deep(ul),
-.mdbody :deep(ol),
-.mdbody :deep(blockquote),
-.mdbody :deep(table) {
-  margin: 0.6em 0;
-}
-.mdbody :deep(ul),
-.mdbody :deep(ol) {
-  padding-left: 1.5em;
-}
-.mdbody :deep(ul) {
-  list-style: disc;
-}
-.mdbody :deep(ol) {
-  list-style: decimal;
-}
-.mdbody :deep(li) {
-  margin: 0.2em 0;
-}
-.mdbody :deep(a) {
-  color: var(--accent);
-  text-decoration: underline;
-}
-.mdbody :deep(code) {
-  /* mono-ok: inline code in the markdown render */
-  font-family: var(--code);
-  font-size: 0.9em;
-  background: var(--bgActive);
-  padding: 1px 5px;
-  border-radius: var(--r-xs);
-}
-.mdbody :deep(pre) {
-  background: var(--bgSubtle);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 12px 14px;
-  overflow-x: auto;
-  line-height: var(--lh-sm);
-}
-.mdbody :deep(pre code) {
-  background: none;
-  padding: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.mdbody :deep(blockquote) {
-  border-left: 3px solid var(--border);
-  padding-left: 1em;
-  color: var(--textMuted);
-}
-.mdbody :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-}
-.mdbody :deep(th),
-.mdbody :deep(td) {
-  border: 1px solid var(--border);
-  padding: 6px 10px;
-  text-align: left;
-}
-.mdbody :deep(th) {
-  background: var(--bgActive);
-}
-.mdbody :deep(hr) {
-  border: 0;
-  border-top: 1px solid var(--border);
-  margin: 1.2em 0;
-}
-</style>

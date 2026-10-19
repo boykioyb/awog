@@ -1,14 +1,18 @@
 <template>
-  <div class="tdt">
-    <div class="dh">
-      <div class="tdt-icn">
-        <Icon name="templates" style="width: var(--icon-md); height: var(--icon-md)" />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-12 shrink-0 items-center gap-2.5 border-b px-4">
+      <div class="grid size-6.5 shrink-0 place-items-center rounded-sm bg-selected text-primary">
+        <Icon name="templates" class="size-4" />
       </div>
-      <div class="dt">{{ template.name }}</div>
-      <span v-if="template.entities.length" class="tag">
+      <div class="min-w-0 truncate text-lg font-semibold">{{ template.name }}</div>
+      <Badge
+        v-if="template.entities.length"
+        variant="outline"
+        class="rounded-sm text-muted-foreground"
+      >
         {{ t('templates.detail.entityCount', { n: template.entities.length }) }}
-      </span>
-      <span style="flex: 1" />
+      </Badge>
+      <span class="flex-1" />
       <Button
         v-if="template.sourceUrl"
         :title="t('templatesUpdate.check')"
@@ -16,7 +20,7 @@
         size="iconMd"
         @click="emit('check-update')"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="refresh" />
       </Button>
       <Button
         :title="t('templates.detail.install')"
@@ -24,46 +28,62 @@
         size="sm"
         @click="emit('install')"
       >
-        <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="act" />
         {{ t('templates.detail.install') }}
       </Button>
       <Button
         :title="t('templates.detail.delete')"
-        class="tdt-danger"
+        class="hover:border-destructive hover:text-destructive"
         variant="outline"
         size="iconMd"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="trash" />
       </Button>
     </div>
 
-    <div class="dscroll">
-      <p v-if="template.description" class="tdt-desc">{{ template.description }}</p>
+    <div class="flex-1 overflow-y-auto p-5">
+      <p v-if="template.description" class="mb-4 text-base leading-relaxed text-muted-foreground">
+        {{ template.description }}
+      </p>
 
       <!-- Trang chủ do người xuất bản khai, giữ lại từ lúc cài (`.install.json`).
            Chỉ hiện khi nó là link https thật — hỏng thì KHÔNG hiện dòng nào. -->
-      <div v-if="safeHomepage" class="tdt-home">
-        <span class="tdt-home-lbl">{{ t('templates.detail.homepage') }}</span>
-        <button type="button" class="tdt-home-url" :title="safeHomepage" @click="openHomepage">
+      <div v-if="safeHomepage" class="mb-4 flex items-baseline gap-2 text-sm">
+        <span class="shrink-0 text-dim">{{ t('templates.detail.homepage') }}</span>
+        <Button
+          variant="link"
+          class="h-auto p-0 text-left text-sm font-normal wrap-anywhere whitespace-normal"
+          :title="safeHomepage"
+          @click="openHomepage"
+        >
           {{ safeHomepage }}
-        </button>
+        </Button>
       </div>
 
-      <div class="tdt-section">
-        <div class="tdt-section-hd">{{ t('templates.detail.entities') }}</div>
-        <div v-if="!groups.length" class="tdt-empty">
+      <div>
+        <div class="mb-3 text-xs font-semibold text-dim">{{ t('templates.detail.entities') }}</div>
+        <div v-if="!groups.length" class="text-sm text-dim">
           {{ t('templates.detail.noEntities') }}
         </div>
-        <div v-for="g in groups" :key="String(g.kind)" class="tdt-group">
-          <div class="tdt-group-hd">
-            <span class="tdt-group-name">{{ t('templates.kind.' + g.kind) }}</span>
-            <span class="chip">{{ g.entities.length }}</span>
-          </div>
-          <div class="tdt-chips">
-            <span v-for="e in g.entities" :key="e.kind + '/' + e.id" class="chip mono">
-              {{ e.id }}
+        <div v-for="g in groups" :key="String(g.kind)" class="mb-4">
+          <div class="mb-2 flex items-center gap-2">
+            <span class="text-sm font-medium text-foreground">
+              {{ t('templates.kind.' + g.kind) }}
             </span>
+            <Badge variant="outline" class="rounded-sm tabular-nums text-muted-foreground">
+              {{ g.entities.length }}
+            </Badge>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <Badge
+              v-for="e in g.entities"
+              :key="e.kind + '/' + e.id"
+              variant="outline"
+              class="rounded-sm font-mono text-muted-foreground"
+            >
+              {{ e.id }}
+            </Badge>
           </div>
         </div>
       </div>
@@ -73,8 +93,7 @@
 
 <script setup lang="ts">
 // Template detail pane — header (install / delete) + the bundled manifest grouped
-// by kind. Rendered in prototype CSS (.dh header + .dscroll body), matching the
-// skills/agents detail markup. Grouping is derived from the `template` prop so it
+// by kind (header row + scroll body), matching the skills/agents detail markup. Grouping is derived from the `template` prop so it
 // always reflects the row LibraryView has selected (which owns its own selection
 // state); the page owns dialog + delete state.
 import { computed } from 'vue'
@@ -132,89 +151,3 @@ const groups = computed<Group[]>(() => {
   }))
 })
 </script>
-
-<style scoped>
-.tdt {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.tdt-icn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  background: var(--accentDim);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-.tdt-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.tdt-desc {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-prose);
-  margin: 0 0 18px;
-}
-.tdt-home {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  margin: 0 0 18px;
-}
-.tdt-home-lbl {
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.tdt-home-url {
-  padding: 0;
-  background: transparent;
-  border: none;
-  text-align: left;
-  color: var(--accent);
-  cursor: pointer;
-  font: inherit;
-  overflow-wrap: anywhere;
-}
-.tdt-home-url:hover {
-  text-decoration: underline;
-}
-.tdt-section-hd {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-  margin-bottom: 12px;
-}
-.tdt-empty {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.tdt-group {
-  margin-bottom: 16px;
-}
-.tdt-group-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.tdt-group-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.tdt-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-</style>

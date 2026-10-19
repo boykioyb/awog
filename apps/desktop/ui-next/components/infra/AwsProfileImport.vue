@@ -6,7 +6,7 @@
     :lock-scrim="busy"
     @close="onClose"
   >
-    <div class="api">
+    <div class="flex min-h-0 flex-col gap-3.5">
       <!-- Bước 1: chọn nguồn (dán khối / file / CSV) — tách riêng, xem file đó. -->
       <AwsProfileImportSourceStep
         v-if="step === 'source'"
@@ -27,41 +27,48 @@
       />
 
       <!-- Bước 3: kết quả. -->
-      <div v-else class="api-result">
-        <Icon
-          name="check"
-          style="width: var(--icon-lg); height: var(--icon-lg); color: var(--green)"
-        />
-        <div class="api-result-title">{{ t('infra.import.file.result.title') }}</div>
-        <div class="api-result-line">
+      <div v-else class="flex flex-col items-center gap-1.5 px-2 pt-5 pb-2 text-center">
+        <Icon name="check" class="size-5 text-success" />
+        <div class="mt-1 text-lg font-semibold text-foreground">
+          {{ t('infra.import.file.result.title') }}
+        </div>
+        <div class="text-sm text-muted-foreground">
           {{ t('infra.import.file.result.created', { n: applyResult?.created.length ?? 0 }) }}
         </div>
-        <div class="api-result-line">
+        <div class="text-sm text-muted-foreground">
           {{
             t('infra.import.file.result.overwritten', {
               n: applyResult?.overwritten.length ?? 0,
             })
           }}
         </div>
-        <div class="api-result-line">
+        <div class="text-sm text-muted-foreground">
           {{ t('infra.import.file.result.skipped', { n: applyResult?.skipped.length ?? 0 }) }}
         </div>
-        <div v-if="applyResult && applyResult.backups.length > 0" class="api-hint">
+        <div v-if="applyResult && applyResult.backups.length > 0" class="text-xs text-dim">
           {{ t('infra.import.backupsNote', { n: applyResult.backups.length }) }}
         </div>
-        <div v-if="applyResult && applyResult.warnings.length > 0" class="api-warnbox">
+        <div
+          v-if="applyResult && applyResult.warnings.length > 0"
+          class="flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+        >
           <div v-for="(w, i) in applyResult.warnings" :key="i">{{ w }}</div>
         </div>
       </div>
 
-      <div v-if="errorMsg && step !== 'result'" class="api-error">{{ errorMsg }}</div>
+      <div
+        v-if="errorMsg && step !== 'result'"
+        class="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
+        {{ errorMsg }}
+      </div>
     </div>
 
     <template #footer>
-      <span v-if="step === 'preview'" class="api-count">
+      <span v-if="step === 'preview'" class="text-sm text-dim">
         {{ t('infra.import.file.preview.selectedCount', { n: selectedCount }) }}
       </span>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <template v-if="step === 'source'">
         <Button type="button" variant="outline" @click="onClose">{{ t('common.cancel') }}</Button>
         <Button
@@ -300,58 +307,3 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 </script>
-
-<style scoped>
-.api {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
-}
-.api-error {
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--dangerDim);
-  border: 1px solid var(--dangerBorder);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.api-warnbox {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.api-count {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.api-result {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 20px 8px 8px;
-  text-align: center;
-}
-.api-result-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-  margin-top: 4px;
-}
-.api-result-line {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-</style>

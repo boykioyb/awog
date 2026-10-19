@@ -1,53 +1,60 @@
 <template>
-  <Teleport to="body">
-    <div class="sgp-ovl" @click.self="emit('close')">
-      <div class="sgp-card" role="dialog" aria-modal="true">
-        <div class="sgp-title">{{ t('sessions.team.pickTitle', { title: session.title }) }}</div>
+  <Dialog :open="true" @update:open="(v: boolean) => !v && emit('close')">
+    <DialogContent class="flex w-105 max-w-[92vw] flex-col gap-2.5 p-4">
+      <DialogTitle class="text-base font-semibold text-foreground">
+        {{ t('sessions.team.pickTitle', { title: session.title }) }}
+      </DialogTitle>
 
-        <Input
-          ref="roleInput"
-          v-model="role"
-          :placeholder="t('sessions.team.rolePlaceholder')"
-          :maxlength="MAX_ROLE_LEN"
-          @keydown.esc.prevent="emit('close')"
-        />
+      <Input
+        ref="roleInput"
+        v-model="role"
+        :placeholder="t('sessions.team.rolePlaceholder')"
+        :maxlength="MAX_ROLE_LEN"
+        @keydown.esc.prevent="emit('close')"
+      />
 
-        <Input
-          v-model="query"
-          :placeholder="t('sessions.team.searchPlaceholder')"
-          @keydown.esc.prevent="emit('close')"
-        />
+      <Input
+        v-model="query"
+        :placeholder="t('sessions.team.searchPlaceholder')"
+        @keydown.esc.prevent="emit('close')"
+      />
 
-        <div class="sgp-list">
-          <!-- Tách khỏi nhóm đứng ngay đầu danh sách, không giấu trong context menu:
-               khi người dùng đã mở hộp này ra thì "bỏ ra ngoài" là một lựa chọn ngang
-               hàng với "chuyển sang nhóm khác". -->
-          <div
-            v-if="session.teamRunId"
-            class="sgp-row sgp-detach"
-            @click="emit('pick', null, null)"
-          >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="sgp-rowttl">{{ t('sessions.team.detach') }}</span>
-          </div>
-
-          <div v-for="c in candidates" :key="c.id" class="sgp-row" @click="pick(c)">
-            <span class="sgp-dot" :style="{ background: c.dot }" />
-            <span class="sgp-rowttl">{{ c.title }}</span>
-            <span v-if="c.current" class="sgp-cur">{{ t('sessions.team.currentParent') }}</span>
-          </div>
-
-          <div v-if="!candidates.length" class="sgp-empty">
-            {{ t('sessions.team.noCandidates') }}
-          </div>
+      <div class="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+        <!-- Tách khỏi nhóm đứng ngay đầu danh sách, không giấu trong context menu:
+             khi người dùng đã mở hộp này ra thì "bỏ ra ngoài" là một lựa chọn ngang
+             hàng với "chuyển sang nhóm khác". -->
+        <div
+          v-if="session.teamRunId"
+          class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-dim hover:bg-accent"
+          @click="emit('pick', null, null)"
+        >
+          <Icon name="x" class="size-3.5" />
+          <span class="flex-auto truncate">{{ t('sessions.team.detach') }}</span>
         </div>
 
-        <div class="sgp-foot">
-          <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+        <div
+          v-for="c in candidates"
+          :key="c.id"
+          class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-foreground hover:bg-accent"
+          @click="pick(c)"
+        >
+          <span class="size-1.5 flex-none rounded-full" :class="c.dotClass" />
+          <span class="flex-auto truncate">{{ c.title }}</span>
+          <span v-if="c.current" class="text-xs text-primary">
+            {{ t('sessions.team.currentParent') }}
+          </span>
+        </div>
+
+        <div v-if="!candidates.length" class="px-2.5 py-3.5 text-center text-faint">
+          {{ t('sessions.team.noCandidates') }}
         </div>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex justify-end gap-2">
+        <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -128,7 +135,7 @@ const candidates = computed(() => {
       .map((s) => ({
         id: s.id,
         title: s.title,
-        dot: s.teamRunId ? 'var(--textFaint)' : 'var(--accent)',
+        dotClass: s.teamRunId ? 'bg-faint' : 'bg-primary',
         current: s.engineId === props.session.teamRunId,
       }))
   )
@@ -138,95 +145,3 @@ function pick(c: { id: number }) {
   emit('pick', c.id, role.value.trim() || null)
 }
 </script>
-
-<style scoped>
-.sgp-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.sgp-card {
-  width: 420px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.sgp-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.sgp-input {
-  width: 100%;
-  padding: 9px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.sgp-input:focus {
-  border-color: var(--accent);
-}
-.sgp-list {
-  max-height: 320px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sgp-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  color: var(--text);
-}
-.sgp-row:hover {
-  background: var(--bgHover);
-}
-.sgp-detach {
-  color: var(--textDim);
-}
-.sgp-dot {
-  width: 6px; /* design-token-ok: chấm tròn — con số px CHÍNH LÀ hình dạng */
-  height: 6px; /* design-token-ok: chấm tròn */
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.sgp-rowttl {
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sgp-cur {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--accent);
-}
-.sgp-empty {
-  padding: 14px 10px;
-  color: var(--textFaint);
-  text-align: center;
-}
-.sgp-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

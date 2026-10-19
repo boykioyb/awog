@@ -1,11 +1,18 @@
 <template>
-  <div ref="canvasEl" class="canvas wfcanvas" @drop="onDrop" @dragover.prevent>
-    <div class="wftoolbar">
-      <span class="chip">{{ scopeLabel }}</span>
-      <span class="chip">{{ t('workflow.toolbar.dag', { n: workflow.nodes.length }) }}</span>
-      <span style="flex: 1" />
+  <div
+    ref="canvasEl"
+    class="wfcanvas relative min-w-0 flex-1 overflow-hidden bg-background"
+    @drop="onDrop"
+    @dragover.prevent
+  >
+    <div class="absolute top-2.5 right-2.5 left-2.5 z-5 flex items-center gap-2">
+      <Badge variant="outline" class="rounded-sm text-muted-foreground">{{ scopeLabel }}</Badge>
+      <Badge variant="outline" class="rounded-sm text-muted-foreground">
+        {{ t('workflow.toolbar.dag', { n: workflow.nodes.length }) }}
+      </Badge>
+      <span class="flex-1" />
       <Button :disabled="!workflow.nodes.length" variant="default" size="sm" @click="$emit('run')">
-        <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="play" class="size-3.5" />
         {{ t('workflow.toolbar.run') }}
       </Button>
     </div>
@@ -30,11 +37,14 @@
       <MiniMap position="bottom-left" pannable zoomable />
     </VueFlow>
 
-    <div v-if="workflow.nodes.length === 0" class="wfempty">
-      <span class="ei">
-        <Icon name="workflows" style="width: var(--icon-lg); height: var(--icon-lg)" />
+    <div
+      v-if="workflow.nodes.length === 0"
+      class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-dim"
+    >
+      <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+        <Icon name="workflows" class="size-5" />
       </span>
-      <div class="et">{{ t('workflow.canvas.empty') }}</div>
+      <div class="text-lg text-muted-foreground">{{ t('workflow.canvas.empty') }}</div>
     </div>
   </div>
 </template>
@@ -224,50 +234,10 @@ const onDrop = (e: DragEvent) => {
 }
 </script>
 
-<style scoped>
-.wfcanvas {
-  flex: 1;
-  min-width: 0;
-  /* The prototype .canvas paints a static dot grid; VueFlow's <Background> draws
-     a pan/zoom-aware one instead, so drop the static layer here. */
-  background-image: none;
-}
-.wfempty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--textDim);
-  pointer-events: none;
-}
-.wfempty .ei {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--r-card);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  display: grid;
-  place-items: center;
-  color: var(--textDim);
-}
-.wfempty .et {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  color: var(--textMuted);
-}
-.btn.pri.sm:disabled {
-  opacity: 0.45;
-  cursor: default;
-  filter: none;
-}
-</style>
-
 <style>
-/* VueFlow theme overrides to blend with the AWOG prototype palette. Unscoped so
-   they reach the VueFlow internals (controls/minimap/handles). */
+/* style-ok: DOM nội bộ của VueFlow (handle/controls/minimap) — class Tailwind không
+   chạm tới được. Không scoped để xuyên vào node do thư viện render; neo dưới
+   `.wfcanvas` (class hook của canvas này) để không lan sang canvas khác. */
 .wfcanvas .vue-flow__node {
   font-family: var(--sans);
 }
@@ -276,7 +246,7 @@ const onDrop = (e: DragEvent) => {
   width: 9px;
   height: 9px;
   background: var(--borderStrong);
-  border: 2px solid var(--bgCanvas);
+  border: 2px solid var(--background);
 }
 .wfcanvas .vue-flow__controls {
   box-shadow: none;
@@ -284,13 +254,13 @@ const onDrop = (e: DragEvent) => {
   overflow: hidden;
 }
 .wfcanvas .vue-flow__controls button {
-  background: var(--bgEl);
+  background: var(--card);
   border-bottom: 1px solid var(--border);
   color: var(--textDim);
 }
 .wfcanvas .vue-flow__controls button:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .wfcanvas .vue-flow__controls button svg {
   fill: currentColor;
@@ -298,6 +268,6 @@ const onDrop = (e: DragEvent) => {
 .wfcanvas .vue-flow__minimap {
   border-radius: var(--r-sm);
   overflow: hidden;
-  background: var(--bgPanel);
+  background: var(--sidebar);
 }
 </style>

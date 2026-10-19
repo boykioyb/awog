@@ -6,38 +6,49 @@
     :lock-scrim="importing"
     @close="emit('close')"
   >
-    <div class="lim">
-      <div class="lim-sub">{{ t('library.import.subtitle') }}</div>
+    <div class="flex flex-col gap-3">
+      <div class="text-sm text-dim">{{ t('library.import.subtitle') }}</div>
 
-      <div v-if="scanning" class="lim-state">{{ t('library.import.scanning') }}</div>
-      <div v-else-if="!candidates.length" class="lim-state">
+      <div v-if="scanning" class="py-4.5 text-center text-sm text-dim">
+        {{ t('library.import.scanning') }}
+      </div>
+      <div v-else-if="!candidates.length" class="py-4.5 text-center text-sm text-dim">
         {{ t('library.import.empty') }}
       </div>
 
       <template v-else>
-        <button type="button" class="lim-selectall" @click="toggleAll">
+        <Button variant="link" size="xs" class="self-start px-0" @click="toggleAll">
           {{ allSelected ? t('library.import.deselectAll') : t('library.import.selectAll') }}
-        </button>
-        <div class="lim-list">
-          <template v-for="g in groups" :key="g.key">
-            <div class="lim-grp">
-              <span
-                class="pdot"
-                :style="{ background: g.key ? 'var(--accent)' : 'var(--textDim)' }"
-              />
-              <span class="lim-grp-nm">{{ groupLabel(g.key) }}</span>
-              <span class="lim-grp-ct">{{ g.items.length }}</span>
+        </Button>
+        <!-- Một bề mặt viền hairline, các hàng chia bằng đường 1px. -->
+        <div class="flex max-h-[48vh] flex-col overflow-y-auto rounded-lg border">
+          <template v-for="(g, gi) in groups" :key="g.key">
+            <div
+              class="flex items-center gap-2 bg-muted px-3 py-2 text-xs text-dim"
+              :class="{ 'border-t': gi > 0 }"
+            >
+              <span class="size-2 flex-none rounded-sm" :class="g.key ? 'bg-primary' : 'bg-dim'" />
+              <span class="min-w-0 truncate">{{ groupLabel(g.key) }}</span>
+              <span class="text-sm tabular-nums">{{ g.items.length }}</span>
             </div>
-            <label v-for="c in g.items" :key="candidateKey(c)" class="lim-item">
-              <input
-                type="checkbox"
-                class="lim-check"
-                :checked="selected.has(candidateKey(c))"
-                @change="toggle(candidateKey(c))"
+            <label
+              v-for="c in g.items"
+              :key="candidateKey(c)"
+              class="flex cursor-pointer items-start gap-3 border-t px-3 py-3 transition-colors hover:bg-accent"
+            >
+              <Checkbox
+                class="mt-0.5"
+                :model-value="selected.has(candidateKey(c))"
+                @update:model-value="toggle(candidateKey(c))"
               />
-              <span class="lim-item-tx">
-                <span class="lim-item-nm">{{ c.name || c.id }}</span>
-                <span class="lim-item-sub mono">{{ sourceLabel(c) }} · {{ c.id }}</span>
+              <span class="flex min-w-0 flex-col gap-1">
+                <span class="text-sm font-semibold break-all text-foreground">
+                  {{ c.name || c.id }}
+                </span>
+                <!-- mono-ok: đường dẫn nguồn + id -->
+                <span class="font-mono text-xs break-all text-dim">
+                  {{ sourceLabel(c) }} · {{ c.id }}
+                </span>
               </span>
             </label>
           </template>
@@ -46,8 +57,9 @@
     </div>
 
     <template #footer>
-      <span class="lim-count">{{ t('library.import.selectedCount', { n: selected.size }) }}</span>
-      <span style="flex: 1" />
+      <span class="mr-auto text-sm text-dim">
+        {{ t('library.import.selectedCount', { n: selected.size }) }}
+      </span>
       <Button :disabled="importing" variant="outline" @click="emit('close')">
         {{ t('common.cancel') }}
       </Button>
@@ -71,6 +83,7 @@ import { candidateKey, useLibraryImport } from '~/composables/useLibraryImport'
 import { useProjects } from '~/composables/useProjects'
 import type { ConfigKind } from '~/stores/templates'
 import Button from '~/components/ui/button/Button.vue'
+import Checkbox from '~/components/ui/checkbox/Checkbox.vue'
 
 const props = defineProps<{
   open: boolean
@@ -122,107 +135,3 @@ const confirm = async (): Promise<void> => {
   emit('imported', n)
 }
 </script>
-
-<style scoped>
-.lim {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.lim-sub {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-.lim-state {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  text-align: center;
-  padding: 18px 0;
-}
-.lim-selectall {
-  align-self: flex-start;
-  background: transparent;
-  border: 0;
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  padding: 2px 0;
-}
-/* Flat hairline list — one bordered surface, rows split by a 1px divider. */
-.lim-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 48vh;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.lim-grp {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  background: var(--bgHover);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.lim-grp:not(:first-child) {
-  border-top: 1px solid var(--border);
-}
-.lim-grp-nm {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lim-grp-ct {
-  font-family: var(--mono, monospace);
-  font-size: 12px;
-  line-height: 12px;
-}
-.lim-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 11px 12px;
-  cursor: pointer;
-  transition: background 0.12s;
-  border-top: 1px solid var(--border);
-}
-.lim-item:hover {
-  background: var(--bgHover);
-}
-.lim-check {
-  margin-top: 3px;
-  flex: 0 0 auto;
-  accent-color: var(--accent);
-}
-.lim-item-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.lim-item-nm {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-  word-break: break-all;
-}
-.lim-item-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.lim-count {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-</style>

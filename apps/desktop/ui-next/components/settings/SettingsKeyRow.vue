@@ -1,7 +1,7 @@
 <template>
-  <div class="keyrow">
+  <div class="flex min-w-56 items-center gap-2">
     <Input
-      :class="{ mono }"
+      :class="inputFont"
       :type="revealed ? 'text' : 'password'"
       :placeholder="placeholder"
       :readonly="readonly"
@@ -9,17 +9,22 @@
       class="flex-1"
       @update:model-value="model = $event"
     />
-    <span class="keyeye" @click="revealed = !revealed">👁</span>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      :title="revealed ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
+      :aria-label="revealed ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
+      @click="revealed = !revealed"
+    >
+      <Icon :name="revealed ? 'eye-off' : 'eye'" />
+    </Button>
   </div>
 </template>
 
 <script setup lang="ts">
-import Input from '~/components/ui/input/Input.vue'
-
-// API-key input with reveal toggle — ports the .keyrow > .keyinp + .keyeye control.
-// Controlled via v-model; password <-> text on eye click. `readonly` renders an
-// existing (masked) value the user can reveal but not edit (e.g. a stored key).
-withDefaults(
+// Ô nhập API key có nút hiện/ẩn. v-model; bấm mắt đổi password <-> text. `readonly`
+// hiển thị giá trị đã lưu (đã che) cho xem nhưng không sửa.
+const props = withDefaults(
   defineProps<{
     placeholder?: string
     readonly?: boolean
@@ -28,6 +33,8 @@ withDefaults(
   { placeholder: '', readonly: false, mono: false },
 )
 
+const { t } = useI18n()
 const model = defineModel<string>({ default: '' })
 const revealed = ref(false)
+const inputFont = computed(() => (props.mono ? 'font-mono' : ''))
 </script>

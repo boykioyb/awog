@@ -1,108 +1,142 @@
 <template>
-  <div class="ssh-detail">
+  <div class="flex min-h-0 flex-1 flex-col">
     <!-- Hero: colored monogram + name + endpoint + status/tags, then a primary
          Connect CTA and icon-only secondary actions. Stays compact so an open
          terminal/SFTP/forward panel below gets the full remaining height. -->
-    <header class="ssh-hero">
-      <span class="ssh-mono" :style="monoStyle">{{ initial }}</span>
-      <div class="ssh-hero-main">
-        <div class="ssh-hero-name">{{ host.name || host.host }}</div>
-        <div class="ssh-hero-endpoint mono">{{ endpoint }}</div>
-        <div class="ssh-hero-meta">
-          <span class="ssh-pill" :style="{ color: statusColor, borderColor: statusColor }">
-            <span class="ssh-pill-dot" :style="{ background: statusColor }" />
+    <header class="flex shrink-0 items-start gap-3 px-4 py-4">
+      <!-- Màu monogram sinh theo folder/host (HSL dữ liệu, không phải token theme). -->
+      <span
+        class="grid size-11 shrink-0 place-items-center rounded-lg text-lg font-semibold"
+        :style="monoStyle"
+      >
+        {{ initial }}
+      </span>
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <div class="text-lg font-semibold break-words text-foreground">
+          {{ host.name || host.host }}
+        </div>
+        <div class="font-mono text-sm break-all text-muted-foreground">{{ endpoint }}</div>
+        <div class="mt-1 flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" :class="statusText">
+            <span class="size-2 shrink-0 rounded-full bg-current" />
             {{ statusLabel }}
-          </span>
-          <span class="ssh-chip">{{ authMethodLabel }}</span>
-          <span v-if="folder" class="ssh-chip">
-            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          </Badge>
+          <Badge variant="secondary">{{ authMethodLabel }}</Badge>
+          <Badge v-if="folder" variant="secondary">
+            <Icon name="folder" />
             {{ folder }}
-          </span>
-          <span v-for="tag in tags" :key="tag" class="ssh-chip">{{ tag }}</span>
-          <span
+          </Badge>
+          <Badge v-for="tag in tags" :key="tag" variant="secondary">{{ tag }}</Badge>
+          <Badge
             v-if="host.options?.strictHostKey === false"
-            class="ssh-chip ssh-chip-warn"
+            variant="outline"
+            class="border-warning text-warning"
             :title="t('ssh.detail.hostKeyOffHint')"
           >
-            <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="alert" />
             {{ t('ssh.detail.hostKeyOff') }}
-          </span>
+          </Badge>
         </div>
       </div>
-      <div class="ssh-hero-actions">
-        <button
-          class="ssh-connect"
-          :class="{ on: showTerminal }"
+      <div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        <!-- Đang mở terminal → CTA chuyển sang dạng accent-tint (đang chọn). -->
+        <Button
+          size="sm"
+          class="mr-1"
+          :class="{
+            'border border-selected-border bg-selected text-primary shadow-none hover:bg-selected':
+              showTerminal,
+          }"
           :title="t('ssh.detail.connect')"
           @click="emit('connect')"
         >
-          <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="play" />
           {{ t('ssh.detail.connect') }}
-        </button>
-        <button
-          class="ssh-act"
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconMd"
+          class="text-muted-foreground"
           :title="t('ssh.detail.test')"
           :aria-label="t('ssh.detail.test')"
           @click="emit('test')"
         >
-          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ssh-act"
-          :class="{ on: showSftp }"
+          <Icon name="refresh" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconMd"
+          class="text-muted-foreground"
+          :class="{ 'bg-selected text-primary hover:bg-selected hover:text-primary': showSftp }"
           :title="t('ssh.detail.sftp')"
           :aria-label="t('ssh.detail.sftp')"
           @click="toggleSftp"
         >
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ssh-act"
-          :class="{ on: showForward }"
+          <Icon name="folder" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconMd"
+          class="text-muted-foreground"
+          :class="{ 'bg-selected text-primary hover:bg-selected hover:text-primary': showForward }"
           :title="t('ssh.detail.forward')"
           :aria-label="t('ssh.detail.forward')"
           @click="toggleForward"
         >
-          <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <span class="ssh-act-sep" />
-        <button
-          class="ssh-act"
+          <Icon name="move" />
+        </Button>
+        <Separator orientation="vertical" class="mx-1 h-4.5" />
+        <Button
+          variant="ghost"
+          size="iconMd"
+          class="text-muted-foreground"
           :title="t('ssh.detail.edit')"
           :aria-label="t('ssh.detail.edit')"
           @click="emit('edit')"
         >
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ssh-act ssh-act-danger"
+          <Icon name="edit" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconMd"
+          class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           :title="t('ssh.detail.delete')"
           :aria-label="t('ssh.detail.delete')"
           @click="emit('delete')"
         >
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="trash" />
+        </Button>
       </div>
     </header>
+    <Separator />
 
     <!-- Body: a live surface (terminal / SFTP / forward) takes over full height
          when open; otherwise the host info list scrolls. -->
-    <div v-if="hasPanel" class="ssh-panels">
-      <section v-if="showTerminal" class="ssh-surface ssh-surface-grow">
-        <div class="ssh-surface-head">
-          <Icon name="ssh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <div
+      v-if="hasPanel"
+      class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pt-3.5 pb-4"
+    >
+      <section
+        v-if="showTerminal"
+        class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border"
+      >
+        <div class="flex shrink-0 items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+          <Icon name="ssh" class="size-3.5" />
           {{ t('ssh.terminal.title') }}
-          <span class="ssh-surface-sub mono">{{ endpoint }}</span>
-          <button
-            class="ssh-surface-x"
+          <span class="min-w-0 flex-1 truncate font-mono text-sm">{{ endpoint }}</span>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground"
             :title="t('ssh.terminal.close')"
             :aria-label="t('ssh.terminal.close')"
             @click="store.closeTerminal()"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="x" />
+          </Button>
         </div>
-        <div class="ssh-surface-body ssh-term-body">
+        <Separator />
+        <div class="min-h-0 flex-1 bg-background">
           <SshTerminal :key="host.id" :host-id="host.id" />
         </div>
       </section>
@@ -126,67 +160,107 @@
       />
     </div>
 
-    <div v-else class="ssh-info">
-      <div class="ssh-sec-h">{{ t('ssh.section.connection') }}</div>
-      <dl class="ssh-kv">
-        <div class="ssh-kv-row">
-          <dt>{{ t('ssh.editor.host') }}</dt>
-          <dd class="mono">{{ endpoint }}</dd>
+    <div v-else class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div class="mb-1.5 text-xs font-semibold text-muted-foreground">
+        {{ t('ssh.section.connection') }}
+      </div>
+      <dl class="mb-5.5">
+        <div class="flex gap-4 py-2 text-sm [&+&]:border-t">
+          <dt class="w-29 shrink-0 text-muted-foreground">{{ t('ssh.editor.host') }}</dt>
+          <dd
+            class="flex min-w-0 flex-1 flex-wrap items-center gap-2 break-words text-foreground font-mono"
+          >
+            {{ endpoint }}
+          </dd>
         </div>
-        <div class="ssh-kv-row">
-          <dt>{{ t('ssh.detail.authMethod') }}</dt>
-          <dd>{{ authMethodLabel }}</dd>
+        <div class="flex gap-4 py-2 text-sm [&+&]:border-t">
+          <dt class="w-29 shrink-0 text-muted-foreground">{{ t('ssh.detail.authMethod') }}</dt>
+          <dd class="flex min-w-0 flex-1 flex-wrap items-center gap-2 break-words text-foreground">
+            {{ authMethodLabel }}
+          </dd>
         </div>
-        <div v-if="host.authMethod === 'key'" class="ssh-kv-row">
-          <dt>{{ t('ssh.detail.identity') }}</dt>
-          <dd>
+        <div v-if="host.authMethod === 'key'" class="flex gap-4 py-2 text-sm [&+&]:border-t">
+          <dt class="w-29 shrink-0 text-muted-foreground">{{ t('ssh.detail.identity') }}</dt>
+          <dd class="flex min-w-0 flex-1 flex-wrap items-center gap-2 break-words text-foreground">
             <template v-if="identity">
               <span>{{ identity.name }}</span>
-              <span v-if="identity.hasPassphrase" class="ssh-chip ssh-chip-accent">
+              <Badge
+                v-if="identity.hasPassphrase"
+                variant="outline"
+                class="border-transparent bg-primary/15 text-primary"
+              >
                 {{ t('ssh.detail.passphrase') }}
-              </span>
-              <button
-                class="ssh-linkbtn"
+              </Badge>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="text-muted-foreground"
                 :title="t('ssh.identity.edit')"
                 @click="emit('edit-identity', identity.id)"
               >
-                <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              </button>
+                <Icon name="edit" />
+              </Button>
             </template>
-            <button v-else class="ssh-linkbtn ssh-linkbtn-text" @click="emit('new-identity')">
-              <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Button
+              v-else
+              variant="ghost"
+              size="xs"
+              class="gap-1 px-1.5 text-primary"
+              @click="emit('new-identity')"
+            >
+              <Icon name="plus" />
               {{ t('ssh.identity.new') }}
-            </button>
+            </Button>
           </dd>
         </div>
-        <div v-if="host.authMethod === 'key' && identity?.keyPath" class="ssh-kv-row">
-          <dt>{{ t('ssh.detail.keyPath') }}</dt>
-          <dd class="mono">{{ identity.keyPath }}</dd>
+        <div
+          v-if="host.authMethod === 'key' && identity?.keyPath"
+          class="flex gap-4 py-2 text-sm [&+&]:border-t"
+        >
+          <dt class="w-29 shrink-0 text-muted-foreground">{{ t('ssh.detail.keyPath') }}</dt>
+          <dd
+            class="flex min-w-0 flex-1 flex-wrap items-center gap-2 break-words text-foreground font-mono"
+          >
+            {{ identity.keyPath }}
+          </dd>
         </div>
-        <div v-if="jumpHostName" class="ssh-kv-row">
-          <dt>{{ t('ssh.detail.jumpHost') }}</dt>
-          <dd>{{ jumpHostName }}</dd>
+        <div v-if="jumpHostName" class="flex gap-4 py-2 text-sm [&+&]:border-t">
+          <dt class="w-29 shrink-0 text-muted-foreground">{{ t('ssh.detail.jumpHost') }}</dt>
+          <dd class="flex min-w-0 flex-1 flex-wrap items-center gap-2 break-words text-foreground">
+            {{ jumpHostName }}
+          </dd>
         </div>
-        <div class="ssh-kv-row">
-          <dt>{{ t('ssh.detail.lastConnected') }}</dt>
-          <dd>{{ lastConnectedRelative }}</dd>
+        <div class="flex gap-4 py-2 text-sm [&+&]:border-t">
+          <dt class="w-29 shrink-0 text-muted-foreground">
+            {{ t('ssh.detail.lastConnected') }}
+          </dt>
+          <dd class="flex min-w-0 flex-1 flex-wrap items-center gap-2 break-words text-foreground">
+            {{ lastConnectedRelative }}
+          </dd>
         </div>
       </dl>
 
-      <div v-if="connectionError" class="ssh-err">
-        <Icon
-          name="alert"
-          style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 2px"
-        />
-        <span class="mono">{{ connectionError }}</span>
-      </div>
+      <Alert
+        v-if="connectionError"
+        variant="destructive"
+        class="mb-5.5 border-destructive/40 bg-destructive/10"
+      >
+        <Icon name="alert" />
+        <AlertDescription class="font-mono">{{ connectionError }}</AlertDescription>
+      </Alert>
 
       <template v-if="portForwards.length">
-        <div class="ssh-sec-h">{{ t('ssh.section.forwards') }}</div>
-        <div class="ssh-fwds">
-          <div v-for="fwd in portForwards" :key="fwd.id" class="ssh-fwd">
-            <span class="ssh-chip">{{ t('ssh.forward.' + fwd.type) }}</span>
-            <span class="mono ssh-fwd-body">{{ forwardLabel(fwd) }}</span>
+        <div class="mb-1.5 text-xs font-semibold text-muted-foreground">
+          {{ t('ssh.section.forwards') }}
+        </div>
+        <div class="mb-5.5 flex flex-col divide-y overflow-hidden rounded-lg border">
+          <div
+            v-for="fwd in portForwards"
+            :key="fwd.id"
+            class="flex items-center gap-2.5 px-3 py-2"
+          >
+            <Badge variant="secondary">{{ t('ssh.forward.' + fwd.type) }}</Badge>
+            <span class="font-mono text-sm break-all text-foreground">{{ forwardLabel(fwd) }}</span>
           </div>
         </div>
       </template>
@@ -207,6 +281,7 @@ import SshForwardPanel from '~/components/ssh/SshForwardPanel.vue'
 import ConnectGate from '~/components/ssh/SshConnectGate.vue'
 import { useSshDetail } from '~/composables/useSshDetail'
 import { hostAccent, useSshStore, type PortForward, type SshHost } from '~/stores/ssh'
+import { SSH_STATUS_BADGE } from '~/components/ssh/ssh-status'
 
 const props = defineProps<{ host: SshHost }>()
 
@@ -235,7 +310,7 @@ const toggleForward = () =>
 
 const {
   host,
-  statusColor,
+  status,
   statusLabel,
   endpoint,
   authMethodLabel,
@@ -247,6 +322,9 @@ const {
   connectionError,
   lastConnectedRelative,
 } = useSshDetail(() => props.host)
+
+// Màu Badge trạng thái theo utility ngữ nghĩa (thay statusColor dạng var thô).
+const statusText = computed(() => SSH_STATUS_BADGE[status.value])
 
 const initial = computed(() => (props.host.name || props.host.host || '?').charAt(0).toUpperCase())
 const monoStyle = computed(() => {
@@ -261,335 +339,3 @@ const forwardLabel = (fwd: PortForward): string => {
   return `${bind} ${arrow} ${fwd.destHost}:${fwd.destPort}`
 }
 </script>
-
-<style scoped>
-.ssh-detail {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-
-/* ── Hero ──────────────────────────────────────────────────────────────────── */
-.ssh-hero {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  gap: 13px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--border);
-}
-.ssh-mono {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-btn);
-  display: grid;
-  place-items: center;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  flex: 0 0 auto;
-}
-.ssh-hero-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.ssh-hero-name {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-  word-break: break-word;
-}
-.ssh-hero-endpoint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.ssh-hero-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.ssh-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border: 1px solid;
-  border-radius: var(--r-sm);
-  background: transparent;
-}
-.ssh-pill-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-.ssh-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.ssh-chip-accent {
-  color: var(--accent);
-  background: var(--accentDim);
-}
-.ssh-chip-warn {
-  color: var(--amber, var(--danger));
-  background: transparent;
-  border: 1px solid var(--amber, var(--danger));
-}
-.ssh-hero-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.ssh-connect {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 13px;
-  margin-right: 4px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: var(--accent);
-  color: var(--accentText, #fff);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  cursor: pointer;
-  transition:
-    filter 0.12s,
-    background 0.12s;
-}
-.ssh-connect:hover {
-  filter: brightness(1.08);
-}
-.ssh-connect.on {
-  background: var(--accentDim);
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.ssh-connect:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.ssh-act {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.ssh-act:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-act.on {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.ssh-act.ssh-act-danger:hover {
-  background: var(--dangerDim, var(--bgHover));
-  color: var(--danger);
-}
-.ssh-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.ssh-act-sep {
-  width: 1px;
-  height: 18px;
-  margin: 0 3px;
-  background: var(--border);
-}
-
-/* ── Info list (no panel) ──────────────────────────────────────────────────── */
-.ssh-info {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px 18px;
-}
-.ssh-sec-h {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-  margin: 0 0 6px;
-}
-.ssh-sec-h + .ssh-kv,
-.ssh-sec-h + .ssh-fwds {
-  margin-bottom: 22px;
-}
-.ssh-kv {
-  margin: 0 0 22px;
-}
-.ssh-kv-row {
-  display: flex;
-  gap: 16px;
-  padding: 8px 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ssh-kv-row + .ssh-kv-row {
-  border-top: 1px solid var(--border);
-}
-.ssh-kv-row dt {
-  flex: 0 0 auto;
-  width: 116px;
-  color: var(--textDim);
-}
-.ssh-kv-row dd {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: var(--text);
-  word-break: break-word;
-}
-.ssh-linkbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.ssh-linkbtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-linkbtn-text {
-  font-weight: 500;
-  color: var(--accent);
-}
-.ssh-err {
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-bottom: 22px;
-  border-radius: var(--r-btn);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--dangerDim);
-  border: 1px solid var(--dangerBorder);
-}
-.ssh-fwds {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-}
-.ssh-fwd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-}
-.ssh-fwd + .ssh-fwd {
-  border-top: 1px solid var(--border);
-}
-.ssh-fwd-body {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  word-break: break-all;
-}
-
-/* ── Live surfaces (terminal / SFTP / forward) ─────────────────────────────── */
-.ssh-panels {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 18px 18px;
-  overflow: hidden;
-}
-.ssh-surface {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-}
-.ssh-surface-grow {
-  flex: 1;
-}
-.ssh-surface-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  padding: 9px 12px;
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ssh-surface-sub {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ssh-surface-x {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ssh-surface-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-term-body {
-  flex: 1;
-  min-height: 0;
-  background: var(--bg);
-}
-</style>

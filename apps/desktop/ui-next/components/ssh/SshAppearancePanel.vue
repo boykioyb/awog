@@ -1,72 +1,98 @@
 <template>
-  <div class="tap" role="dialog" :aria-label="t('ssh.appearance.title')">
-    <div class="tap-head">
-      <span class="tap-title">{{ t('ssh.appearance.title') }}</span>
-      <button
-        class="tap-x"
-        type="button"
+  <div
+    class="absolute inset-y-0 right-0 z-5 flex w-80 flex-col overflow-y-auto border-l bg-background"
+    role="dialog"
+    :aria-label="t('ssh.appearance.title')"
+  >
+    <div class="flex shrink-0 items-center justify-between gap-2 px-3 py-2.5">
+      <span class="text-sm font-medium text-foreground">{{ t('ssh.appearance.title') }}</span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-muted-foreground"
         :title="t('ssh.appearance.close')"
         :aria-label="t('ssh.appearance.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </div>
+    <Separator />
 
-    <div class="tap-body">
+    <div class="flex min-h-0 flex-auto flex-col gap-4.5 px-3 py-3.5">
       <!-- Theme preset -->
-      <div class="tap-group">
-        <div class="tap-label">{{ t('ssh.appearance.theme') }}</div>
-        <div class="tap-presets">
-          <button
+      <div class="flex flex-col gap-2">
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('ssh.appearance.theme') }}
+        </div>
+        <div class="flex flex-col gap-1">
+          <Button
             v-for="p in store.presets"
             :key="p.id"
-            class="tap-preset"
-            :class="{ on: p.id === store.presetId }"
-            type="button"
+            variant="ghost"
+            class="h-auto justify-start gap-2.5 border border-transparent px-2 py-1.5 text-left font-normal text-muted-foreground"
+            :class="{
+              'border-selected-border bg-selected text-foreground hover:bg-selected':
+                p.id === store.presetId,
+            }"
             @click="store.setPreset(p.id)"
           >
-            <span class="tap-swatch" :style="{ background: swatchBg(p) }">
-              <span class="tap-swatch-txt" :style="{ color: swatchFg(p) }">Aa</span>
-              <span class="tap-swatch-dots">
-                <i v-for="(c, i) in swatchDots(p)" :key="i" :style="{ background: c }" />
+            <!-- Swatch xem trước màu terminal của preset — màu lấy từ dữ liệu preset. -->
+            <span
+              class="flex h-8 w-11 shrink-0 flex-col items-start justify-center gap-0.5 overflow-hidden rounded-sm border px-1 py-0.5"
+              :style="{ background: swatchBg(p) }"
+            >
+              <span class="font-mono text-xs" :style="{ color: swatchFg(p) }">Aa</span>
+              <span class="flex gap-0.5">
+                <i
+                  v-for="(c, i) in swatchDots(p)"
+                  :key="i"
+                  class="size-1.25 rounded-xs"
+                  :style="{ background: c }"
+                />
               </span>
             </span>
-            <span class="tap-preset-name">{{ p.name }}</span>
-            <Icon v-if="p.id === store.presetId" name="check" class="tap-check" />
-          </button>
+            <span class="flex-auto text-sm font-medium">{{ p.name }}</span>
+            <Icon v-if="p.id === store.presetId" name="check" class="shrink-0 text-primary" />
+          </Button>
         </div>
       </div>
 
       <!-- Font size -->
-      <div class="tap-group">
-        <div class="tap-label">{{ t('ssh.appearance.fontSize') }}</div>
-        <div class="tap-stepper">
-          <button
-            class="tap-step"
-            type="button"
+      <div class="flex flex-col gap-2">
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('ssh.appearance.fontSize') }}
+        </div>
+        <div class="inline-flex items-center gap-0.5 self-start rounded-md border bg-muted p-0.5">
+          <Button
+            variant="ghost"
+            size="iconSm"
             :disabled="store.fontSize <= FONT_SIZE_MIN"
             :aria-label="t('ssh.appearance.fontSizeDown')"
             @click="store.setFontSize(store.fontSize - 1)"
           >
-            <Icon name="minus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <span class="tap-step-val tnum">{{ store.fontSize }}</span>
-          <button
-            class="tap-step"
-            type="button"
+            <Icon name="minus" />
+          </Button>
+          <span class="min-w-7.5 text-center text-sm text-foreground tabular-nums">
+            {{ store.fontSize }}
+          </span>
+          <Button
+            variant="ghost"
+            size="iconSm"
             :disabled="store.fontSize >= FONT_SIZE_MAX"
             :aria-label="t('ssh.appearance.fontSizeUp')"
             @click="store.setFontSize(store.fontSize + 1)"
           >
-            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="plus" />
+          </Button>
         </div>
       </div>
 
       <!-- Font family -->
-      <div class="tap-group">
-        <div class="tap-label">{{ t('ssh.appearance.fontFamily') }}</div>
+      <div class="flex flex-col gap-2">
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('ssh.appearance.fontFamily') }}
+        </div>
         <AppSelect v-model="fontModel" :options="FONT_OPTIONS" width="100%" />
       </div>
     </div>
@@ -116,183 +142,3 @@ function onKey(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-.tap {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 320px;
-  border-left: 1px solid var(--border);
-  background: var(--bg);
-  z-index: 5;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-.tap-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.tap-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.tap-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.tap-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.tap-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 14px 12px;
-}
-.tap-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tap-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 550;
-  color: var(--textDim);
-}
-.tap-presets {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.tap-preset {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
-}
-.tap-preset:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.tap-preset.on {
-  background: var(--bgActive);
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-.tap-swatch {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 3px;
-  width: 44px;
-  height: 32px;
-  padding: 3px 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  overflow: hidden;
-}
-.tap-swatch-txt {
-  /* mono-ok: terminal preview swatch — shows real terminal text */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: 12px;
-}
-.tap-swatch-dots {
-  display: flex;
-  gap: 2px;
-}
-.tap-swatch-dots i {
-  width: 5px;
-  height: 5px;
-  /* design-token-ok: 5px swatch dot — a token radius clamps and changes its shape. */
-  border-radius: 1px;
-}
-.tap-preset-name {
-  flex: 1 1 auto;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-}
-.tap-check {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--accent);
-}
-.tap-stepper {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  align-self: flex-start;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  padding: 2px;
-}
-.tap-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 26px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.tap-step:hover:not(:disabled) {
-  background: var(--bgHover);
-}
-.tap-step:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.tap-step-val {
-  min-width: 30px;
-  text-align: center;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-</style>

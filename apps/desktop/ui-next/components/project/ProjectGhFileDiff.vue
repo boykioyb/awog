@@ -1,15 +1,36 @@
 <template>
-  <div class="ghdiff">
-    <div v-if="!rows.length" class="ghdiff-empty">{{ t('projects.drawer.diffEmpty') }}</div>
+  <!-- mono-ok: nội dung diff là code -->
+  <div class="bg-muted font-mono text-xs">
+    <div v-if="!rows.length" class="px-3 py-2 text-dim">{{ t('projects.drawer.diffEmpty') }}</div>
     <template v-else>
-      <div v-for="(r, i) in rows" :key="i" class="dl" :class="r.type">
-        <div v-if="r.type === 'hunk'" class="dhunk">{{ r.text }}</div>
+      <!-- Hàng flex (không phải table) để ô code wrap ổn định còn gutter cố định bề
+           rộng + bám đỉnh. GitHub tô màu cả HÀNG, không tô chữ. -->
+      <div
+        v-for="(r, i) in rows"
+        :key="i"
+        class="flex items-start"
+        :class="{ 'bg-diff-add/15': r.type === 'add', 'bg-diff-del/15': r.type === 'del' }"
+      >
+        <div
+          v-if="r.type === 'hunk'"
+          class="min-w-0 flex-1 bg-muted px-2.5 py-0.5 break-anywhere whitespace-pre-wrap text-dim"
+        >
+          {{ r.text }}
+        </div>
         <template v-else>
-          <span class="dln">{{ r.oldNo }}</span>
-          <span class="dln dln-n">{{ r.newNo }}</span>
+          <span class="w-8.5 flex-none px-2 text-right whitespace-nowrap text-faint select-none">
+            {{ r.oldNo }}
+          </span>
+          <span
+            class="w-8.5 flex-none border-r px-2 text-right whitespace-nowrap text-faint select-none"
+          >
+            {{ r.newNo }}
+          </span>
           <!-- Single interpolation in a pre-wrap cell — keep on one line so no markup
                whitespace leaks into the rendered diff. -->
-          <span class="dc">{{ r.text }}</span>
+          <span class="min-w-0 flex-1 px-2.5 break-anywhere whitespace-pre-wrap text-foreground">
+            {{ r.text }}
+          </span>
         </template>
       </div>
     </template>
@@ -61,61 +82,3 @@ const rows = computed<DiffRow[]>(() => {
   })
 })
 </script>
-
-<style scoped>
-.ghdiff {
-  background: var(--bgInput);
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.ghdiff-empty {
-  padding: 9px 11px;
-  color: var(--textDim);
-}
-/* Flex rows (not a table) so the code cell wraps reliably while the gutter stays
-   fixed-width + top-aligned. */
-.dl {
-  display: flex;
-  align-items: flex-start;
-}
-/* Line-number gutters: fixed width, right-aligned, faint, non-selectable. */
-.dln {
-  flex: 0 0 auto;
-  width: 34px;
-  padding: 0 8px;
-  text-align: right;
-  color: var(--textFaint);
-  user-select: none;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  white-space: nowrap;
-}
-.dln-n {
-  border-right: 1px solid var(--border);
-}
-.dc {
-  flex: 1;
-  min-width: 0;
-  padding: 0 10px;
-  color: var(--text);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-/* Background-coloured rows (GitHub colours the row, not the text). */
-.dl.add {
-  background: var(--addBg);
-}
-.dl.del {
-  background: var(--delBg);
-}
-.dhunk {
-  flex: 1;
-  min-width: 0;
-  padding: 2px 10px;
-  background: var(--bgSubtle);
-  color: var(--textDim);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-</style>

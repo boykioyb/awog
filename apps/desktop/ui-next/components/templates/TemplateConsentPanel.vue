@@ -1,76 +1,109 @@
 <template>
-  <div class="tcp">
-    <div class="tcp-head">
-      <div class="tcp-name">{{ inspection.name }}</div>
-      <span v-if="inspection.version" class="chip">{{ inspection.version }}</span>
-      <span v-if="inspection.alreadyInstalled" class="chip">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-center gap-2">
+      <div class="text-lg font-semibold text-foreground">{{ inspection.name }}</div>
+      <Badge v-if="inspection.version" variant="outline" class="rounded-sm text-muted-foreground">
+        {{ inspection.version }}
+      </Badge>
+      <Badge
+        v-if="inspection.alreadyInstalled"
+        variant="outline"
+        class="rounded-sm text-muted-foreground"
+      >
         {{ t('templatesDiscover.consent.alreadyInstalled') }}
-      </span>
+      </Badge>
     </div>
-    <p v-if="inspection.description" class="tcp-desc">{{ inspection.description }}</p>
+    <p v-if="inspection.description" class="text-sm leading-relaxed text-muted-foreground">
+      {{ inspection.description }}
+    </p>
 
     <!-- Nguồn thật của bundle: người dùng phải đọc được nó trước khi đồng ý. -->
-    <div class="tcp-src">
-      <span class="tcp-src-lbl">{{ t('templatesDiscover.consent.source') }}</span>
-      <span class="tcp-src-url">{{ inspection.sourceUrl }}</span>
+    <div class="flex min-w-0 items-baseline gap-2">
+      <span class="shrink-0 text-xs text-dim">{{ t('templatesDiscover.consent.source') }}</span>
+      <span class="font-mono text-xs wrap-anywhere text-foreground">
+        {{ inspection.sourceUrl }}
+      </span>
     </div>
 
     <!-- Trang chủ do người xuất bản khai (tuỳ chọn). Chỉ hiện khi nó là link
          https thật — homepage hỏng thì KHÔNG hiện gì, không hiện link chết. -->
-    <div v-if="safeHomepage" class="tcp-src">
-      <span class="tcp-src-lbl">{{ t('templatesDiscover.consent.homepage') }}</span>
-      <button type="button" class="tcp-src-url link" :title="safeHomepage" @click="openHomepage">
+    <div v-if="safeHomepage" class="flex min-w-0 items-baseline gap-2">
+      <span class="shrink-0 text-xs text-dim">{{ t('templatesDiscover.consent.homepage') }}</span>
+      <Button
+        variant="link"
+        class="h-auto p-0 text-left font-mono text-xs font-normal wrap-anywhere whitespace-normal"
+        :title="safeHomepage"
+        @click="openHomepage"
+      >
         {{ safeHomepage }}
-      </button>
+      </Button>
     </div>
 
     <!-- Cảnh báo bề mặt nguy hiểm: hook = script chạy được, rule = vào thẳng
          system prompt. Chỉ hiện khi bundle thật sự có, và nói rõ hậu quả. -->
-    <div v-if="risky.length" class="tcp-warn">
-      <Icon name="shield" class="tcp-warn-ic" />
-      <div class="tcp-warn-tx">
-        <div class="tcp-warn-hd">{{ t('templatesDiscover.consent.riskTitle') }}</div>
-        <div v-for="kind in risky" :key="kind" class="tcp-warn-line">
+    <Alert v-if="risky.length" class="border-warning bg-warning/10 [&>svg]:text-warning">
+      <Icon name="shield" />
+      <AlertTitle class="line-clamp-none font-semibold text-foreground">
+        {{ t('templatesDiscover.consent.riskTitle') }}
+      </AlertTitle>
+      <AlertDescription class="text-xs leading-relaxed">
+        <div v-for="kind in risky" :key="kind">
           {{ t('templatesDiscover.consent.risk.' + kind) }}
         </div>
-      </div>
-    </div>
+      </AlertDescription>
+    </Alert>
 
-    <div v-if="inspection.undisclosedKinds.length" class="tcp-warn undisclosed">
-      <Icon name="alert" class="tcp-warn-ic" />
-      <div class="tcp-warn-tx">
-        <div class="tcp-warn-hd">{{ t('templatesDiscover.consent.undisclosedTitle') }}</div>
-        <div class="tcp-warn-line">
-          {{ t('templatesDiscover.consent.undisclosed', { kinds: undisclosedLabels }) }}
-        </div>
-      </div>
-    </div>
+    <Alert
+      v-if="inspection.undisclosedKinds.length"
+      class="border-destructive bg-destructive/10 [&>svg]:text-destructive"
+    >
+      <Icon name="alert" />
+      <AlertTitle class="line-clamp-none font-semibold text-foreground">
+        {{ t('templatesDiscover.consent.undisclosedTitle') }}
+      </AlertTitle>
+      <AlertDescription class="text-xs leading-relaxed">
+        {{ t('templatesDiscover.consent.undisclosed', { kinds: undisclosedLabels }) }}
+      </AlertDescription>
+    </Alert>
 
     <!-- Danh sách ĐẦY ĐỦ: mọi entity sẽ được ghi, không cắt bớt, không "…and N
          more". Đây là thứ người dùng đang đồng ý. -->
-    <div class="tcp-section">
-      <div class="tcp-section-hd">
+    <Separator />
+    <div class="flex flex-col gap-2">
+      <div class="flex items-center gap-2 text-xs font-semibold text-dim">
         <span>{{ t('templatesDiscover.consent.willWrite') }}</span>
-        <span class="chip">{{ inspection.entities.length }}</span>
+        <Badge variant="outline" class="rounded-sm tabular-nums text-muted-foreground">
+          {{ inspection.entities.length }}
+        </Badge>
       </div>
-      <div v-if="!groups.length" class="tcp-empty">
+      <div v-if="!groups.length" class="text-xs leading-relaxed text-dim">
         {{ t('templatesDiscover.consent.nothing') }}
       </div>
-      <div v-for="g in groups" :key="g.kind" class="tcp-group">
-        <div class="tcp-group-hd">
-          <span class="tcp-group-nm" :class="{ risky: isRisky(g.kind) }">
+      <div v-for="g in groups" :key="g.kind" class="flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <span
+            class="text-sm font-semibold"
+            :class="isRisky(g.kind) ? 'text-warning' : 'text-foreground'"
+          >
             {{ t('templates.kind.' + g.kind) }}
           </span>
-          <span class="chip">{{ g.entities.length }}</span>
+          <Badge variant="outline" class="rounded-sm tabular-nums text-muted-foreground">
+            {{ g.entities.length }}
+          </Badge>
         </div>
-        <div v-for="e in g.entities" :key="e.kind + '/' + e.id" class="tcp-ent">
-          <span class="tcp-ent-id">{{ e.id }}</span>
-          <span class="tcp-ent-file">{{ e.file }}</span>
+        <div
+          v-for="e in g.entities"
+          :key="e.kind + '/' + e.id"
+          class="flex min-w-0 items-baseline gap-2.5 rounded-md border bg-muted px-2.5 py-1"
+        >
+          <span class="text-sm text-foreground">{{ e.id }}</span>
+          <span class="font-mono text-xs wrap-anywhere text-dim">{{ e.file }}</span>
         </div>
       </div>
     </div>
 
-    <div class="tcp-foot">
+    <Separator />
+    <div class="text-xs leading-relaxed text-dim">
       {{
         t('templatesDiscover.consent.footprint', {
           files: inspection.fileCount,
@@ -78,7 +111,9 @@
         })
       }}
     </div>
-    <div class="tcp-note">{{ t('templatesDiscover.consent.stagingNote') }}</div>
+    <div class="text-xs leading-relaxed text-dim">
+      {{ t('templatesDiscover.consent.stagingNote') }}
+    </div>
   </div>
 </template>
 
@@ -161,168 +196,3 @@ const sizeLabel = computed(() => {
   return `${(bytes / (KB * KB)).toFixed(1)} MB`
 })
 </script>
-
-<style scoped>
-.tcp {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.tcp-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tcp-name {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.tcp-desc {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-}
-.tcp-src {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.tcp-src-lbl {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.tcp-src-url {
-  /* mono-ok: URL repo — người dùng copy-paste được vào trình duyệt/terminal */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.tcp-src-url.link {
-  padding: 0;
-  background: transparent;
-  border: none;
-  text-align: left;
-  color: var(--accent);
-  cursor: pointer;
-}
-.tcp-src-url.link:hover {
-  text-decoration: underline;
-}
-.tcp-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amber);
-}
-.tcp-warn.undisclosed {
-  background: var(--dangerDim);
-  border-color: var(--danger);
-}
-.tcp-warn-ic {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  margin-top: 2px;
-  color: var(--amber);
-}
-.tcp-warn.undisclosed .tcp-warn-ic {
-  color: var(--danger);
-}
-.tcp-warn-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.tcp-warn-hd {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.tcp-warn-line {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-}
-.tcp-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.tcp-section-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-}
-.tcp-empty,
-.tcp-note,
-.tcp-foot {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.tcp-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.tcp-group-hd {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.tcp-group-nm {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.tcp-group-nm.risky {
-  color: var(--amber);
-}
-.tcp-ent {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 5px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  min-width: 0;
-}
-.tcp-ent-id {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.tcp-ent-file {
-  /* mono-ok: đường dẫn file trong bundle */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow-wrap: anywhere;
-}
-.tcp-foot {
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-</style>

@@ -1,31 +1,55 @@
 <template>
-  <div class="gcard" :class="{ gate: !answered && !cancelled }">
-    <div class="gh">
+  <!-- Thẻ câu hỏi — khung card; đang chờ trả lời (`gate`) = viền + nền hổ phách nhạt.
+       `data-qhead` / `data-qbody` là móc để SessionQuestionDrawer gỡ hàng tiêu đề và
+       cho thân cuộn khi thẻ nằm trong ngăn kéo. -->
+  <div
+    class="my-1 flex flex-col gap-0.5 rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm"
+    :class="{ 'border-warning/45 bg-warning/5': !answered && !cancelled }"
+  >
+    <div
+      data-qhead
+      class="mb-1.5 flex items-center gap-2 text-base font-medium"
+      :class="!answered && !cancelled ? 'text-warning' : 'text-foreground'"
+    >
       <Icon name="alert" class="size-4 shrink-0" />
       {{ items.length > 1 ? t('sessions.gate.questionMulti') : t('sessions.gate.question') }}
     </div>
-    <div v-if="block.title" class="qtitle">{{ block.title }}</div>
+    <!-- Tiêu đề của cả lời gọi (`title`), trên mọi câu hỏi. -->
+    <div v-if="block.title" class="mt-0.5 mb-2.5 text-lg font-semibold text-foreground">
+      {{ block.title }}
+    </div>
 
     <!-- answered → read-only record. An item CAN be answerless (decide-for-me /
          follow-up), so the record shows what was actually said, nothing more. -->
     <template v-if="answered">
-      <div v-for="(it, qi) in items" :key="qi" class="qitem">
-        <div class="qp">{{ it.prompt }}</div>
-        <div v-if="it.answer" class="resolved">
+      <div v-for="(it, qi) in items" :key="qi" :class="{ 'mt-3.5': qi > 0 }">
+        <div class="mb-2.5 text-base leading-(--lh-prose) text-foreground">{{ it.prompt }}</div>
+        <div v-if="it.answer" class="mt-1 flex items-center gap-2 text-base text-success">
           <Icon name="check" class="size-4 shrink-0" />
           {{ t('sessions.gate.chose', { answer: it.answer }) }}
         </div>
-        <div v-else class="resolved den">{{ t('sessions.gate.noAnswer') }}</div>
+        <div v-else class="mt-1 flex items-center gap-2 text-base text-destructive">
+          {{ t('sessions.gate.noAnswer') }}
+        </div>
       </div>
-      <div v-if="block.response" class="qwrote">
+      <!-- Chữ người dùng viết thêm, hiện lại ở bản ghi read-only. -->
+      <div v-if="block.response" class="mt-2.5 text-sm leading-(--lh-prose) text-muted-foreground">
         {{ t('sessions.gate.wrote', { text: block.response }) }}
       </div>
     </template>
 
     <!-- cancelled by a turn abort while still parked -->
     <template v-else-if="cancelled">
-      <div v-for="(it, qi) in items" :key="qi" class="qp">{{ it.prompt }}</div>
-      <div class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
+      <div
+        v-for="(it, qi) in items"
+        :key="qi"
+        class="mb-2.5 text-base leading-(--lh-prose) text-foreground"
+      >
+        {{ it.prompt }}
+      </div>
+      <div class="mt-1 flex items-center gap-2 text-base text-destructive">
+        {{ t('sessions.gate.cancelled') }}
+      </div>
     </template>
 
     <!-- interactive: one tab per question; pick → auto-advance; submit on last -->
@@ -34,27 +58,32 @@
            column is short (a bottom dock can leave it a few hundred pixels), and what
            has to give there is the body — the submit row must stay on screen. A plain
            div here, styled only by the drawer. -->
-      <div class="qbody">
-        <div v-if="forms.length > 1" class="qtabs">
-          <button
-            v-for="(f, qi) in forms"
-            :key="qi"
-            class="qtab"
-            :class="{ on: qi === active, done: isAnswered(f) }"
-            @click="active = qi"
-          >
-            <Icon v-if="isAnswered(f)" name="check" class="size-3 shrink-0" />
-            {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
-          </button>
-        </div>
+      <div data-qbody>
+        <Tabs
+          v-if="forms.length > 1"
+          :model-value="active"
+          @update:model-value="(v: string | number) => (active = Number(v))"
+        >
+          <TabsList class="mb-3 h-auto flex-wrap justify-start gap-0.5">
+            <TabsTrigger v-for="(f, qi) in forms" :key="qi" :value="qi" class="px-2.5">
+              <Icon v-if="isAnswered(f)" name="check" class="text-primary" />
+              {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         <template v-for="(f, qi) in forms" :key="qi">
-          <div v-if="qi === active" class="qitem">
-            <div class="qp">{{ f.item.prompt }}</div>
-            <div v-if="f.item.hint" class="qhint">{{ f.item.hint }}</div>
+          <div v-if="qi === active">
+            <div class="mb-2.5 text-base leading-(--lh-prose) text-foreground">
+              {{ f.item.prompt }}
+            </div>
+            <!-- Dòng gợi ý dưới câu hỏi (`description`). -->
+            <div v-if="f.item.hint" class="-mt-1 mb-2.5 text-sm text-muted-foreground">
+              {{ f.item.hint }}
+            </div>
 
             <!-- text: một ô nhập tự do, không có lựa chọn nào -->
-            <div v-if="f.item.kind === 'text'" class="qopts">
+            <div v-if="f.item.kind === 'text'" class="flex flex-col gap-2">
               <Textarea
                 v-model="f.text"
                 class="min-h-20 resize-y"
@@ -63,61 +92,89 @@
                 @keydown.enter.meta="onEnter"
                 @keydown.enter.ctrl="onEnter"
               />
-              <div class="qcount">{{ f.text.length }} / {{ TEXT_MAX }}</div>
+              <!-- Bộ đếm ký tự (cap là của AWOG, schema không có). -->
+              <div class="mt-0.5 text-right text-xs text-muted-foreground tabular-nums">
+                {{ f.text.length }} / {{ TEXT_MAX }}
+              </div>
             </div>
 
             <!-- number: thanh trượt + số đọc được, kèm đơn vị nếu model có gửi -->
-            <div v-else-if="f.item.kind === 'number'" class="qopts">
-              <div class="qnum">
+            <div v-else-if="f.item.kind === 'number'" class="flex flex-col gap-2">
+              <div class="flex items-center gap-3">
+                <!-- raw-ok: components/ui chưa có Slider shadcn; range gốc tô màu primary -->
                 <input
                   v-model.number="f.num"
-                  class="qslider"
+                  class="min-w-0 flex-1 accent-primary"
                   type="range"
                   :min="numMin(f)"
                   :max="numMax(f)"
                   :step="f.item.step ?? 1"
                 />
-                <span class="qnumval">
+                <span
+                  class="min-w-18 text-right text-lg font-semibold text-foreground tabular-nums"
+                >
                   {{ f.num }}
-                  <b v-if="f.item.unit">{{ f.item.unit }}</b>
+                  <b v-if="f.item.unit" class="ml-0.5 text-sm font-normal text-muted-foreground">
+                    {{ f.item.unit }}
+                  </b>
                 </span>
               </div>
-              <div class="qnumends">
+              <div class="mt-0.5 flex justify-between text-xs text-muted-foreground tabular-nums">
                 <span>{{ numMin(f) }}</span>
                 <span>{{ numMax(f) }}</span>
               </div>
             </div>
 
             <!-- choice (mặc định): nhiều lựa chọn = checkbox, một lựa chọn = nút -->
-            <div v-else class="qopts">
+            <div v-else class="flex flex-col gap-2">
               <template v-if="f.item.multi">
+                <!-- Hàng nhiều lựa chọn — ô tick + nhãn; đang chọn = viền primary + wash.
+                     Ô tick là span vẽ, không phải Checkbox: label bấm sẽ chuyển click
+                     sang control bên trong ⇒ lật hai lần. -->
                 <label
                   v-for="(o, oi) in f.item.options"
                   :key="oi"
-                  class="qchk"
-                  :class="{ on: f.sel.includes(o.label), 'has-desc': !!o.desc }"
+                  class="flex cursor-pointer gap-2.5 rounded-md border px-3 py-2 text-base text-foreground transition-colors hover:border-ring motion-reduce:transition-none"
+                  :class="[
+                    f.sel.includes(o.label) ? 'border-primary bg-primary/10' : 'border-input',
+                    o.desc ? 'items-start' : 'items-center',
+                  ]"
                   @click="toggle(f, o.label)"
                 >
-                  <span class="qcbox">
+                  <span
+                    class="grid size-4 flex-none place-items-center rounded-sm border"
+                    :class="[
+                      f.sel.includes(o.label)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input text-transparent',
+                      { 'mt-0.5': !!o.desc },
+                    ]"
+                  >
                     <Icon v-if="f.sel.includes(o.label)" name="check" class="size-3" />
                   </span>
-                  <span class="qchktext">
+                  <span class="block">
                     {{ o.label }}
-                    <b v-if="o.desc">{{ o.desc }}</b>
+                    <b v-if="o.desc" class="mt-0.5 block text-sm font-normal text-muted-foreground">
+                      {{ o.desc }}
+                    </b>
                   </span>
                 </label>
               </template>
               <template v-else>
-                <button
+                <!-- Một lựa chọn — hàng viền trên nền card; đang chọn = viền primary + wash. -->
+                <Button
                   v-for="(o, oi) in f.item.options"
                   :key="oi"
-                  class="qopt"
-                  :class="{ on: f.sel.includes(o.label) }"
+                  variant="outline"
+                  class="h-auto flex-col items-start justify-start gap-0.5 px-3 py-2 text-left text-base font-normal whitespace-normal text-foreground shadow-none hover:border-ring motion-reduce:transition-none"
+                  :class="{ 'border-primary bg-primary/10': f.sel.includes(o.label) }"
                   @click="choose(f, qi, o.label)"
                 >
                   {{ o.label }}
-                  <b v-if="o.desc">{{ o.desc }}</b>
-                </button>
+                  <b v-if="o.desc" class="block text-sm font-normal text-muted-foreground">
+                    {{ o.desc }}
+                  </b>
+                </Button>
               </template>
               <!-- "Other": free-text answer, luôn có (như Claude Code). -->
               <Input
@@ -131,8 +188,10 @@
 
         <!-- Ô "còn gì nữa không": đi vào `response` của tool — chữ của người dùng nằm
            ngoài mọi lựa chọn, model đọc được nguyên văn. -->
-        <div class="qresp">
-          <label class="qresplbl">{{ t('sessions.gate.responseLabel') }}</label>
+        <div class="mt-3">
+          <Label class="mb-1.5 block text-sm font-normal text-muted-foreground">
+            {{ t('sessions.gate.responseLabel') }}
+          </Label>
           <Input
             v-model="response"
             :placeholder="t('sessions.gate.responsePlaceholder')"
@@ -141,12 +200,20 @@
         </div>
       </div>
 
-      <div class="cact qact">
+      <!-- Hàng nút: "bạn quyết đi" đứng riêng bên trái (lối thoát, không phải hành động
+           chính), hai nút kết thúc dồn về phải. -->
+      <div class="mt-1 flex items-center gap-2">
         <!-- Bỏ lượt hỏi: không trả lời câu nào, nói thẳng cho model là "bạn quyết". -->
-        <Button variant="ghost" size="sm" class="qghost" type="button" @click="onDecide">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="text-muted-foreground hover:text-foreground"
+          type="button"
+          @click="onDecide"
+        >
           {{ t('sessions.gate.decideForMe') }}
         </Button>
-        <span class="qspacer" />
+        <span class="flex-1" />
         <!-- Xin thêm một vòng câu hỏi: gửi kèm phần đã trả lời (nếu có). -->
         <Button variant="outline" size="sm" @click="onFollowUp">
           {{ t('sessions.gate.askFollowUp') }}
@@ -288,299 +355,3 @@ const onDecide = (): void => {
   send([], { response: own ? `${own}\n\n${note}` : note })
 }
 </script>
-
-<style scoped>
-/* Question card — card chrome on canonical tokens. The class names stay the
-   documented hooks: `.gcard`/`.gate`/`.qopt`/`.qchk`/`.qtab` are theme-cute.css
-   restyle targets AND the drawer's `:deep()` selectors look for them; the rules
-   below re-express them on shadcn var names (cute's attribute-scoped rules still
-   win when that theme family is active). Font sizes ride the fs/lh token scale
-   so Appearance font-size scaling applies here too. */
-.gcard {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 4px 0;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--card);
-  color: var(--card-foreground);
-  box-shadow: var(--shadow-sm);
-}
-.gcard.gate {
-  border-color: rgb(from var(--warning) r g b / 45%);
-  background: rgb(from var(--warning) r g b / 6%);
-}
-.gcard.gate .gh {
-  color: var(--warning);
-}
-.gh {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 500;
-  color: var(--foreground);
-  margin-bottom: 6px;
-}
-/* Resolved/cancelled one-liner (session question record). */
-.resolved {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 4px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--success);
-}
-.resolved.den {
-  color: var(--destructive);
-}
-/* Tiêu đề của cả lời gọi (`title`), trên mọi câu hỏi. */
-.qtitle {
-  margin: 2px 0 10px;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-  color: var(--foreground);
-}
-/* Câu hỏi — prose line. */
-.qp {
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-  margin-bottom: 10px;
-  color: var(--foreground);
-}
-/* Dòng gợi ý dưới câu hỏi (`description`). */
-.qhint {
-  margin: -4px 0 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.qitem + .qitem {
-  margin-top: 14px;
-}
-.qopts {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-/* Single-choice option — outline row on the card surface; .on = primary edge +
-   wash (proto selected-row idiom). */
-.qopt {
-  text-align: left;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  padding: 9px 12px;
-  border: 1px solid var(--input);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
-}
-.qopt:hover {
-  border-color: var(--ring);
-  background: var(--accent-wash);
-}
-.qopt.on {
-  border-color: var(--primary);
-  background: rgb(from var(--primary) r g b / 8%);
-}
-.qopt b {
-  display: block;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 400;
-  color: var(--muted-foreground);
-  margin-top: 2px;
-}
-/* Multi-choice row — checkbox box + label; .on mirrors .qopt.on. */
-.qchk {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  padding: 9px 12px;
-  border: 1px solid var(--input);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
-}
-.qchk:hover {
-  border-color: var(--ring);
-}
-.qchk.on {
-  border-color: var(--primary);
-  background: rgb(from var(--primary) r g b / 8%);
-}
-/* Checkbox — shadcn checkbox look: input edge; checked = solid primary + white tick. */
-.qchk .qcbox {
-  width: 16px;
-  height: 16px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--input);
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  color: transparent;
-}
-.qchk.on .qcbox {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-.qchktext {
-  display: block;
-}
-.qchktext b {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 400;
-  color: var(--muted-foreground);
-}
-.qchk.has-desc {
-  align-items: flex-start;
-}
-.qchk.has-desc .qcbox {
-  margin-top: 2px;
-}
-/* Câu hỏi 'text': bộ đếm ký tự (cap là của AWOG, schema không có). */
-.qcount {
-  margin-top: 2px;
-  text-align: right;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-/* Câu hỏi 'number': thanh trượt + số hiện tại. */
-.qnum {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.qslider {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--primary);
-}
-.qnumval {
-  min-width: 4.5rem;
-  text-align: right;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-  color: var(--foreground);
-  font-variant-numeric: tabular-nums;
-}
-.qnumval b {
-  margin-left: 3px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 400;
-  color: var(--muted-foreground);
-}
-.qnumends {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-/* Ô ghi chú tự do cho cả lời gọi (`response`). */
-.qresp {
-  margin-top: 12px;
-}
-.qresplbl {
-  display: block;
-  margin-bottom: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-/* Hàng nút: "bạn quyết đi" đứng riêng bên trái (lối thoát, không phải hành động
-   chính), hai nút kết thúc dồn về phải. */
-.qact {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-}
-.qspacer {
-  flex: 1;
-}
-.qghost {
-  color: var(--muted-foreground);
-}
-.qghost:hover {
-  color: var(--foreground);
-}
-/* Tab strip — shadcn Tabs idiom: muted track + raised active item. */
-.qtabs {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  margin-bottom: 12px;
-  border-radius: var(--r-btn);
-  background: var(--muted);
-}
-.qtab {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  padding: 4px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.qtab:hover {
-  color: var(--foreground);
-}
-.qtab.on {
-  background: var(--card);
-  color: var(--foreground);
-  box-shadow: var(--shadow-sm);
-}
-.qtab.done :deep(.icn) {
-  color: var(--primary);
-}
-/* Chữ người dùng viết thêm, hiện lại ở bản ghi read-only. */
-.qwrote {
-  margin-top: 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--muted-foreground);
-}
-@media (prefers-reduced-motion: reduce) {
-  .qopt,
-  .qchk,
-  .qtab {
-    transition: none;
-  }
-}
-</style>

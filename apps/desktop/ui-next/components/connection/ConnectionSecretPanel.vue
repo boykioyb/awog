@@ -1,17 +1,17 @@
 <template>
-  <div class="csp">
-    <div class="csp-head">
-      <Icon
-        name="shield"
-        style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-      />
-      <span class="csp-title">{{ t('connections.secret.title') }}</span>
+  <div class="mx-4 mb-3 flex flex-col gap-2 rounded-lg border border-selected-border bg-card p-3">
+    <div class="flex items-center gap-2">
+      <Icon name="shield" class="size-3.5 text-primary" />
+      <span class="text-sm font-semibold text-foreground">{{ t('connections.secret.title') }}</span>
     </div>
-    <div class="csp-sub">{{ t('connections.secret.subtitle') }}</div>
+    <div class="text-xs text-muted-foreground">{{ t('connections.secret.subtitle') }}</div>
 
-    <div class="csp-rows">
-      <div v-for="s in secrets" :key="s.key" class="csp-row">
-        <label class="csp-label mono" :for="`csp-${s.key}`">{{ s.field || s.key }}</label>
+    <div class="flex flex-col gap-2">
+      <div v-for="s in secrets" :key="s.key" class="flex flex-col gap-1">
+        <!-- Tên KEY keychain là chuỗi kỹ thuật ⇒ mono. -->
+        <Label :for="`csp-${s.key}`" class="font-mono text-xs text-muted-foreground">
+          {{ s.field || s.key }}
+        </Label>
         <Input
           :id="`csp-${s.key}`"
           v-model="values[s.key]"
@@ -20,22 +20,24 @@
           spellcheck="false"
           autocomplete="off"
           :disabled="saving"
-          class="mono"
+          class="font-mono"
           @keydown.enter.prevent="onSave"
         />
       </div>
     </div>
 
-    <div class="csp-actions">
+    <div class="flex justify-end gap-2">
       <Button :disabled="saving" variant="outline" size="sm" @click="emit('skip')">
         {{ t('connections.secret.later') }}
       </Button>
-      <Button :disabled="saving || !hasAny" variant="default" size="sm" @click="onSave">
-        <Icon
-          :name="saving ? 'refresh' : 'check'"
-          :class="{ spin: saving }"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
-        />
+      <Button
+        :disabled="saving || !hasAny"
+        variant="default"
+        size="sm"
+        class="[&_svg]:size-3"
+        @click="onSave"
+      >
+        <Icon :name="saving ? 'refresh' : 'check'" :class="saving && 'animate-spin'" />
         {{ saving ? t('connections.secret.saving') : t('connections.secret.save') }}
       </Button>
     </div>
@@ -91,78 +93,3 @@ const onSave = () => {
   emit('save', out)
 }
 </script>
-
-<style scoped>
-.csp {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin: 0 16px 12px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--accentBorder);
-}
-.csp-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.csp-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.csp-sub {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-.csp-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.csp-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.csp-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--textMuted);
-}
-.csp-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.csp-input:focus {
-  border-color: var(--accent);
-}
-.csp-input:disabled {
-  opacity: 0.6;
-}
-.csp-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.spin {
-  animation: csp-spin 0.9s linear infinite;
-}
-@keyframes csp-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

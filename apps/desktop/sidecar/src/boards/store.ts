@@ -474,6 +474,12 @@ async function loadBoard(projectId: string): Promise<ProjectBoard> {
   }
 }
 
+// Ghi của CHÍNH sidecar đã tự phát `board.changed`; watcher (watcher.ts, kind `boards`)
+// chỉ cần báo cho ghi từ BÊN NGOÀI — vd script đồng bộ chạy bằng lịch `command`.
+// Cửa sổ rộng hơn debounce của watcher để event fs về trễ vẫn được nhận ra.
+const OWN_WRITE_WINDOW_MS = 2_000
+const ownWrites = new Map<string, number>()
+
 async function saveBoard(projectId: string, board: ProjectBoard): Promise<void> {
   const dir = boardsDir()
   await mkdir(dir, { recursive: true, mode: 0o700 })
@@ -482,6 +488,11 @@ async function saveBoard(projectId: string, board: ProjectBoard): Promise<void> 
   await writeFile(tmp, JSON.stringify(board, null, 2), 'utf8')
   await chmod(tmp, 0o600)
   await rename(tmp, file)
+  ownWrites.set(projectId, Date.now())
+}
+
+export function isOwnBoardWrite(projectId: string): boolean {
+  return Date.now() - (ownWrites.get(projectId) ?? 0) < OWN_WRITE_WINDOW_MS
 }
 
 // Board là dữ liệu làm việc của user: nếu file đang có mà JSON hỏng thì đổi tên

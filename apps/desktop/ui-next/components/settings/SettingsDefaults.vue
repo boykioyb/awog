@@ -7,12 +7,11 @@
       :name="t('settingsDefaults.systemPrompt.name')"
       :desc="t('settingsDefaults.systemPrompt.desc')"
     >
-      <textarea
+      <Textarea
         v-model="systemPrompt"
-        class="keyinp"
         rows="5"
+        class="min-h-28 resize-y"
         :placeholder="t('settingsDefaults.systemPrompt.placeholder')"
-        style="resize: vertical; min-height: 7rem; font-family: var(--sans)"
       />
     </SettingsField>
 
@@ -21,12 +20,11 @@
       :name="t('settingsDefaults.instructions.name')"
       :desc="t('settingsDefaults.instructions.desc')"
     >
-      <textarea
+      <Textarea
         v-model="instructions"
-        class="keyinp"
         rows="6"
+        class="min-h-32 resize-y"
         :placeholder="t('settingsDefaults.instructions.placeholder')"
-        style="resize: vertical; min-height: 8rem; font-family: var(--sans)"
       />
     </SettingsField>
 
@@ -68,7 +66,7 @@
     </SettingsField>
 
     <!-- Translation model (selection-to-translate, docs/features/selection-translate.md) -->
-    <div class="sech">{{ t('settingsDefaults.translate.heading') }}</div>
+    <SettingsGroupLabel>{{ t('settingsDefaults.translate.heading') }}</SettingsGroupLabel>
 
     <SettingsField
       :name="t('settingsDefaults.translate.follow.name')"

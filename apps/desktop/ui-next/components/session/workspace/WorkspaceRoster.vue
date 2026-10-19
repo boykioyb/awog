@@ -2,8 +2,7 @@
   <section ref="rootEl" class="mt-3">
     <Button
       variant="ghost"
-      class="h-auto p-0 flex w-full items-center gap-1.5 py-0.5 text-left font-sans text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-      type="button"
+      class="h-auto w-full justify-start gap-1.5 px-0 py-0.5 text-left text-xs font-medium text-muted-foreground hover:bg-transparent hover:text-foreground [&_svg]:size-3"
       @click="open = !open"
     >
       <ChevronDown class="size-3 shrink-0 transition-transform" :class="{ 'rotate-180': open }" />
@@ -35,30 +34,37 @@
       />
     </div>
 
-    <!-- Menu chọn agent — teleported + fixed để thoát khỏi panel cuộn; giữ
-         primitive .smenu/.mi chung của app (đã tôn màu + z-index đúng tầng). -->
+    <!-- Menu chọn agent — teleported + fixed để thoát khỏi panel cuộn, neo theo
+         usePopoverAnchor. Không dùng DropdownMenu vì anchor là nút trong hàng con. -->
     <Teleport to="body">
-      <div v-if="agentMenuFor" class="fixed inset-0 z-[120]" @click="agentMenuFor = null" />
-      <div v-if="agentMenuFor" ref="agentMenuEl" class="smenu" :style="agentMenuStyle">
-        <div class="mi" :class="{ on: !agentMenuFor.agent }" @click="pickAgent(null)">
-          {{ t('sessions.workspace.group.agentNone') }}
+      <template v-if="agentMenuFor">
+        <div class="fixed inset-0 z-120" @click="agentMenuFor = null" />
+        <!-- hook-ok: `.smenu` do OVERLAYS của useEmbeddedBrowser.ts đọc -->
+        <div ref="agentMenuEl" class="smenu" :class="MENU" :style="agentMenuStyle">
+          <div
+            role="menuitem"
+            :class="[MENU_ITEM, !agentMenuFor.agent && 'bg-selected text-foreground']"
+            @click="pickAgent(null)"
+          >
+            {{ t('sessions.workspace.group.agentNone') }}
+          </div>
+          <div v-if="!agentOptions.length" :class="[MENU_ITEM, 'pointer-events-none opacity-45']">
+            {{ t('sessions.workspace.group.agentEmpty') }}
+          </div>
+          <div
+            v-for="a in agentOptions"
+            :key="agents.agentKey(a)"
+            role="menuitem"
+            :class="[MENU_ITEM, sameAgent(agentMenuFor.agent, a) && 'bg-selected text-foreground']"
+            @click="pickAgent(a)"
+          >
+            {{ a.name || a.id }}
+            <span v-if="a.source === 'project'" class="text-faint">
+              · {{ t('sessions.workspace.group.agentProject') }}
+            </span>
+          </div>
         </div>
-        <div v-if="!agentOptions.length" class="mi mdisabled">
-          {{ t('sessions.workspace.group.agentEmpty') }}
-        </div>
-        <div
-          v-for="a in agentOptions"
-          :key="agents.agentKey(a)"
-          class="mi"
-          :class="{ on: sameAgent(agentMenuFor.agent, a) }"
-          @click="pickAgent(a)"
-        >
-          {{ a.name || a.id }}
-          <span v-if="a.source === 'project'" class="text-faint">
-            · {{ t('sessions.workspace.group.agentProject') }}
-          </span>
-        </div>
-      </div>
+      </template>
     </Teleport>
   </section>
 </template>
@@ -125,6 +131,13 @@ const { style: agentMenuStyle } = usePopoverAnchor(agentAnchorEl, agentMenuEl, a
 })
 
 const agentOptions = computed<Agent[]>(() => agents.agents)
+
+// Hộp menu chọn agent (vị trí do usePopoverAnchor ghi inline).
+const MENU =
+  'fixed z-130 max-h-[calc(100vh-1.5rem)] min-w-42 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md'
+// Một hàng của menu chọn agent (hover wash; hàng đang chọn thêm accent-tint).
+const MENU_ITEM =
+  'flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground'
 
 const sameAgent = (ref0: Session['agent'], a: Agent): boolean =>
   !!ref0 &&

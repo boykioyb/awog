@@ -1,69 +1,99 @@
 <template>
-  <div class="ais">
-    <p class="ais-sub">{{ t('infra.import.file.subtitle') }}</p>
+  <!-- mono-ok (các ô font-mono dưới đây): đường dẫn file/CSV + khối dán từ SSO portal —
+       copy được thẳng vào terminal/editor. -->
+  <div class="flex flex-col gap-3.5">
+    <p class="m-0 text-sm text-dim">{{ t('infra.import.file.subtitle') }}</p>
 
-    <div class="seg ais-seg">
-      <span :class="{ on: sourceKind === 'paste' }" @click="sourceKind = 'paste'">
+    <!-- Bấm lại mục đang bật thì ToggleGroup emit rỗng — segmented luôn giữ một giá trị. -->
+    <ToggleGroup
+      type="single"
+      :spacing="1"
+      class="self-start rounded-lg bg-muted p-0.5"
+      :model-value="sourceKind"
+      @update:model-value="
+        (v) => {
+          if (v === 'paste' || v === 'file' || v === 'csv') sourceKind = v
+        }
+      "
+    >
+      <ToggleGroupItem
+        value="paste"
+        class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+      >
         {{ t('infra.import.file.source.paste') }}
-      </span>
-      <span :class="{ on: sourceKind === 'file' }" @click="sourceKind = 'file'">
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="file"
+        class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+      >
         {{ t('infra.import.file.source.file') }}
-      </span>
-      <span :class="{ on: sourceKind === 'csv' }" @click="sourceKind = 'csv'">
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="csv"
+        class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+      >
         {{ t('infra.import.file.source.csv') }}
-      </span>
-    </div>
+      </ToggleGroupItem>
+    </ToggleGroup>
 
-    <div v-if="sourceKind === 'paste'" class="ais-field">
-      <label class="ais-label">{{ t('infra.import.file.paste.label') }}</label>
+    <div v-if="sourceKind === 'paste'" class="flex flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.file.paste.label') }}
+      </Label>
       <!-- Textarea, KHÔNG type=password — người dùng cần sửa được khối đã dán.
            Cảnh báo rõ + cha xoá sạch khỏi state ngay khi apply xong. -->
-      <textarea
+      <Textarea
         v-model="pasteText"
-        class="ais-input ais-ta mono"
+        class="min-h-32 resize-y font-mono text-sm"
         rows="7"
         spellcheck="false"
         autocomplete="off"
         :placeholder="t('infra.import.file.paste.placeholder')"
       />
-      <div class="ais-warn">
-        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <div
+        class="flex items-start gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+      >
+        <Icon name="alert" class="mt-0.5 size-3 flex-none" />
         {{ t('infra.import.file.paste.warning') }}
       </div>
     </div>
 
-    <div v-else-if="sourceKind === 'file'" class="ais-field">
-      <label class="ais-label">{{ t('infra.import.file.file.label') }}</label>
-      <div class="ais-path-row">
+    <div v-else-if="sourceKind === 'file'" class="flex flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.file.file.label') }}
+      </Label>
+      <div class="flex items-center gap-2">
         <Input
           v-model="filePath"
           :placeholder="t('infra.import.file.file.pathPlaceholder')"
           spellcheck="false"
-          class="mono"
+          class="min-w-0 flex-1 font-mono"
         />
         <Button v-if="canBrowse" type="button" variant="outline" size="sm" @click="browseFile">
-          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="folder" class="size-3" />
           {{ t('infra.import.file.file.browse') }}
         </Button>
       </div>
-      <div class="ais-hint">{{ t('infra.import.file.file.hint') }}</div>
+      <div class="text-xs text-dim">{{ t('infra.import.file.file.hint') }}</div>
     </div>
 
-    <div v-else class="ais-field">
-      <label class="ais-label">{{ t('infra.import.file.csv.label') }}</label>
-      <div class="ais-path-row">
+    <div v-else class="flex flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.file.csv.label') }}
+      </Label>
+      <div class="flex items-center gap-2">
         <Input
           v-model="csvPath"
           :placeholder="t('infra.import.file.csv.pathPlaceholder')"
           spellcheck="false"
-          class="mono"
+          class="min-w-0 flex-1 font-mono"
         />
         <Button v-if="canBrowse" type="button" variant="outline" size="sm" @click="browseCsv">
-          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="folder" class="size-3" />
           {{ t('infra.import.file.csv.browse') }}
         </Button>
       </div>
-      <div class="ais-hint">{{ t('infra.import.file.csv.hint') }}</div>
+      <div class="text-xs text-dim">{{ t('infra.import.file.csv.hint') }}</div>
       <!-- Người chưa từng tạo access key đọc hint trên không biết đi đâu tiếp.
            Khối này là chỗ duy nhất trong app nói cách LẤY credential
            (docs/features/aws-profile-manager.md §"Lấy credential ở đâu"). -->
@@ -106,82 +136,3 @@ async function browseCsv(): Promise<void> {
   if (p) csvPath.value = p
 }
 </script>
-
-<style scoped>
-.ais {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.ais-sub {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.ais-seg {
-  align-self: flex-start;
-}
-.ais-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ais-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.ais-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ais-input:focus {
-  border-color: var(--accent);
-}
-.ais-input.mono {
-  /* mono-ok: đường dẫn file/CSV + khối dán từ SSO portal — copy được thẳng vào
-     terminal/editor */
-  font-family: var(--code);
-}
-.ais-ta {
-  resize: vertical;
-  min-height: 8rem;
-  line-height: var(--lh-md);
-}
-.ais-path-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ais-path-row .ais-input {
-  flex: 1;
-  min-width: 0;
-}
-.ais-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ais-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-</style>

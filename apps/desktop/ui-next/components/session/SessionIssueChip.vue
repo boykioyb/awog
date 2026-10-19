@@ -2,55 +2,84 @@
   <!-- Chip issue của phiên (docs/features/session-issue-tracking.md) — cùng khuôn chip
        SSH/hạ tầng trong SessionContextStrip: một chip mở popover của chính nó. Phiên
        chưa có issue (chưa gửi tin nào) hoặc không có project thì chip VẮNG MẶT. -->
-  <span v-if="item" class="iswrap">
-    <button
+  <!-- Không co: chip đã ngắn (chấm + một chữ status) — để hàng chật thì chip khác
+       (hạ tầng, checklist) cắt chữ của chúng, đừng cắt status ra "Đa…". -->
+  <span v-if="item" class="relative inline-flex flex-none">
+    <Button
       ref="chipEl"
       type="button"
-      class="ctxchip"
-      :class="{ on: open }"
+      variant="outline"
+      size="xs"
+      class="h-5.5 gap-1.5 rounded-md px-2.5 font-normal text-dim shadow-none hover:text-foreground [&_svg]:size-3"
+      :class="{ 'border-selected-border bg-selected text-primary': open }"
       :title="`${statusLabel(item.status)} · ${item.title}`"
       @click.stop="open = !open"
     >
       <!-- Gọn: chỉ chấm màu + status, KHÔNG title issue — issue tự sinh mang đúng
            title của phiên (đã nằm ngay bên trái header), lặp lại chỉ đẩy status
            vào chỗ bị cắt "Đa…". Title đầy đủ ở tooltip + đầu popover. -->
-      <span class="isdot" :style="{ background: statusColor(item.status) }" />
-      <span class="islbl">{{ statusLabel(item.status) }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+      <!-- Chấm màu status — hình dạng chính là thông tin, không phải chữ. -->
+      <span
+        class="size-2 flex-none rounded-full"
+        :style="{ background: statusColor(item.status) }"
+      />
+      <span class="whitespace-nowrap">{{ statusLabel(item.status) }}</span>
+      <Icon name="chev" />
+    </Button>
 
     <Teleport to="body">
-      <div v-if="open" class="isbackdrop" @click="open = false" />
-      <div v-if="open" ref="popEl" class="pop ispop" :style="popStyle" @click.stop>
-        <div class="ishead">
-          <span class="istitle">{{ item.title }}</span>
-          <span class="isid">{{ item.id }}</span>
+      <div v-if="open" class="fixed inset-0 z-40" @click="open = false" />
+      <!-- role=dialog + data-state=open: khớp selector `[role="dialog"][data-state="open"]`
+           trong OVERLAYS (useEmbeddedBrowser.ts) để trình duyệt nhúng nhường chỗ. -->
+      <div
+        v-if="open"
+        ref="popEl"
+        role="dialog"
+        data-state="open"
+        class="fixed z-130 max-h-[min(70vh,560px)] w-80 overflow-y-auto rounded-lg border bg-popover p-3 text-popover-foreground shadow-md"
+        :style="popStyle"
+        @click.stop
+      >
+        <div class="mb-2.5 flex flex-col gap-0.5">
+          <span class="text-base font-semibold">{{ item.title }}</span>
+          <span class="text-xs text-muted-foreground">{{ item.id }}</span>
         </div>
 
-        <div class="pl">{{ t('sessions.issue.status') }}</div>
-        <div class="isgrid">
-          <button
-            v-for="st in ISSUE_QUICK_STATUSES"
-            :key="st"
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('sessions.issue.status') }}
+        </div>
+        <div class="mt-1 mb-2.5 grid grid-cols-2 gap-1">
+          <Button
+            v-for="qs in ISSUE_QUICK_STATUSES"
+            :key="qs"
             type="button"
-            class="isst"
-            :class="{ cur: item.status === st }"
-            @click="onStatus(st)"
+            variant="outline"
+            size="xs"
+            class="justify-start gap-1.5 font-normal shadow-none"
+            :class="{ 'border-selected-border bg-selected': item.status === qs }"
+            @click="onStatus(qs)"
           >
-            <span class="isdot" :style="{ background: statusColor(st) }" />
-            {{ statusLabel(st) }}
-          </button>
+            <span class="size-2 flex-none rounded-full" :style="{ background: statusColor(qs) }" />
+            {{ statusLabel(qs) }}
+          </Button>
         </div>
 
-        <div class="isrecap-h">
-          <span class="pl">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-medium text-muted-foreground">
             {{
               item.recap
                 ? t('sessions.issue.recapAt', { when: fmtWhen(item.recap.at) })
                 : t('sessions.issue.recap')
             }}
           </span>
-          <button type="button" class="islink" :disabled="recapping" @click="recap()">
+          <Button
+            type="button"
+            variant="link"
+            size="xs"
+            class="h-auto p-0 font-normal disabled:text-muted-foreground"
+            :disabled="recapping"
+            @click="recap()"
+          >
             {{
               recapping
                 ? t('sessions.issue.recapRunning')
@@ -58,21 +87,36 @@
                   ? t('sessions.issue.recapRefresh')
                   : t('sessions.issue.recapRun')
             }}
-          </button>
+          </Button>
         </div>
-        <div class="isrecap">
+        <div class="mt-1 mb-1.5 rounded-sm border p-2">
           <IssueRecapView v-if="item.recap" :text="item.recap.text" />
-          <p v-else class="ishint">{{ t('sessions.issue.recapEmpty') }}</p>
+          <p v-else class="m-0 text-xs text-muted-foreground">
+            {{ t('sessions.issue.recapEmpty') }}
+          </p>
         </div>
 
-        <button type="button" class="ctxpop-act" @click="onOpenBoard">
-          <Icon name="board" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <!-- Hàng hành động — cùng nhịp với popover SSH của SessionContextStrip. -->
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="mt-1 w-full justify-start px-2 font-normal [&_svg]:size-3.5"
+          @click="onOpenBoard"
+        >
+          <Icon name="board" />
           {{ t('sessions.issue.openBoard') }}
-        </button>
-        <button type="button" class="ctxpop-act danger" @click="onUntrack">
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="mt-1 w-full justify-start px-2 font-normal text-destructive hover:text-destructive [&_svg]:size-3.5"
+          @click="onUntrack"
+        >
+          <Icon name="x" />
           {{ t('sessions.issue.untrack') }}
-        </button>
+        </Button>
       </div>
     </Teleport>
   </span>
@@ -92,7 +136,9 @@ const { item, recapping, recap, setStatus, openOnBoard, untrack } = useSessionIs
 )
 
 const open = ref(false)
-const chipEl = useTemplateRef<HTMLElement>('chipEl')
+// `Button` là component ⇒ template ref trả instance, phần tử thật ở `$el`.
+const chipBtn = useTemplateRef<{ $el: HTMLElement }>('chipEl')
+const chipEl = computed(() => chipBtn.value?.$el ?? null)
 const popEl = useTemplateRef<HTMLElement>('popEl')
 const { style: popStyle } = usePopoverAnchor(chipEl, popEl, open)
 
@@ -118,147 +164,3 @@ const fmtWhen = (iso: string): string => {
     : d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 </script>
-
-<style scoped>
-.iswrap {
-  position: relative;
-  display: inline-flex;
-  /* Không co: chip đã ngắn (chấm + một chữ status) — để hàng chật thì chip khác
-     (hạ tầng, checklist) cắt chữ của chúng, đừng cắt status ra "Đa…". */
-  flex: 0 0 auto;
-}
-.islbl {
-  white-space: nowrap;
-}
-/* Chấm màu status — hình dạng chính là thông tin, không phải chữ. */
-.isdot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.ispop {
-  width: 320px;
-  max-height: min(70vh, 560px);
-  overflow-y: auto;
-  background: var(--popover);
-  border-color: var(--border);
-  border-radius: var(--radius);
-}
-.ishead {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 10px;
-}
-.istitle {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--popover-foreground);
-}
-.isid {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.isgrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin: 4px 0 10px;
-}
-.isst {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--popover-foreground);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.isst:hover {
-  background: var(--accent-wash);
-}
-/* Status hiện tại = accent-tint, không nền xám đặc. */
-.isst.cur {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-}
-.isst:focus-visible,
-.islink:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.isrecap-h {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.islink {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--primary);
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.islink:disabled {
-  color: var(--muted-foreground);
-  cursor: default;
-}
-.isrecap {
-  margin: 4px 0 6px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  color: var(--popover-foreground);
-}
-.ishint {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-/* Hàng hành động — cùng nhịp với popover SSH của SessionContextStrip. */
-.ctxpop-act {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 4px;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-xs);
-  color: var(--popover-foreground);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  text-align: left;
-}
-.ctxpop-act:hover {
-  background: var(--accent-wash);
-}
-.ctxpop-act.danger {
-  color: var(--destructive);
-}
-.ctxpop-act .icn {
-  flex: 0 0 auto;
-}
-.isbackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-</style>

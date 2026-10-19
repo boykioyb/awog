@@ -1,80 +1,94 @@
 <template>
-  <div class="cmd">
-    <div class="dh">
-      <div class="cmd-icn">
-        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-12.5 flex-none items-center gap-2.5 border-b px-5.5">
+      <div
+        class="grid size-6.5 flex-none place-items-center rounded-sm border bg-muted text-muted-foreground"
+      >
+        <Icon name="commands" class="size-3.5" />
       </div>
-      <div class="dt mono">/{{ command.name }}</div>
-      <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
-      <span v-if="isImported" class="tag cmd-lock" :title="t('commands.detail.imported')">
-        <Icon name="lock" style="width: 10px; height: 10px" />
+      <!-- mono-ok: lệnh slash người dùng gõ lại -->
+      <div class="min-w-0 truncate font-mono text-lg font-semibold">/{{ command.name }}</div>
+      <Badge
+        variant="outline"
+        :class="isProject ? 'border-primary/45 bg-primary/8 text-primary' : 'text-muted-foreground'"
+        :title="sourcePath"
+      >
+        {{ sourceLabel }}
+      </Badge>
+      <Badge
+        v-if="isImported"
+        variant="outline"
+        class="text-muted-foreground"
+        :title="t('commands.detail.imported')"
+      >
+        <Icon name="lock" />
         {{ t('commands.detail.imported') }}
-      </span>
-      <span style="flex: 1" />
+      </Badge>
+      <span class="flex-1" />
       <Button
         :title="t('commands.detail.edit')"
-        class="cmd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('edit')"
       >
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="edit" />
       </Button>
       <Button
         v-if="!isImported"
         :title="t('commands.detail.duplicate')"
-        class="cmd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('duplicate')"
       >
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="copy" />
       </Button>
       <Button
         v-if="!isImported"
         :title="t('commands.detail.delete')"
-        class="cmd-act cmd-danger"
+        class="hover:border-destructive hover:text-destructive"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="trash" />
       </Button>
     </div>
 
-    <div class="dscroll">
-      <p class="cmd-desc">{{ command.description || '—' }}</p>
+    <div class="flex-1 overflow-y-auto p-5.5">
+      <p class="m-0 text-base leading-(--lh-prose) text-muted-foreground">
+        {{ command.description || '—' }}
+      </p>
 
-      <div class="cmd-invoke mono">
+      <!-- mono-ok: lệnh slash + gợi ý tham số người dùng gõ lại -->
+      <div class="mt-2.5 font-mono text-sm text-dim">
         /{{ command.name }}
-        <span v-if="command.argumentHint" class="cmd-arg">{{ command.argumentHint }}</span>
+        <span v-if="command.argumentHint" class="text-faint">{{ command.argumentHint }}</span>
       </div>
 
-      <div class="cmd-meta">
+      <div class="mt-4 flex flex-wrap items-center gap-2.5">
         <!-- Enable/disable toggle — imported commands are locked (identity = the CC file). -->
-        <div v-if="!isImported" class="cmd-toggle">
-          <span class="cmd-toggle-label">{{ t('commands.detail.enabled') }}</span>
-          <button
-            class="seg cmd-seg"
-            type="button"
-            role="switch"
-            :aria-checked="command.enabled"
-            @click="emit('toggle')"
-          >
-            <span :class="{ on: command.enabled }">{{ t('commands.detail.on') }}</span>
-            <span :class="{ on: !command.enabled }">{{ t('commands.detail.off') }}</span>
-          </button>
+        <div v-if="!isImported" class="flex items-center gap-2">
+          <span class="text-sm font-medium text-dim">{{ t('commands.detail.enabled') }}</span>
+          <Switch
+            :checked="command.enabled"
+            :aria-label="t('commands.detail.enabled')"
+            @update:checked="emit('toggle')"
+          />
+          <span class="text-xs text-dim">
+            {{ command.enabled ? t('commands.detail.on') : t('commands.detail.off') }}
+          </span>
         </div>
 
-        <span v-if="command.argumentHint" class="chip mono">
+        <!-- mono-ok: giá trị frontmatter (tham số, tool, model id) -->
+        <Badge v-if="command.argumentHint" variant="outline" :class="CHIP">
           {{ t('commands.detail.argumentHint') }}: {{ command.argumentHint }}
-        </span>
-        <span v-if="command.allowedTools" class="chip mono">
+        </Badge>
+        <Badge v-if="command.allowedTools" variant="outline" :class="CHIP">
           {{ t('commands.detail.allowedTools') }}: {{ command.allowedTools }}
-        </span>
-        <span v-if="command.model" class="chip mono">
+        </Badge>
+        <Badge v-if="command.model" variant="outline" :class="CHIP">
           {{ t('commands.detail.model') }}: {{ command.model }}
-        </span>
+        </Badge>
       </div>
 
       <LibraryMarkdownBody
@@ -91,9 +105,9 @@
 </template>
 
 <script setup lang="ts">
-// Command detail pane — port of the old UI CommandDetail logic, rendered in
-// prototype CSS (.dh header + .dscroll body). Surfaces the slash invocation +
-// arg hint, an enable/disable toggle (prototype `.seg`, wired to toggleCommand),
+// Command detail pane — port of the old UI CommandDetail logic: header cố định +
+// thân cuộn. Surfaces the slash invocation + arg hint, an enable/disable
+// toggle (Switch, wired to toggleCommand),
 // and the prompt template body via LibraryMarkdownBody with an LLM-edit trigger.
 // Imported (read-only) commands hide toggle/duplicate/delete.
 import { computed } from 'vue'
@@ -116,6 +130,9 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// Chip frontmatter (giá trị kỹ thuật nên mono).
+const CHIP = 'font-mono text-muted-foreground'
+
 const isProject = computed(() => (props.command.source ?? 'global') === 'project')
 const isImported = computed(() => props.command.readOnly === true)
 
@@ -129,72 +146,3 @@ const sourcePath = computed(() => {
   return `${base}/.awog/commands/${file}`
 })
 </script>
-
-<style scoped>
-.cmd {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.cmd-icn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textMuted);
-  flex: 0 0 auto;
-}
-.cmd-lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.cmd-act {
-  width: 28px;
-  height: 28px;
-}
-.cmd-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.cmd-desc {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-prose);
-  margin: 0;
-}
-.cmd-invoke {
-  margin-top: 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.cmd-arg {
-  color: var(--textFaint);
-}
-.cmd-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-}
-.cmd-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cmd-toggle-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--textDim);
-}
-.cmd-seg {
-  cursor: pointer;
-}
-</style>

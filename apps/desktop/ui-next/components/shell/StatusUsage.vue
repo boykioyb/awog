@@ -1,5 +1,5 @@
 <template>
-  <div class="sb-usage">
+  <div class="flex items-center gap-0.5">
     <StatusUsageRing v-for="a in rlAccounts" :key="a.id" :account="a" />
   </div>
 </template>
@@ -16,11 +16,3 @@ const rlAccounts = computed(() =>
   accounts.value.filter((a) => a.provider === 'Anthropic' || a.provider === 'OpenAI'),
 )
 </script>
-
-<style scoped>
-.sb-usage {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-</style>

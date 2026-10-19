@@ -2,7 +2,11 @@
   <div class="proto-md text-sm leading-relaxed text-foreground/90">
     <template v-for="(seg, i) in segments" :key="i">
       <ProtoMermaid v-if="seg.type === 'mermaid'" :code="seg.code" />
-      <pre v-else-if="seg.type === 'widget'" class="proto-md-code"><code>{{ seg.code }}</code></pre>
+      <!-- mono-ok: khối code widget -->
+      <pre
+        v-else-if="seg.type === 'widget'"
+        class="m-0 overflow-x-auto rounded-lg border bg-muted px-3 py-2.5 font-mono text-[0.85em]"
+      ><code>{{ seg.code }}</code></pre>
       <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
       <div v-else v-html="seg.html" />
     </template>
@@ -23,13 +27,15 @@ const segments = computed(() => renderMarkdown(props.src))
 </script>
 
 <style scoped>
+/* style-ok: prose cho HTML markdown đã sanitize (v-html) — class không chạm tới được DOM
+   do marked/Shiki/KaTeX sinh ra. */
 /* Prose rules for the sanitized html segments — mirrors the density of
    SessionMarkdownHtml: compact lists, code chips, hairline blockquote/table. */
 .proto-md :deep(p) {
   margin: 0 0 8px;
 }
 .proto-md :deep(strong) {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--foreground);
 }
 .proto-md :deep(em) {
@@ -53,7 +59,7 @@ const segments = computed(() => renderMarkdown(props.src))
 .proto-md :deep(h3),
 .proto-md :deep(h4) {
   margin: 12px 0 6px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--foreground);
   line-height: var(--lh-lg);
 }
@@ -120,15 +126,5 @@ const segments = computed(() => renderMarkdown(props.src))
 .proto-md :deep(> *:last-child),
 .proto-md :deep(li > *:last-child) {
   margin-bottom: 0;
-}
-.proto-md-code {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow-x: auto;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.85em;
 }
 </style>

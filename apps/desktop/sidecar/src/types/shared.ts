@@ -346,6 +346,9 @@ export interface SessionCliImportCursor {
   spawnedAt?: number
 }
 
+// Lệnh `/` người dùng gõ (skill/command của họ, hoặc lệnh native của Claude CLI).
+export type SessionSlashCommand = { name: string; args: string; native?: boolean }
+
 export interface SessionMessage {
   id: string
   role: 'user' | 'agent' | 'system'
@@ -367,6 +370,9 @@ export interface SessionMessage {
   // image preview, and so resume rebuilds the image content block for the model
   // (ADR 0029 resume = rebuild Context from history each turn).
   attachments?: SessionAttachment[]
+  // Lệnh `/` mà tin user này gọi (`text` là body đã nở cho model). Chỉ để UI hiện lại
+  // bubble gọn `/tên` + args sau khi nạp lại JSONL — không vào context của model.
+  command?: SessionSlashCommand
   // Metadata persisted so UI re-hydrate from JSONL keeps assistant features
   // (markdown rendering, latency badge, model name, token counters).
   startedAt?: number

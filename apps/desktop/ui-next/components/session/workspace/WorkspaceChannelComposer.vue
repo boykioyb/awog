@@ -10,8 +10,8 @@
         v-for="m in mentionOpts"
         :key="m.engineId"
         variant="ghost"
-        class="h-auto p-0 rounded-sm px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent hover:text-primary"
-        type="button"
+        size="xs"
+        class="justify-start rounded-sm px-2 text-left font-normal text-foreground hover:text-primary"
         @click="pickMention(m)"
       >
         {{ m.title }}
@@ -21,12 +21,13 @@
       <Input
         v-model="draft"
         :placeholder="t('sessions.workspace.group.channelPh')"
-        class="min-w-0 flex-1 rounded-md border bg-transparent px-2.5 py-1.5 text-sm text-foreground outline-none focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-ring"
+        class="h-ctrl-sm min-w-0 flex-1 px-2.5"
         @keydown.enter.prevent="send"
       />
       <Button
         variant="outline"
-        class="h-auto p-0 flex w-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:border-ring hover:text-primary disabled:pointer-events-none disabled:opacity-45"
+        size="iconMd"
+        class="shrink-0 text-muted-foreground hover:border-ring hover:text-primary disabled:opacity-45 [&_svg]:size-3.5"
         :disabled="!draft.trim() || sending"
         :aria-label="t('sessions.workspace.group.postChannel')"
         @click="send"

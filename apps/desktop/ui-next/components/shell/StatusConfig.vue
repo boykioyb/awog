@@ -5,78 +5,92 @@
        này chỉ còn style; nhãn = tên văn phong, tooltip nói rõ là style picker.
 
        `openChip` vẫn giữ nguyên union bốn giá trị: `/style` ở composer gọi
-       `open('style')` từ xa. Đổi union sẽ làm hỏng đường vào đó. -->
-  <span class="sb-cfg">
-    <span class="sb-wrap">
-      <button class="sb-item" :title="cfgTitle" @click.stop="toggle('style')">
-        <Icon name="settings" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="sb-cfg-lbl">{{ styleName }}</span>
-      </button>
-
-      <div v-if="openChip" class="smenu stylemenu sb-menu sb-cfgmenu" @click.stop>
-        <template v-for="grp in styleGroups" :key="grp.key">
-          <div class="palg" :class="{ first: grp.key === styleGroups[0]?.key }">
-            {{ grp.label }}
-          </div>
-          <div
-            v-for="row in grp.rows"
-            :key="row.slug"
-            class="mi sty"
-            :class="{ cur: row.slug === activeStyleId }"
-            @click="pickStyle(row.slug)"
-          >
-            <Icon :name="row.icon" class="styicon" />
-            <div class="stytext">
-              <div class="nm2">
-                <span class="stynm">{{ row.name }}</span>
-                <span
-                  v-if="row.overridesBuiltIn"
-                  class="tag styover"
-                  :title="t('settingsStyles.overrides.hint')"
-                >
-                  {{ t('settingsStyles.overrides.tag') }}
-                </span>
-              </div>
-              <div v-if="row.hint" class="sd2">{{ row.hint }}</div>
+       `open('style')` từ xa. Đổi union sẽ làm hỏng đường vào đó.
+       Popover portal ra <body> và tự né mép cửa sổ (mở LÊN vì thanh ở đáy). -->
+  <Popover :open="!!openChip" @update:open="onOpenChange">
+    <PopoverTrigger as-child>
+      <StatusChip :title="cfgTitle">
+        <Icon name="settings" />
+        <span class="max-w-32 truncate font-medium">{{ styleName }}</span>
+      </StatusChip>
+    </PopoverTrigger>
+    <PopoverContent
+      side="top"
+      align="end"
+      :side-offset="8"
+      class="max-h-[min(60vh,420px)] w-68 overflow-y-auto p-1"
+    >
+      <template v-for="grp in styleGroups" :key="grp.key">
+        <div class="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+          {{ grp.label }}
+        </div>
+        <!-- Cả hàng là vùng bấm chọn style; nút ⓘ lồng bên trong nên hàng không thể
+             là nút (nút lồng nút là HTML sai). Tên style người dùng tự viết có thể
+             dài: tên tự cắt, mô tả kẹp 2 dòng để menu không bị kéo giãn. -->
+        <div
+          v-for="row in grp.rows"
+          :key="row.slug"
+          class="flex cursor-pointer items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground"
+          @click="pickStyle(row.slug)"
+        >
+          <Icon :name="row.icon" class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 items-center gap-1.5">
+              <span class="min-w-0 truncate text-base text-foreground">{{ row.name }}</span>
+              <Badge
+                v-if="row.overridesBuiltIn"
+                variant="outline"
+                class="shrink-0"
+                :title="t('settingsStyles.overrides.hint')"
+              >
+                {{ t('settingsStyles.overrides.tag') }}
+              </Badge>
             </div>
-            <button
-              v-if="row.desc"
-              class="styinfo"
-              type="button"
-              :aria-label="t('sessions.style.infoLabel', { name: row.name })"
-              :aria-expanded="infoSlug === row.slug"
-              @click.stop="toggleInfo(row.slug)"
-            >
-              <Icon name="info" class="styinfoicon" />
-            </button>
-            <Icon v-if="row.slug === activeStyleId" name="check" class="styck" />
+            <div v-if="row.hint" class="line-clamp-2 text-sm text-muted-foreground">
+              {{ row.hint }}
+            </div>
           </div>
-        </template>
-        <label class="nmk" style="padding: 0 10px 8px" @click.stop="toggleNoMd">
-          <span class="tog2 sm" :class="{ off: !noMd }" />
+          <!-- Thẻ mô tả của style: Popover lồng, mở sang TRÁI menu để không tràn mép
+               phải cửa sổ (chip style nằm ở cụm phải của thanh). -->
+          <Popover
+            v-if="row.desc"
+            :open="infoSlug === row.slug"
+            @update:open="(v: boolean) => (infoSlug = v ? row.slug : null)"
+          >
+            <PopoverTrigger as-child>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="size-5 shrink-0 text-muted-foreground"
+                :aria-label="t('sessions.style.infoLabel', { name: row.name })"
+                @click.stop
+              >
+                <Icon name="info" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="left" align="start" :side-offset="12" class="w-64 p-3">
+              <div class="text-sm font-semibold text-foreground">{{ row.name }}</div>
+              <div class="mt-1 text-sm whitespace-pre-line text-muted-foreground">
+                {{ row.desc }}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Icon
+            v-if="row.slug === activeStyleId"
+            name="check"
+            class="mt-0.5 size-3.5 shrink-0 text-primary"
+          />
+        </div>
+      </template>
+      <Separator class="my-1" />
+      <div class="flex items-center gap-2 px-2 py-1.5">
+        <Switch :id="noMdId" :checked="noMd" @update:checked="toggleNoMd" />
+        <Label :for="noMdId" class="font-normal">
           {{ t('sessions.config.noMarkdown') }}
-        </label>
+        </Label>
       </div>
-
-      <!-- Description popover for the highlighted style row. Rendered as a sibling of
-           the menu (which has overflow-y:auto and would CLIP a child card) and
-           anchored to the LEFT of the menu so it never runs off the window's right
-           edge. Position lives in the scoped <style> (mirrors .sb-menu). -->
-      <div
-        v-if="openChip && infoSlug"
-        class="styinfocard"
-        role="dialog"
-        aria-labelledby="styinfo-title"
-        aria-describedby="styinfo-body"
-        @click.stop
-      >
-        <div id="styinfo-title" class="styinfotitle">{{ infoName }}</div>
-        <div id="styinfo-body" class="styinfobody">{{ infoDesc }}</div>
-      </div>
-    </span>
-
-    <div v-if="openChip" class="sb-backdrop" @click="close" />
-  </span>
+    </PopoverContent>
+  </Popover>
 </template>
 
 <script setup lang="ts">
@@ -88,14 +102,23 @@
 // module-level (useStatusConfig) so only one shows at a time. Popovers open upward
 // (the bar is pinned to the window bottom).
 import type { Session } from '~/composables/useSessionsData'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const { openChip, toggle, close } = useStatusConfig()
 
+// Popover điều khiển bởi `openChip` (module-level) để `/style` mở được từ xa.
+function onOpenChange(open: boolean) {
+  if (open) toggle('style')
+  else close()
+}
+
 const { activeStyleId, styleName, styleGroups, noMd, selectStyle, toggleNoMd } =
   useSessionModelConfig(() => props.session)
+
+// Status bar và dock SSH cùng lắp chip này — id của công tắc phải riêng từng bản.
+const noMdId = useId()
 
 // Nhãn chip là tên văn phong; tooltip nói rõ đây là style picker.
 const cfgTitle = computed(() => t('statusbar.cfg.style'))
@@ -109,101 +132,11 @@ function pickStyle(slug: string) {
 // Which style row's info card is open (one at a time), or null. Text comes off the
 // row itself (i18n for built-ins, the file's frontmatter/directive for a style the
 // user wrote) — never from an i18n key built out of the id, which would miss for
-// every user style.
+// every user style. Esc / bấm ra ngoài do Popover lồng tự lo.
 const infoSlug = ref<string | null>(null)
-const infoRow = computed(() =>
-  infoSlug.value
-    ? styleGroups.value.flatMap((g) => g.rows).find((r) => r.slug === infoSlug.value)
-    : undefined,
-)
-const infoName = computed(() => infoRow.value?.name ?? '')
-const infoDesc = computed(() => infoRow.value?.desc ?? '')
-function toggleInfo(slug: string) {
-  infoSlug.value = infoSlug.value === slug ? null : slug
-}
-// Close the card whenever the style menu closes or another chip opens (covers the
-// backdrop click, pickStyle, and remote opens — close() is shared so we can't hook it).
+// Close the card whenever the style menu closes or another chip opens (covers
+// pickStyle and remote opens — close() is shared so we can't hook it).
 watch(openChip, () => {
   infoSlug.value = null
 })
-// Esc dismisses the open description card.
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && infoSlug.value) infoSlug.value = null
-}
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
-<style scoped>
-.sb-cfg {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.sb-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.sb-cfg-lbl {
-  font-weight: 500;
-  max-width: 130px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Popovers open UPWARD, anchored above the chip. Override the global `.smenu`
-   fixed/z so they sit over page content (the bar's z-index:82 stacking context). */
-.sb-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  z-index: 95;
-  max-height: min(60vh, 420px);
-  overflow-y: auto;
-}
-.sb-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 94;
-}
-/* Style description card: absolute (like .sb-menu), opens UPWARD, sits to the LEFT of
-   the 272px-wide style menu (272 + 8px gap) so it clears the window's right edge and
-   escapes the menu's overflow-y clip. Trade-off: on a very narrow window it can near
-   the left edge, but the style chip lives in the bar's right cluster so there is room. */
-.styinfocard {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 280px;
-  z-index: 96;
-}
-.mi {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  text-align: left;
-}
-/* Style rows: a user-written style brings a free-form name + description from its
-   file, so the name line truncates and the hint clamps to two lines — the 272px
-   menu must not stretch because someone wrote a long title. */
-.stylemenu .mi.sty .nm2 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.stynm {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.styover {
-  flex: none;
-}
-.stylemenu .mi.sty .sd2 {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-</style>

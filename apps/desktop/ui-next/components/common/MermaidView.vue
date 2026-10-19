@@ -3,52 +3,89 @@
        viewport: a transformed/filtered ancestor in the transcript would otherwise become
        its containing block and confine it (the "gap at top" bug). Disabled inline. -->
   <Teleport to="body" :disabled="!fullscreen">
-    <div class="mmd" :class="{ full: fullscreen }">
+    <!-- Card bo góc với header TÍCH HỢP dính cạnh trên, nền muted 50%, cao 256px cả
+         header. Fullscreen KHÔNG edge-to-edge: card nổi lùi 16px khỏi mép cửa sổ, nền
+         đục + shadow lớn. z-550: mermaid sống TRONG preview (`.pvovl` 480) / board item
+         (160) / peek full (400) — bung full từ đó phải nổi trên preview; vẫn dưới
+         action-menu (570). `mmd` là hook: DocMermaid ghi đè qua `:deep(.mmd)`. -->
+    <div
+      class="mmd flex flex-col self-stretch overflow-hidden rounded-lg border"
+      :class="
+        fullscreen ? 'fixed inset-4 z-550 bg-background shadow-lg' : 'relative h-64 bg-muted/50'
+      "
+    >
       <!-- Header tích hợp dính cạnh trên card (chrome proto): nhãn ngôn ngữ bên trái,
           cụm điều khiển zoom/pan/copy/fullscreen bên phải. -->
-      <div class="mmdbar">
-        <Waypoints class="mmdic-brand" />
-        <span class="mmdlang">mermaid</span>
-        <span class="mmdspacer" />
-        <button class="mmb" :title="t('common.zoomOut')" @click="zoomBy(-0.2)">
-          <Icon name="minus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button class="mmz" :title="t('common.zoomReset')" @click="reset">
+      <div class="flex items-center gap-1 border-b px-3 py-1.5">
+        <Waypoints class="size-3 text-muted-foreground" />
+        <span class="text-xs text-muted-foreground">mermaid</span>
+        <span class="flex-1" />
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="ICON_BTN"
+          :title="t('common.zoomOut')"
+          @click="zoomBy(-0.2)"
+        >
+          <Icon name="minus" />
+        </Button>
+        <!-- Nút % — click reset zoom+pan, chỉ đổi màu chữ khi hover. -->
+        <Button
+          variant="ghost"
+          size="xs"
+          class="h-6 w-10 px-0 text-xs font-normal text-muted-foreground tabular-nums hover:bg-transparent hover:text-foreground"
+          :title="t('common.zoomReset')"
+          @click="reset"
+        >
           {{ Math.round(scale * 100) }}%
-        </button>
-        <button class="mmb" :title="t('common.zoomIn')" @click="zoomBy(0.2)">
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button class="mmb" :title="t('common.fit')" @click="fit">
-          <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <span class="mmsep" />
-        <button
-          class="mmb"
-          :class="{ ok: copied }"
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="ICON_BTN"
+          :title="t('common.zoomIn')"
+          @click="zoomBy(0.2)"
+        >
+          <Icon name="plus" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="ICON_BTN"
+          :title="t('common.fit')"
+          @click="fit"
+        >
+          <Icon name="scan" />
+        </Button>
+        <Separator orientation="vertical" class="mx-0.5 h-4" />
+        <!-- Copy xong — tick xanh giống nút copy của code-block trong transcript. -->
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="[ICON_BTN, { 'text-success hover:text-success': copied }]"
           :title="copied ? t('common.copied') : t('common.mermaid.copySource')"
           @click="copySource"
         >
-          <Icon
-            :name="copied ? 'check' : 'copy'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-        <button
-          class="mmb"
+          <Icon :name="copied ? 'check' : 'copy'" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="ICON_BTN"
           :title="fullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
           @click="toggleFull"
         >
-          <Icon
-            :name="fullscreen ? 'minimize' : 'maximize'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
+          <Icon :name="fullscreen ? 'minimize' : 'maximize'" />
+        </Button>
       </div>
 
+      <!-- Viewport: track xác định `minmax(0,1fr)` để width:100% của stage resolve theo
+           viewport (cột `auto` co theo content, mà `<svg width="100%">` đóng góp 0 ⇒
+           diagram sập về 0) mà stage zoom >100% vẫn tràn + bị clip. Diagram là bề mặt
+           pan — không cho bôi chữ label. -->
       <div
         ref="vpRef"
-        class="mmdvp"
+        class="relative grid min-h-0 flex-1 cursor-grab touch-none grid-cols-[minmax(0,1fr)] place-items-center overflow-hidden select-none active:cursor-grabbing"
         @wheel="onWheelZoom"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
@@ -57,16 +94,28 @@
       >
         <!-- mermaid output is sanitized (securityLevel:strict) before v-html -->
         <!-- eslint-disable-next-line vue/no-v-html -- mermaid SVG, sanitized -->
-        <div v-if="svg" class="mmdstage" :style="stageStyle" v-html="svg" />
-        <div v-else-if="error" class="mmderr">
-          <span class="mmderrline">
-            <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div v-if="svg" class="mmdstage origin-center" :style="stageStyle" v-html="svg" />
+        <!-- Lỗi/loading ghim góc trên-trái viewport — tuyệt đối để không lệch grid
+             centering của stage; cuộn được để source dài không bị cắt. -->
+        <div
+          v-else-if="error"
+          class="absolute inset-0 flex flex-col gap-2 overflow-auto p-3 text-xs text-destructive"
+        >
+          <span class="flex items-start gap-1.5">
+            <Icon name="alert" class="mt-px size-3.5 flex-none" />
             <span>{{ error }}</span>
           </span>
-          <pre class="mmdsrc">{{ source }}</pre>
+          <!-- Giữ source gốc kèm lỗi parse để chẩn đoán (mono: nguồn mermaid). -->
+          <pre
+            class="m-0 max-w-full overflow-auto rounded-md border bg-background px-3 py-2.5 text-left font-mono text-xs whitespace-pre-wrap text-dim"
+            >{{ source }}</pre
+          >
         </div>
-        <div v-else class="mmdwait">
-          <Loader2 class="mmdspin animate-spin" />
+        <div
+          v-else
+          class="absolute top-0 left-0 flex items-center gap-2 p-3 text-xs text-muted-foreground"
+        >
+          <Loader2 class="size-3 animate-spin" />
           {{ t('common.mermaid.rendering') }}
         </div>
       </div>
@@ -101,7 +150,11 @@ let mermaidUid = 0
 // silently produced no SVG. A module-level counter guarantees uniqueness.
 const props = defineProps<{ code: string }>()
 const { t } = useI18n()
+// theme-ok: chọn theme dark/light cho mermaid
 const { isDark } = useTheme()
+
+// Nút icon ghost 24×24 trên header.
+const ICON_BTN = 'size-6 text-muted-foreground [&_svg]:size-3.5'
 const { scale, tx, ty, zoomBy, setScale, reset, onPointerDown, onPointerMove, onPointerUp } =
   useZoomPan({
     min: 0.3,
@@ -221,7 +274,7 @@ function repairMermaid(src: string): string {
   if (isFlow) {
     // (1) A styling statement (classDef/class/style/linkStyle) joined to the previous one
     // by a `;` on the SAME line fuses them for mermaid's parser: the `;` gets swallowed
-    // into the preceding value (e.g. `...stroke:#c62828; class K b` → "got 'CLASS',
+    // into the preceding value (e.g. `...stroke:#c62828; class K b` → "got 'CLASS', hex-ok: ví dụ cú pháp mermaid
     // expecting NEWLINE"). Put each such statement on its own line.
     out = out.replace(/;[ \t]*(?=(?:classDef|class|style|linkStyle)\b)/g, '\n')
     // (2) Quote flowchart edge labels whose text carries shape punctuation:
@@ -365,7 +418,7 @@ function inlineFill(el: Element): string | null {
 }
 
 // mermaid colours node labels from the (dark) theme → light text. When the diagram
-// author sets a LIGHT custom fill (e.g. `style X fill:#ffebee` — common in LLM output
+// author sets a LIGHT custom fill (e.g. `style X fill:#ffebee` — common in LLM output hex-ok: ví dụ cú pháp mermaid
 // tuned for the light theme), that light text lands on a light fill and is unreadable.
 // For every node carrying an inline fill, flip its label ink to dark/light by the fill's
 // perceived luminance. Default-fill nodes have no inline fill → left untouched, and the
@@ -384,6 +437,7 @@ function fixNodeContrast(svgMarkup: string): string {
     const rgb = fill ? parseColor(fill) : null
     if (!rgb) continue
     // Perceived luminance (ITU-R BT.601); >150/255 ≈ light surface → needs dark ink.
+    // hex-ok: màu chữ đảo theo nền node do tác giả diagram tự đặt (dữ liệu)
     const ink = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] > 150 ? '#1a1a1a' : '#f5f5f5'
     for (const lbl of Array.from(
       node.querySelectorAll<HTMLElement>(
@@ -515,182 +569,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* Chrome theo proto: card bo --r-btn với header TÍCH HỢP dính cạnh trên (trước là
-   pill điều khiển nổi trên viewport), nền muted 50%, viewport cao 256px tổng cả header. */
-.mmd {
-  position: relative;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  height: 256px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: color-mix(in srgb, var(--muted) 50%, transparent);
-  overflow: hidden;
-}
-/* Fullscreen KHÔNG edge-to-edge nữa: một card nổi lùi 16px khỏi mép cửa sổ, giữ
-   border + radius, nền đục + shadow lớn (proto inset-4 z-[85] shadow-2xl). z 550:
-   mermaid sống TRONG preview (`.pvovl` 480) / board item (160) / peek full (400)
-   — bung full từ đó phải nổi trên preview; vẫn dưới action-menu (570). */
-.mmd.full {
-  position: fixed;
-  inset: 16px;
-  z-index: 550;
-  height: auto;
-  background: var(--background);
-  box-shadow: var(--shadow-lg);
-}
-/* Header bar: nhãn "mermaid" bên trái, cụm nút bên phải, hairline dưới tách viewport. */
-.mmdbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.mmdic-brand {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--muted-foreground);
-}
-.mmdlang {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.mmdspacer {
-  flex: 1;
-}
-/* Ghost icon button 24×24 (proto Button iconSm size-6). */
-.mmb {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  border-radius: var(--r-sm);
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.mmb:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-/* Copy confirmed — tick xanh giống nút copy của code-block trong transcript. */
-.mmb.ok,
-.mmb.ok:hover {
-  color: var(--success);
-}
-/* Nút % — click reset zoom+pan (proto w-10, chỉ đổi màu chữ khi hover). */
-.mmz {
-  width: 40px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  border-radius: var(--r-sm);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.mmz:hover {
-  color: var(--foreground);
-}
-.mmsep {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  margin: 0 2px;
-}
-.mmdvp {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: grid;
-  /* Track có kích thước xác định để width:100% của stage resolve theo viewport. Không
-     có nó, cột `auto` ngầm định co theo content, mà `<svg width="100%">` của mermaid
-     đóng góp 0 vào track auto → cột (và diagram) sập về 0. minmax(0,1fr) lấp đầy
-     container nhưng vẫn cho stage zoom (>100%) tràn + bị clip. */
-  grid-template-columns: minmax(0, 1fr);
-  place-items: center;
-  cursor: grab;
-  touch-action: none;
-  /* Diagram là bề mặt pan — kéo không được bôi chữ label (highlight xanh khi pan).
-     Không selectable trong suốt viewport. */
-  user-select: none;
-  -webkit-user-select: none;
-}
-.mmdvp:active {
-  cursor: grabbing;
-}
-.mmdstage {
-  transform-origin: center center;
-}
-/* Force the mermaid SVG to fill the (zoomable) stage width so it scales as vector. */
+/* style-ok: SVG do mermaid sinh ra (v-html) — ép lấp đầy bề rộng stage (zoom được) để
+   scale như vector; mermaid đặt width/max-width inline nên cần !important. */
 .mmdstage :deep(svg) {
   display: block;
   width: 100% !important;
   height: auto !important;
   max-width: none !important;
-}
-/* Trạng thái lỗi/loading ghim góc trên-trái của viewport (proto p-3 text-xs
-   text-destructive) — tuyệt đối để không lệch grid centering của stage. Container
-   scroll được để source dài không bị cắt. */
-.mmderr {
-  position: absolute;
-  inset: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  color: var(--destructive);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.mmderrline {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-.mmderrline .icn {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-/* Giữ source gốc kèm lỗi parse — proto không có nhưng production cần để chẩn đoán. */
-.mmdsrc {
-  margin: 0;
-  max-width: 100%;
-  overflow: auto;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  color: var(--textDim);
-  /* mono-ok: mermaid source */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: pre-wrap;
-  text-align: left;
-}
-.mmdwait {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.mmdspin {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
 }
 </style>

@@ -2,28 +2,59 @@
   <!-- `data-session-id` là NEO cho thanh chọn-văn-bản của SessionDetail (Quote /
        Copy MD / Translate). Không có nó, một selection trong ô con vẫn bị quy về phiên
        của SessionDetail: quote rơi vào composer phiên cha, và `data-mi` lại là chỉ số
-       message của ô con ⇒ trích dẫn trỏ nhầm message. -->
-  <div class="gpane" :class="{ primary }" :data-session-id="session.id">
-    <div class="gph">
-      <span class="gpdot" :style="{ background: statusColor }" :title="statusLabel" />
-      <span class="gptitle" :title="session.title">{{ session.title }}</span>
-      <span v-if="session.teamRole" class="gprole">{{ session.teamRole }}</span>
-      <span class="gpwhen">{{ timeLabel }}</span>
-      <button
-        class="gpib"
+       message của ô con ⇒ trích dẫn trỏ nhầm message.
+       Ô của phiên cha mang viền tô primary (kiểu công tắc sáng, không phải nền). -->
+  <div
+    class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-background"
+    :class="primary && 'border-primary/42'"
+    :data-session-id="session.id"
+  >
+    <!-- Header panel h-8 / chữ nhỏ; hairline bằng inset shadow (thanh cao cố định). -->
+    <div
+      class="flex h-8 shrink-0 items-center gap-2 px-2 text-sm shadow-[inset_0_-1px_0_var(--border)]"
+    >
+      <!-- Màu chấm là dữ liệu trạng thái (STATUS_COLOR), không phải màu theme. -->
+      <span
+        class="size-2 shrink-0 rounded-full"
+        :style="{ background: statusColor }"
+        :title="statusLabel"
+      />
+      <span class="min-w-0 flex-auto truncate font-medium" :title="session.title">
+        {{ session.title }}
+      </span>
+      <Badge
+        v-if="session.teamRole"
+        variant="outline"
+        class="shrink-0 border-primary/42 px-1.5 py-px font-normal text-primary"
+      >
+        {{ session.teamRole }}
+      </Badge>
+      <span class="shrink-0 text-xs text-muted-foreground tabular-nums">{{ timeLabel }}</span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
         :title="t('sessions.grid.openFull')"
+        :aria-label="t('sessions.grid.openFull')"
         @click="emit('openFull', session.id)"
       >
-        <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon name="external" class="size-3" />
+      </Button>
       <!-- MỌI ô ẩn được, kể cả ô của phiên cha: lưới neo vào cái NHÓM (chip trên thanh)
            chứ không vào một ô cụ thể, nên không có ô nào phải ở lại. -->
-      <button class="gpib" :title="t('sessions.grid.hide')" @click="emit('hide')">
-        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+        :title="t('sessions.grid.hide')"
+        :aria-label="t('sessions.grid.hide')"
+        @click="emit('hide')"
+      >
+        <Icon name="x" class="size-3" />
+      </Button>
     </div>
 
-    <div class="gpbody">
+    <div class="relative flex min-h-0 flex-auto flex-col">
       <SessionTranscript
         :messages="session.msgs"
         :fallback-when="session.when"
@@ -48,7 +79,8 @@
       @preview="previewAtt"
       @open-more="moreOpen = true"
     />
-    <input ref="fileInput" type="file" multiple style="display: none" @change="onPick" />
+    <!-- raw-ok: input file ẩn — chỉ để mở hộp chọn file của OS -->
+    <input ref="fileInput" type="file" multiple class="hidden" @change="onPick" />
     <SessionAttachmentsModal
       :open="moreOpen"
       :attachments="att.pending.value"
@@ -144,84 +176,3 @@ function previewAtt(i: number) {
   openPreview(previewRefFromAttachment(a), imageSiblingsFromAttachments(att.pending.value))
 }
 </script>
-
-<style scoped>
-.gpane {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--background);
-  overflow: hidden;
-}
-/* The parent's pane wears a primary-tinted border (lit-toggle idiom, not a fill). */
-.gpane.primary {
-  border-color: color-mix(in srgb, var(--primary) 42%, transparent);
-}
-/* h-8 / xs — the proto panel-header idiom. */
-.gph {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 8px;
-  height: 32px;
-  flex: 0 0 auto;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.gpdot {
-  width: 7px; /* design-token-ok: chấm tròn — con số px CHÍNH LÀ hình dạng */
-  height: 7px; /* design-token-ok: chấm tròn */
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.gptitle {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 550;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gprole {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
-  border-radius: var(--r-pill);
-  color: var(--primary);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.gpwhen {
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-.gpib {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  background: transparent;
-  cursor: pointer;
-}
-.gpib:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.gpbody {
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-</style>

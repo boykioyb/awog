@@ -2,7 +2,7 @@
   <!-- "Trong màn agent sẽ có hiển thị toàn bộ session cả danh sách" — yêu cầu
        người dùng, nguyên văn. Đây là danh sách THU NHỎ của màn phiên: cùng
        `SessionListItem` (một định nghĩa cho "một hàng phiên"), chỉ khác bề rộng. -->
-  <div class="ixbs">
+  <div class="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
     <SessionListItem
       v-for="s in sessions"
       :key="s.id"
@@ -14,7 +14,9 @@
       @click="$emit('pick', s.id)"
       @ctxmenu="noop"
     />
-    <p v-if="!sessions.length" class="ixbs-empty">{{ t('infra.bubble.noSessions') }}</p>
+    <p v-if="!sessions.length" class="m-auto px-2 py-5 text-center text-xs text-faint">
+      {{ t('infra.bubble.noSessions') }}
+    </p>
   </div>
 </template>
 
@@ -31,21 +33,3 @@ const { t } = useI18n()
 /** Bong bóng không có menu chuột phải — chọn phiên là hành động duy nhất ở đây. */
 function noop(): void {}
 </script>
-
-<style scoped>
-.ixbs {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 6px 8px;
-}
-
-.ixbs-empty {
-  margin: auto;
-  padding: 20px 10px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-</style>

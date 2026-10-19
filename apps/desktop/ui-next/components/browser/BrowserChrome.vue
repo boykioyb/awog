@@ -1,8 +1,9 @@
 <template>
-  <div class="bch">
+  <div class="flex shrink-0 flex-col">
     <!-- Hàng 1 — tab strip bên trái, nhóm nút "cửa sổ" bên phải. Nhóm phải là
-         KHỐI CỐ ĐỊNH: strip co lại và cuộn ngang, nút không bao giờ bị bóp. -->
-    <div class="bch-tabs">
+         KHỐI CỐ ĐỊNH: strip co lại và cuộn ngang, nút không bao giờ bị bóp.
+         Hairline dưới bằng inset shadow (không border) để không ăn 1px chiều cao. -->
+    <div class="flex items-center gap-1.5 px-2 py-1.5 shadow-[inset_0_-1px_0_var(--color-border)]">
       <BrowserTabs
         :tabs="tabs"
         :active-tab-id="activeTabId"
@@ -15,32 +16,32 @@
       <!-- Nhóm cửa sổ còn ĐÚNG HAI nút (session-ui-refactor §3.6). Dock · popout ·
            phóng to đã chuyển xuống menu `⋯` ở hàng dưới: đây là panel rộng 322px,
            trước đó 15 nút chen nhau tới mức thanh phải xuống dòng. -->
-      <div class="bch-grp">
+      <div class="flex flex-none items-center gap-1">
         <!-- ⋮ — sprite chỉ có bộ 3 chấm NGANG, quay 90° thành dọc. Nút ở đây nhưng
              menu render trong NavBar (giữ cùng chỗ với hai menu kia) → gọi qua
              ref, forward nguyên MouseEvent để neo đúng vị trí nút. -->
-        <button
-          type="button"
-          class="bch-act"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('browser.menu.title')"
+          :aria-label="t('browser.menu.title')"
           @pointerenter="prefetchBrowserFrame"
           @pointerdown="prefetchBrowserFrame"
           @click.stop="navBarEl?.openOverflow($event)"
         >
-          <Icon
-            name="dots"
-            class="bch-vdots"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-        <button
-          type="button"
-          class="bch-act"
+          <Icon name="dots" class="rotate-90" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="isPanel ? t('browser.close') : t('browser.closeWindow')"
+          :aria-label="isPanel ? t('browser.close') : t('browser.closeWindow')"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
     </div>
 
@@ -169,46 +170,3 @@ const onOpenUrl = (target: string, mode: 'current' | 'new'): void => {
 // neo đúng mép nút.
 const navBarEl = useTemplateRef<{ openOverflow: (ev: MouseEvent) => void }>('navBarEl')
 </script>
-
-<style scoped>
-.bch {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-.bch-tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.bch-grp {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-.bch-act {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.bch-act:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.bch-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.bch-vdots {
-  transform: rotate(90deg);
-}
-</style>

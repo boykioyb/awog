@@ -6,41 +6,45 @@
     :lock-scrim="busy"
     @close="onClose"
   >
-    <div class="acl">
-      <p class="acl-sub">{{ t('infra.login.subtitle') }}</p>
+    <div class="flex flex-col gap-3.5">
+      <p class="m-0 text-sm text-dim">{{ t('infra.login.subtitle') }}</p>
 
-      <div v-if="done" class="acl-done">
-        <Icon
-          name="check"
-          style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-        />
+      <div
+        v-if="done"
+        class="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm text-foreground"
+      >
+        <Icon name="check" class="size-3.5 text-primary" />
         {{ t('infra.login.done', { name: doneProfile }) }}
       </div>
 
       <template v-else>
-        <div class="acl-field">
-          <label class="acl-label">{{ t('infra.login.profileName') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-xs font-semibold text-foreground">
+            {{ t('infra.login.profileName') }}
+          </Label>
           <!-- Mở từ màn sửa = LÀM MỚI PHIÊN cho đúng profile đó, nên tên đứng
                yên. Bản trước để ô này sửa được, và sửa nó là TẠO PROFILE THỨ HAI
                thay vì đổi tên (đo trên máy người dùng 2026-09-14: `console` +
                `hoatq.dev`, cùng một `login_session`). Đổi tên giờ làm ở màn Sửa —
-               form `login` đã cho sửa tên (AwsProfileEditorLoginFields.vue). -->
+               form `login` đã cho sửa tên (AwsProfileEditorLoginFields.vue).
+               mono-ok: tên profile là định danh người dùng gõ/dán và cũng là tham
+               số `--profile` của CLI. -->
           <Input
             v-model.trim="name"
             spellcheck="false"
             autocomplete="off"
             :readonly="isRelogin"
             :disabled="busy"
-            class="mono"
+            class="font-mono"
           />
-          <div v-if="isRelogin" class="acl-hint">
+          <div v-if="isRelogin" class="text-xs text-dim">
             {{ t('infra.login.reloginNameLocked', { name: name }) }}
           </div>
-          <div v-if="nameError" class="acl-error">{{ nameError }}</div>
+          <div v-if="nameError" class="text-xs text-destructive">{{ nameError }}</div>
         </div>
 
-        <div class="acl-field">
-          <label class="acl-label">{{ t('infra.login.region') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-xs font-semibold text-foreground">{{ t('infra.login.region') }}</Label>
           <AppSelect v-model="regionPick" :options="regionOptions" width="100%" :disabled="busy" />
           <!-- Region ngoài danh sách ngắn ở trên: vẫn phải tới được, nhưng chỉ
                hiện ô gõ tay khi thật sự chọn "Region khác…" — người dùng phổ
@@ -55,12 +59,15 @@
           />
         </div>
 
-        <div v-if="busy" class="acl-waiting">
-          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div
+          v-if="busy"
+          class="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm text-primary"
+        >
+          <Icon name="globe" class="size-3.5" />
           {{ t('infra.login.waiting') }}
         </div>
-        <p v-else class="acl-hint">{{ t('infra.login.hint') }}</p>
-        <p v-if="!busy" class="acl-hint">{{ t('infra.login.staleCookieHint') }}</p>
+        <p v-else class="m-0 text-xs text-dim">{{ t('infra.login.hint') }}</p>
+        <p v-if="!busy" class="m-0 text-xs text-dim">{{ t('infra.login.staleCookieHint') }}</p>
       </template>
 
       <!-- URL uỷ quyền do CLI in ra, hiện NGAY khi có — không đợi đăng nhập xong.
@@ -73,27 +80,39 @@
            URL cũ chỉ dẫn tới trang "không kết nối được" SAU khi người dùng gõ
            xong mật khẩu. Câu lỗi hết giờ thay vào đó nói đúng việc cần làm:
            chạy lại rồi mở ẩn danh ngay khi URL hiện ra. -->
-      <div v-if="loginUrl && busy" class="acl-url">
-        <div class="acl-url-title">{{ t('infra.login.url.title') }}</div>
-        <code class="acl-url-value">{{ loginUrl }}</code>
-        <div class="acl-url-acts">
+      <div
+        v-if="loginUrl && busy"
+        class="flex flex-col gap-2 rounded-lg border bg-muted px-3 py-2.5"
+      >
+        <div class="text-sm font-semibold text-foreground">{{ t('infra.login.url.title') }}</div>
+        <!-- mono-ok: URL uỷ quyền của AWS — người dùng đọc và copy nguyên văn sang
+             trình duyệt, nên phải tách được ký tự dễ nhầm (0/O, 1/l). -->
+        <code class="max-h-24 overflow-y-auto font-mono text-xs break-all text-muted-foreground">
+          {{ loginUrl }}
+        </code>
+        <div class="flex flex-wrap gap-2">
           <Button type="button" :disabled="openingPrivate" variant="default" @click="onOpenPrivate">
-            <Icon name="eye-off" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="eye-off" class="size-3.5" />
             {{ t('infra.login.url.private') }}
           </Button>
           <Button type="button" variant="outline" @click="onCopyUrl">
-            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="copy" class="size-3.5" />
             {{ copied ? t('infra.login.url.copied') : t('infra.login.url.copy') }}
           </Button>
           <Button type="button" variant="outline" @click="onReopenUrl">
-            <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="external" class="size-3.5" />
             {{ t('infra.login.url.reopen') }}
           </Button>
         </div>
-        <p class="acl-url-hint">{{ t('infra.login.url.hint') }}</p>
+        <p class="m-0 text-xs text-dim">{{ t('infra.login.url.hint') }}</p>
       </div>
 
-      <div v-if="errorMsg" class="acl-error acl-error-box">{{ errorMsg }}</div>
+      <div
+        v-if="errorMsg"
+        class="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+      >
+        {{ errorMsg }}
+      </div>
 
       <!-- Hai đường khi cửa sổ ẩn danh không cứu được, hiện NGAY trong lúc chờ
            (không đợi hết 5 phút): trang lỗi của AWS hiện ra tức thì, còn CLI thì
@@ -111,17 +130,26 @@
            Nút này KHÔNG phải <a href>: interceptor của useLinkOpen sẽ hỏi "mở
            trong AWOG hay browser?", mà gõ mật khẩu AWS vào Chromium của app là
            một cái bẫy (cùng lý do với AwsProfileCredentialHelp.vue). -->
-      <div v-if="loginUrl && (busy || errorCode === 'LOGIN_TIMEOUT')" class="acl-once">
-        <p class="acl-hint">{{ t('infra.login.retryNote') }}</p>
-        <button type="button" class="acl-link" @click="onOpenConsoleSignIn">
-          <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <div
+        v-if="loginUrl && (busy || errorCode === 'LOGIN_TIMEOUT')"
+        class="flex flex-col items-start gap-2"
+      >
+        <p class="m-0 text-xs text-dim">{{ t('infra.login.retryNote') }}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          class="text-primary"
+          @click="onOpenConsoleSignIn"
+        >
+          <Icon name="external" class="size-3" />
           {{ t('infra.login.openSignIn') }}
-        </button>
+        </Button>
       </div>
     </div>
 
     <template #footer>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button v-if="done" type="button" variant="default" @click="onDone">
         {{ t('common.close') }}
       </Button>
@@ -433,145 +461,3 @@ function onDone(): void {
   emit('done')
 }
 </script>
-
-<style scoped>
-.acl {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.acl-sub {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.acl-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.acl-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.acl-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  /* mono-ok: tên profile là định danh người dùng gõ/dán và cũng là tham số
-     `--profile` của CLI — cùng lý do với các ô tên profile khác của màn này. */
-  font-family: var(--code);
-  outline: none;
-}
-.acl-input:focus {
-  border-color: var(--accent);
-}
-.acl-hint {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.acl-waiting {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.acl-done {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.acl-error {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--danger);
-}
-.acl-url {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--bgHover);
-  border: 1px solid var(--border);
-}
-.acl-url-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  font-weight: 600;
-}
-.acl-url-value {
-  /* mono-ok: URL uỷ quyền của AWS — người dùng đọc và copy nguyên văn sang
-     trình duyệt, nên phải tách được ký tự dễ nhầm (0/O, 1/l). */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-  word-break: break-all;
-  max-height: 96px;
-  overflow-y: auto;
-}
-.acl-url-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.acl-url-hint {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.acl-error-box {
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--dangerDim);
-  border: 1px solid var(--dangerBorder);
-}
-.acl-once {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.acl-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.acl-link:hover {
-  background: var(--bgHover);
-}
-</style>

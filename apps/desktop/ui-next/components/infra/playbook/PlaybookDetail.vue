@@ -4,47 +4,65 @@
        SƠ ĐỒ BA HÀNG → danh sách bước → kết quả chạy.
        Người đọc phải nắm được "đụng vào gì, ai chết theo, hỏng thì lui sao" TRƯỚC khi
        nhìn thấy một dòng lệnh nào. -->
-  <div class="pb-detail">
-    <div v-if="loading" class="pb-dstate">
-      <Icon name="refresh" class="ikspin" style="width: var(--icon-lg); height: var(--icon-lg)" />
-      <p class="pb-dstate-txt" role="status" aria-busy="true">
+  <div class="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto px-4 pt-3 pb-4">
+    <div
+      v-if="loading"
+      class="flex flex-1 flex-col items-center justify-center gap-2.5 px-5 py-8.5 text-center text-dim"
+    >
+      <Icon name="refresh" class="size-5 animate-spin" />
+      <p class="text-base text-muted-foreground" role="status" aria-busy="true">
         {{ t('playbooks.detail.loading') }}
       </p>
     </div>
 
-    <div v-else-if="error" class="pb-dstate">
-      <Icon name="alert" style="width: var(--icon-lg); height: var(--icon-lg)" />
-      <p class="pb-dstate-txt">{{ t('playbooks.detail.error.title') }}</p>
-      <p class="pb-dstate-hint">{{ error }}</p>
-      <p class="pb-dstate-hint">{{ t('playbooks.detail.error.hint') }}</p>
+    <div
+      v-else-if="error"
+      class="flex flex-1 flex-col items-center justify-center gap-2.5 px-5 py-8.5 text-center text-dim"
+    >
+      <Icon name="alert" class="size-5" />
+      <p class="text-base text-muted-foreground">{{ t('playbooks.detail.error.title') }}</p>
+      <p class="max-w-115 text-xs leading-(--lh-sm) text-dim">{{ error }}</p>
+      <p class="max-w-115 text-xs leading-(--lh-sm) text-dim">
+        {{ t('playbooks.detail.error.hint') }}
+      </p>
       <Button type="button" variant="outline" size="sm" @click="emit('retry')">
         {{ t('playbooks.list.retry') }}
       </Button>
     </div>
 
-    <div v-else-if="!playbook" class="pb-dstate">
-      <Icon name="book" style="width: var(--icon-lg); height: var(--icon-lg)" />
-      <p class="pb-dstate-txt">{{ t('playbooks.detail.none.title') }}</p>
-      <p class="pb-dstate-hint">{{ t('playbooks.detail.none.hint') }}</p>
+    <div
+      v-else-if="!playbook"
+      class="flex flex-1 flex-col items-center justify-center gap-2.5 px-5 py-8.5 text-center text-dim"
+    >
+      <Icon name="book" class="size-5" />
+      <p class="text-base text-muted-foreground">{{ t('playbooks.detail.none.title') }}</p>
+      <p class="max-w-115 text-xs leading-(--lh-sm) text-dim">
+        {{ t('playbooks.detail.none.hint') }}
+      </p>
     </div>
 
     <template v-else>
-      <header class="pb-head">
-        <h2 class="pb-name">{{ playbook.name }}</h2>
+      <header class="flex flex-wrap items-center gap-2">
+        <h2 class="text-lg font-semibold text-foreground">{{ playbook.name }}</h2>
         <!-- Chip trạng thái là của LƯỢT CHẠY đang xem, không phải của playbook:
              playbook không có trạng thái riêng (hợp đồng §4). -->
-        <span v-if="view.run" class="chip" :class="`st-${view.run.status}`">
+        <Badge
+          v-if="view.run"
+          variant="outline"
+          class="rounded-sm font-medium text-muted-foreground"
+        >
           {{ t(`playbooks.status.${view.run.status}`) }}
-        </span>
+        </Badge>
+        <!-- Bản dựng sẵn: chỉ đọc, sửa/xoá đều bị sidecar từ chối — nói trước. -->
         <span
           v-if="view.source"
-          class="pb-src"
-          :class="{ ro: view.source === 'builtin' }"
+          class="text-xs"
+          :class="view.source === 'builtin' ? 'text-lavender' : 'text-dim'"
           :title="view.source === 'builtin' ? t('playbooks.source.builtinWhy') : ''"
         >
           {{ t(`playbooks.source.${view.source}`) }}
         </span>
-        <span class="pb-tier">
+        <span class="text-xs text-dim">
           {{
             t('playbooks.meta.tier', {
               kind: t(`playbooks.kind.${playbook.kind}`),
@@ -53,7 +71,8 @@
           }}
         </span>
 
-        <span class="pb-head-gap" />
+        <!-- Đẩy ba nút ra mép phải. -->
+        <span class="flex-1" />
 
         <!-- Sửa · Nhân bản · Xoá. Icon-trần với `title`, theo luật hàng nút của
              `*Detail.vue` (.claude/rules/nuxt-vue.md §UI patterns) — không trộn
@@ -64,72 +83,86 @@
         <Button
           v-if="writable"
           variant="ghost"
-          class="h-auto p-0 pb-hbtn"
+          size="iconMd"
+          class="text-dim disabled:opacity-40"
           type="button"
           :disabled="view.busy"
           :title="t('playbooks.action.edit')"
+          :aria-label="t('playbooks.action.edit')"
           @click="emit('edit')"
         >
-          <Icon name="edit" class="pb-hic" />
+          <Icon name="edit" />
         </Button>
         <Button
           variant="ghost"
-          class="h-auto p-0 pb-hbtn"
+          size="iconMd"
+          class="text-dim disabled:opacity-40"
           type="button"
           :disabled="view.busy"
           :title="t('playbooks.action.duplicate')"
+          :aria-label="t('playbooks.action.duplicate')"
           @click="emit('duplicate')"
         >
-          <Icon name="copy" class="pb-hic" />
+          <Icon name="copy" />
         </Button>
-        <button
+        <Button
           v-if="writable"
-          class="pb-hbtn danger"
+          variant="ghost"
+          size="iconMd"
+          class="text-dim hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
           type="button"
           :disabled="view.busy"
           :title="t('playbooks.action.delete')"
+          :aria-label="t('playbooks.action.delete')"
           @click="emit('delete')"
         >
-          <Icon name="trash" class="pb-hic" />
-        </button>
+          <Icon name="trash" />
+        </Button>
       </header>
 
-      <p v-if="playbook.description" class="pb-desc">{{ playbook.description }}</p>
+      <p v-if="playbook.description" class="text-sm leading-(--lh-prose) text-muted-foreground">
+        {{ playbook.description }}
+      </p>
 
-      <p class="pb-meta">
+      <p class="flex flex-wrap items-center gap-1 text-xs leading-(--lh-sm) text-dim">
         {{
           t('playbooks.meta.summary', {
             steps: playbook.steps.length,
             services: view.touchedServices.length,
           })
         }}
-        <span v-if="view.rollback.total" :class="{ 'is-bad': view.rollback.missing > 0 }">
+        <span v-if="view.rollback.total" :class="{ 'text-warning': view.rollback.missing > 0 }">
           · {{ rollbackLabel }}
         </span>
-        <span class="pb-meta-when">
+        <span class="ml-1.5 text-faint">
           {{ t('playbooks.meta.updated', { at: playbook.updatedAt }) }}
         </span>
       </p>
 
       <!-- File HỎNG: nói ngay chỗ nào, vì đây cũng là lý do nút gửi duyệt bị tắt. -->
-      <p v-if="view.issues?.length" class="pb-block">
-        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <p
+        v-if="view.issues?.length"
+        class="flex items-center gap-1 text-xs leading-(--lh-sm) text-warning"
+      >
+        <Icon name="alert" class="size-3" />
         {{ t('playbooks.detail.issues', { n: view.issues.length }) }}
       </p>
 
       <!-- Biến: điền trước khi kiểm tra hoặc chạy -->
-      <div v-if="view.variables.length" class="pb-vars">
-        <div class="pb-vars-hd">
-          <span class="pb-vars-ttl">{{ t('playbooks.variables.title') }}</span>
-          <span v-if="view.requiredMissing.length" class="pb-vars-req">
+      <div v-if="view.variables.length" class="flex flex-col gap-1.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-sm font-semibold text-muted-foreground">
+            {{ t('playbooks.variables.title') }}
+          </span>
+          <span v-if="view.requiredMissing.length" class="text-xs text-warning">
             {{ t('playbooks.variables.required') }}
           </span>
         </div>
-        <div class="pb-vars-grid">
-          <label v-for="v in view.variables" :key="v.name" class="pb-var">
-            <span class="pb-var-lbl">
+        <div class="flex flex-wrap gap-2">
+          <label v-for="v in view.variables" :key="v.name" class="flex min-w-40 flex-col gap-1">
+            <span class="text-xs text-dim">
               {{ v.label || v.name }}
-              <span v-if="v.required" class="pb-var-star">*</span>
+              <span v-if="v.required" class="text-warning">*</span>
             </span>
             <Input
               type="text"
@@ -142,7 +175,7 @@
       </div>
 
       <!-- Hành động. Nút bị TẮT luôn kèm lý do ngay dưới (luật 3 + luật 4). -->
-      <div class="pb-acts">
+      <div class="flex flex-wrap items-center gap-1.5">
         <Button
           type="button"
           :disabled="view.busy || view.requiredMissing.length > 0"
@@ -150,7 +183,7 @@
           size="sm"
           @click="emit('preflight')"
         >
-          <Icon name="inspect" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="inspect" />
           {{ t('playbooks.action.preflight') }}
         </Button>
 
@@ -164,7 +197,7 @@
           size="sm"
           @click="emit('submit')"
         >
-          <Icon name="send" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="send" />
           {{ t('playbooks.action.submit') }}
         </Button>
 
@@ -178,7 +211,7 @@
           size="sm"
           @click="emit('approve')"
         >
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="check" />
           {{ t('playbooks.action.approve') }}
         </Button>
 
@@ -189,7 +222,7 @@
           size="sm"
           @click="emit('run')"
         >
-          <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="play" />
           {{ view.busy ? t('playbooks.action.working') : t('playbooks.action.run') }}
         </Button>
 
@@ -200,7 +233,7 @@
           size="sm"
           @click="emit('rollback')"
         >
-          <Icon name="revert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="revert" />
           {{ t('playbooks.action.rollback') }}
         </Button>
 
@@ -215,7 +248,7 @@
           size="sm"
           @click="emit('share')"
         >
-          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="download" />
           {{ t('playbooks.action.share') }}
         </Button>
 
@@ -229,22 +262,31 @@
           size="sm"
           @click="emit('shareRun')"
         >
-          <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="book" />
           {{ t('playbooks.action.shareRun') }}
         </Button>
       </div>
 
-      <p v-if="view.rollback.missing > 0" class="pb-block">
-        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <p
+        v-if="view.rollback.missing > 0"
+        class="flex items-center gap-1 text-xs leading-(--lh-sm) text-warning"
+      >
+        <Icon name="alert" class="size-3" />
         {{ t('playbooks.action.submitBlocked', { n: view.rollback.missing }) }}
       </p>
       <!-- Bước `do` nào còn thiếu cặp: sidecar đã ghép cặp THEO CHỈ SỐ, UI chỉ đọc
            lại danh sách id nó trả (`summary.missingRollback`) chứ không tự đoán. -->
-      <p v-if="view.rollback.missingIds.length" class="pb-block">
+      <p
+        v-if="view.rollback.missingIds.length"
+        class="flex items-center gap-1 text-xs leading-(--lh-sm) text-warning"
+      >
         {{ t('playbooks.action.submitMissing', { ids: view.rollback.missingIds.join(', ') }) }}
       </p>
-      <p v-if="view.requiredMissing.length > 0" class="pb-block">
-        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <p
+        v-if="view.requiredMissing.length > 0"
+        class="flex items-center gap-1 text-xs leading-(--lh-sm) text-warning"
+      >
+        <Icon name="alert" class="size-3" />
         {{ t('playbooks.variables.required') }}
       </p>
 
@@ -328,217 +370,3 @@ function onVar(name: string, v: string): void {
   emit('setVariable', name, v)
 }
 </script>
-
-<style scoped>
-/* Hàng nút ở đầu màn chi tiết: đẩy ba nút ra mép phải. */
-.pb-head-gap {
-  flex: 1;
-}
-
-.pb-hbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-
-.pb-hbtn:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-
-.pb-hbtn.danger:hover:not(:disabled) {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-
-.pb-hbtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.pb-hic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.pb-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  height: 100%;
-  overflow-y: auto;
-  padding: 12px 16px 16px;
-}
-
-.pb-dstate {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 34px 20px;
-  color: var(--textDim);
-  text-align: center;
-}
-
-.pb-dstate-txt {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-
-.pb-dstate-hint {
-  margin: 0;
-  max-width: 460px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pb-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pb-name {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-}
-
-.pb-src {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-/* Bản dựng sẵn: chỉ đọc, sửa/xoá đều bị sidecar từ chối — nói trước. */
-.pb-src.ro {
-  color: var(--violet);
-}
-
-.pb-tier {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pb-desc {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-
-.pb-meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pb-meta .is-bad {
-  color: var(--amber);
-}
-
-.pb-meta-when {
-  margin-left: 6px;
-  color: var(--textFaint);
-}
-
-.pb-vars {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pb-vars-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pb-vars-ttl {
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 650;
-}
-
-.pb-vars-req {
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pb-vars-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.pb-var {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 160px;
-}
-
-.pb-var-lbl {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pb-var-star {
-  color: var(--amber);
-}
-
-.pb-var-inp {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pb-acts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.pb-block {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-</style>

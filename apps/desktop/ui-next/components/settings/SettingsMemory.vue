@@ -24,83 +24,115 @@
     </SettingsField>
 
     <SettingsField :name="t('settings.memory.cost.name')" :desc="t('settings.memory.cost.desc')">
-      <span class="chip">
+      <Badge variant="outline" class="text-muted-foreground">
         {{ t('settings.memory.cost.value', { n: memory.enabledCount, chars: chars }) }}
-      </span>
+      </Badge>
     </SettingsField>
 
-    <div class="memhead">
-      <div class="sech">{{ t('settings.memory.list.heading') }}</div>
-      <div class="memhead-actions">
+    <div class="mt-4.5 mb-1.5 flex items-center justify-between">
+      <div data-set-label class="text-xs font-medium text-muted-foreground">
+        {{ t('settings.memory.list.heading') }}
+      </div>
+      <div class="flex gap-1.5">
         <Button variant="outline" size="sm" @click="startCreate">
-          <Icon name="plus" :size="13" />
+          <Icon name="plus" class="size-3.5" />
           {{ t('settings.memory.list.add') }}
         </Button>
         <Button v-if="memory.facts.length > 0" variant="danger" size="sm" @click="onClearAll">
-          <Icon name="trash" :size="13" />
+          <Icon name="trash" class="size-3.5" />
           {{ t('settings.memory.list.clear') }}
         </Button>
       </div>
     </div>
 
-    <div v-if="memory.facts.length === 0" class="memempty" :style="{ color: 'var(--textFaint)' }">
+    <div v-if="memory.facts.length === 0" class="px-0.5 py-2.5 text-faint">
       {{ t('settings.memory.list.empty') }}
     </div>
 
     <template v-for="type in MEMORY_TYPES" :key="type">
-      <div v-if="memory.byType[type].length > 0" class="memgroup">
-        <div class="memgrouphead" :style="{ color: 'var(--textFaint)' }">
+      <div v-if="memory.byType[type].length > 0" class="mb-3">
+        <div class="mt-2 mb-1 text-sm text-faint">
           {{ t('settings.memory.type.' + type) }}
         </div>
-        <div v-for="fact in memory.byType[type]" :key="factKey(fact)" class="memrow">
+        <div
+          v-for="fact in memory.byType[type]"
+          :key="factKey(fact)"
+          class="flex items-center gap-2 border-t py-1.5"
+        >
           <SettingsTog
             :model-value="fact.enabled"
             @update:model-value="() => memory.toggleFact(fact)"
           />
-          <div class="memtext">
-            <div class="memname">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
               {{ fact.name }}
-              <span v-if="fact.source === 'project'" class="tag acc" style="padding: 1px 6px">
+              <Badge
+                v-if="fact.source === 'project'"
+                variant="outline"
+                class="border-primary/45 bg-primary/10 text-primary"
+              >
                 {{ t('settings.memory.tier.project') }}
-              </span>
+              </Badge>
             </div>
-            <div class="memdesc" :style="{ color: 'var(--textDim)' }">{{ fact.description }}</div>
+            <div class="truncate text-dim">{{ fact.description }}</div>
           </div>
-          <button class="membtn" :title="t('common.edit')" @click="startEdit(fact)">
-            <Icon name="edit" :size="13" />
-          </button>
-          <button class="membtn danger" :title="t('common.delete')" @click="onDelete(fact)">
-            <Icon name="trash" :size="13" />
-          </button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0 text-dim"
+            :title="t('common.edit')"
+            :aria-label="t('common.edit')"
+            @click="startEdit(fact)"
+          >
+            <Icon name="edit" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0 text-dim hover:bg-destructive/10 hover:text-destructive"
+            :title="t('common.delete')"
+            :aria-label="t('common.delete')"
+            @click="onDelete(fact)"
+          >
+            <Icon name="trash" />
+          </Button>
         </div>
       </div>
     </template>
 
     <!-- inline editor (create + edit share it) -->
-    <div v-if="draft" class="memeditor" :style="{ borderColor: 'var(--borderStrong)' }">
-      <div class="memfields">
-        <label class="memfield">
-          <span class="sech">{{ t('settings.memory.editor.name') }}</span>
+    <div v-if="draft" class="mt-3 flex flex-col gap-2 rounded-md border border-input p-2.5">
+      <div class="flex gap-2">
+        <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span class="text-xs font-medium text-muted-foreground">
+            {{ t('settings.memory.editor.name') }}
+          </span>
           <Input v-model="draft.name" class="flex-1" />
         </label>
-        <label class="memfield">
-          <span class="sech">{{ t('settings.memory.editor.type') }}</span>
+        <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span class="text-xs font-medium text-muted-foreground">
+            {{ t('settings.memory.editor.type') }}
+          </span>
           <AppSelect v-model="draft.type" :options="typeOptions" />
         </label>
       </div>
-      <label class="memfield">
-        <span class="sech">{{ t('settings.memory.editor.description') }}</span>
+      <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-xs font-medium text-muted-foreground">
+          {{ t('settings.memory.editor.description') }}
+        </span>
         <Input
           v-model="draft.description"
           :placeholder="t('settings.memory.editor.descriptionHint')"
           class="flex-1"
         />
       </label>
-      <label class="memfield">
-        <span class="sech">{{ t('settings.memory.editor.body') }}</span>
-        <textarea v-model="draft.body" class="keyinp membody resize-y min-h-[6rem]" />
+      <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-xs font-medium text-muted-foreground">
+          {{ t('settings.memory.editor.body') }}
+        </span>
+        <Textarea v-model="draft.body" class="min-h-24 resize-y" />
       </label>
-      <div class="memeditor-actions">
+      <div class="flex justify-end gap-1.5">
         <Button variant="outline" size="sm" @click="draft = null">{{ t('common.cancel') }}</Button>
         <Button :disabled="!canSave" variant="default" size="sm" @click="onSave">
           {{ t('common.save') }}
@@ -225,96 +257,3 @@ onMounted(() => {
   if (!memory.loaded) void memory.loadMemory()
 })
 </script>
-
-<style scoped>
-.memhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 18px 0 6px;
-}
-.memhead-actions {
-  display: flex;
-  gap: 6px;
-}
-.memempty {
-  padding: 10px 2px;
-  font-size: 1em;
-  line-height: var(--lh-md);
-}
-.memgroup {
-  margin-bottom: 12px;
-}
-.memgrouphead {
-  font-size: 12px;
-  line-height: 18px;
-  margin: 8px 0 4px;
-}
-.memrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-top: 1px solid var(--border);
-}
-.memtext {
-  flex: 1;
-  min-width: 0;
-}
-.memname {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 1em;
-}
-.memdesc {
-  font-size: 1em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.membtn {
-  padding: 5px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.membtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.membtn.danger:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-.memeditor {
-  margin-top: 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.memfields {
-  display: flex;
-  gap: 8px;
-}
-.memfield {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-.memeditor-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.membody {
-  line-height: var(--lh-md);
-}
-</style>

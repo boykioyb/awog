@@ -1,46 +1,48 @@
 <template>
   <!-- Self-hides when settled with no rate-limit data (account has no usage
   surface) — see `hidden`. -->
-  <div v-if="!hidden" class="arl">
-    <div class="arlhd">
-      <span class="arlnm">{{ account.label }}</span>
-      <span class="tag">{{ account.provider }}</span>
-      <span style="flex: 1" />
-      <button
-        class="arlref"
+  <Card v-if="!hidden" class="gap-2.5 p-4">
+    <div class="flex items-center gap-2">
+      <span class="font-medium text-foreground">{{ account.label }}</span>
+      <Badge variant="secondary">{{ account.provider }}</Badge>
+      <span class="flex-1" />
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-muted-foreground"
         :title="t('activity.rateLimit.refresh')"
         :disabled="loading"
         @click="refresh(true)"
       >
-        <Icon
-          name="refresh"
-          :class="{ spin: loading }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-      </button>
+        <Icon name="refresh" :class="{ 'animate-spin motion-reduce:animate-none': loading }" />
+      </Button>
     </div>
 
-    <div v-if="loading && !rows.length" class="arlhint">{{ t('activity.rateLimit.loading') }}</div>
+    <div v-if="loading && !rows.length" class="text-sm text-muted-foreground">
+      {{ t('activity.rateLimit.loading') }}
+    </div>
     <template v-else>
       <!-- Keep the last-good bars visible even when a refresh failed; the error is
       a note beneath, so a transient 429 no longer blanks (and hides) the card. -->
-      <div v-if="rows.length" class="arlbars">
-        <div v-for="row in rows" :key="row.type" class="arlrow">
-          <div class="arlmeta">
-            <span class="arllbl">{{ row.label }}</span>
-            <span class="arlpct tnum">{{ row.pct }}%</span>
+      <div v-if="rows.length" class="flex flex-col gap-2">
+        <div v-for="row in rows" :key="row.type" class="flex flex-col gap-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm text-muted-foreground">{{ row.label }}</span>
+            <span class="text-xs text-muted-foreground tabular-nums">{{ row.pct }}%</span>
           </div>
-          <div class="arlbar">
-            <i :style="{ width: row.pct + '%', background: row.color }" />
-          </div>
-          <div v-if="row.reset" class="arlreset">
+          <Progress
+            :model-value="row.pct"
+            class="h-1.5 bg-muted motion-reduce:*:transition-none"
+            :class="row.barClass"
+          />
+          <div v-if="row.reset" class="text-xs text-muted-foreground">
             {{ t('activity.rateLimit.resets', { in: row.reset }) }}
           </div>
         </div>
       </div>
-      <div v-if="error" class="arlhint err">{{ t('activity.rateLimit.error') }}</div>
+      <div v-if="error" class="text-sm text-warning">{{ t('activity.rateLimit.error') }}</div>
     </template>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -75,10 +77,11 @@ function formatResetsIn(ms?: number): string {
   return `${mins % 60}m`
 }
 
-function rlColor(u: number): string {
-  if (u >= 1) return 'var(--destructive)'
-  if (u >= 0.9) return 'var(--warning)'
-  return 'var(--primary)'
+// Màu thanh theo mức: tô lên indicator (con trực tiếp `data-slot=progress-indicator`).
+function rlBarClass(u: number): string {
+  if (u >= 1) return '*:data-[slot=progress-indicator]:bg-destructive'
+  if (u >= 0.9) return '*:data-[slot=progress-indicator]:bg-warning'
+  return ''
 }
 
 const rows = computed(() =>
@@ -86,7 +89,7 @@ const rows = computed(() =>
     type: e.rateLimitType,
     label: t(`activity.rateLimit.type.${e.rateLimitType}`),
     pct: Math.round(Math.min(1, Math.max(0, e.utilization)) * 100),
-    color: rlColor(e.utilization),
+    barClass: rlBarClass(e.utilization),
     reset: formatResetsIn(e.resetsAt),
   })),
 )
@@ -95,112 +98,3 @@ const rows = computed(() =>
 // without a usage surface) — only accounts that actually report a rate limit show.
 const hidden = computed(() => !loading.value && !error.value && rows.value.length === 0)
 </script>
-
-<style scoped>
-.arl {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 15px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-}
-.arlhd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.arlnm {
-  font-size: 1em;
-  font-weight: 550;
-  color: var(--foreground);
-}
-.arlref {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: var(--r-xs); /* rounded-sm */
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.arlref:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.arlref:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.spin {
-  animation: arlspin 0.9s linear infinite;
-}
-@keyframes arlspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.arlhint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.arlhint.err {
-  color: var(--warning);
-}
-.arlbars {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.arlrow {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.arlmeta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.arllbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.arlpct {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.arlbar {
-  height: 6px;
-  border-radius: var(--r-pill);
-  background: var(--muted);
-  overflow: hidden;
-}
-.arlbar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  transition: width 0.2s;
-}
-.arlreset {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-  .arlbar i {
-    transition: none;
-  }
-}
-</style>

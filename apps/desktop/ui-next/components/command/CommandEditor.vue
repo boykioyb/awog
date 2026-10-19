@@ -5,24 +5,30 @@
     :width="640"
     @close="emit('cancel')"
   >
-    <div class="cme">
+    <div class="flex flex-col gap-4">
       <!-- Save location (tier) — locked once a command exists (moving tiers = a new file). -->
-      <div class="cme-field">
-        <label class="cme-label">{{ t('commands.editor.saveLocation') }}</label>
-        <div class="cme-tiers">
-          <button
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('commands.editor.saveLocation') }}
+        </Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="self-start rounded-lg bg-muted p-0.5"
+          :model-value="draft.source"
+          :disabled="isExisting"
+          @update:model-value="(v) => v && (draft.source = v as CommandSource)"
+        >
+          <ToggleGroupItem
             v-for="opt in sourceOptions"
             :key="opt.value"
-            type="button"
-            class="chip cme-tier"
-            :class="{ on: draft.source === opt.value }"
-            :disabled="isExisting"
-            @click="draft.source = opt.value"
+            :value="opt.value"
+            :class="SEG_ITEM"
           >
             {{ opt.label }}
-          </button>
-        </div>
-        <div v-if="draft.source === 'project'" class="cme-project">
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <div v-if="draft.source === 'project'">
           <AppSelect
             v-model="draft.projectId"
             :options="projectOptions"
@@ -30,90 +36,108 @@
             width="100%"
           />
         </div>
-        <div class="cme-hint">{{ sourceHint }}</div>
+        <div class="text-xs text-dim">{{ sourceHint }}</div>
       </div>
 
-      <div class="cme-grid">
-        <div class="cme-field">
-          <label class="cme-label">{{ t('commands.editor.slug') }}</label>
-          <div class="cme-slug">
-            <span class="cme-slash mono">/</span>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('commands.editor.slug') }}</Label>
+          <div class="flex items-center gap-1.5">
+            <!-- mono-ok: tiền tố lệnh slash -->
+            <span class="font-mono text-sm text-dim">/</span>
             <Input
               :model-value="draft.id"
               :placeholder="t('commands.editor.slugPh')"
               spellcheck="false"
               :disabled="isExisting"
-              class="mono"
+              class="font-mono"
               @update:model-value="onSlugInput"
             />
           </div>
-          <div class="cme-hint">
+          <div class="text-xs text-dim">
             {{ t('commands.editor.slugHint', { slug: draft.id || 'slug' }) }}
           </div>
         </div>
-        <div class="cme-field">
-          <label class="cme-label">{{ t('commands.editor.name') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('commands.editor.name') }}</Label>
           <Input v-model="draft.name" :placeholder="t('commands.editor.namePh')" />
         </div>
       </div>
 
-      <div class="cme-field">
-        <label class="cme-label">{{ t('commands.editor.description') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('commands.editor.description') }}
+        </Label>
+        <Textarea
           v-model="draft.description"
-          class="cme-input cme-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('commands.editor.descPh')"
         />
       </div>
 
-      <div class="cme-grid">
-        <div class="cme-field">
-          <label class="cme-label">{{ t('commands.editor.argumentHint') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('commands.editor.argumentHint') }}
+          </Label>
           <Input
             v-model="draft.argumentHint"
             :placeholder="t('commands.editor.argumentHintPh')"
-            class="mono"
+            class="font-mono"
           />
         </div>
-        <div class="cme-field">
-          <label class="cme-label">{{ t('commands.editor.model') }}</label>
-          <Input v-model="draft.model" :placeholder="t('commands.editor.modelPh')" class="mono" />
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('commands.editor.model') }}
+          </Label>
+          <Input
+            v-model="draft.model"
+            :placeholder="t('commands.editor.modelPh')"
+            class="font-mono"
+          />
         </div>
       </div>
 
-      <div class="cme-field">
-        <label class="cme-label">{{ t('commands.editor.allowedTools') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('commands.editor.allowedTools') }}
+        </Label>
         <Input
           v-model="draft.allowedTools"
           :placeholder="t('commands.editor.allowedToolsPh')"
-          class="mono"
+          class="font-mono"
         />
       </div>
 
-      <div class="cme-field">
-        <label class="cme-label">{{ t('commands.editor.template') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('commands.editor.template') }}
+        </Label>
+        <!-- mono-ok: thân template lệnh (markdown + $ARGUMENTS) -->
+        <Textarea
           v-model="draft.body"
-          class="cme-input cme-ta mono"
+          class="min-h-12 resize-y font-mono"
           rows="10"
           :placeholder="t('commands.editor.templatePh')"
         />
-        <div class="cme-hint">{{ t('commands.editor.templateHint') }}</div>
+        <div class="text-xs text-dim">{{ t('commands.editor.templateHint') }}</div>
       </div>
 
-      <div v-if="!isImported" class="cme-field cme-toggle-field">
-        <label class="cme-label">{{ t('commands.editor.enabled') }}</label>
-        <button
-          class="seg cme-seg"
-          type="button"
-          role="switch"
-          :aria-checked="draft.enabled"
-          @click="draft.enabled = !draft.enabled"
-        >
-          <span :class="{ on: draft.enabled }">{{ t('commands.detail.on') }}</span>
-          <span :class="{ on: !draft.enabled }">{{ t('commands.detail.off') }}</span>
-        </button>
+      <div v-if="!isImported" class="flex items-center justify-between gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('commands.editor.enabled') }}
+        </Label>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-dim">
+            {{ draft.enabled ? t('commands.detail.on') : t('commands.detail.off') }}
+          </span>
+          <Switch
+            :checked="draft.enabled"
+            :aria-label="t('commands.editor.enabled')"
+            @update:checked="(v: boolean) => (draft.enabled = v)"
+          />
+        </div>
       </div>
     </div>
 
@@ -127,8 +151,8 @@
 </template>
 
 <script setup lang="ts">
-// Command form editor — port of the old UI CommandEditor logic, rendered in
-// prototype CSS inside LibraryEntityModal. Save-location tier + slug are locked
+// Command form editor — port of the old UI CommandEditor logic, rendered
+// inside LibraryEntityModal. Save-location tier + slug are locked
 // once the command exists. A fresh editor can be seeded from the AI creator's
 // "edit details" hand-off. Emits the assembled Command on save.
 import { computed, ref, watch } from 'vue'
@@ -153,6 +177,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Segmented control chọn tier (cùng kiểu LibraryMarkdownBody).
+const SEG_ITEM =
+  'h-6 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 const sourceOptions: { value: CommandSource; label: string }[] = [
   { value: 'global', label: '~/.awog/commands' },
@@ -298,96 +326,3 @@ const onSave = () => {
   emit('save', command)
 }
 </script>
-
-<style scoped>
-.cme {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.cme-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.cme-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cme-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.cme-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.cme-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — command body */
-  font-family: var(--code);
-}
-.cme-input:focus {
-  border-color: var(--accent);
-}
-.cme-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.cme-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.cme-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.cme-tiers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.cme-tier {
-  cursor: pointer;
-  background: var(--bgInput);
-}
-.cme-tier.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.cme-tier:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.cme-slug {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.cme-slash {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cme-toggle-field {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-.cme-seg {
-  cursor: pointer;
-}
-</style>

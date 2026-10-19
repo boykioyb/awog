@@ -1,137 +1,138 @@
 <template>
-  <div class="sbp">
-    <div class="sbp-tabs" role="tablist">
-      <button
-        v-for="tb in tabs"
-        :key="tb.id"
-        type="button"
-        role="tab"
-        class="sbp-tab"
-        :class="{ on: tab === tb.id }"
-        :aria-selected="tab === tb.id"
-        @click="tab = tb.id"
-      >
-        {{ tb.label }}
-      </button>
-    </div>
+  <div class="flex flex-col gap-2">
+    <Separator />
+    <Tabs v-model="tab" class="flex flex-col gap-2">
+      <TabsList class="self-start">
+        <TabsTrigger v-for="tb in tabs" :key="tb.id" :value="tb.id">
+          {{ tb.label }}
+        </TabsTrigger>
+      </TabsList>
 
-    <template v-if="tab === 'manual'">
-      <p class="sbp-note">{{ t('browser.profiles.proxy.note') }}</p>
+      <TabsContent value="manual" class="flex flex-col gap-2">
+        <p class="m-0 text-xs text-dim">{{ t('browser.profiles.proxy.note') }}</p>
 
-      <div class="sbp-grid">
-        <label class="sbp-lbl">{{ t('browser.profiles.proxy.type') }}</label>
-        <AppSelect v-model="kind" :options="typeOptions" width="160px" />
+        <div class="grid grid-cols-[6rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-2">
+          <label class="pt-1.5 text-sm text-dim">{{ t('browser.profiles.proxy.type') }}</label>
+          <AppSelect v-model="kind" :options="typeOptions" width="160px" />
 
-        <template v-if="kind !== 'off'">
-          <label class="sbp-lbl">{{ t('browser.profiles.proxy.host') }}</label>
-          <div class="sbp-hostrow">
-            <Input
-              v-model="host"
-              type="text"
-              spellcheck="false"
-              :placeholder="t('browser.profiles.proxy.hostPlaceholder')"
-            />
-            <Input
-              v-model="port"
-              type="text"
-              inputmode="numeric"
-              spellcheck="false"
-              class="sbp-port"
-              :placeholder="t('browser.profiles.proxy.port')"
-              :aria-label="t('browser.profiles.proxy.port')"
-            />
-          </div>
-
-          <label class="sbp-lbl">{{ t('browser.profiles.proxy.auth') }}</label>
-          <div class="sbp-auth">
-            <p v-if="isSocks" class="sbp-warn">{{ t('browser.profiles.proxy.socksNoAuth') }}</p>
-            <div v-else-if="authSaved && !replacingAuth" class="sbp-saved">
-              <span class="sbp-savedtxt">
-                {{
-                  clearingAuth
-                    ? t('browser.profiles.proxy.authWillClear')
-                    : t('browser.profiles.proxy.authSaved')
-                }}
-              </span>
-              <Button size="sm" variant="outline" @click="replacingAuth = true">
-                {{ t('browser.profiles.proxy.authReplace') }}
-              </Button>
-              <Button
-                v-if="!clearingAuth"
-                size="sm"
-                variant="outline"
-                class="sbp-del"
-                @click="clearingAuth = true"
-              >
-                {{ t('browser.profiles.proxy.authClear') }}
-              </Button>
-              <Button v-else size="sm" variant="outline" @click="clearingAuth = false">
-                {{ t('common.cancel') }}
-              </Button>
-            </div>
-            <template v-else>
+          <template v-if="kind !== 'off'">
+            <label class="pt-1.5 text-sm text-dim">{{ t('browser.profiles.proxy.host') }}</label>
+            <div class="flex gap-1.5">
               <Input
-                v-model="username"
+                v-model="host"
                 type="text"
-                autocomplete="off"
                 spellcheck="false"
-                :placeholder="t('browser.profiles.proxy.username')"
+                :placeholder="t('browser.profiles.proxy.hostPlaceholder')"
               />
               <Input
-                v-model="password"
-                type="password"
-                autocomplete="new-password"
-                :placeholder="t('browser.profiles.proxy.password')"
+                v-model="port"
+                type="text"
+                inputmode="numeric"
+                spellcheck="false"
+                class="w-21 shrink-0"
+                :placeholder="t('browser.profiles.proxy.port')"
+                :aria-label="t('browser.profiles.proxy.port')"
               />
-              <p class="sbp-hint">{{ t('browser.profiles.proxy.authHint') }}</p>
-            </template>
-          </div>
+            </div>
 
-          <label class="sbp-lbl">{{ t('browser.profiles.proxy.bypass') }}</label>
-          <div class="sbp-bypass">
-            <Input
-              v-model="bypass"
-              type="text"
-              spellcheck="false"
-              :placeholder="t('browser.profiles.proxy.bypassPlaceholder')"
-            />
-            <p class="sbp-hint">{{ t('browser.profiles.proxy.bypassHint') }}</p>
-          </div>
-        </template>
-      </div>
+            <label class="pt-1.5 text-sm text-dim">{{ t('browser.profiles.proxy.auth') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <p v-if="isSocks" class="m-0 rounded-md border px-2 py-1.5 text-sm text-dim">
+                {{ t('browser.profiles.proxy.socksNoAuth') }}
+              </p>
+              <div
+                v-else-if="authSaved && !replacingAuth"
+                class="flex flex-wrap items-center gap-1.5"
+              >
+                <span class="text-sm text-foreground">
+                  {{
+                    clearingAuth
+                      ? t('browser.profiles.proxy.authWillClear')
+                      : t('browser.profiles.proxy.authSaved')
+                  }}
+                </span>
+                <Button size="sm" variant="outline" @click="replacingAuth = true">
+                  {{ t('browser.profiles.proxy.authReplace') }}
+                </Button>
+                <Button
+                  v-if="!clearingAuth"
+                  size="sm"
+                  variant="outline"
+                  class="text-destructive hover:text-destructive"
+                  @click="clearingAuth = true"
+                >
+                  {{ t('browser.profiles.proxy.authClear') }}
+                </Button>
+                <Button v-else size="sm" variant="outline" @click="clearingAuth = false">
+                  {{ t('common.cancel') }}
+                </Button>
+              </div>
+              <template v-else>
+                <Input
+                  v-model="username"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :placeholder="t('browser.profiles.proxy.username')"
+                />
+                <Input
+                  v-model="password"
+                  type="password"
+                  autocomplete="new-password"
+                  :placeholder="t('browser.profiles.proxy.password')"
+                />
+                <p class="m-0 text-xs text-dim">{{ t('browser.profiles.proxy.authHint') }}</p>
+              </template>
+            </div>
 
-      <p v-if="error" class="sbp-err" role="alert">{{ error }}</p>
+            <label class="pt-1.5 text-sm text-dim">{{ t('browser.profiles.proxy.bypass') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <Input
+                v-model="bypass"
+                type="text"
+                spellcheck="false"
+                :placeholder="t('browser.profiles.proxy.bypassPlaceholder')"
+              />
+              <p class="m-0 text-xs text-dim">{{ t('browser.profiles.proxy.bypassHint') }}</p>
+            </div>
+          </template>
+        </div>
 
-      <div class="sbp-actions">
-        <Button size="sm" variant="default" :disabled="saving || !canSave" @click="onSave">
-          {{ t('common.save') }}
-        </Button>
-        <Button
-          v-if="bridgeAvailable"
-          size="sm"
-          variant="outline"
-          :disabled="!canTest"
-          :title="!profile.proxy ? t('browser.profiles.proxy.testNeedsSave') : undefined"
-          @click="onTest"
-        >
-          {{ testing ? t('browser.profiles.proxy.testing') : t('browser.profiles.proxy.test') }}
-        </Button>
-        <span
-          v-if="testResult"
-          class="sbp-test"
-          :class="testResult.ok ? 'ok' : 'bad'"
-          role="status"
-        >
-          {{ testText }}
-        </span>
-        <span class="flex-1" />
-        <Button size="sm" variant="outline" @click="emit('close')">
-          {{ t('common.cancel') }}
-        </Button>
-      </div>
-    </template>
+        <p v-if="error" class="m-0 text-sm text-destructive" role="alert">{{ error }}</p>
 
-    <FreeProxyPicker v-else :profile="profile" @applied="onFreeApplied" />
+        <div class="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" variant="default" :disabled="saving || !canSave" @click="onSave">
+            {{ t('common.save') }}
+          </Button>
+          <Button
+            v-if="bridgeAvailable"
+            size="sm"
+            variant="outline"
+            :disabled="!canTest"
+            :title="!profile.proxy ? t('browser.profiles.proxy.testNeedsSave') : undefined"
+            @click="onTest"
+          >
+            {{ testing ? t('browser.profiles.proxy.testing') : t('browser.profiles.proxy.test') }}
+          </Button>
+          <span
+            v-if="testResult"
+            class="text-sm wrap-anywhere"
+            :class="testResult.ok ? 'text-success' : 'text-destructive'"
+            role="status"
+          >
+            {{ testText }}
+          </span>
+          <span class="flex-1" />
+          <Button size="sm" variant="outline" @click="emit('close')">
+            {{ t('common.cancel') }}
+          </Button>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="free">
+        <FreeProxyPicker :profile="profile" @applied="onFreeApplied" />
+      </TabsContent>
+    </Tabs>
   </div>
 </template>
 
@@ -147,8 +148,6 @@ import FreeProxyPicker from '~/components/browser/FreeProxyPicker.vue'
 import { useBrowserProfiles } from '~/composables/useBrowserProfiles'
 import { sidecarErrorText } from '~/composables/useSidecar'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ profile: BrowserProfile }>()
 const emit = defineEmits<{ close: [] }>()
@@ -300,114 +299,3 @@ const onTest = async (): Promise<void> => {
   }
 }
 </script>
-
-<style scoped>
-.sbp-tabs {
-  display: flex;
-  gap: 4px;
-}
-.sbp-tab {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.sbp-tab:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sbp-tab.on {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-.sbp {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
-  box-shadow: inset 0 1px 0 var(--border);
-}
-.sbp-note,
-.sbp-hint {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.sbp-grid {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px 10px;
-}
-.sbp-lbl {
-  padding-top: 6px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sbp-hostrow {
-  display: flex;
-  gap: 6px;
-}
-.sbp-port {
-  flex: 0 0 84px;
-}
-.sbp-auth,
-.sbp-bypass {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sbp-saved {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.sbp-savedtxt {
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sbp-warn {
-  margin: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sbp-err {
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sbp-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.sbp-test {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  overflow-wrap: anywhere;
-}
-.sbp-test.ok {
-  color: var(--green);
-}
-.sbp-test.bad {
-  color: var(--danger);
-}
-.sbp-del {
-  color: var(--danger);
-}
-</style>

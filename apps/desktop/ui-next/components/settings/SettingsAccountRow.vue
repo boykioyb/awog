@@ -1,69 +1,106 @@
 <template>
-  <div class="acr" :class="{ active }">
-    <div class="acrmain">
+  <div
+    class="flex flex-col gap-2 rounded-md border bg-background px-3 py-2.5"
+    :class="{ 'border-input': active }"
+  >
+    <div class="flex items-center gap-2">
       <!-- Active-account radio -->
-      <button
-        class="acrradio"
-        :class="{ on: active }"
+      <Button
         type="button"
+        variant="outline"
+        size="iconSm"
+        class="size-4.5 rounded-full border-input [&_svg]:size-2.5"
+        :class="{
+          'border-transparent bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground':
+            active,
+        }"
         :title="active ? t('settingsModels.account.active') : t('settingsModels.account.setActive')"
+        :aria-label="
+          active ? t('settingsModels.account.active') : t('settingsModels.account.setActive')
+        "
         @click="emit('set-active')"
       >
-        <Icon v-if="active" name="check" style="width: 10px; height: 10px" />
-      </button>
+        <Icon v-if="active" name="check" />
+      </Button>
 
-      <div class="acrinfo">
-        <div class="acrtop">
-          <span class="acrlabel">{{ account.label }}</span>
-          <span class="acrdot" :title="statusTitle" :style="{ background: statusColor }" />
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+          <span class="truncate font-medium text-foreground">{{ account.label }}</span>
+          <span class="size-2 shrink-0 rounded-full" :class="statusDotClass" :title="statusTitle" />
         </div>
-        <div class="acrsub mono">{{ detail }}</div>
+        <!-- mono-ok: email / fingerprint / host endpoint -->
+        <div class="mt-0.5 truncate font-mono text-sm text-dim">{{ detail }}</div>
       </div>
 
-      <button
+      <Button
         v-if="needsReauth"
-        class="acract acrreauth"
         type="button"
+        variant="outline"
+        size="iconSm"
+        class="border-selected-border text-primary hover:border-primary hover:bg-selected hover:text-primary"
         :title="t('settingsModels.account.reauth')"
+        :aria-label="t('settingsModels.account.reauth')"
         @click="emit('reauth')"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="acract"
+        <Icon name="refresh" />
+      </Button>
+      <Button
         type="button"
+        variant="outline"
+        size="iconSm"
+        class="text-dim"
         :title="t('settingsModels.account.edit')"
+        :aria-label="t('settingsModels.account.edit')"
         @click="emit('edit')"
       >
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="acract"
+        <Icon name="edit" />
+      </Button>
+      <Button
         type="button"
+        variant="outline"
+        size="iconSm"
+        class="text-dim"
         :disabled="testing"
         :title="t('settingsModels.account.test')"
+        :aria-label="t('settingsModels.account.test')"
         @click="emit('test')"
       >
-        <span v-if="testing" class="acrspin" />
-        <Icon v-else name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="acract acrdanger"
+        <span
+          v-if="testing"
+          class="size-3.5 animate-spin rounded-full border-2 border-border border-t-primary"
+        />
+        <Icon v-else name="act" />
+      </Button>
+      <Button
         type="button"
+        variant="outline"
+        size="iconSm"
+        class="text-dim hover:border-destructive hover:bg-transparent hover:text-destructive"
         :title="t('settingsModels.account.disconnect')"
+        :aria-label="t('settingsModels.account.disconnect')"
         @click="emit('disconnect')"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </div>
 
     <!-- Curated models (only present when the user overrode the catalog). -->
-    <div v-if="account.models?.length" class="acrmodels">
-      <span v-for="m in account.models" :key="m" class="chip acrmodel">{{ m }}</span>
+    <div v-if="account.models?.length" class="flex flex-wrap gap-1.5 pl-7">
+      <Badge v-for="m in account.models" :key="m" variant="outline" class="text-muted-foreground">
+        {{ m }}
+      </Badge>
     </div>
 
     <!-- Test result line -->
-    <div v-if="testResult" class="acrtest" :class="{ err: !testResult.ok }">
+    <div
+      v-if="testResult"
+      class="ml-7 rounded-sm border px-2 py-1 text-base"
+      :class="
+        testResult.ok
+          ? 'bg-card text-foreground'
+          : 'border-destructive bg-destructive/10 text-destructive'
+      "
+    >
       {{ formatTestResult(testResult) }}
     </div>
   </div>
@@ -118,10 +155,10 @@ const needsReauth = computed(() => {
   return code === 'AUTH_EXPIRED' || code === 'TOKEN_EXPIRED'
 })
 
-const statusColor = computed(() => {
-  if (props.account.status === 'connected') return 'var(--green)'
-  if (props.account.status === 'expired') return 'var(--amber)'
-  return 'var(--textFaint)'
+const statusDotClass = computed(() => {
+  if (props.account.status === 'connected') return 'bg-success'
+  if (props.account.status === 'expired') return 'bg-warning'
+  return 'bg-faint'
 })
 const statusTitle = computed(() => {
   if (props.account.status === 'connected') return t('settingsModels.statusDot.connected')
@@ -169,143 +206,3 @@ const formatTestResult = (result: AccountTestResult): string => {
   return t('settingsModels.test.error', { code: err.code, message: err.message }).trim()
 }
 </script>
-
-<style scoped>
-.acr {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.acr.active {
-  border-color: var(--borderStrong);
-}
-.acrmain {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.acrradio {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1px solid var(--borderStrong);
-  background: transparent;
-  color: var(--accentText);
-  cursor: pointer;
-}
-.acrradio.on {
-  background: var(--accent);
-  border-color: transparent;
-}
-.acrinfo {
-  flex: 1;
-  min-width: 0;
-}
-.acrtop {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.acrlabel {
-  font-size: 1em;
-  font-weight: 500;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.acrdot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-.acrsub {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.acract {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.acract:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-/* Recovery action for a lapsed OAuth account — icon-only like its siblings, but
-   accent-tinted so it reads as the recommended action (label via `title`). */
-.acrreauth {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-}
-.acrreauth:hover {
-  background: var(--accentDim);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.acract:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-.acrdanger:hover {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-.acrspin {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: acrspin 0.7s linear infinite;
-}
-@keyframes acrspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.acrmodels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding-left: 27px;
-}
-.acrmodel {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.acrtest {
-  margin-left: 27px;
-  padding: 5px 9px;
-  border-radius: var(--r-xs);
-  font-size: 1em;
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  color: var(--text);
-}
-.acrtest.err {
-  background: var(--dangerDim);
-  border-color: var(--danger);
-  color: var(--danger);
-}
-</style>

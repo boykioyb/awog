@@ -1,66 +1,91 @@
 <template>
-  <div class="ttn">
+  <div>
     <div
-      class="ttn-row"
-      :class="{ toggle: canToggle }"
+      class="flex min-w-0 items-center gap-2 rounded-sm px-2 py-0.5"
+      :class="{ 'cursor-pointer hover:bg-accent': canToggle }"
       :style="{ marginLeft: `${depth * 14}px` }"
       @click="canToggle && (open = !open)"
     >
-      <span class="ttn-chv">
-        <Icon v-if="canToggle" name="chev" class="ttn-chvi" :class="{ open }" />
+      <span class="w-2.5 shrink-0">
+        <Icon
+          v-if="canToggle"
+          name="chev"
+          class="size-2.5 text-dim transition-transform"
+          :class="open ? 'rotate-0' : '-rotate-90'"
+        />
       </span>
-      <span class="ttn-kind" :style="{ color: typeColor }">{{ typeLabel }}</span>
+      <span class="shrink-0 text-xs font-semibold uppercase" :class="typeColor">
+        {{ typeLabel }}
+      </span>
       <template v-if="item.type === 'agent' || item.type === 'subagent'">
-        <span class="ttn-name">{{ item.name ?? item.agentName }}</span>
-        <span v-if="item.model" class="ttn-dot">·</span>
-        <span v-if="item.model" class="ttn-dim">{{ item.model }}</span>
+        <span class="shrink-0 truncate text-sm font-medium text-foreground">
+          {{ item.name ?? item.agentName }}
+        </span>
+        <span v-if="item.model" class="shrink-0 text-faint">·</span>
+        <span v-if="item.model" class="truncate text-sm text-dim">
+          {{ item.model }}
+        </span>
       </template>
       <template v-else-if="item.type === 'tool'">
-        <span class="ttn-tool mono">{{ item.tool }}</span>
-        <span v-if="item.input" class="ttn-input mono">{{ item.input }}</span>
+        <span class="shrink-0 font-mono text-sm text-foreground">{{ item.tool }}</span>
+        <span v-if="item.input" class="min-w-0 truncate font-mono text-sm text-muted-foreground">
+          {{ item.input }}
+        </span>
       </template>
       <template v-else-if="item.type === 'todo'">
-        <span class="ttn-name">{{ item.name }}</span>
+        <span class="shrink-0 truncate text-sm font-medium text-foreground">
+          {{ item.name }}
+        </span>
       </template>
-      <span v-else-if="item.type === 'thinking' && detailText" class="ttn-think">
+      <span
+        v-else-if="item.type === 'thinking' && detailText"
+        class="min-w-0 truncate text-sm text-muted-foreground italic"
+      >
         {{ detailText }}
       </span>
-      <span class="ttn-dur tnum">
-        <span v-if="isRunning" class="ttn-live">{{ t('tasks.trace.running') }}</span>
+      <span class="ml-auto shrink-0 text-xs tabular-nums text-dim">
+        <span v-if="isRunning" class="text-foreground">{{ t('tasks.trace.running') }}</span>
         <template v-else>{{ item.duration }}</template>
       </span>
     </div>
 
     <div
       v-if="open && (item.purpose || detailText)"
-      class="ttn-detail"
+      class="py-0.5"
       :style="{ marginLeft: `${depth * 14 + 22}px` }"
     >
-      <div v-if="item.type === 'subagent' && item.purpose" class="ttn-purpose">
+      <div v-if="item.type === 'subagent' && item.purpose" class="py-0.5 text-sm text-dim">
         {{ item.purpose }}
       </div>
       <div
         v-if="detailText && item.type !== 'thinking'"
-        class="ttn-detail-body"
-        :style="{ color: detailColor }"
+        class="py-0.5 text-sm break-words whitespace-pre-wrap"
+        :class="detailColor"
       >
         {{ detailText }}
       </div>
-      <div v-if="detailText && item.type === 'thinking'" class="ttn-detail-body think">
+      <div
+        v-if="detailText && item.type === 'thinking'"
+        class="py-0.5 text-sm break-words whitespace-pre-wrap text-muted-foreground italic"
+      >
         {{ detailText }}
       </div>
     </div>
 
     <div
       v-if="item.type === 'todo' && item.todos?.length"
-      class="ttn-todos"
+      class="py-0.5"
       :style="{ marginLeft: `${depth * 14 + 22}px` }"
     >
-      <div v-for="(td, i) in item.todos" :key="i" class="ttn-todo">
-        <span class="ttn-todo-mark" :style="{ color: todoColor(td.status) }">
+      <div v-for="(td, i) in item.todos" :key="i" class="flex items-start gap-1.5 text-sm">
+        <!-- Ba dấu (○ ▸ ✓) có độ rộng khác nhau trong font hệ thống — hộp cố định 1em giữ cột chữ không xô lệch. -->
+        <span class="w-[1em] shrink-0 text-center" :class="todoColor(td.status)">
           {{ todoMark(td.status) }}
         </span>
-        <span class="ttn-todo-text" :class="{ done: td.status === 'completed' }">
+        <span
+          class="min-w-0 break-words"
+          :class="td.status === 'completed' ? 'text-faint line-through' : 'text-foreground'"
+        >
           {{ td.content }}
         </span>
       </div>
@@ -78,8 +103,7 @@
 </template>
 
 <script setup lang="ts">
-// Recursive execution-trace node — port of the old UI TraceNodeItem in prototype
-// CSS. AGENT roots open by default; SUBAGENT sub-trees + per-row detail (tool
+// Recursive execution-trace node. AGENT roots open by default; SUBAGENT sub-trees + per-row detail (tool
 // result / reasoning) stay collapsed to a one-line preview until clicked.
 import { computed, ref } from 'vue'
 import Icon from '~/components/Icon.vue'
@@ -102,7 +126,7 @@ const detailText = computed<string | null>(() => {
   return null
 })
 const detailColor = computed(() =>
-  props.item.result?.startsWith('[error]') ? 'var(--danger)' : 'var(--textFaint)',
+  props.item.result?.startsWith('[error]') ? 'text-destructive' : 'text-faint',
 )
 const canToggle = computed(() => hasChildren.value || !!detailText.value)
 
@@ -118,159 +142,19 @@ const TYPE_LABEL: Record<TraceNode['type'], string> = {
 const typeLabel = computed(() => TYPE_LABEL[props.item.type])
 
 const TYPE_COLOR: Record<TraceNode['type'], string> = {
-  agent: 'var(--text)',
-  subagent: 'var(--accent)',
-  tool: 'var(--textMuted)',
-  thinking: 'var(--textDim)',
-  todo: 'var(--accent)',
+  agent: 'text-foreground',
+  subagent: 'text-primary',
+  tool: 'text-muted-foreground',
+  thinking: 'text-dim',
+  todo: 'text-primary',
 }
 const typeColor = computed(() => TYPE_COLOR[props.item.type])
 
 const TODO_MARK: Record<TodoStatus, string> = { pending: '○', in_progress: '▸', completed: '✓' }
 const todoMark = (status: TodoStatus): string => TODO_MARK[status]
 const todoColor = (status: TodoStatus): string => {
-  if (status === 'completed') return 'var(--green)'
-  if (status === 'in_progress') return 'var(--accent)'
-  return 'var(--textDim)'
+  if (status === 'completed') return 'text-success'
+  if (status === 'in_progress') return 'text-primary'
+  return 'text-dim'
 }
 </script>
-
-<style scoped>
-.ttn-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 7px;
-  border-radius: var(--r-xs);
-  min-width: 0;
-}
-.ttn-row.toggle {
-  cursor: pointer;
-}
-.ttn-row.toggle:hover {
-  background: var(--bgHover);
-}
-.ttn-chv {
-  width: 10px;
-  flex: 0 0 auto;
-}
-.ttn-chvi {
-  width: 10px;
-  height: 10px;
-  color: var(--textDim);
-  transition: transform 0.15s;
-  transform: rotate(-90deg);
-}
-.ttn-chvi.open {
-  transform: rotate(0deg);
-}
-.ttn-kind {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 650;
-  flex: 0 0 auto;
-}
-.ttn-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-  flex: 0 0 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ttn-dot {
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-.ttn-dim {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ttn-tool {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  flex: 0 0 auto;
-}
-.ttn-input {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.ttn-think {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-style: italic;
-  color: var(--textMuted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.ttn-dur {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.ttn-live {
-  color: var(--text);
-}
-.ttn-detail,
-.ttn-todos {
-  padding: 2px 0;
-}
-.ttn-purpose {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  padding: 2px 0;
-}
-.ttn-detail-body {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 2px 0;
-}
-.ttn-detail-body.think {
-  font-style: italic;
-  color: var(--textMuted);
-}
-.ttn-todo {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ttn-todo-mark {
-  /* The three marks (○ ▸ ✓) have different advances in the system font;
-     a fixed box keeps the text column from jittering between rows. */
-  width: 1em;
-  text-align: center;
-  flex: 0 0 auto;
-}
-.ttn-todo-text {
-  min-width: 0;
-  word-break: break-word;
-  color: var(--text);
-}
-.ttn-todo-text.done {
-  color: var(--textFaint);
-  text-decoration: line-through;
-}
-</style>

@@ -1,52 +1,93 @@
 <template>
-  <div class="gclog">
-    <div class="gclhd">
-      <span class="gchtitle">{{ t('git.commandLog.title') }}</span>
-      <span class="gclct">{{ t('git.commandLog.count', { n: rows.length }) }}</span>
-      <span style="flex: 1" />
-      <label class="gcltoggle">
-        <input v-model="showReads" type="checkbox" />
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <!-- Thanh cao cố định: hairline bằng inset shadow. -->
+    <div
+      class="flex h-9.5 flex-none items-center gap-2 px-3 shadow-[inset_0_-1px_0_var(--color-border)]"
+    >
+      <span class="font-sans text-xs font-semibold text-muted-foreground">
+        {{ t('git.commandLog.title') }}
+      </span>
+      <span class="text-xs text-faint tabular-nums">
+        {{ t('git.commandLog.count', { n: rows.length }) }}
+      </span>
+      <span class="flex-1" />
+      <label
+        class="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground select-none"
+      >
+        <Checkbox :model-value="showReads" @update:model-value="(v) => (showReads = v === true)" />
         <span>{{ t('git.commandLog.showReads') }}</span>
       </label>
-      <button class="gsecbtn" :disabled="!rows.length" @click="copyAll">
-        <Icon name="copy" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Button
+        variant="outline"
+        size="xs"
+        :class="SEC_BTN"
+        :disabled="!rows.length"
+        @click="copyAll"
+      >
+        <Icon name="copy" />
         <span>{{ copied ? t('git.commandLog.copied') : t('git.commandLog.copy') }}</span>
-      </button>
-      <button class="gsecbtn" :disabled="!total" @click="emit('clear')">
+      </Button>
+      <Button
+        variant="outline"
+        size="xs"
+        :class="SEC_BTN"
+        :disabled="!total"
+        @click="emit('clear')"
+      >
         {{ t('git.commandLog.clear') }}
-      </button>
+      </Button>
     </div>
 
-    <div ref="scrollRef" class="gclbody">
-      <p v-if="!rows.length" class="gclempty">
+    <div ref="scrollRef" class="flex-1 overflow-y-auto p-1.5">
+      <p v-if="!rows.length" class="px-1.5 py-2.5 text-sm text-faint">
         {{ total ? t('git.commandLog.allFiltered') : t('git.commandLog.empty') }}
       </p>
       <div
         v-for="e in rows"
         :key="e.id"
-        class="gclrow"
-        :class="{ fail: e.exitCode !== 0, open: expanded.has(e.id) }"
+        class="cursor-pointer rounded-sm px-2 py-1"
+        :class="expanded.has(e.id) ? 'bg-muted' : 'hover:bg-accent'"
         @click="toggle(e)"
       >
-        <div class="gclline">
-          <span class="gcltime tnum">{{ clock(e.startedAt) }}</span>
-          <span class="gclcmd mono">git {{ e.argv.join(' ') }}</span>
-          <span class="gcldur tnum">{{ e.durationMs }}ms</span>
-          <span class="gclcode tnum" :class="{ fail: e.exitCode !== 0 }">{{ e.exitCode }}</span>
+        <div class="flex min-w-0 items-center gap-2.5">
+          <span class="flex-none text-xs text-faint tabular-nums">{{ clock(e.startedAt) }}</span>
+          <!-- mono-ok: lệnh shell thật, người dùng có thể copy vào terminal -->
+          <span
+            class="min-w-0 flex-1 truncate font-mono text-sm"
+            :class="e.exitCode !== 0 ? 'text-destructive' : 'text-foreground'"
+          >
+            git {{ e.argv.join(' ') }}
+          </span>
+          <span class="flex-none text-xs text-faint tabular-nums">{{ e.durationMs }}ms</span>
+          <span
+            class="min-w-5.5 flex-none text-right text-xs tabular-nums"
+            :class="e.exitCode !== 0 ? 'font-semibold text-destructive' : 'text-faint'"
+          >
+            {{ e.exitCode }}
+          </span>
         </div>
         <!-- Collapsed rows still show the failure reason: hiding the one line that
              says WHY would defeat the point of having a log. stderr FIRST, then
              stdout — `git merge` prints "CONFLICT (content): …" to stdout and
              leaves stderr empty, so keying on stderr alone left the most common
              failure in the app with a red exit code and no reason next to it. -->
-        <pre v-if="!expanded.has(e.id) && e.exitCode !== 0 && reasonOf(e)" class="gclerr mono">{{
-          reasonOf(e)
-        }}</pre>
+        <!-- mono-ok: output git nguyên văn -->
+        <pre
+          v-if="!expanded.has(e.id) && e.exitCode !== 0 && reasonOf(e)"
+          :class="[OUT, 'text-destructive']"
+          >{{ reasonOf(e) }}</pre
+        >
         <template v-if="expanded.has(e.id)">
-          <pre v-if="e.stderr" class="gclout mono err">{{ e.stderr }}</pre>
-          <pre v-if="e.stdout" class="gclout mono">{{ e.stdout }}</pre>
-          <p v-if="!e.stdout && !e.stderr" class="gclnoout">{{ t('git.commandLog.noOutput') }}</p>
-          <p v-if="e.truncated" class="gclnoout">{{ t('git.commandLog.truncated') }}</p>
+          <!-- mono-ok: output git nguyên văn -->
+          <pre v-if="e.stderr" :class="[OUT, 'text-destructive']">{{ e.stderr }}</pre>
+          <!-- mono-ok: output git nguyên văn -->
+          <pre v-if="e.stdout" :class="[OUT, 'text-muted-foreground']">{{ e.stdout }}</pre>
+          <p v-if="!e.stdout && !e.stderr" class="px-1.5 py-2.5 text-sm text-faint">
+            {{ t('git.commandLog.noOutput') }}
+          </p>
+          <p v-if="e.truncated" class="px-1.5 py-2.5 text-sm text-faint">
+            {{ t('git.commandLog.truncated') }}
+          </p>
         </template>
       </div>
     </div>
@@ -63,11 +104,17 @@
 // `https://user:token@host`), so nothing here needs to re-filter — but nothing
 // here may re-assemble raw values either.
 import type { GitCommandEntry } from '~/composables/useGitApi'
+import Button from '~/components/ui/button/Button.vue'
+import Checkbox from '~/components/ui/checkbox/Checkbox.vue'
+import { SEC_BTN } from './git-ui'
 
 const props = defineProps<{ entries: GitCommandEntry[] }>()
 const emit = defineEmits<{ (e: 'clear'): void }>()
 
 const { t } = useI18n()
+// Khối output git: thụt theo cột thời gian, wrap, cuộn ngang nếu cần.
+const OUT =
+  'mt-1 ml-16.5 overflow-x-auto rounded-sm bg-muted px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap'
 
 // Reads are the majority by far — the watcher re-runs `status` on every file
 // change — so they are hidden by default or they bury the command being chased.
@@ -128,123 +175,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.gclog {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-.gclhd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  height: 38px;
-  padding: 0 12px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.gclct {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--textFaint);
-}
-.gcltoggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  user-select: none;
-}
-.gclbody {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px;
-}
-.gclempty,
-.gclnoout {
-  padding: 10px 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.gclrow {
-  padding: 5px 8px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-}
-.gclrow:hover {
-  background: var(--accent-wash);
-}
-.gclrow.open {
-  background: var(--muted);
-}
-.gclline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.gcltime {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-/* mono-ok: an actual shell command the user may copy into a terminal */
-.gclcmd {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--foreground);
-}
-.gclrow.fail .gclcmd {
-  color: var(--destructive);
-}
-.gcldur {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.gclcode {
-  flex: 0 0 auto;
-  min-width: 22px;
-  text-align: right;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.gclcode.fail {
-  color: var(--destructive);
-  font-weight: 600;
-}
-/* mono-ok: raw git output */
-.gclerr,
-.gclout {
-  margin: 4px 0 0 66px;
-  padding: 6px 8px;
-  border-radius: var(--r-xs);
-  background: var(--muted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-}
-.gclerr,
-.gclout.err {
-  color: var(--destructive);
-}
-</style>

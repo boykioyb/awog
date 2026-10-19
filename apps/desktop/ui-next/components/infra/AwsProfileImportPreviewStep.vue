@@ -1,56 +1,71 @@
 <template>
-  <div class="aps">
-    <p class="aps-sub">{{ t('infra.import.file.preview.subtitle') }}</p>
+  <div class="flex min-h-0 flex-col gap-2.5">
+    <p class="m-0 text-sm text-dim">{{ t('infra.import.file.preview.subtitle') }}</p>
 
-    <div v-if="warnings.length" class="aps-warnbox">
-      <div class="aps-warnbox-title">{{ t('infra.import.warnings.title') }}</div>
+    <div
+      v-if="warnings.length"
+      class="flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+    >
+      <div class="font-semibold">{{ t('infra.import.warnings.title') }}</div>
       <div v-for="(w, i) in warnings" :key="i">{{ w }}</div>
     </div>
 
-    <div v-if="!rows.length" class="aps-empty">{{ t('infra.import.file.preview.empty') }}</div>
+    <div v-if="!rows.length" class="px-1 py-6 text-center text-sm text-muted-foreground">
+      {{ t('infra.import.file.preview.empty') }}
+    </div>
 
-    <div v-else class="aps-table">
-      <div class="aps-head">
-        <span class="aps-col-name">{{ t('infra.import.file.preview.colName') }}</span>
-        <span class="aps-col-kind">{{ t('infra.import.file.preview.colKind') }}</span>
-        <span class="aps-col-keys">{{ t('infra.import.file.preview.colKeys') }}</span>
-        <span class="aps-col-conflict">{{ t('infra.import.file.preview.colConflict') }}</span>
-        <span class="aps-col-action">{{ t('infra.import.file.preview.colAction') }}</span>
+    <div v-else class="flex max-h-[46vh] flex-col overflow-y-auto rounded-lg border">
+      <div
+        class="grid grid-cols-[1.6fr_0.9fr_1.1fr_1.1fr_auto] items-center gap-2.5 bg-muted px-3 py-2 text-xs text-dim"
+      >
+        <span>{{ t('infra.import.file.preview.colName') }}</span>
+        <span>{{ t('infra.import.file.preview.colKind') }}</span>
+        <span>{{ t('infra.import.file.preview.colKeys') }}</span>
+        <span>{{ t('infra.import.file.preview.colConflict') }}</span>
+        <span>{{ t('infra.import.file.preview.colAction') }}</span>
       </div>
 
-      <div v-for="row in rows" :key="row.name" class="aps-row">
-        <div class="aps-row-main">
-          <span class="aps-name mono" :title="row.name">{{ row.name }}</span>
-          <span class="aps-kind">{{ kindLabel(row.kind) }}</span>
-          <span class="aps-keys">
-            <span v-if="row.hasStaticKeys" class="aps-badge">
-              {{ t('infra.import.file.preview.hasStaticKeys') }}
-            </span>
-            <span v-if="row.hasSessionToken" class="aps-badge">
-              {{ t('infra.import.file.preview.hasSessionToken') }}
-            </span>
+      <div v-for="row in rows" :key="row.name" class="border-t first:border-t-0">
+        <div class="grid grid-cols-[1.6fr_0.9fr_1.1fr_1.1fr_auto] items-center gap-2.5 px-3 py-2">
+          <!-- mono-ok: tên profile là identifier dùng ở `--profile` của CLI. -->
+          <span
+            class="min-w-0 truncate font-mono text-sm font-semibold text-foreground"
+            :title="row.name"
+          >
+            {{ row.name }}
           </span>
-          <span class="aps-conflict" :class="{ warn: row.conflict !== 'none' }">
+          <span class="text-xs text-dim">{{ kindLabel(row.kind) }}</span>
+          <span class="flex flex-wrap gap-1">
+            <Badge v-if="row.hasStaticKeys" variant="secondary" class="rounded-sm font-normal">
+              {{ t('infra.import.file.preview.hasStaticKeys') }}
+            </Badge>
+            <Badge v-if="row.hasSessionToken" variant="secondary" class="rounded-sm font-normal">
+              {{ t('infra.import.file.preview.hasSessionToken') }}
+            </Badge>
+          </span>
+          <span class="text-xs" :class="row.conflict !== 'none' ? 'text-warning' : 'text-dim'">
             {{ conflictLabel(row.conflict) }}
           </span>
           <AppSelect
-            class="aps-mode"
+            class="justify-self-end"
             :model-value="row.mode"
             :options="modeOptions(row)"
             width="152px"
             @update:model-value="(v) => emit('set-mode', row.name, v as ImportRowMode)"
           />
         </div>
-        <div v-if="row.mode === 'rename'" class="aps-rename">
+        <div v-if="row.mode === 'rename'" class="flex items-center gap-2 px-3 pb-2.5">
           <Input
-            :class="{ 'has-err': !!rowError(row) }"
+            :class="{ 'border-destructive focus-visible:ring-destructive': !!rowError(row) }"
             :model-value="row.to"
             :placeholder="t('infra.import.file.preview.renamePlaceholder')"
             spellcheck="false"
-            class="mono"
+            class="h-ctrl-sm min-w-0 flex-1 font-mono"
             @update:model-value="emit('set-to', row.name, $event)"
           />
-          <span v-if="rowError(row)" class="aps-rename-err">{{ rowError(row) }}</span>
+          <span v-if="rowError(row)" class="flex-none text-xs text-destructive">
+            {{ rowError(row) }}
+          </span>
         </div>
       </div>
     </div>
@@ -124,136 +139,3 @@ function rowError(row: ImportRow): string {
   return ''
 }
 </script>
-
-<style scoped>
-.aps {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-}
-.aps-sub {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.aps-warnbox {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.aps-warnbox-title {
-  font-weight: 650;
-}
-.aps-empty {
-  padding: 24px 4px;
-  text-align: center;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.aps-table {
-  display: flex;
-  flex-direction: column;
-  max-height: 46vh;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.aps-head,
-.aps-row-main {
-  display: grid;
-  grid-template-columns: 1.6fr 0.9fr 1.1fr 1.1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 12px;
-}
-.aps-head {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  background: var(--bgHover);
-}
-.aps-row + .aps-row {
-  border-top: 1px solid var(--border);
-}
-.aps-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.aps-kind {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.aps-keys {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.aps-badge {
-  padding: 2px 7px;
-  border-radius: var(--r-xs);
-  background: var(--bgActive);
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-.aps-conflict {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.aps-conflict.warn {
-  color: var(--amber);
-}
-.aps-mode {
-  justify-self: end;
-}
-.aps-rename {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px 10px;
-}
-.aps-rename-input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 9px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.aps-rename-input:focus {
-  border-color: var(--accent);
-}
-.aps-rename-input.has-err,
-.aps-rename-input.has-err:focus {
-  border-color: var(--danger);
-}
-.aps-rename-err {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--danger);
-}
-</style>

@@ -34,6 +34,8 @@ import {
   type SurfaceRunResult,
 } from '../tools/surface-tools.js'
 import { WAKEUP_TEXT, createWakeupRunner } from '../tools/wakeup-tool.js'
+import { SCHEDULE_PROPOSE_TEXT, createScheduleProposeRunner } from '../tools/schedule-propose-tool.js'
+import { MAX_COMMAND_ARGS } from '../../schedules/schema.js'
 import { MAX_WAKEUP_NOTE_LEN } from '../../schedules/schema.js'
 import { TurnState } from './live-process.js'
 
@@ -82,6 +84,8 @@ export function buildSurfaceToolsSdkServer(
   // như wiki/memory đang phải làm — tức tự tạo thêm bề mặt cho đúng lớp bug
   // "tool bắc cầu đổi tên" đã cắn ba lần.
   const wakeup = () => turns.once('wakeup-runner', () => createWakeupRunner(sessionId))
+  // `propose_schedule` (ADR 0108) đi nhờ server này cùng lý do với `schedule_wakeup`.
+  const propose = () => turns.once('schedule-propose-runner', () => createScheduleProposeRunner(sessionId))
 
   return createSdkMcpServer({
     name: SURFACE_MCP_SERVER,
@@ -148,6 +152,29 @@ export function buildSurfaceToolsSdkServer(
           // `isError` phải đi qua cầu: một lần đặt BỊ TỪ CHỐI (hết chỗ, note quá
           // dài) không phải một bước thành công — nhánh Pi phân biệt bằng
           // `details.isError`, còn ở đây chỉ có cờ này.
+          return {
+            content: [{ type: 'text' as const, text: r.text }],
+            ...(r.isError ? { isError: true } : {}),
+          }
+        },
+      ),
+      tool(
+        'propose_schedule',
+        SCHEDULE_PROPOSE_TEXT.description,
+        {
+          // Trần độ dài khớp bản TypeBox của nhánh Pi (schedule-propose-tool.ts); hàng rào
+          // thật là ScheduleSchema.parse trong runner dùng chung.
+          name: z.string().max(200).describe(SCHEDULE_PROPOSE_TEXT.name),
+          every_minutes: z.number().optional().describe(SCHEDULE_PROPOSE_TEXT.everyMinutes),
+          at: z.string().optional().describe(SCHEDULE_PROPOSE_TEXT.at),
+          weekdays: z.array(z.number()).optional().describe(SCHEDULE_PROPOSE_TEXT.weekdays),
+          prompt: z.string().max(20_000).optional().describe(SCHEDULE_PROPOSE_TEXT.prompt),
+          program: z.string().max(1000).optional().describe(SCHEDULE_PROPOSE_TEXT.program),
+          args: z.array(z.string().max(2000)).max(MAX_COMMAND_ARGS).optional().describe(SCHEDULE_PROPOSE_TEXT.args),
+          timeout_minutes: z.number().optional().describe(SCHEDULE_PROPOSE_TEXT.timeoutMinutes),
+        },
+        async (args) => {
+          const r = await propose()(args)
           return {
             content: [{ type: 'text' as const, text: r.text }],
             ...(r.isError ? { isError: true } : {}),

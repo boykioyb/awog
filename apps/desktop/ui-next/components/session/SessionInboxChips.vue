@@ -4,37 +4,56 @@
        card này chỉ hiện cho những tin bị park vì nhóm chạm trần chi phí an toàn
        (xem withinDeliverCap trong stores/sessions.ts). Nút giao là đường thủ công
        duy nhất còn lại. -->
-  <div v-if="msgs.length" class="inbx">
-    <div class="inbx-hd">
-      <Icon name="bell" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="inbx-title">{{ title }}</span>
-      <span style="flex: 1" />
-      <button
-        class="inbx-x"
+  <Card
+    v-if="msgs.length"
+    class="mx-3 mt-1.5 flex flex-col gap-1.5 rounded-lg px-2.5 py-2 shadow-sm"
+  >
+    <div class="flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Icon name="bell" class="size-3.5" />
+      <span class="flex-1 font-semibold text-foreground">{{ title }}</span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-4 rounded-sm text-muted-foreground hover:text-foreground"
         :title="t('sessionsInbox.dismissAll')"
+        :aria-label="t('sessionsInbox.dismissAll')"
         @click="store.dismissInbox(engineId)"
       >
-        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon name="x" class="size-3" />
+      </Button>
     </div>
 
-    <div v-for="m in msgs" :key="m.id" class="inbx-row">
-      <span class="inbx-org" :class="`is-${m.origin}`">{{ orgLabel(m) }}</span>
+    <div v-for="m in msgs" :key="m.id" class="flex min-w-0 items-center gap-1.5">
+      <!-- Nguồn ngoài tô amber: người lạ viết ra, đáng ngờ nhất trong ba loại. -->
+      <Badge
+        variant="outline"
+        class="shrink-0 rounded-sm px-1.5 py-px font-normal"
+        :class="
+          m.origin === 'external'
+            ? 'border-warning/45 text-warning'
+            : 'border-primary/45 text-primary'
+        "
+      >
+        {{ orgLabel(m) }}
+      </Badge>
       <!-- preview do sidecar dựng (đã khử bí mật, một dòng). Text node, không v-html. -->
-      <span class="inbx-prev">{{ m.preview }}</span>
-      <button
-        class="inbx-x"
+      <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ m.preview }}</span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-4 rounded-sm text-muted-foreground hover:text-foreground"
         :title="t('sessionsInbox.dismiss')"
+        :aria-label="t('sessionsInbox.dismiss')"
         @click="store.dismissInboxMessage(engineId, m.id)"
       >
-        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon name="x" class="size-3" />
+      </Button>
     </div>
 
-    <p class="inbx-note">{{ untrustedNote }}</p>
+    <p class="m-0 text-xs text-faint">{{ untrustedNote }}</p>
 
-    <div class="inbx-foot">
-      <span class="inbx-wait">
+    <div class="flex items-center gap-2">
+      <span class="flex-1 text-xs text-faint">
         {{ canDeliver ? t('sessionsInbox.capped') : t('sessionsInbox.waiting') }}
       </span>
       <Button
@@ -46,7 +65,7 @@
         {{ t('sessionsInbox.deliver') }}
       </Button>
     </div>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -98,95 +117,3 @@ function orgLabel(m: { origin: InboxOrigin; fromTitle: string }): string {
   return t('sessionsInbox.from', { name: m.fromTitle })
 }
 </script>
-
-<style scoped>
-/* Card hộp thư — shadcn popover/card idiom: card surface + hairline border +
-   --radius + --shadow-sm, muted meta text, ghost dismiss buttons. */
-.inbx {
-  margin: 6px 12px 0;
-  padding: 8px 10px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.inbx-hd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.inbx-title {
-  font-weight: 600;
-  color: var(--foreground);
-}
-.inbx-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.inbx-org {
-  flex: none;
-  padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
-  color: var(--primary);
-  border-radius: var(--r-xs);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-/* Nguồn ngoài tô amber: người lạ viết ra, đáng ngờ nhất trong ba loại. */
-.inbx-org.is-external {
-  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
-  color: var(--warning);
-}
-.inbx-prev {
-  flex: 1;
-  color: var(--muted-foreground);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.inbx-note {
-  margin: 0;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.inbx-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.inbx-wait {
-  flex: 1;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-/* Nút bỏ qua — ghost icon: muted, accent-wash hover, foreground khi hover. */
-.inbx-x {
-  flex: none;
-  color: var(--muted-foreground);
-  padding: 1.5px;
-  border-radius: var(--r-xs);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  transition:
-    color 0.12s var(--ease, ease),
-    background 0.12s var(--ease, ease);
-}
-.inbx-x:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-</style>

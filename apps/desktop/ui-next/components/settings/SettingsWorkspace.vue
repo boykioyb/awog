@@ -6,8 +6,9 @@
       :name="t('settings.workspace.path.name')"
       :desc="t('settings.workspace.path.desc')"
     >
-      <div class="keyrow">
-        <Input :value="workspaceRoot" readonly class="mono flex-1" />
+      <div class="flex min-w-56 items-center gap-2">
+        <!-- mono-ok: đường dẫn thư mục -->
+        <Input :value="workspaceRoot" readonly class="flex-1 font-mono" />
         <Button
           :title="t('settings.workspace.path.copy')"
           variant="outline"
@@ -23,18 +24,10 @@
       :name="t('settings.workspace.git.name')"
       :desc="t('settings.workspace.git.desc')"
     >
-      <span class="chip">
-        <span
-          style="
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--green);
-            display: inline-block;
-          "
-        />
+      <Badge variant="outline" class="text-muted-foreground">
+        <span class="size-1.5 rounded-full bg-success" />
         {{ t('settings.workspace.git.enabled') }}
-      </span>
+      </Badge>
     </SettingsField>
 
     <!-- Config import from .claude / .agents lives on each library page's toolbar
@@ -71,8 +64,6 @@
 
 <script setup lang="ts">
 import type { LinkOpenMode } from '~/composables/useLinkOpen'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 // Workspace panel — wires setSecHtml('workspace') to real state + IPC.
 //   - Workspace path: READ-ONLY. The sidecar always uses os.homedir()/.awog as

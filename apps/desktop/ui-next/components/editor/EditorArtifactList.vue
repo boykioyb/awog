@@ -1,24 +1,33 @@
 <template>
-  <div class="edalist">
-    <div class="edalist-head">{{ t('editor.artifacts', { id: taskId }) }}</div>
-    <div class="edalist-body">
+  <div class="flex h-full min-h-0 w-60 flex-none flex-col border-r bg-sidebar">
+    <div class="shrink-0 border-b px-3 py-2 text-sm text-dim">
+      {{ t('editor.artifacts', { id: taskId }) }}
+    </div>
+    <div class="min-h-0 flex-1 overflow-y-auto pt-1 pb-2.5">
+      <!-- raw-ok: hàng danh sách artifact — cả dòng là vùng bấm -->
       <button
         v-for="file in files"
         :key="file.path"
-        class="edalist-row"
-        :class="{ on: file.name === selectedName || file.path === selectedName }"
+        type="button"
+        class="flex w-full cursor-pointer items-center gap-2 border-l-2 px-3 py-1.5 text-left text-foreground hover:bg-accent"
+        :class="
+          file.name === selectedName || file.path === selectedName
+            ? 'border-l-primary bg-selected'
+            : 'border-l-transparent'
+        "
         @click="emit('select', file.name)"
       >
-        <Icon :name="file.kind === 'diff' ? 'branch' : 'text'" class="edalist-icon" />
-        <div class="edalist-meta">
-          <div class="edalist-name">{{ file.name }}</div>
-          <div v-if="file.phase" class="edalist-sub">
+        <Icon :name="file.kind === 'diff' ? 'branch' : 'text'" class="size-3.5 shrink-0 text-dim" />
+        <div class="min-w-0">
+          <!-- mono: tên file artifact -->
+          <div class="truncate font-mono">{{ file.name }}</div>
+          <div v-if="file.phase" class="truncate text-sm text-faint">
             {{ file.phase }}
             <span v-if="file.version">· v{{ file.version }}</span>
           </div>
         </div>
       </button>
-      <div v-if="!files.length" class="edalist-empty">{{ t('editor.noArtifacts') }}</div>
+      <div v-if="!files.length" class="px-3.5 py-4.5 text-faint">{{ t('editor.noArtifacts') }}</div>
     </div>
   </div>
 </template>
@@ -39,77 +48,3 @@ const emit = defineEmits<{ select: [name: string] }>()
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-.edalist {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  flex: 0 0 240px;
-  border-right: 1px solid var(--border);
-  background: var(--bgPanel);
-}
-.edalist-head {
-  padding: 9px 12px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.edalist-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 0 10px;
-}
-.edalist-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 12px;
-  text-align: left;
-  color: var(--text);
-  background: transparent;
-  border: none;
-  border-left: 2px solid transparent;
-  cursor: pointer;
-}
-.edalist-row:hover {
-  background: var(--bgHover);
-}
-.edalist-row.on {
-  background: var(--bgActive);
-  border-left-color: var(--accent);
-}
-.edalist-icon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-  flex-shrink: 0;
-}
-.edalist-meta {
-  min-width: 0;
-}
-.edalist-name {
-  /* mono-ok: artifact file name */
-  font-family: var(--code);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.edalist-sub {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.edalist-empty {
-  padding: 18px 14px;
-  color: var(--textFaint);
-}
-</style>

@@ -1,48 +1,87 @@
 <template>
-  <div class="ntf-row" :class="{ read: !item.unread }">
+  <!-- GRID, not flex, and deliberately so: `minmax(0, 1fr)` gives the text column a
+       track that physically cannot exceed the space left over. The flex version
+       wrapped correctly on Chromium 151 and overflowed on the Chromium 130 that
+       Electron 33 ships. Grid tracks are computed from the container, so every
+       engine lands on the same width.
+       Hàng chưa đọc mang tint accent (đậm thêm khi hover, không đổi sang xám); hai
+       hàng ĐÃ đọc liền nhau thì ngăn bằng hairline, còn lại ngăn bằng khe 4px —
+       hairline giữa hai khối cùng tint thì vô hình. -->
+  <div
+    data-ntf-row
+    :data-read="item.unread ? undefined : ''"
+    class="grid grid-cols-[--spacing(1.5)_--spacing(3.5)_minmax(0,1fr)] items-start gap-x-1.5 overflow-hidden rounded-sm py-2 pr-1.5 pl-1 [[data-ntf-row]+&]:mt-1 [[data-ntf-row][data-read]+&[data-read]]:mt-0 [[data-ntf-row][data-read]+&[data-read]]:rounded-none [[data-ntf-row][data-read]+&[data-read]]:border-t"
+    :class="item.unread ? 'bg-primary/8 hover:bg-primary/15' : 'hover:bg-accent'"
+  >
     <!-- Unread marker. Always occupies its slot so read and unread rows stay aligned
          — the dot appearing/disappearing must not shift the text next to it. -->
-    <span class="ntf-row-dot" :class="{ on: item.unread }" />
-    <Icon :name="typeIcon" class="ntf-row-ic" :class="{ act: actionable }" />
-    <div class="ntf-row-body">
+    <span class="mt-1.5 size-1.5 rounded-full" :class="item.unread && 'bg-primary'" />
+    <Icon
+      :name="typeIcon"
+      class="mt-0.5 size-3.5"
+      :class="actionable ? 'text-primary' : 'text-dim'"
+    />
+    <div class="min-w-0 overflow-hidden">
       <!-- Title WRAPS (clamped at 3 lines): a truncated GitHub title usually loses
            the part that says what changed. The row lives inside a per-repo group
            (TopBarNotifications), so the repo name is not repeated here. -->
-      <button class="ntf-row-main" type="button" :title="hoverText" @click="emit('open', item)">
-        <span class="ntf-row-title">{{ item.title }}</span>
-        <span class="ntf-row-meta">
-          <span v-if="item.number != null" class="ntf-row-num tnum">#{{ item.number }}</span>
+      <!-- raw-ok: vùng bấm cả khối tiêu đề + dòng meta nhiều dòng — Button là inline-flex một dòng -->
+      <button
+        class="block w-full min-w-0 cursor-pointer overflow-hidden rounded-xs text-left focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+        type="button"
+        :title="hoverText"
+        @click="emit('open', item)"
+      >
+        <!-- Chưa đọc là trạng thái mặc định (đa số hàng), nên ĐỘ ĐẬM là thứ tách hàng
+             còn cần việc khỏi hàng đã xử lý. -->
+        <span
+          class="line-clamp-3 wrap-anywhere"
+          :class="item.unread ? 'font-semibold text-foreground' : 'font-normal text-dim'"
+        >
+          {{ item.title }}
+        </span>
+        <!-- KHÔNG text-faint: chữ 12px trên nền trắng của theme sáng chỉ ~3.4:1. -->
+        <span
+          class="mt-0.5 flex w-full min-w-0 items-baseline gap-1.5 overflow-hidden text-sm text-dim"
+        >
+          <span v-if="item.number != null" class="shrink-0 tabular-nums">#{{ item.number }}</span>
           <!-- Who opened it. Sits BEFORE the reason so it is never the first thing
                truncated — "whose PR is this" is the question the row gets asked. -->
           <span
             v-if="author"
-            class="ntf-row-author"
+            class="min-w-0 shrink truncate text-muted-foreground"
             :title="t('github.inbox.author', { login: author })"
           >
             {{ author }}
           </span>
-          <span class="ntf-row-reason" :class="{ act: actionable }">
+          <span class="min-w-0 truncate" :class="actionable && 'text-primary'">
             {{ reasonLabel(item.reason) }}
           </span>
-          <span class="ntf-row-time">{{ when }}</span>
+          <span class="ml-auto shrink-0 whitespace-nowrap">{{ when }}</span>
         </span>
       </button>
       <!-- Actions on their OWN line, with labels: always visible, never competing
            with the title for width, and no icon the user has to decode. -->
-      <div class="ntf-row-acts">
-        <button
+      <div class="mt-1.5 flex flex-wrap gap-1">
+        <Button
           v-if="item.unread"
-          class="ntf-row-act read"
-          type="button"
+          variant="outline"
+          size="xs"
+          class="h-auto px-2 py-0.5 text-sm font-normal text-dim hover:border-success hover:bg-transparent hover:text-success"
           @click.stop="emit('read', item.id)"
         >
-          <Icon name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="check" />
           <span>{{ t('github.inbox.markRead') }}</span>
-        </button>
-        <button class="ntf-row-act" type="button" @click.stop="emit('external', item)">
-          <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        </Button>
+        <Button
+          variant="outline"
+          size="xs"
+          class="h-auto px-2 py-0.5 text-sm font-normal text-dim"
+          @click.stop="emit('external', item)"
+        >
+          <Icon name="external" />
           <span>{{ t('github.inbox.openExternal') }}</span>
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -84,176 +123,3 @@ const hoverText = computed(() => {
   return `${props.item.repo}${ref}\n${props.item.title}`
 })
 </script>
-
-<style scoped>
-.ntf-row {
-  /* GRID, not flex, and deliberately so: `minmax(0, 1fr)` gives the text column a
-     track that physically cannot exceed the space left over. The flex version
-     wrapped correctly on Chromium 151 and overflowed on the Chromium 130 that
-     Electron 33 ships (form controls keep an intrinsic min size, so `min-width: 0`
-     never took). Grid tracks are computed from the container, so every engine lands
-     on the same width. */
-  display: grid;
-  grid-template-columns: 6px 13px minmax(0, 1fr);
-  column-gap: 6px;
-  align-items: start;
-  padding: 7px 6px 7px 4px;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-/* Rows are multi-line now, so they need a seam to read as separate items. With the
-   unread tint that seam is the GAP, not a border: a hairline between two identically
-   tinted blocks is invisible, and adjacent unread rows would merge into one slab.
-   The hairline stays only where both neighbours are transparent (two read rows). */
-.ntf-row + .ntf-row {
-  margin-top: 4px;
-}
-.ntf-row.read + .ntf-row.read {
-  margin-top: 0;
-  border-top: 1px solid var(--border);
-}
-/* Unread rows carry an accent tint — the state you can see without reading a word.
-   `color-mix` on the theme accent keeps it a derived value (no hardcoded colour) and
-   lets hover deepen the SAME tint instead of replacing it with grey, which would
-   have made a hovered unread row look less unread than its neighbours. */
-.ntf-row:not(.read) {
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
-}
-.ntf-row:not(.read):hover {
-  background: color-mix(in srgb, var(--primary) 15%, transparent);
-}
-.ntf-row.read:hover {
-  background: var(--accent-wash);
-}
-.ntf-row-dot {
-  width: 6px;
-  height: 6px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: transparent;
-}
-.ntf-row-dot.on {
-  background: var(--primary);
-}
-.ntf-row-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  margin-top: 2px;
-  color: var(--textDim);
-}
-.ntf-row-ic.act {
-  color: var(--primary);
-}
-.ntf-row-body {
-  min-width: 0;
-  overflow: hidden;
-}
-.ntf-row-main {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-/* Wrap, capped at 3 lines. `-webkit-box` + line-clamp is the recipe that works on
-   Chromium 130 (the modern `line-clamp` property landed later). `anywhere` breaks
-   the odd unbroken branch name instead of widening the row. */
-.ntf-row-title {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  color: var(--foreground);
-  /* Unread is the default state here (most rows), so weight is what separates a
-     row that still wants something from one already handled. */
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-/* Read rows stay in the list (that IS the read/unread distinction) but stop
-   competing for attention. */
-.ntf-row.read .ntf-row-title {
-  color: var(--textDim);
-  font-weight: 400;
-}
-.ntf-row-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  width: 100%;
-  min-width: 0;
-  margin-top: 2px;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 18px;
-  /* NOT --textFaint: at 12px on the light theme's white that lands around 3.4:1,
-     which is what read as "washed out" for the number/author/timestamp. */
-  color: var(--textDim);
-}
-.ntf-row-num {
-  flex: 0 0 auto;
-}
-.ntf-row-author {
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-row-reason {
-  min-width: 0;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-row-reason.act {
-  color: var(--primary);
-}
-.ntf-row-time {
-  flex: 0 0 auto;
-  margin-left: auto;
-  white-space: nowrap;
-}
-.ntf-row-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-}
-.ntf-row-act {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-.ntf-row-act:hover {
-  border-color: var(--input);
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.ntf-row-act.read:hover {
-  border-color: var(--success);
-  color: var(--success);
-}
-.ntf-row-act:focus-visible,
-.ntf-row-main:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
-}
-</style>

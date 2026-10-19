@@ -1,6 +1,11 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="ovl on" @click.self="close">
+    <!-- Không dùng Dialog của reka: hộp này gọi confirm() (ConfirmDialogHost, overlay
+         riêng teleport ra body) — Dialog modal khoá pointer-events ngoài content nên
+         hộp confirm lồng bên trên sẽ không bấm được.
+         `.ovl.on` giữ làm hook: nằm trong OVERLAYS (useEmbeddedBrowser.ts).
+         hook-ok: `.ovl.on` do OVERLAYS của useEmbeddedBrowser.ts đọc -->
+    <div v-if="open" class="ovl on" :class="OVERLAY_CLASS" @click.self="close">
       <div
         class="flex max-h-[86vh] w-[min(560px,92vw)] flex-col gap-3.5 overflow-y-auto rounded-xl border border-border bg-popover p-4"
         role="dialog"
@@ -11,10 +16,13 @@
           <span class="flex-1 text-base text-foreground">
             {{ t('sessions.workspace.browser.import.title') }}
           </span>
-          <span v-if="profileName" class="chip">{{ profileName }}</span>
+          <Badge v-if="profileName" variant="outline" class="rounded-sm text-muted-foreground">
+            {{ profileName }}
+          </Badge>
           <Button
             variant="ghost"
-            class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            size="iconSm"
+            class="text-muted-foreground"
             :title="t('common.close')"
             :aria-label="t('common.close')"
             @click="close"
@@ -51,11 +59,7 @@
                protection): detection comes back empty although the browser is
                installed. The folder picker is the sanctioned way through. -->
           <p class="text-xs">{{ t('sessions.workspace.browser.import.pickHint') }}</p>
-          <Button
-            variant="outline"
-            class="h-auto p-0 w-fit rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-            @click="pick"
-          >
+          <Button variant="outline" size="sm" class="w-fit" @click="pick">
             {{ t('sessions.workspace.browser.import.pick') }}
           </Button>
         </div>
@@ -68,13 +72,13 @@
             <AppSelect v-model="browserId" :options="browserOptions" width="100%" />
             <!-- Cứu cánh khi macOS chặn liệt kê (entry `blocked`) hoặc browser
                  không nằm trong danh sách — picker là đường được cấp quyền. -->
-            <button
-              type="button"
-              class="w-fit text-xs text-muted-foreground underline transition-colors hover:text-foreground"
+            <Button
+              variant="link"
+              class="h-auto w-fit p-0 text-xs font-normal text-muted-foreground underline hover:text-foreground"
               @click="pick"
             >
               {{ t('sessions.workspace.browser.import.pick') }}
-            </button>
+            </Button>
           </label>
 
           <!-- Data dir tồn tại nhưng OS từ chối liệt kê (EPERM) — profile picker
@@ -92,11 +96,7 @@
                 })
               }}
             </p>
-            <Button
-              variant="outline"
-              class="h-auto p-0 w-fit rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-              @click="pick"
-            >
+            <Button variant="outline" size="sm" class="w-fit" @click="pick">
               {{ t('sessions.workspace.browser.import.pick') }}
             </Button>
           </div>
@@ -125,7 +125,7 @@
               :key="part"
               class="flex cursor-pointer items-center gap-2 text-foreground"
             >
-              <input v-model="parts[part]" type="checkbox" />
+              <AppCheckbox v-model:checked="parts[part]" />
               <span>{{ t(`sessions.workspace.browser.import.part.${part}`) }}</span>
               <span
                 v-if="part !== 'cookies'"
@@ -185,12 +185,7 @@
                 }}
               </li>
             </ul>
-            <Button
-              v-if="report.needsRestart"
-              variant="default"
-              class="h-auto p-0 w-fit rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-              @click="restart"
-            >
+            <Button v-if="report.needsRestart" size="sm" class="w-fit" @click="restart">
               {{ t('sessions.workspace.browser.import.restart') }}
             </Button>
           </div>
@@ -200,26 +195,17 @@
 
         <div class="flex items-center gap-2">
           <Button
-            variant="ghost"
-            class="h-auto p-0 px-0 text-xs text-muted-foreground underline transition-colors hover:text-destructive"
+            variant="link"
+            class="h-auto p-0 text-xs font-normal text-muted-foreground underline hover:text-destructive"
             @click="clearAll"
           >
             {{ t('sessions.workspace.browser.import.clear') }}
           </Button>
           <span class="flex-1" />
-          <Button
-            variant="outline"
-            class="h-auto p-0 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-            @click="close"
-          >
+          <Button variant="outline" size="sm" @click="close">
             {{ t('common.close') }}
           </Button>
-          <Button
-            variant="default"
-            class="h-auto p-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-            :disabled="!canImport"
-            @click="runImport"
-          >
+          <Button size="sm" :disabled="!canImport" @click="runImport">
             {{
               busy
                 ? t('sessions.workspace.browser.import.running')
@@ -333,6 +319,9 @@ watch(
 )
 
 const close = (): void => emit('close')
+// Overlay phủ toàn màn, hộp neo cách đỉnh 13vh như mọi modal `.ovl` của app.
+const OVERLAY_CLASS =
+  'fixed inset-0 z-100 flex items-start justify-center bg-black/55 pt-[13vh] [-webkit-app-region:no-drag]'
 
 // Đường vòng qua tường TCC của macOS: khi OS từ chối LIỆT KÊ data dir của
 // browser (entry `blocked`, hay danh sách rỗng hẳn), hộp chọn thư mục native là

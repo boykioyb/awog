@@ -6,14 +6,10 @@
     lock-scrim
     @close="emit('close')"
   >
-    <div class="dwm">
-      <p class="dwm-body">{{ bodyText }}</p>
-      <label class="dwm-suppress">
-        <input
-          type="checkbox"
-          :checked="suppress"
-          @change="suppress = ($event.target as HTMLInputElement).checked"
-        />
+    <div class="flex flex-col gap-3">
+      <p class="text-sm text-muted-foreground">{{ bodyText }}</p>
+      <label class="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox :model-value="suppress" @update:model-value="suppress = $event === true" />
         <span>{{ t('tasks.dirty.suppress') }}</span>
       </label>
     </div>
@@ -33,9 +29,8 @@
 </template>
 
 <script setup lang="ts">
-// Dirty-workspace warning before starting a task — port of the old UI
-// DirtyWorkspaceWarnModal in prototype CSS via LibraryEntityModal. NewTaskModal
-// probes the selected project's git status, passes the uncommitted `fileCount`,
+// Dirty-workspace warning before starting a task, built on LibraryEntityModal.
+// NewTaskModal probes the selected project's git status, passes the uncommitted `fileCount`,
 // and acts on the user's choice (commit / stash / continue) + the "don't ask
 // again this session" toggle.
 import { computed, ref } from 'vue'
@@ -64,25 +59,3 @@ const bodyText = computed(() =>
     : t('tasks.dirty.body'),
 )
 </script>
-
-<style scoped>
-.dwm {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.dwm-body {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.dwm-suppress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  cursor: pointer;
-}
-</style>

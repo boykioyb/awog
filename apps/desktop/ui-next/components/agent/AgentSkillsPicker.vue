@@ -1,26 +1,26 @@
 <template>
-  <!-- Skills whitelist — checkbox list + search (auto when >8 rows), styles
-       global (.awp-*, agent-whitelist.css). Empty/undefined = every in-scope
+  <!-- Skills whitelist — checkbox list + search (auto when >8 rows), khung
+       dùng chung AgentPickList / AgentPickRow. Empty/undefined = every in-scope
        skill. Agents are global roles → caller passes the global tier only. -->
   <div>
-    <Input v-if="searchable" v-model="q" :placeholder="t('common.search')" class="awp-search" />
-    <div class="awp-list">
-      <label
+    <Input v-if="searchable" v-model="q" :placeholder="t('common.search')" class="mb-2" />
+    <AgentPickList
+      :is-empty="filteredRows.length === 0"
+      :empty-text="t('agents.editor.skillsEmpty')"
+    >
+      <AgentPickRow
         v-for="s in filteredRows"
         :key="s.key"
-        class="awp-row"
-        :class="{ on: isOn(s.id) }"
+        :checked="isOn(s.id)"
         :title="s.description"
+        @toggle="toggle(s.id)"
       >
-        <input type="checkbox" :checked="isOn(s.id)" class="awp-cbx" @change="toggle(s.id)" />
-        <span class="awp-name mono">{{ s.id }}</span>
-        <span v-if="s.tier" class="awp-tier">{{ s.tier }}</span>
-      </label>
-      <div v-if="filteredRows.length === 0" class="awp-empty">
-        {{ t('agents.editor.skillsEmpty') }}
-      </div>
-    </div>
-    <div class="awp-hint">{{ t('agents.editor.skillsHint') }}</div>
+        <!-- mono-ok: id skill -->
+        <span class="font-mono text-sm font-medium text-foreground">{{ s.id }}</span>
+        <span v-if="s.tier" class="truncate text-xs text-faint">{{ s.tier }}</span>
+      </AgentPickRow>
+    </AgentPickList>
+    <div class="text-xs text-dim">{{ t('agents.editor.skillsHint') }}</div>
   </div>
 </template>
 

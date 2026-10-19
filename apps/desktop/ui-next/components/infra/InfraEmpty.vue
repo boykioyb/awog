@@ -11,13 +11,13 @@
        "chưa chọn profile" có ba lời khuyên khác nhau và BA trong số đó chỉ sang
        "Cài đặt → Hạ tầng" — một màn mà lúc đó không tồn tại, và nay tồn tại nhưng là
        màn ma trận quyền, không phải chỗ chọn profile. -->
-  <div class="iem">
-    <p class="iem-ttl">{{ title }}</p>
-    <p v-if="hint" class="iem-hint">{{ hint }}</p>
+  <div class="flex flex-col items-start gap-1.5 py-3">
+    <p class="m-0 text-base text-foreground">{{ title }}</p>
+    <p v-if="hint" class="m-0 max-w-[62ch] text-sm leading-relaxed text-dim">{{ hint }}</p>
     <Button
       v-if="action && actionLabel"
       type="button"
-      class="iem-act"
+      class="mt-0.5"
       variant="default"
       size="sm"
       @click="onAction"
@@ -46,32 +46,3 @@ function onAction(): void {
   if (props.action) request(props.action)
 }
 </script>
-
-<style scoped>
-.iem {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 14px 0;
-}
-
-.iem-ttl {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.iem-hint {
-  margin: 0;
-  max-width: 62ch;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-
-.iem-act {
-  margin-top: 2px;
-}
-</style>

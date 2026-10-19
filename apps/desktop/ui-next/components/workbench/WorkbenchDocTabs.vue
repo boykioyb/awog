@@ -6,7 +6,7 @@
   <Tabs :model-value="wb.activeDoc" @update:model-value="(v) => (wb.activeDoc = String(v))">
     <TabsList
       ref="stripEl"
-      class="dtabs flex h-8 flex-none items-center justify-start gap-0.5 overflow-x-auto rounded-none bg-transparent p-0 px-2"
+      class="dtabs flex h-10 flex-none items-center justify-start gap-0.5 overflow-x-auto rounded-none bg-transparent p-0 px-2"
       @wheel="onWheel"
     >
       <TabsTrigger
@@ -14,7 +14,7 @@
         :key="d.id"
         :value="d.id"
         :data-doc="d.id"
-        class="dtab group inline-flex h-6 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-[var(--r-xs)] border border-transparent px-2.5 py-0 text-[var(--fs-sm)] font-normal text-[var(--textMuted)] shadow-none transition-colors hover:text-[var(--text)] data-[state=active]:border-[var(--border)] data-[state=active]:bg-[var(--bgSubtle)] data-[state=active]:text-[var(--text)] data-[state=active]:shadow-none"
+        class="dtab group inline-flex h-7 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-[var(--r-xs)] border border-transparent px-2.5 py-0 text-[var(--fs-sm)] font-normal text-[var(--textMuted)] shadow-none transition-colors hover:text-[var(--text)] data-[state=active]:border-[var(--border)] data-[state=active]:bg-[var(--bgSubtle)] data-[state=active]:text-[var(--text)] data-[state=active]:shadow-none"
         :class="[`k-${d.kind}`, { pin: d.pin }]"
         :title="titleOf(d)"
         @auxclick="(e: MouseEvent) => onAux(d, e)"
@@ -37,7 +37,7 @@
       <Button
         variant="ghost"
         size="iconSm"
-        class="size-6 flex-none rounded-[var(--r-xs)] p-0 text-[var(--textFaint)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
+        class="size-7 flex-none rounded-[var(--r-xs)] p-0 text-[var(--textFaint)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
         :title="t('workbench.tab.newWeb')"
         @click="void wbDocs.openNewWebDoc()"
       >
@@ -80,6 +80,7 @@ const ICON: Record<WorkbenchDocKind, string> = {
   web: `${SVG_OPEN}<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>`,
   img: `${SVG_OPEN}<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`,
   vid: `${SVG_OPEN}<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>`,
+  office: `${SVG_OPEN}<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M12 11v8"/></svg>`,
   mmd: `${SVG_OPEN}<rect x="3" y="3" width="7" height="6" rx="1"/><rect x="14" y="15" width="7" height="6" rx="1"/><path d="M6.5 9v3a3 3 0 0 0 3 3h8"/></svg>`,
   settings: `${SVG_OPEN}<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   monitor: `${SVG_OPEN}<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>`,
@@ -90,7 +91,8 @@ const ICON: Record<WorkbenchDocKind, string> = {
 }
 const PIN_SVG = `${SVG_OPEN}<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a3 3 0 0 0-3-3 3 3 0 0 0-3 3Z"/></svg>`
 
-const isFileDoc = (d: WorkbenchDoc) => ['file', 'md', 'img', 'vid', 'mmd'].includes(d.kind)
+const isFileDoc = (d: WorkbenchDoc) =>
+  ['file', 'md', 'img', 'vid', 'office', 'mmd'].includes(d.kind)
 const titleOf = (d: WorkbenchDoc) => (isFileDoc(d) ? wbDocs.relPathOf(d) : d.title)
 
 // Giữ tab đang mở trong khung nhìn khi strip tràn.

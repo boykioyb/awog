@@ -1,90 +1,112 @@
 <template>
-  <div class="llb">
-    <div class="llb-tabs" role="tablist" :aria-label="t('infra.logs.library.title')">
-      <button
-        v-for="tab in TABS"
-        :key="tab"
-        class="llb-tab"
-        :class="{ on: current === tab }"
-        type="button"
-        role="tab"
-        :aria-selected="current === tab"
-        @click="current = tab"
-      >
+  <Tabs
+    :model-value="current"
+    class="flex min-h-0 flex-col gap-1.5"
+    @update:model-value="(v) => (current = v as Tab)"
+  >
+    <TabsList :aria-label="t('infra.logs.library.title')" class="h-auto self-start">
+      <TabsTrigger v-for="tab in TABS" :key="tab" :value="tab" class="px-2 py-1 text-xs">
         {{ t(`infra.logs.library.tab.${tab}`) }}
-        <span v-if="countOf(tab) > 0" class="llb-badge">{{ countOf(tab) }}</span>
-      </button>
-    </div>
+        <Badge
+          v-if="countOf(tab) > 0"
+          variant="secondary"
+          class="rounded-sm px-1 py-0 tabular-nums"
+        >
+          {{ countOf(tab) }}
+        </Badge>
+      </TabsTrigger>
+    </TabsList>
 
     <!-- Mẫu sẵn -->
-    <div v-if="current === 'templates'" class="llb-list">
+    <TabsContent
+      value="templates"
+      class="mt-0 flex max-h-66 flex-col overflow-y-auto rounded-md border bg-card"
+    >
+      <!-- raw-ok: hàng list cả dòng là một vùng bấm, không phải nút -->
       <button
         v-for="tpl in templates"
         :key="tpl.id"
-        class="llb-row"
+        class="relative flex w-full cursor-pointer flex-col gap-0.5 border-b px-2 py-1.5 text-left text-muted-foreground last:border-b-0 hover:bg-accent"
         type="button"
         @click="emit('apply', tpl.query, tpl.windowSeconds, tpl.id)"
       >
-        <span class="llb-row-name">{{ t(`infra.logs.library.template.${tpl.id}`) }}</span>
-        <span class="llb-row-sub">{{ tpl.query }}</span>
-        <span class="llb-row-meta">{{ windowLabel(tpl.windowSeconds) }}</span>
+        <span class="truncate pr-5.5 text-sm text-foreground">
+          {{ t(`infra.logs.library.template.${tpl.id}`) }}
+        </span>
+        <span class="truncate text-xs text-dim">{{ tpl.query }}</span>
+        <span class="text-xs text-faint tabular-nums">{{ windowLabel(tpl.windowSeconds) }}</span>
       </button>
-      <p v-if="templates.length === 0" class="llb-empty">{{ t('infra.logs.library.empty') }}</p>
-    </div>
+      <p v-if="templates.length === 0" class="px-2.5 py-3.5 text-center text-sm text-dim">
+        {{ t('infra.logs.library.empty') }}
+      </p>
+    </TabsContent>
 
     <!-- Đã lưu -->
-    <div v-else-if="current === 'saved'" class="llb-list">
+    <TabsContent
+      value="saved"
+      class="mt-0 flex max-h-66 flex-col overflow-y-auto rounded-md border bg-card"
+    >
+      <!-- Nút xoá lồng bên trong là span role=button vì HTML cấm lồng nút trong nút. -->
+      <!-- raw-ok: hàng list cả dòng là một vùng bấm, không phải nút -->
       <button
         v-for="s in saved"
         :key="s.id"
-        class="llb-row"
+        class="relative flex w-full cursor-pointer flex-col gap-0.5 border-b px-2 py-1.5 text-left text-muted-foreground last:border-b-0 hover:bg-accent"
         type="button"
         @click="emit('apply', s.query, s.windowSeconds, '')"
       >
-        <span class="llb-row-name">{{ s.name }}</span>
-        <span class="llb-row-sub">{{ s.query }}</span>
-        <span class="llb-row-meta">
+        <span class="truncate pr-5.5 text-sm text-foreground">{{ s.name }}</span>
+        <span class="truncate text-xs text-dim">{{ s.query }}</span>
+        <span class="text-xs text-faint tabular-nums">
           <template v-if="s.lastBytesScanned !== undefined">
             {{ t('infra.logs.library.lastScan', { size: formatBytes(s.lastBytesScanned) }) }}
           </template>
         </span>
         <span
-          class="llb-row-x"
+          class="absolute top-1.5 right-1.5 grid size-4.5 place-items-center rounded-sm text-faint hover:bg-muted hover:text-destructive"
           role="button"
           tabindex="0"
           :title="t('infra.logs.library.delete')"
           @click.stop="emit('delete', s.id)"
           @keydown.enter.stop="emit('delete', s.id)"
         >
-          <Icon name="x" class="llb-ic" />
+          <Icon name="x" class="size-3" />
         </span>
       </button>
-      <p v-if="saved.length === 0" class="llb-empty">{{ t('infra.logs.library.empty') }}</p>
-    </div>
+      <p v-if="saved.length === 0" class="px-2.5 py-3.5 text-center text-sm text-dim">
+        {{ t('infra.logs.library.empty') }}
+      </p>
+    </TabsContent>
 
     <!-- Lịch sử -->
-    <div v-else class="llb-list">
-      <div class="llb-histhead">
+    <TabsContent
+      value="history"
+      class="mt-0 flex max-h-66 flex-col overflow-y-auto rounded-md border bg-card"
+    >
+      <div class="flex justify-end border-b px-2 py-1">
         <Button type="button" variant="outline" size="sm" @click="emit('clear-history')">
           {{ t('infra.logs.library.clearHistory') }}
         </Button>
       </div>
+      <!-- raw-ok: hàng list cả dòng là một vùng bấm, không phải nút -->
       <button
         v-for="h in history"
         :key="h.id"
-        class="llb-row"
+        class="relative flex w-full cursor-pointer flex-col gap-0.5 border-b px-2 py-1.5 text-left text-muted-foreground last:border-b-0 hover:bg-accent"
         type="button"
         @click="emit('apply', h.query, h.windowSeconds, '')"
       >
-        <span class="llb-row-name">{{ h.query }}</span>
-        <span class="llb-row-sub">
+        <span class="truncate pr-5.5 text-sm text-foreground">{{ h.query }}</span>
+        <span class="truncate text-xs text-dim">
           {{ fmtWhen(h.ranAt) }} · {{ h.status }} ·
           {{ t('infra.logs.library.scanned', { size: formatBytes(h.bytesScanned) }) }}
         </span>
       </button>
-      <p v-if="history.length === 0" class="llb-empty">{{ t('infra.logs.library.empty') }}</p>
-    </div>
-  </div>
+      <p v-if="history.length === 0" class="px-2.5 py-3.5 text-center text-sm text-dim">
+        {{ t('infra.logs.library.empty') }}
+      </p>
+    </TabsContent>
+  </Tabs>
 </template>
 
 <script setup lang="ts">
@@ -143,142 +165,3 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(2)} GiB`
 }
 </script>
-
-<style scoped>
-.llb {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-}
-
-.llb-tabs {
-  display: flex;
-  gap: 3px;
-}
-
-.llb-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-
-.llb-tab.on {
-  border-color: var(--border);
-  color: var(--text);
-  background: var(--bgHover);
-}
-
-.llb-badge {
-  padding: 0 5px;
-  border-radius: var(--r-xs);
-  background: var(--bgActive);
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-
-.llb-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 264px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-}
-
-.llb-histhead {
-  display: flex;
-  justify-content: flex-end;
-  padding: 5px 7px;
-  border-bottom: 1px solid var(--border);
-}
-
-.llb-row {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 6px 9px;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  color: var(--textMuted);
-  text-align: left;
-  cursor: pointer;
-}
-
-.llb-row:last-child {
-  border-bottom: none;
-}
-
-.llb-row:hover {
-  background: var(--bgHover);
-}
-
-.llb-row-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding-right: 22px;
-}
-
-.llb-row-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.llb-row-meta {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-
-.llb-row-x {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: var(--r-xs);
-  color: var(--textFaint);
-}
-
-.llb-row-x:hover {
-  color: var(--danger);
-  background: var(--bgActive);
-}
-
-.llb-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.llb-empty {
-  margin: 0;
-  padding: 14px 10px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-</style>

@@ -70,7 +70,7 @@
           <!-- Render|Raw segmented control — the header slot the proto gives markdown.
                html shares it too (same `view` state, same two modes). -->
           <div
-            v-if="shownItem.kind === 'markdown' || shownItem.kind === 'html'"
+            v-if="shownItem.kind === 'markdown' || shownItem.kind === 'html' || isCsv"
             class="flex shrink-0 rounded-md border border-border p-0.5"
           >
             <button
@@ -85,7 +85,11 @@
               ]"
               @click="view = v"
             >
-              {{ t(v === 'render' ? 'common.render' : 'common.raw') }}
+              {{
+                isCsv
+                  ? t(v === 'render' ? 'common.preview.csvTable' : 'common.preview.csvSource')
+                  : t(v === 'render' ? 'common.render' : 'common.raw')
+              }}
             </button>
           </div>
           <Button
@@ -337,6 +341,11 @@
             :title="shownItem.name"
           />
 
+          <!-- CSV / TSV → bảng (lưới Excel dùng chung); công tắc Bảng | Mã nguồn ở header. -->
+          <div v-else-if="showCsvTable" class="pvsheet">
+            <OfficeSheetView :office="csvTable" />
+          </div>
+
           <!-- text / markdown-raw / html-raw / code → Monaco viewer/editor (§9).
                Read-only unless edit mode is on (then `change`/`save` flow to the modal). -->
           <div v-else-if="showCode" class="pvcode">
@@ -557,6 +566,9 @@ const {
   office,
   showOfficeDoc,
   showOfficeSheet,
+  isCsv,
+  csvTable,
+  showCsvTable,
   officeEmpty,
   editorValue,
   editorReadOnly,
@@ -1392,6 +1404,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 
 /* ── rendered markdown prose (v-html content → :deep) ─────────────────── */
+/* Ảnh link ngoài bị chặn trong file chỉ-xem (usePreviewModal blockRemoteImages). */
+.mdbody :deep(.pv-img-blocked) {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-xs);
+  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
 .mdbody {
   width: 100%;
   max-width: 880px;

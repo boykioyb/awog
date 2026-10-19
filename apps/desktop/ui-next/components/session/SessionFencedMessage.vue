@@ -1,14 +1,24 @@
 <template>
-  <div class="fmsg">
-    <div class="fmh">
-      <Icon :name="icon" class="fmi" />
-      <span class="fmsrc" :title="label">{{ label }}</span>
-      <span v-if="msg.injection" class="fmwarn" :title="t('sessions.fenced.injectionHint')">
-        <Icon name="alert" class="fmwi" />
+  <!-- KHÔNG nền, KHÔNG viền, KHÔNG bo góc: thẻ này nằm TRONG bong bóng user (đã có sẵn
+       nền + viền + bo góc của nó), nên thêm một lớp nữa là hai khung lồng nhau — user
+       bác đúng ở chỗ đó. Nhiều tin giao trong CÙNG một lượt thì ngăn bằng một vạch mảnh
+       + khoảng thở (`[&+&]` = khối này đứng ngay sau một khối cùng loại). -->
+  <div class="flex flex-col gap-1.5 [&+&]:mt-2.5 [&+&]:border-t [&+&]:pt-2.5">
+    <div class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <Icon :name="icon" class="size-3 shrink-0" />
+      <span class="min-w-0 truncate" :title="label">{{ label }}</span>
+      <span
+        v-if="msg.injection"
+        class="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-destructive/12 px-1.5 py-px text-destructive"
+        :title="t('sessions.fenced.injectionHint')"
+      >
+        <Icon name="alert" class="size-3" />
         {{ t('sessions.fenced.injection') }}
       </span>
     </div>
-    <div class="fmb"><SessionLinkedText :text="msg.body" /></div>
+    <div class="text-base leading-(--lh-prose) text-foreground">
+      <SessionLinkedText :text="msg.body" />
+    </div>
   </div>
 </template>
 
@@ -42,63 +52,3 @@ const label = computed(() => {
   return src ? t('sessions.fenced.fromSession', { title: src }) : t('sessions.fenced.fromUnknown')
 })
 </script>
-
-<style scoped>
-/* KHÔNG nền, KHÔNG viền, KHÔNG bo góc: thẻ này nằm TRONG bong bóng user (`.mu`, đã có
-   sẵn nền + viền + bo góc của nó), nên thêm một lớp nữa là hai khung lồng nhau — user
-   bác đúng ở chỗ đó. Cùng quy ước với card lồng trong panel infra: khối bọc giữ skin,
-   card con khử khung. Dòng "Tin từ phiên «X»" ở trên đã đủ nói đây không phải chữ
-   người dùng gõ; nó mới là thứ mang thông tin, cái khung thì không. */
-.fmsg {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* Nhiều tin giao trong CÙNG một lượt: ngăn bằng một vạch mảnh + khoảng thở, vẫn không
-   phải một cái khung. */
-.fmsg + .fmsg {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.fmh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.fmi {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
-}
-.fmsrc {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fmwarn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding: 1px 6px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-.fmwi {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-.fmb {
-  color: var(--foreground);
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-}
-</style>

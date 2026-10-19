@@ -1,61 +1,76 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on sim-ovl" @click.self="emit('close')">
-      <div class="sim-card" role="dialog" aria-modal="true">
-        <div class="sim-head">
-          <Icon name="shield" class="sim-icn" />
-          <span class="sim-title">{{ t('ssh.identity.title') }}</span>
-          <Button class="sim-new" variant="default" size="sm" @click="emit('new')">
-            <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
-            {{ t('ssh.identity.new') }}
-          </Button>
-          <button
-            class="sim-close"
-            :title="t('ssh.panel.close')"
-            :aria-label="t('ssh.panel.close')"
-            @click="emit('close')"
-          >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+  <!-- Band modal gốc (z-170 của Dialog) — nằm dưới hộp xác nhận xoá (z-200) mà nó mở.
+       Nút X của DialogContent thay nút đóng tự viết ở head. Escape do listener window
+       trong script xử lý nên chặn Escape của Dialog để không emit close hai lần. -->
+  <Dialog :open="open" @update:open="(v: boolean) => !v && emit('close')">
+    <DialogContent
+      class="flex max-h-[80vh] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-130"
+      @escape-key-down.prevent
+    >
+      <DialogHeader class="flex-row items-center gap-2 py-3.5 pr-12 pl-4">
+        <Icon name="shield" class="size-4 shrink-0 text-primary" />
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          {{ t('ssh.identity.title') }}
+        </DialogTitle>
+        <Button class="ml-auto" variant="default" size="sm" @click="emit('new')">
+          <Icon name="plus" />
+          {{ t('ssh.identity.new') }}
+        </Button>
+      </DialogHeader>
+      <Separator />
 
-        <div class="sim-body">
-          <div v-if="!identities.length" class="sim-empty">{{ t('ssh.identity.empty') }}</div>
-          <div v-for="idn in identities" v-else :key="idn.id" class="sim-row">
-            <div class="sim-row-main">
-              <span class="sim-name">{{ idn.name }}</span>
-              <div class="sim-meta">
-                <span v-if="idn.keyType" class="sim-kt">{{ idn.keyType }}</span>
-                <span class="sim-src mono">
+      <div class="overflow-y-auto py-1.5">
+        <div v-if="!identities.length" class="px-4 py-6 text-center text-sm text-muted-foreground">
+          {{ t('ssh.identity.empty') }}
+        </div>
+        <div v-else class="flex flex-col divide-y">
+          <div
+            v-for="idn in identities"
+            :key="idn.id"
+            class="flex items-center gap-2.5 px-4 py-2.5"
+          >
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+              <span class="font-medium text-foreground">{{ idn.name }}</span>
+              <div class="flex flex-wrap items-center gap-2">
+                <Badge v-if="idn.keyType" variant="secondary">{{ idn.keyType }}</Badge>
+                <span class="font-mono text-sm break-all text-muted-foreground">
                   {{ idn.inlineStored ? t('ssh.detail.inlineKey') : idn.keyPath || '—' }}
                 </span>
-                <span v-if="idn.hasPassphrase" class="sim-pp">
-                  <Icon name="shield" style="width: 10px; height: 10px" />
+                <Badge
+                  v-if="idn.hasPassphrase"
+                  variant="outline"
+                  class="border-transparent bg-primary/15 text-primary"
+                >
+                  <Icon name="shield" />
                   {{ t('ssh.detail.passphrase') }}
-                </span>
+                </Badge>
               </div>
             </div>
-            <button
-              class="sim-act"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground"
               :title="t('ssh.identity.edit')"
               :aria-label="t('ssh.identity.edit')"
               @click="emit('edit', idn.id)"
             >
-              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="sim-act sim-del"
+              <Icon name="edit" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               :title="t('ssh.identity.delete')"
               :aria-label="t('ssh.identity.delete')"
               @click="emit('delete', idn.id)"
             >
-              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+              <Icon name="trash" />
+            </Button>
           </div>
         </div>
       </div>
-    </div>
-  </Teleport>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -78,154 +93,3 @@ const onKey = (e: KeyboardEvent) => {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-.sim-ovl {
-  align-items: center;
-  padding-top: 0;
-  /* Base modal band — below the confirm dialog (z-200) it launches for delete. */
-  z-index: 120;
-}
-.sim-card {
-  width: 520px;
-  max-width: 92vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-.sim-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.sim-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-  color: var(--accent);
-}
-.sim-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.sim-new {
-  margin-left: auto;
-}
-.sim-close {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.sim-close:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sim-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.sim-body {
-  overflow-y: auto;
-  padding: 6px 0;
-}
-.sim-empty {
-  padding: 24px 16px;
-  text-align: center;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sim-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-}
-.sim-row + .sim-row {
-  border-top: 1px solid var(--border);
-}
-.sim-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.sim-name {
-  color: var(--text);
-  font-weight: 550;
-}
-.sim-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sim-kt {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.sim-src {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  word-break: break-all;
-}
-.sim-pp {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--accent);
-  background: var(--accentDim);
-}
-.sim-act {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.sim-act:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sim-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.sim-del:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-</style>

@@ -1,7 +1,7 @@
 <template>
-  <img v-if="src" :src="src" :alt="alt" class="slk-thumb-img" draggable="false" />
-  <div v-else class="slk-thumb-ph" :class="{ failed }">
-    <Icon :name="failed ? 'file' : 'clock'" />
+  <img v-if="src" :src="src" :alt="alt" class="block size-full object-cover" draggable="false" />
+  <div v-else class="grid size-full place-items-center bg-muted text-faint">
+    <Icon :name="failed ? 'file' : 'clock'" class="size-5!" />
   </div>
 </template>
 
@@ -29,24 +29,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-.slk-thumb-img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.slk-thumb-ph {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  background: var(--bgSubtle);
-  color: var(--textFaint);
-}
-.slk-thumb-ph .icn {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-}
-</style>

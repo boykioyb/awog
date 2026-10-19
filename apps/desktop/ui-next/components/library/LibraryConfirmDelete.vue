@@ -1,50 +1,48 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on lcd-ovl" @click.self="emit('cancel')">
-      <div class="lcd-card" role="dialog" aria-modal="true">
-        <div class="lcd-head">
-          <Icon
-            name="alert"
-            class="lcd-icn"
-            :style="{ color: kind === 'danger' ? 'var(--danger)' : 'var(--accent)' }"
-          />
-          <span class="lcd-title">{{ title }}</span>
-        </div>
-        <div class="lcd-body">{{ description }}</div>
-        <slot name="extra" />
-        <div class="lcd-foot">
-          <Button variant="outline" @click="emit('cancel')">
-            {{ cancelLabel || t('common.cancel') }}
-          </Button>
-          <Button
-            :class="{ pri: kind !== 'danger' }"
-            :style="
-              kind === 'danger'
-                ? { background: 'var(--danger)', color: 'var(--bg)', borderColor: 'transparent' }
-                : undefined
-            "
-            variant="outline"
-            @click="emit('confirm')"
-          >
-            {{ confirmLabel || (kind === 'danger' ? t('common.delete') : t('common.confirm')) }}
-          </Button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <Dialog :open="open" @update:open="(v) => !v && emit('cancel')">
+    <!-- z-200: confirm mở từ trong modal khác (Git modal z-120, Git prompt z-150) phải
+         nằm trên nó — cùng bậc TextPromptHost. -->
+    <DialogContent class="z-200 w-105 max-w-[92vw] gap-3.5 border-input bg-card p-4.5">
+      <DialogHeader class="flex-row items-center gap-2 pr-8">
+        <Icon
+          name="alert"
+          class="flex-none"
+          :class="kind === 'danger' ? 'text-destructive' : 'text-primary'"
+        />
+        <DialogTitle class="text-lg font-semibold">{{ title }}</DialogTitle>
+      </DialogHeader>
+      <DialogDescription class="text-sm whitespace-pre-wrap text-muted-foreground">
+        {{ description }}
+      </DialogDescription>
+      <slot name="extra" />
+      <DialogFooter>
+        <Button variant="outline" @click="emit('cancel')">
+          {{ cancelLabel || t('common.cancel') }}
+        </Button>
+        <Button :variant="kind === 'danger' ? 'destructive' : 'default'" @click="emit('confirm')">
+          {{ confirmLabel || (kind === 'danger' ? t('common.delete') : t('common.confirm')) }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
 // Shared confirm-delete dialog for every library feature (skills, agents,
 // commands, rules, hooks, connections). Port of the old UI ConfirmDeleteModal,
-// rendered in prototype CSS (centered card over the `.ovl` scrim — matching
-// PreviewModal/GitPromptModal). `kind` controls the icon color + confirm style;
+// dựng trên Dialog shadcn (Escape / bấm scrim / nút X đều = cancel qua
+// `update:open`). `kind` controls the icon color + confirm style;
 // defaults to 'danger' so the common Delete flow stays red. Caller owns the
 // open state + supplies localized title/description.
-import { onBeforeUnmount, onMounted } from 'vue'
 import Button from '~/components/ui/button/Button.vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     open: boolean
     title: string
@@ -59,61 +57,4 @@ const props = withDefaults(
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 
 const { t } = useI18n()
-
-const onKey = (e: KeyboardEvent) => {
-  if (props.open && e.key === 'Escape') emit('cancel')
-}
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-/* Center the card (the shared .ovl aligns to top for the command palette). */
-.lcd-ovl {
-  align-items: center;
-  padding-top: 0;
-  /* Topmost imperative dialog — match TextPromptHost (200) so a confirm raised
-     from inside another modal (e.g. the session Git modal at z-120, the Git
-     prompt modal at z-150) stacks above it rather than behind. */
-  z-index: 200;
-}
-.lcd-card {
-  width: 420px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.lcd-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.lcd-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-}
-.lcd-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.lcd-body {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-  white-space: pre-wrap;
-}
-.lcd-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

@@ -1,5 +1,6 @@
 <template>
-  <section class="page on agentspage" data-page="agents">
+  <!-- relative: neo cho thanh bulk nổi đáy. -->
+  <section class="relative flex min-w-0 flex-1 flex-col overflow-hidden" data-page="agents">
     <!-- ══ LIST — khuôn Multica agents-page: CollectionHeader (icon + title +
          count + tagline + New) / toolbar (search + tier filter) / ListGrid
          64px two-line identity rows / kebab menu. ══ -->
@@ -16,7 +17,7 @@
         </Button>
       </CollectionHeader>
 
-      <div class="agt-bar">
+      <div class="flex shrink-0 items-center gap-2 border-b px-4 py-2">
         <div class="relative">
           <Icon
             name="search"
@@ -24,14 +25,14 @@
           />
           <Input v-model="query" :placeholder="t('agents.search')" class="w-72 pl-8" />
         </div>
-        <span class="agt-flex" />
-        <AppSelect v-model="teamFilter" :options="teamFilterOpts" />
-        <AppSelect v-model="sortBy" :options="sortOpts" />
+        <span class="flex-1" />
+        <AppSelect v-model="teamFilter" class="min-w-37.5" :options="teamFilterOpts" />
+        <AppSelect v-model="sortBy" class="min-w-37.5" :options="sortOpts" />
       </div>
 
       <CollectionList v-if="filteredAgents.length" :cols="COLS">
         <template #head>
-          <span class="agt-checkhead" @click.stop>
+          <span class="flex items-center justify-center p-0" @click.stop>
             <AppCheckbox
               :checked="allFilteredSelected"
               :indeterminate="selected.size > 0 && !allFilteredSelected"
@@ -42,32 +43,41 @@
           <span>{{ t('agents.col.status') }}</span>
           <span>{{ t('agents.col.runtime') }}</span>
           <span>{{ t('agents.col.lastActive') }}</span>
-          <span class="agt-head-r">{{ t('agents.col.runs') }}</span>
+          <span class="text-right">{{ t('agents.col.runs') }}</span>
           <span />
         </template>
         <div
           v-for="a in filteredAgents"
           :key="agentKey(a)"
-          class="cl-row"
-          :class="{ 'cl-row-sel': selected.has(agentKey(a)) }"
+          class="cl-row group"
+          :class="{ 'bg-selected': selected.has(agentKey(a)) }"
           @click="openDetail(a)"
         >
-          <div class="cl-cell agt-check" @click.stop>
+          <div class="cl-cell justify-center p-0" @click.stop>
             <AppCheckbox :checked="selected.has(agentKey(a))" @update:checked="toggleAgent(a)" />
           </div>
-          <div class="cl-cell agt-id">
-            <span class="agt-avw">
+          <div class="cl-cell gap-2.5">
+            <span class="relative inline-flex shrink-0">
               <EntityAvatar :name="a.name" :seed="agentKey(a)" size="md" />
-              <span v-if="isLive(a)" class="agt-avdot" />
+              <!-- Chấm "live" đè góc avatar; viền màu nền hàng để chấm "cắt" avatar. -->
+              <span
+                v-if="isLive(a)"
+                class="absolute -right-px -bottom-px size-2.5 rounded-full border-2 border-background bg-success"
+              />
             </span>
-            <div class="agt-idt">
-              <span class="agt-name">{{ a.name }}</span>
-              <span v-if="a.description" class="agt-desc">{{ a.description }}</span>
+            <div class="flex min-w-0 flex-col">
+              <span class="truncate text-sm font-medium text-foreground">{{ a.name }}</span>
+              <span v-if="a.description" class="truncate text-xs text-muted-foreground">
+                {{ a.description }}
+              </span>
             </div>
           </div>
           <div class="cl-cell">
-            <span class="agt-st" :class="{ on: isLive(a) }">
-              <span class="agt-std" />
+            <span
+              class="inline-flex items-center gap-1.5 text-sm"
+              :class="isLive(a) ? 'text-success' : 'text-muted-foreground'"
+            >
+              <span class="size-2 rounded-full bg-current" />
               {{ isLive(a) ? t('agents.status.active') : t('agents.status.idle') }}
             </span>
           </div>
@@ -75,11 +85,17 @@
             {{ providerDisplayName(a.provider) }} · {{ modelDisplayName(a.model) }}
           </div>
           <div class="cl-cell">{{ relTime(statsFor(a).lastIso) }}</div>
-          <div class="cl-cell agt-runs">{{ statsFor(a).sessions }}</div>
-          <div class="cl-cell agt-kebab">
+          <div class="cl-cell justify-end tabular-nums">{{ statsFor(a).sessions }}</div>
+          <div class="cl-cell justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="iconSm" class="agt-kebab-btn" @click.stop>
+                <!-- Kebab chỉ hiện khi hover hàng / focus / menu đang mở. -->
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  class="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                  @click.stop
+                >
                   <Icon name="dots" class="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -114,10 +130,14 @@
         </div>
       </CollectionList>
 
-      <div v-else class="agt-empty">
-        <span class="agt-empty-ic"><Icon name="bot" class="size-5" /></span>
-        <div class="agt-empty-t">{{ t('agents.empty.title') }}</div>
-        <div class="agt-empty-d">{{ t('agents.empty.desc') }}</div>
+      <div v-else class="flex flex-1 flex-col items-center justify-center gap-2">
+        <span
+          class="mb-1 inline-flex size-11 items-center justify-center rounded-lg border bg-muted text-muted-foreground"
+        >
+          <Icon name="bot" class="size-5" />
+        </span>
+        <div class="text-base font-semibold text-foreground">{{ t('agents.empty.title') }}</div>
+        <div class="mb-2 text-sm text-muted-foreground">{{ t('agents.empty.desc') }}</div>
         <Button @click="chooserOpen = true">
           <Icon name="plus" class="size-3.5" />
           {{ t('agents.page.new') }}
@@ -125,8 +145,13 @@
       </div>
 
       <!-- Bulk bar — nổi đáy khi có tick chọn: export .zip / xoá hàng loạt. -->
-      <div v-if="selected.size" class="agt-bulk">
-        <span class="agt-bulk-n">{{ t('agents.bulk.selected', { n: selected.size }) }}</span>
+      <div
+        v-if="selected.size"
+        class="absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-lg border bg-popover px-3 py-2 shadow-lg"
+      >
+        <span class="pr-1 text-sm font-semibold text-foreground">
+          {{ t('agents.bulk.selected', { n: selected.size }) }}
+        </span>
         <!-- Set model — action-dropdown (mỗi chọn = một lần áp cho mọi agent
              đang tick). Cùng khuôn bulk bar của Board: Button sm + DropdownMenu
              nên mọi control trong bar đều h-8, không nhô chiều cao. -->
@@ -171,7 +196,7 @@
     <!-- ══ DETAIL — khuôn agent-detail-page: back header + pane (tabs:
          Instructions | Sessions) + inspector rail phải (properties). ══ -->
     <template v-else>
-      <header class="agd-back">
+      <header class="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Button
           variant="ghost"
           size="iconSm"
@@ -180,9 +205,9 @@
         >
           <Icon name="arrow-left" class="size-4" />
         </Button>
-        <span class="agd-back-t">{{ t('agents.page.title') }}</span>
+        <span class="text-sm font-semibold text-foreground">{{ t('agents.page.title') }}</span>
 
-        <span class="agd-flex" />
+        <span class="flex-1" />
         <!-- Trò chuyện: materialize agent thành phiên chat thật (agents.run) —
              chat tự do (không project) kiểu trợ lý cá nhân, hoặc trong một
              project để có workspace context. -->
@@ -244,17 +269,30 @@
         </DropdownMenu>
       </header>
 
-      <div class="agd-body">
-        <div class="agd-main">
-          <div class="agd-hero">
+      <div class="flex min-h-0 flex-auto max-[860px]:flex-col">
+        <div class="min-w-0 flex-auto overflow-y-auto px-6 py-5 [scrollbar-width:thin]">
+          <div class="flex items-start gap-3.5">
             <EntityAvatar :name="detail.name" :seed="agentKey(detail)" size="lg" />
-            <div class="agd-hero-t">
-              <div class="agd-name">
+            <div class="min-w-0 flex-1">
+              <div
+                class="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-foreground"
+              >
                 {{ detail.name }}
-                <span class="tag mono">{{ detail.id }}</span>
-                <span v-if="detail.role" class="tag acc">{{ detail.role }}</span>
+                <!-- font-mono: id agent là định danh người dùng gõ lại (mono-ok). -->
+                <Badge variant="outline" class="font-mono text-muted-foreground">
+                  {{ detail.id }}
+                </Badge>
+                <Badge
+                  v-if="detail.role"
+                  variant="outline"
+                  class="border-primary/40 bg-primary/10 text-primary"
+                >
+                  {{ detail.role }}
+                </Badge>
               </div>
-              <div v-if="detail.description" class="agd-desc">{{ detail.description }}</div>
+              <div v-if="detail.description" class="mt-1 text-sm text-muted-foreground">
+                {{ detail.description }}
+              </div>
             </div>
           </div>
 
@@ -279,7 +317,12 @@
               >
                 <Icon :name="tab.icon" class="size-3.5" />
                 {{ tab.label }}
-                <span v-if="tab.count != null" class="agd-tabc">{{ tab.count }}</span>
+                <span
+                  v-if="tab.count != null"
+                  class="rounded-full bg-muted px-1.5 text-xs text-muted-foreground"
+                >
+                  {{ tab.count }}
+                </span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -287,7 +330,9 @@
           <!-- Instructions = systemPrompt (AGENT.md body). Nút "Chỉnh bằng AI"
                nằm trong header của markdown body (allow-edit) — chung một hàng
                với Render/Raw + Copy, không còn hàng riêng trống trải. -->
-          <div v-if="detailTab === 'instructions'" class="agd-pane">
+          <!-- hook-ok: `.lmb-head` là class gốc của LibraryMarkdownBody — bỏ mt để không
+               thành dải trống to dưới đường tab. -->
+          <div v-if="detailTab === 'instructions'" class="pt-4 [&_.lmb-head]:mt-0">
             <LibraryMarkdownBody
               :title="t('agents.detail.tabInstructions')"
               :content="detail.systemPrompt"
@@ -300,10 +345,12 @@
 
           <!-- Whitelist tabs — same pickers AgentEditor uses, persisted inline
                per toggle via patchAgent → agents.upsert. -->
-          <div v-else-if="detailTab === 'skills'" class="agd-pane">
-            <div class="agd-wl-head">
-              <span class="agd-wl-state">{{ skillsState }}</span>
-              <span v-if="patching" class="agd-wl-state">{{ t('common.saving') }}</span>
+          <div v-else-if="detailTab === 'skills'" class="pt-4">
+            <div class="mb-2 flex items-baseline justify-between gap-2">
+              <span class="text-xs text-muted-foreground tabular-nums">{{ skillsState }}</span>
+              <span v-if="patching" class="text-xs text-muted-foreground tabular-nums">
+                {{ t('common.saving') }}
+              </span>
             </div>
             <AgentSkillsPicker
               :model-value="wlVal('skillIds')"
@@ -312,10 +359,12 @@
             />
           </div>
 
-          <div v-else-if="detailTab === 'tools'" class="agd-pane">
-            <div class="agd-wl-head">
-              <span class="agd-wl-state">{{ toolsState }}</span>
-              <span v-if="patching" class="agd-wl-state">{{ t('common.saving') }}</span>
+          <div v-else-if="detailTab === 'tools'" class="pt-4">
+            <div class="mb-2 flex items-baseline justify-between gap-2">
+              <span class="text-xs text-muted-foreground tabular-nums">{{ toolsState }}</span>
+              <span v-if="patching" class="text-xs text-muted-foreground tabular-nums">
+                {{ t('common.saving') }}
+              </span>
             </div>
             <AgentToolsPicker
               :model-value="wlVal('tools')"
@@ -324,10 +373,12 @@
             />
           </div>
 
-          <div v-else-if="detailTab === 'connections'" class="agd-pane">
-            <div class="agd-wl-head">
-              <span class="agd-wl-state">{{ connectionsState }}</span>
-              <span v-if="patching" class="agd-wl-state">{{ t('common.saving') }}</span>
+          <div v-else-if="detailTab === 'connections'" class="pt-4">
+            <div class="mb-2 flex items-baseline justify-between gap-2">
+              <span class="text-xs text-muted-foreground tabular-nums">{{ connectionsState }}</span>
+              <span v-if="patching" class="text-xs text-muted-foreground tabular-nums">
+                {{ t('common.saving') }}
+              </span>
             </div>
             <AgentConnectionsPicker
               :model-value="wlVal('mcpServerIds')"
@@ -336,10 +387,12 @@
             />
           </div>
 
-          <div v-else-if="detailTab === 'repos'" class="agd-pane">
-            <div class="agd-wl-head">
-              <span class="agd-wl-state">{{ reposState }}</span>
-              <span v-if="patching" class="agd-wl-state">{{ t('common.saving') }}</span>
+          <div v-else-if="detailTab === 'repos'" class="pt-4">
+            <div class="mb-2 flex items-baseline justify-between gap-2">
+              <span class="text-xs text-muted-foreground tabular-nums">{{ reposState }}</span>
+              <span v-if="patching" class="text-xs text-muted-foreground tabular-nums">
+                {{ t('common.saving') }}
+              </span>
             </div>
             <AgentReposPicker
               :model-value="wlVal('repos')"
@@ -349,63 +402,130 @@
           </div>
 
           <!-- Sessions — "session nằm sau agent": mọi phiên đang bind vai này -->
-          <div v-else class="agd-pane">
+          <div v-else class="pt-4">
             <Input
               v-if="agentSessions.length > 4"
               v-model="sessionQ"
               :placeholder="t('common.search')"
-              class="agd-ses-q"
+              class="mb-2.5 w-70"
             />
-            <div v-if="!filteredSessions.length" class="agd-pane-empty">
+            <div
+              v-if="!filteredSessions.length"
+              class="py-6 text-center text-sm text-muted-foreground"
+            >
               {{ t('agents.detail.noSessions') }}
             </div>
-            <button
+            <Button
               v-for="s in filteredSessions"
               :key="s.id"
-              class="agd-run"
+              variant="ghost"
+              class="mb-0.5 h-auto w-full justify-start gap-2.5 px-2.5 py-2 text-left font-normal text-foreground [&_svg]:size-3.5"
               @click="openSession(s)"
             >
-              <span class="agd-run-dot" :style="{ background: statusColor(s) }" />
-              <span class="agd-run-title">{{ s.title }}</span>
-              <span class="agd-run-proj">{{ projectName(s.project) }}</span>
-              <span class="agd-run-when">{{ s.when }}</span>
-              <Icon name="chev" class="size-3.5 text-muted-foreground" />
-            </button>
+              <span class="size-2 shrink-0 rounded-full" :class="statusDot(s)" />
+              <span class="min-w-0 flex-1 truncate">{{ s.title }}</span>
+              <span class="shrink-0 text-xs text-muted-foreground">
+                {{ projectName(s.project) }}
+              </span>
+              <span class="shrink-0 text-xs text-muted-foreground">{{ s.when }}</span>
+              <Icon name="chev" class="text-muted-foreground" />
+            </Button>
           </div>
         </div>
 
-        <aside class="agd-insp">
-          <div class="agd-insp-h">{{ t('agents.detail.props') }}</div>
-          <button class="agd-prop" @click="openEditor(detail)">
-            <span class="agd-prop-l">{{ t('agents.detail.provider') }}</span>
-            <span class="agd-prop-v">{{ providerDisplayName(detail.provider) }}</span>
-          </button>
-          <button class="agd-prop" @click="openEditor(detail)">
-            <span class="agd-prop-l">{{ t('agents.detail.model') }}</span>
-            <span class="agd-prop-v">{{ modelDisplayName(detail.model) }}</span>
-          </button>
-          <button class="agd-prop" @click="openEditor(detail)">
-            <span class="agd-prop-l">{{ t('agents.detail.role') }}</span>
-            <span class="agd-prop-v">{{ detail.role || '—' }}</span>
-          </button>
+        <!-- Inspector rail phải (khuôn Multica); cửa sổ hẹp → xuống dưới pane chính. -->
+        <aside
+          class="w-70 shrink-0 overflow-y-auto border-l py-4 [scrollbar-width:thin] max-[860px]:w-auto max-[860px]:border-t max-[860px]:border-l-0"
+        >
+          <div class="px-4 pb-2 text-xs font-medium text-muted-foreground">
+            {{ t('agents.detail.props') }}
+          </div>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="openEditor(detail)"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.detail.provider') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ providerDisplayName(detail.provider) }}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="openEditor(detail)"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.detail.model') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ modelDisplayName(detail.model) }}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="openEditor(detail)"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.detail.role') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ detail.role || '—' }}
+            </span>
+          </Button>
           <!-- Whitelist props jump to their detail tab (editable inline);
                scalar props still open the full editor. -->
-          <button class="agd-prop" @click="detailTab = 'skills'">
-            <span class="agd-prop-l">{{ t('agents.editor.skills') }}</span>
-            <span class="agd-prop-v">{{ skillsState }}</span>
-          </button>
-          <button class="agd-prop" @click="detailTab = 'tools'">
-            <span class="agd-prop-l">{{ t('agents.detail.tools') }}</span>
-            <span class="agd-prop-v">{{ toolsState }}</span>
-          </button>
-          <button class="agd-prop" @click="detailTab = 'connections'">
-            <span class="agd-prop-l">{{ t('agents.detail.connections') }}</span>
-            <span class="agd-prop-v">{{ connectionsState }}</span>
-          </button>
-          <button class="agd-prop" @click="detailTab = 'repos'">
-            <span class="agd-prop-l">{{ t('agents.editor.repos') }}</span>
-            <span class="agd-prop-v">{{ reposState }}</span>
-          </button>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="detailTab = 'skills'"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.editor.skills') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ skillsState }}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="detailTab = 'tools'"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.detail.tools') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ toolsState }}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="detailTab = 'connections'"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.detail.connections') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ connectionsState }}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            class="h-auto w-full justify-between gap-2 rounded-none px-4 py-1.5 font-normal"
+            @click="detailTab = 'repos'"
+          >
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('agents.editor.repos') }}
+            </span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ reposState }}
+            </span>
+          </Button>
         </aside>
       </div>
     </template>
@@ -500,7 +620,7 @@ import { useProjects } from '~/composables/useProjects'
 import { useRelTime } from '~/composables/useRelTime'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTeamsStore } from '~/stores/teams'
-import { PROVIDER_DISPLAY, STATUS_COLOR, type Session } from '~/composables/useSessionsData'
+import { PROVIDER_DISPLAY, type Session } from '~/composables/useSessionsData'
 import { sidecarErrorText } from '~/composables/useSidecar'
 import type { Agent } from '~/stores/agents'
 
@@ -937,7 +1057,16 @@ const detailTabs = computed(() => {
   ]
 })
 
-const statusColor = (s: Session): string => STATUS_COLOR[s.status] ?? 'var(--muted-foreground)'
+// Chấm trạng thái phiên — class màu ngữ nghĩa (cùng ý nghĩa với STATUS_COLOR ở
+// useSessionsData, nhưng ở dạng utility thay cho var màu inline).
+const STATUS_DOT: Record<Session['status'], string> = {
+  idle: 'bg-faint',
+  streaming: 'bg-primary',
+  awaiting: 'bg-warning',
+  done: 'bg-success',
+  error: 'bg-destructive',
+}
+const statusDot = (s: Session): string => STATUS_DOT[s.status] ?? 'bg-muted-foreground'
 
 function openSession(s: Session): void {
   void sessionsStore.openByEngineId(s.engineId ?? '')
@@ -996,366 +1125,3 @@ const projectListWithPath = computed(() =>
   projects.value.map((p) => ({ id: p.id, name: p.name, path: projectPath(p.id) ?? undefined })),
 )
 </script>
-
-<style scoped>
-.agentspage.page {
-  flex-direction: column;
-  position: relative; /* neo cho .agt-bulk nổi đáy */
-}
-/* ── Toolbar (search + filter) ── */
-.agt-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.agt-flex {
-  flex: 1;
-}
-.agt-bar :deep(.appselect) {
-  min-width: 150px;
-}
-
-/* ── Identity cell: avatar + name/desc hai dòng (64px row) ── */
-.agt-id {
-  gap: 10px;
-}
-/* Chấm "live" đè góc avatar — Multica agents-page overlay. */
-.agt-avw {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-}
-.agt-avdot {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--success);
-  /* Viền khớp nền row (--background của CollectionList) để chấm "cắt" avatar. */
-  border: 2px solid var(--background);
-}
-/* Status cell: dot + label (Active accent / Idle muted). */
-.agt-st {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-}
-.agt-std {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted-foreground);
-}
-.agt-st.on {
-  color: var(--success);
-}
-.agt-st.on .agt-std {
-  background: var(--success);
-}
-/* Runs — cột số căn phải (khuôn bảng Multica). */
-.agt-runs {
-  justify-content: flex-end;
-  font-variant-numeric: tabular-nums;
-}
-.agt-head-r {
-  text-align: right;
-}
-.agt-idt {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.agt-name {
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.agt-desc {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.agt-kebab {
-  justify-content: flex-end;
-}
-.agt-kebab .agt-kebab-btn {
-  opacity: 0;
-  transition: opacity 0.1s ease;
-}
-.cl-row:hover .agt-kebab .agt-kebab-btn,
-.agt-kebab .agt-kebab-btn:focus-visible {
-  opacity: 1;
-}
-/* Checkbox col + hàng được chọn */
-.agt-check,
-.agt-checkhead {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-.cl-row-sel {
-  background: var(--accent-wash);
-}
-/* Bulk bar nổi — đáy giữa. */
-.agt-bulk {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--popover);
-  box-shadow: var(--shadow-lg);
-}
-.agt-bulk-n {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--foreground);
-  padding-right: 4px;
-}
-
-/* ── Empty state ── */
-.agt-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.agt-empty-ic {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  margin-bottom: 4px;
-}
-.agt-empty-t {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--foreground);
-}
-.agt-empty-d {
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  margin-bottom: 8px;
-}
-
-/* ── Detail: back header ── */
-.agd-back {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 48px;
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--border);
-}
-.agd-back-t {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--foreground);
-}
-.agd-flex {
-  flex: 1;
-}
-
-/* ── Detail body: main pane + inspector rail ── */
-.agd-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-.agd-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 20px 24px;
-}
-.agd-hero {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.agd-hero-t {
-  min-width: 0;
-  flex: 1;
-}
-.agd-name {
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--foreground);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.agd-desc {
-  margin-top: 4px;
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  line-height: var(--lh-sm);
-}
-.agd-tabc {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  background: var(--muted);
-  border-radius: var(--r-pill);
-  padding: 0 6px;
-}
-.agd-pane {
-  padding-top: 16px;
-}
-/* Instructions pane: markdown body's own header has margin-top 20px — kết hợp
-   với pane padding thành một dải trống to dưới tab line. Xoá cho pane này. */
-.agd-pane :deep(.lmb-head) {
-  margin-top: 0;
-}
-/* Whitelist tab pane — full pane width; state line mirrors the inspector
-   value (all / {n} allowed / inherit). */
-.agd-wl-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.agd-wl-state {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-.agd-ses-q {
-  width: 280px;
-  margin-bottom: 10px;
-}
-.agd-pane-empty {
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  padding: 24px 0;
-  text-align: center;
-}
-.agd-run {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  margin-bottom: 2px;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  font-family: var(--sans);
-  cursor: pointer;
-  text-align: left;
-}
-.agd-run:hover {
-  background: var(--accent-wash);
-}
-.agd-run-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.agd-run-title {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.agd-run-proj,
-.agd-run-when {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  flex: 0 0 auto;
-}
-
-/* ── Inspector rail (khuôn 300px phải của Multica) ── */
-.agd-insp {
-  flex: 0 0 280px;
-  border-left: 1px solid var(--border);
-  padding: 16px 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-.agd-insp-h {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-  padding: 0 16px 8px;
-}
-.agd-prop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 16px;
-  background: none;
-  border: none;
-  font-family: var(--sans);
-  text-align: left;
-  cursor: default;
-}
-button.agd-prop {
-  cursor: pointer;
-}
-button.agd-prop:hover {
-  background: var(--accent-wash);
-}
-.agd-prop-l {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  flex: 0 0 auto;
-}
-.agd-prop-v {
-  font-size: var(--fs-xs);
-  color: var(--foreground);
-  text-align: right;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@media (max-width: 860px) {
-  .agd-body {
-    flex-direction: column;
-  }
-  .agd-insp {
-    flex: 0 0 auto;
-    border-left: none;
-    border-top: 1px solid var(--border);
-  }
-}
-</style>

@@ -8,204 +8,240 @@
 
        LƯU ĐƯỢC BẢN CÒN THIẾU BƯỚC QUAY LUI. Sidecar cố ý cho lưu bản nháp dở và chỉ
        chặn ở `submit`. Vì vậy dải cảnh báo quay lui là CẢNH BÁO — nó không khoá nút Lưu,
-       và nói rõ chỗ sẽ bị chặn là lúc gửi duyệt. -->
-  <Teleport to="body">
-    <div v-if="open" class="ovl on" @click.self="close">
-      <div class="pbe" role="dialog" aria-modal="true">
-        <header class="pbe-hd">
-          <Icon name="edit" class="pbe-hd-ic" />
-          <span class="pbe-ttl">
-            {{ t(mode === 'edit' ? 'playbooks.editor.titleEdit' : 'playbooks.editor.titleNew') }}
-          </span>
-          <span class="pbe-gap" />
-          <span class="pbe-id-preview" :title="t('playbooks.editor.idWhy')">
-            {{ effectiveId }}.md
-          </span>
-        </header>
+       và nói rõ chỗ sẽ bị chặn là lúc gửi duyệt.
 
-        <div class="pbe-body">
-          <!-- ── Nhận dạng ───────────────────────────────────────────────── -->
-          <div class="pbe-row">
-            <label class="pbe-fld pbe-grow">
-              <span class="pbe-lbl">{{ t('playbooks.editor.name') }}</span>
-              <Input
-                v-model="form.name"
-                type="text"
-                maxlength="160"
-                autocomplete="off"
-                :placeholder="t('playbooks.editor.namePlaceholder')"
-              />
-            </label>
-            <label class="pbe-fld">
-              <span class="pbe-lbl">{{ t('playbooks.editor.kind') }}</span>
-              <AppSelect v-model="kind" :options="kindOptions" width="160px" />
-            </label>
-          </div>
+       Dialog shadcn (reka): bấm nền là đóng như hộp cũ; Esc bị chặn (`escape-key-down`
+       preventDefault) để giữ đúng hành vi cũ — hộp soạn dài không được mất bản nháp
+       vì một phím. `[role=dialog][data-state=open]` đã có trong OVERLAYS. -->
+  <Dialog :open="open" @update:open="(v: boolean) => !v && close()">
+    <DialogContent
+      class="flex max-h-[88vh] w-[94vw] max-w-215 flex-col gap-0 overflow-hidden bg-card p-0 sm:rounded-2xl"
+      @escape-key-down="(e: KeyboardEvent) => e.preventDefault()"
+    >
+      <!-- Hairline dưới thanh cao cố định = inset box-shadow, không border (border ăn
+           1px của chiều cao và đẩy con căn giữa vào nửa pixel). -->
+      <DialogHeader
+        class="h-11.5 shrink-0 flex-row items-center gap-2 px-3.5 pr-12 shadow-[inset_0_-1px_0_var(--border)]"
+      >
+        <Icon name="edit" class="size-3.5 text-dim" />
+        <DialogTitle class="text-base font-normal text-foreground">
+          {{ t(mode === 'edit' ? 'playbooks.editor.titleEdit' : 'playbooks.editor.titleNew') }}
+        </DialogTitle>
+        <span class="flex-1" />
+        <!-- mono-ok: tên file thật trên đĩa -->
+        <span class="font-mono text-xs text-faint" :title="t('playbooks.editor.idWhy')">
+          {{ effectiveId }}.md
+        </span>
+      </DialogHeader>
 
-          <label class="pbe-fld">
-            <span class="pbe-lbl">{{ t('playbooks.editor.description') }}</span>
-            <textarea
-              v-model="form.description"
-              class="pbe-inp pbe-area"
-              rows="2"
-              maxlength="1000"
-              :placeholder="t('playbooks.editor.descriptionPlaceholder')"
+      <div class="flex flex-col gap-3 overflow-y-auto p-3.5">
+        <!-- ── Nhận dạng ───────────────────────────────────────────────── -->
+        <div class="flex flex-wrap items-end gap-2.5">
+          <label class="flex min-w-50 flex-1 flex-col gap-1">
+            <span class="text-xs text-dim">{{ t('playbooks.editor.name') }}</span>
+            <Input
+              v-model="form.name"
+              type="text"
+              maxlength="160"
+              autocomplete="off"
+              :placeholder="t('playbooks.editor.namePlaceholder')"
             />
           </label>
-
-          <!-- ── Nơi lưu ─────────────────────────────────────────────────── -->
-          <!-- Khoá khi sửa: đổi tier là DI CHUYỂN file sang thư mục khác, không phải
-               sửa nội dung. Muốn chuyển thì nhân bản sang nơi mới rồi xoá bản cũ. -->
-          <div class="pbe-row">
-            <label class="pbe-fld">
-              <span class="pbe-lbl">{{ t('playbooks.editor.tier') }}</span>
-              <AppSelect
-                v-model="tier"
-                :options="tierOptions"
-                width="170px"
-                :disabled="mode === 'edit'"
-              />
-            </label>
-            <label v-if="form.tier === 'project'" class="pbe-fld pbe-grow">
-              <span class="pbe-lbl">{{ t('playbooks.editor.project') }}</span>
-              <AppSelect
-                v-model="form.projectId"
-                :options="projectOptions"
-                width="100%"
-                :disabled="mode === 'edit'"
-                :placeholder="t('playbooks.editor.projectPlaceholder')"
-              />
-            </label>
-          </div>
-
-          <!-- ── Biến ────────────────────────────────────────────────────── -->
-          <section class="pbe-sec">
-            <div class="pbe-sec-hd">
-              <span class="pbe-sec-ttl">{{ t('playbooks.editor.variables') }}</span>
-              <span class="pbe-sec-hint">{{ t('playbooks.editor.variablesWhy') }}</span>
-              <span class="pbe-gap" />
-              <Button
-                type="button"
-                :disabled="form.variables.length >= MAX_VARIABLES"
-                variant="outline"
-                size="sm"
-                @click="addVariable"
-              >
-                <Icon name="plus" class="pbe-ic" />
-                {{ t('playbooks.editor.addVariable') }}
-              </Button>
-            </div>
-
-            <ul v-if="form.variables.length" class="pbe-vars">
-              <li v-for="(v, i) in form.variables" :key="i" class="pbe-var">
-                <Input
-                  v-model="v.name"
-                  type="text"
-                  maxlength="64"
-                  spellcheck="false"
-                  :placeholder="t('playbooks.editor.varNamePlaceholder')"
-                  class="pbe-var-name"
-                />
-                <Input
-                  v-model="v.label"
-                  type="text"
-                  maxlength="160"
-                  :placeholder="t('playbooks.editor.varLabelPlaceholder')"
-                  class="pbe-grow"
-                />
-                <Input
-                  v-model="v.default"
-                  type="text"
-                  maxlength="1024"
-                  spellcheck="false"
-                  :placeholder="t('playbooks.editor.varDefaultPlaceholder')"
-                  class="pbe-var-def"
-                />
-                <label class="pbe-req" :title="t('playbooks.editor.varRequiredWhy')">
-                  <input v-model="v.required" type="checkbox" />
-                  {{ t('playbooks.editor.varRequired') }}
-                </label>
-                <button
-                  class="pbe-ibtn danger"
-                  type="button"
-                  :title="t('playbooks.editor.removeVariable')"
-                  @click="removeVariable(i)"
-                >
-                  <Icon name="trash" class="pbe-ic" />
-                </button>
-              </li>
-            </ul>
-            <p v-else class="pbe-empty">{{ t('playbooks.editor.noVariables') }}</p>
-          </section>
-
-          <!-- ── Bước ────────────────────────────────────────────────────── -->
-          <section class="pbe-sec">
-            <div class="pbe-sec-hd">
-              <span class="pbe-sec-ttl">{{ t('playbooks.editor.steps') }}</span>
-              <span class="pbe-sec-hint">{{ t('playbooks.editor.stepsWhy') }}</span>
-              <span class="pbe-gap" />
-              <Button
-                v-for="v in EDITOR_VERBS"
-                :key="v"
-                type="button"
-                :disabled="form.steps.length >= MAX_STEPS"
-                :title="t(`playbooks.editor.addStepWhy.${v}`)"
-                variant="outline"
-                size="sm"
-                @click="addStep(v)"
-              >
-                <Icon name="plus" class="pbe-ic" />
-                {{ t(`playbooks.verb.${v}`) }}
-              </Button>
-            </div>
-
-            <!-- Cảnh báo, KHÔNG phải lỗi: bản nháp thiếu bước quay lui vẫn lưu được —
-                 nó chỉ không gửi duyệt được. Câu chữ nói đúng chỗ sẽ bị chặn. -->
-            <p v-if="missingRollback > 0" class="pbe-warn">
-              <Icon name="alert" class="pbe-ic" />
-              {{ t('playbooks.editor.missingRollback', { n: missingRollback }) }}
-            </p>
-
-            <ul class="pbe-steps">
-              <PlaybookEditorStep
-                v-for="(s, i) in form.steps"
-                :key="i"
-                v-model="form.steps[i]!"
-                :index="i"
-                :is-last="i === form.steps.length - 1"
-                @move="(d) => moveStep(i, d)"
-                @remove="removeStep(i)"
-              />
-            </ul>
-          </section>
-
-          <!-- Lỗi của chính hộp này (chặn Lưu) rồi tới lỗi sidecar trả về sau một lượt
-               lưu hỏng — hai nguồn khác nhau nên không gộp thành một danh sách. -->
-          <ul v-if="blockingErrors.length" class="pbe-errs">
-            <li v-for="(e, i) in blockingErrors" :key="i">{{ e }}</li>
-          </ul>
-          <ul v-if="issues.length" class="pbe-errs">
-            <li v-for="(iss, i) in issues" :key="i">{{ issueText(iss) }}</li>
-          </ul>
+          <label class="flex min-w-0 flex-col gap-1">
+            <span class="text-xs text-dim">{{ t('playbooks.editor.kind') }}</span>
+            <AppSelect v-model="kind" :options="kindOptions" width="160px" />
+          </label>
         </div>
 
-        <footer class="pbe-ft">
-          <Button type="button" :disabled="saving" variant="outline" @click="close">
-            {{ t('common.cancel') }}
-          </Button>
-          <Button
-            type="button"
-            :disabled="!canSave"
-            :aria-busy="saving"
-            variant="default"
-            @click="onSave"
+        <label class="flex min-w-0 flex-col gap-1">
+          <span class="text-xs text-dim">{{ t('playbooks.editor.description') }}</span>
+          <Textarea
+            :model-value="form.description"
+            class="min-h-12 resize-y"
+            rows="2"
+            maxlength="1000"
+            :placeholder="t('playbooks.editor.descriptionPlaceholder')"
+            @update:model-value="(v: string | number) => (form.description = String(v))"
+          />
+        </label>
+
+        <!-- ── Nơi lưu ─────────────────────────────────────────────────── -->
+        <!-- Khoá khi sửa: đổi tier là DI CHUYỂN file sang thư mục khác, không phải
+             sửa nội dung. Muốn chuyển thì nhân bản sang nơi mới rồi xoá bản cũ. -->
+        <div class="flex flex-wrap items-end gap-2.5">
+          <label class="flex min-w-0 flex-col gap-1">
+            <span class="text-xs text-dim">{{ t('playbooks.editor.tier') }}</span>
+            <AppSelect
+              v-model="tier"
+              :options="tierOptions"
+              width="170px"
+              :disabled="mode === 'edit'"
+            />
+          </label>
+          <label v-if="form.tier === 'project'" class="flex min-w-50 flex-1 flex-col gap-1">
+            <span class="text-xs text-dim">{{ t('playbooks.editor.project') }}</span>
+            <AppSelect
+              v-model="form.projectId"
+              :options="projectOptions"
+              width="100%"
+              :disabled="mode === 'edit'"
+              :placeholder="t('playbooks.editor.projectPlaceholder')"
+            />
+          </label>
+        </div>
+
+        <!-- ── Biến ────────────────────────────────────────────────────── -->
+        <section class="flex flex-col gap-2 border-t pt-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-base text-foreground">{{ t('playbooks.editor.variables') }}</span>
+            <span class="text-xs text-faint">{{ t('playbooks.editor.variablesWhy') }}</span>
+            <span class="flex-1" />
+            <Button
+              type="button"
+              :disabled="form.variables.length >= MAX_VARIABLES"
+              variant="outline"
+              size="sm"
+              @click="addVariable"
+            >
+              <Icon name="plus" />
+              {{ t('playbooks.editor.addVariable') }}
+            </Button>
+          </div>
+
+          <ul v-if="form.variables.length" class="m-0 flex list-none flex-col gap-2 p-0">
+            <li
+              v-for="(v, i) in form.variables"
+              :key="i"
+              class="flex flex-wrap items-center gap-1.5"
+            >
+              <!-- mono-ok: tên biến đi vào placeholder {{tên}} của argv -->
+              <Input
+                v-model="v.name"
+                type="text"
+                maxlength="64"
+                spellcheck="false"
+                :placeholder="t('playbooks.editor.varNamePlaceholder')"
+                class="w-37.5 font-mono"
+              />
+              <Input
+                v-model="v.label"
+                type="text"
+                maxlength="160"
+                :placeholder="t('playbooks.editor.varLabelPlaceholder')"
+                class="w-auto min-w-50 flex-1"
+              />
+              <!-- mono-ok: giá trị nội suy thẳng vào argv -->
+              <Input
+                v-model="v.default"
+                type="text"
+                maxlength="1024"
+                spellcheck="false"
+                :placeholder="t('playbooks.editor.varDefaultPlaceholder')"
+                class="w-40 font-mono"
+              />
+              <Label
+                class="cursor-pointer gap-1 text-xs font-normal whitespace-nowrap text-dim"
+                :title="t('playbooks.editor.varRequiredWhy')"
+              >
+                <Checkbox
+                  :model-value="v.required"
+                  @update:model-value="v.required = $event === true"
+                />
+                {{ t('playbooks.editor.varRequired') }}
+              </Label>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="text-dim hover:bg-destructive/10 hover:text-destructive"
+                :title="t('playbooks.editor.removeVariable')"
+                :aria-label="t('playbooks.editor.removeVariable')"
+                @click="removeVariable(i)"
+              >
+                <Icon name="trash" />
+              </Button>
+            </li>
+          </ul>
+          <p v-else class="text-xs leading-(--lh-sm) text-faint">
+            {{ t('playbooks.editor.noVariables') }}
+          </p>
+        </section>
+
+        <!-- ── Bước ────────────────────────────────────────────────────── -->
+        <section class="flex flex-col gap-2 border-t pt-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-base text-foreground">{{ t('playbooks.editor.steps') }}</span>
+            <span class="text-xs text-faint">{{ t('playbooks.editor.stepsWhy') }}</span>
+            <span class="flex-1" />
+            <Button
+              v-for="v in EDITOR_VERBS"
+              :key="v"
+              type="button"
+              :disabled="form.steps.length >= MAX_STEPS"
+              :title="t(`playbooks.editor.addStepWhy.${v}`)"
+              variant="outline"
+              size="sm"
+              @click="addStep(v)"
+            >
+              <Icon name="plus" />
+              {{ t(`playbooks.verb.${v}`) }}
+            </Button>
+          </div>
+
+          <!-- Cảnh báo, KHÔNG phải lỗi: bản nháp thiếu bước quay lui vẫn lưu được —
+               nó chỉ không gửi duyệt được. Câu chữ nói đúng chỗ sẽ bị chặn. -->
+          <p
+            v-if="missingRollback > 0"
+            class="flex items-start gap-1.5 text-xs leading-(--lh-sm) text-warning"
           >
-            {{ t('playbooks.editor.save') }}
-          </Button>
-        </footer>
+            <Icon name="alert" class="size-3 shrink-0" />
+            {{ t('playbooks.editor.missingRollback', { n: missingRollback }) }}
+          </p>
+
+          <ul class="m-0 flex list-none flex-col gap-2 p-0">
+            <PlaybookEditorStep
+              v-for="(s, i) in form.steps"
+              :key="i"
+              v-model="form.steps[i]!"
+              :index="i"
+              :is-last="i === form.steps.length - 1"
+              @move="(d) => moveStep(i, d)"
+              @remove="removeStep(i)"
+            />
+          </ul>
+        </section>
+
+        <!-- Lỗi của chính hộp này (chặn Lưu) rồi tới lỗi sidecar trả về sau một lượt
+             lưu hỏng — hai nguồn khác nhau nên không gộp thành một danh sách. -->
+        <ul
+          v-if="blockingErrors.length"
+          class="m-0 flex list-disc flex-col gap-0.5 pl-4.5 text-xs leading-(--lh-sm) text-destructive"
+        >
+          <li v-for="(e, i) in blockingErrors" :key="i">{{ e }}</li>
+        </ul>
+        <ul
+          v-if="issues.length"
+          class="m-0 flex list-disc flex-col gap-0.5 pl-4.5 text-xs leading-(--lh-sm) text-destructive"
+        >
+          <li v-for="(iss, i) in issues" :key="i">{{ issueText(iss) }}</li>
+        </ul>
       </div>
-    </div>
-  </Teleport>
+
+      <DialogFooter class="shrink-0 gap-2 px-3.5 py-2.5 shadow-[inset_0_1px_0_var(--border)]">
+        <Button type="button" :disabled="saving" variant="outline" @click="close">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button
+          type="button"
+          :disabled="!canSave"
+          :aria-busy="saving"
+          variant="default"
+          @click="onSave"
+        >
+          {{ t('playbooks.editor.save') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -292,222 +328,3 @@ async function onSave(): Promise<void> {
   if (target) emit('saved', target)
 }
 </script>
-
-<style scoped>
-.pbe {
-  display: flex;
-  flex-direction: column;
-  width: min(860px, 94vw);
-  max-height: 88vh;
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  background: var(--bgPanel);
-  overflow: hidden;
-}
-
-.pbe-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  height: 46px;
-  flex-shrink: 0;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.pbe-hd-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-}
-
-.pbe-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.pbe-gap {
-  flex: 1;
-}
-
-.pbe-id-preview {
-  font-family: var(--code); /* mono-ok: tên file thật trên đĩa */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.pbe-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  overflow-y: auto;
-}
-
-.pbe-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.pbe-fld {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.pbe-grow {
-  flex: 1;
-  min-width: 200px;
-}
-
-.pbe-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.pbe-inp {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pbe-area {
-  resize: vertical;
-  min-height: 3rem;
-}
-
-.pbe-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.pbe-sec-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pbe-sec-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.pbe-sec-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.pbe-vars,
-.pbe-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pbe-var {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.pbe-var-name {
-  width: 150px;
-  font-family: var(--code); /* mono-ok: tên biến đi vào placeholder {{tên}} của argv */
-}
-
-.pbe-var-def {
-  width: 160px;
-  font-family: var(--code); /* mono-ok: giá trị nội suy thẳng vào argv */
-}
-
-.pbe-req {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  white-space: nowrap;
-}
-
-.pbe-empty {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-.pbe-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-}
-
-.pbe-errs {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  padding-left: 18px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-
-.pbe-ibtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-
-.pbe-ibtn.danger:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-
-.pbe-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex-shrink: 0;
-}
-
-.pbe-ft {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 14px;
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 0 var(--border);
-}
-</style>

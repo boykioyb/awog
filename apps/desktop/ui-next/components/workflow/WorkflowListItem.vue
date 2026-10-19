@@ -1,30 +1,65 @@
 <template>
-  <div class="libli wfli" :class="{ on: selected }" @click="emit('select')">
-    <div class="lrow">
-      <Icon name="workflows" class="wfli-icn" />
+  <div
+    class="group mb-0.5 cursor-pointer rounded-md border px-3 py-2"
+    :class="
+      selected
+        ? 'border-selected-border bg-selected shadow-[inset_2px_0_0_var(--color-primary)]'
+        : 'border-transparent hover:bg-accent'
+    "
+    @click="emit('select')"
+  >
+    <div class="flex items-center gap-2">
+      <Icon
+        name="workflows"
+        class="size-3.5 shrink-0"
+        :class="selected ? 'text-primary' : 'text-dim'"
+      />
       <Input
         v-if="renaming"
         ref="inputEl"
         :model-value="renameValue"
-        class="wfli-rename mono"
+        class="h-ctrl-xs min-w-0 flex-1 border-selected-border px-2 font-mono text-sm font-medium"
         @click.stop
         @keydown.enter="emit('commit-rename')"
         @keydown.escape="emit('cancel-rename')"
         @blur="emit('commit-rename')"
         @update:model-value="emit('update:renameValue', $event)"
       />
-      <span v-else class="ttl" @dblclick.stop="emit('start-rename')">{{ workflow.name }}</span>
-      <button class="wfli-del" :title="t('common.delete')" @click.stop="emit('delete')">
-        <Icon name="trash" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+      <span
+        v-else
+        class="min-w-0 flex-1 truncate text-base"
+        :class="selected ? 'font-semibold text-foreground' : 'font-medium'"
+        @dblclick.stop="emit('start-rename')"
+      >
+        {{ workflow.name }}
+      </span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim opacity-55 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+        :title="t('common.delete')"
+        @click.stop="emit('delete')"
+      >
+        <Icon name="trash" class="size-3" />
+      </Button>
     </div>
-    <div class="sub">
-      <span>
+    <div class="mt-1 flex items-center justify-between gap-1.5 text-sm text-muted-foreground">
+      <span class="truncate">
         {{
           t('workflow.item.meta', { nodes: workflow.nodes.length, edges: workflow.edges.length })
         }}
       </span>
-      <span class="tag" :class="{ acc: workflow.source === 'project' }">{{ scopeLabel }}</span>
+      <Badge
+        variant="outline"
+        class="rounded-sm"
+        :class="
+          workflow.source === 'project'
+            ? 'border-primary/40 bg-primary/10 text-primary'
+            : 'text-muted-foreground'
+        "
+      >
+        {{ scopeLabel }}
+      </Badge>
     </div>
   </div>
 </template>
@@ -36,6 +71,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type { Workflow } from '~/stores/workflows'
 import Input from '~/components/ui/input/Input.vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   workflow: Workflow
@@ -78,56 +114,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.wfli .lrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wfli-icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.wfli.on .wfli-icn {
-  color: var(--accent);
-}
-.wfli-rename {
-  flex: 1;
-  min-width: 0;
-  background: var(--bgInput);
-  border: 1px solid var(--accentBorder);
-  border-radius: var(--r-xs);
-  padding: 2px 7px;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  outline: none;
-}
-.wfli-del {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-xs);
-  border: 0;
-  background: transparent;
-  color: var(--textDim);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  opacity: 0.55;
-  flex: 0 0 auto;
-}
-.wfli:hover .wfli-del {
-  opacity: 1;
-}
-.wfli-del:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.wfli .sub {
-  justify-content: space-between;
-}
-</style>

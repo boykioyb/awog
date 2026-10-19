@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="git" style="flex-direction: column">
+  <section class="flex min-w-0 flex-1 flex-col overflow-hidden" data-page="git">
     <GitManager />
   </section>
 </template>

@@ -1,18 +1,35 @@
 <template>
-  <section class="page on" data-page="workflows">
-    <div class="md">
-      <!-- list sidebar: header + scope filter + workflow list + agent palette -->
-      <div class="list wflist">
-        <div class="wflist-hd">
-          <div class="wflist-title">{{ t('workflow.header') }}</div>
-          <Button :title="t('workflow.new')" variant="outline" size="iconMd" @click="openCreator">
-            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="workflows">
+    <!-- relative: neo drawer list ở chế độ hẹp (useResponsiveShell). -->
+    <div class="relative flex min-w-0 flex-1 overflow-hidden">
+      <!-- list sidebar: header + scope filter + workflow list + agent palette.
+           Chế độ hẹp (compact) → drawer trượt từ cạnh trái, bật/tắt bằng listOpen
+           (nút ở AppTopBar, scrim ở layout). -->
+      <div
+        class="flex w-70 shrink-0 flex-col overflow-hidden border-r bg-sidebar"
+        :class="
+          compact && [
+            'absolute inset-y-0 left-0 z-91 max-w-[82vw] shadow-lg transition-transform duration-200 motion-reduce:transition-none',
+            listOpen ? 'translate-x-0' : '-translate-x-full',
+          ]
+        "
+      >
+        <div class="flex shrink-0 items-center justify-between gap-2 border-b p-3">
+          <div class="text-xs font-medium text-muted-foreground">{{ t('workflow.header') }}</div>
+          <Button
+            :title="t('workflow.new')"
+            :aria-label="t('workflow.new')"
+            variant="outline"
+            size="iconMd"
+            @click="openCreator"
+          >
+            <Icon name="plus" />
           </Button>
         </div>
-        <div class="wflist-scope">
+        <div class="shrink-0 border-b px-3 py-2">
           <AppSelect v-model="scopeFilter" :options="scopeOptions" width="100%" />
         </div>
-        <div class="wflist-scroll">
+        <div class="max-h-[42%] shrink-0 overflow-y-auto p-2">
           <WorkflowListItem
             v-for="wf in displayedWorkflows"
             :key="`${wf.source ?? 'global'}:${wf.projectId ?? ''}:${wf.id}`"
@@ -27,7 +44,7 @@
             @commit-rename="commitRename"
             @cancel-rename="cancelRename"
           />
-          <div v-if="!displayedWorkflows.length" class="wflist-empty">
+          <div v-if="!displayedWorkflows.length" class="px-2 py-4 text-center text-sm text-faint">
             {{ t('workflow.empty') }}
           </div>
         </div>
@@ -47,12 +64,14 @@
         @update:selected-node="onSelectNode"
         @run="onRun"
       />
-      <div v-else class="detail">
-        <div class="empty">
-          <span class="ei">
-            <Icon name="workflows" style="width: var(--icon-lg); height: var(--icon-lg)" />
+      <div v-else class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <div
+          class="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"
+        >
+          <span class="grid size-12 place-items-center rounded-xl border bg-card">
+            <Icon name="workflows" class="size-5" />
           </span>
-          <div class="et">{{ t('workflow.emptyDetail') }}</div>
+          <div class="text-lg">{{ t('workflow.emptyDetail') }}</div>
         </div>
       </div>
 
@@ -108,6 +127,7 @@ import { useWorkflowsPage } from '~/composables/useWorkflowsPage'
 import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
+const { compact, listOpen } = useResponsiveShell()
 
 const {
   projectList,
@@ -157,41 +177,3 @@ const canvasScopeLabel = computed(() => {
   return t('workflow.scope.global')
 })
 </script>
-
-<style scoped>
-.wflist {
-  flex: 0 0 280px;
-}
-.wflist-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 11px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.wflist-title {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.wflist-scope {
-  padding: 9px 11px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.wflist-scroll {
-  overflow-y: auto;
-  padding: 7px;
-  max-height: 42%;
-  flex: 0 0 auto;
-}
-.wflist-empty {
-  padding: 16px 9px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-  text-align: center;
-}
-</style>

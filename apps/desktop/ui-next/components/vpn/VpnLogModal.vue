@@ -1,22 +1,29 @@
 <template>
   <LibraryEntityModal :open="open" :title="title" :width="760" @close="emit('close')">
     <template #header-extra>
-      <span class="vlog-status" :style="{ color: statusColor }">
-        <span class="vlog-dot" :style="{ background: statusColor }" />
+      <Badge variant="outline" :class="statusBadge">
+        <span class="size-2 shrink-0 rounded-full bg-current" />
         {{ statusLabel }}
-      </span>
+      </Badge>
     </template>
 
-    <div ref="scroller" class="vlog-body">
-      <div v-if="!lines.length" class="vlog-empty">{{ emptyText }}</div>
-      <pre v-else class="vlog-pre">{{ lines.join('\n') }}</pre>
+    <div
+      ref="scroller"
+      class="h-[52vh] overflow-y-auto rounded-lg border bg-background px-3.5 py-3"
+    >
+      <div v-if="!lines.length" class="px-0.5 py-1.5 text-base text-muted-foreground">
+        {{ emptyText }}
+      </div>
+      <pre v-else class="whitespace-pre-wrap font-mono text-sm wrap-anywhere text-foreground">{{
+        lines.join('\n')
+      }}</pre>
     </div>
 
     <template #footer>
       <Button :disabled="!lines.length" variant="outline" @click="onClear">
         {{ t('vpn.log.clear') }}
       </Button>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('close')">{{ t('common.close') }}</Button>
     </template>
   </LibraryEntityModal>
@@ -28,7 +35,8 @@
 // Auto-scrolls to the tail as new lines arrive. Read-only; Clear drops the buffer.
 import { computed, nextTick, useTemplateRef, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
-import { useVpnStore, VPN_STATUS_COLORS, type VpnStatus } from '~/stores/vpn'
+import { useVpnStore, type VpnStatus } from '~/stores/vpn'
+import { VPN_STATUS_BADGE } from '~/components/vpn/vpn-status'
 import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
@@ -45,7 +53,7 @@ const store = useVpnStore()
 
 const lines = computed(() => (props.id ? store.logsOf(props.id) : []))
 const title = computed(() => t('vpn.log.title', { name: props.name }))
-const statusColor = computed(() => VPN_STATUS_COLORS[props.status])
+const statusBadge = computed(() => VPN_STATUS_BADGE[props.status])
 const statusLabel = computed(() => t(`vpn.status.${props.status}`))
 // While connecting, openvpn output streams in shortly (it may still be authorizing /
 // starting) — so don't tell the user to "click Connect" (they already did).
@@ -71,42 +79,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-.vlog-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 12px;
-}
-.vlog-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.vlog-body {
-  height: 52vh;
-  overflow-y: auto;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  background: var(--bg);
-  padding: 12px 14px;
-}
-.vlog-empty {
-  color: var(--textDim);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  padding: 6px 2px;
-}
-.vlog-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--text);
-}
-</style>

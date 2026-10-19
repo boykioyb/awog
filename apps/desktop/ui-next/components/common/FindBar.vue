@@ -1,60 +1,74 @@
 <template>
-  <div class="pvfind" role="search">
-    <Icon name="search" class="pvfico" />
+  <!-- Overlay ghim góc phải-trên của thẻ preview, nổi trên nội dung không đẩy layout
+       (cùng kiểu overlay toolbar). -->
+  <div
+    class="absolute top-2.5 right-3.5 z-9 flex items-center gap-1 rounded-lg border bg-popover px-1.5 py-1 shadow-md"
+    role="search"
+  >
+    <Icon name="search" class="mx-0.5 size-3.5 flex-none text-muted-foreground" />
     <Input
       ref="inputRef"
       v-model="query"
       unstyled
-      :class="['pvfinput', { noresult }]"
+      class="h-ctrl-xs min-h-0 w-47.5 rounded-sm border border-transparent bg-muted px-1.5 text-foreground focus-visible:border-input focus-visible:ring-1 focus-visible:ring-ring"
+      :class="{ 'border-destructive focus-visible:border-destructive': noresult }"
       spellcheck="false"
       :placeholder="placeholder"
       @keydown.enter.prevent="onEnter"
     />
-    <span v-if="status || query.trim()" class="pvfcount" :class="{ noresult }">
+    <span
+      v-if="status || query.trim()"
+      class="px-1 text-sm whitespace-nowrap tabular-nums"
+      :class="noresult ? 'text-destructive' : 'text-muted-foreground'"
+    >
       {{ status || (noresult ? t('common.find.noResults') : `${current}/${total}`) }}
     </span>
-    <button
-      class="pvfbtn"
-      :class="{ on: matchCase }"
+    <Toggle
+      size="sm"
+      class="h-ctrl-xs min-w-ctrl-xs px-1.5 font-normal text-muted-foreground hover:bg-accent hover:text-accent-foreground data-[state=on]:bg-accent data-[state=on]:text-primary"
+      :model-value="matchCase"
       :title="t('common.find.matchCase')"
       :aria-label="t('common.find.matchCase')"
-      :aria-pressed="matchCase"
-      @click="matchCase = !matchCase"
+      @update:model-value="(v: boolean) => (matchCase = v)"
     >
       Aa
-    </button>
-    <button
-      class="pvfbtn"
+    </Toggle>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground [&_svg]:size-4"
       :disabled="!total"
       :title="t('common.find.prev')"
       :aria-label="t('common.find.prev')"
       @click="emit('prev')"
     >
-      <Icon name="chev-left" style="width: var(--icon-md); height: var(--icon-md)" />
-    </button>
-    <button
-      class="pvfbtn"
+      <Icon name="chev-left" />
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground [&_svg]:size-4"
       :disabled="!total"
       :title="t('common.find.next')"
       :aria-label="t('common.find.next')"
       @click="emit('next')"
     >
-      <Icon name="chev-right" style="width: var(--icon-md); height: var(--icon-md)" />
-    </button>
-    <button
-      class="pvfbtn"
+      <Icon name="chev-right" />
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground"
       :title="t('common.find.close')"
       :aria-label="t('common.find.close')"
       @click="emit('close')"
     >
-      <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
+      <Icon name="x" />
+    </Button>
   </div>
 </template>
 
 <script setup lang="ts">
-import Input from '~/components/ui/input/Input.vue'
-
 // Find-in-page bar for the PreviewModal markdown-render surface. Thin: state lives in
 // usePreviewFind (owned by usePreviewModal); this component binds query + match-case
 // and emits next/prev/close. Keyboard: Enter = next, Shift+Enter = prev; Esc and a
@@ -78,7 +92,8 @@ const { t } = useI18n()
 // No match found for a non-empty query → danger state on input + counter.
 const noresult = computed(() => !props.status && !!query.value.trim() && props.total === 0)
 
-const inputRef = useTemplateRef<HTMLInputElement>('inputRef')
+// Input shadcn expose focus/select (template ref là instance).
+const inputRef = useTemplateRef<{ focus: () => void; select: () => void }>('inputRef')
 function focusInput() {
   const el = inputRef.value
   if (!el) return
@@ -94,78 +109,3 @@ function onEnter(e: KeyboardEvent) {
   else emit('next')
 }
 </script>
-
-<style scoped>
-/* Overlay pinned to the top-right of the preview card, floating over the content
-   without shifting layout (mirrors the toolbar overlay idiom). */
-.pvfind {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  z-index: 9;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-md);
-}
-.pvfico {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--muted-foreground);
-  flex: none;
-  margin: 0 2px;
-}
-.pvfinput {
-  width: 190px;
-  padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs); /* rounded-sm */
-  background: var(--muted);
-  color: var(--foreground);
-  outline: none;
-}
-.pvfinput:focus-visible {
-  border-color: var(--input);
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.pvfinput.noresult {
-  border-color: var(--destructive);
-}
-.pvfcount {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  padding: 0 4px;
-}
-.pvfcount.noresult {
-  color: var(--destructive);
-}
-.pvfbtn {
-  display: grid;
-  place-items: center;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 5px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.pvfbtn:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.pvfbtn.on {
-  background: var(--accent-wash);
-  color: var(--primary);
-}
-.pvfbtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-</style>

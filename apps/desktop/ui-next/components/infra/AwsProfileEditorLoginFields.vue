@@ -1,36 +1,40 @@
 <template>
-  <div class="apl">
-    <div class="apl-head">
-      <Icon
-        name="globe"
-        style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-      />
-      <span class="apl-title">{{ t('infra.editor.login.title') }}</span>
+  <div class="flex flex-col gap-2.5 rounded-lg border bg-muted p-3">
+    <div class="flex items-center gap-2 text-sm font-semibold text-foreground">
+      <Icon name="globe" class="size-3.5 text-primary" />
+      <span>{{ t('infra.editor.login.title') }}</span>
     </div>
 
-    <div class="apl-rows">
-      <div class="apl-row">
-        <span class="apl-k">{{ t('infra.editor.login.account') }}</span>
+    <div class="flex flex-col gap-1">
+      <div class="flex items-baseline gap-2">
+        <span class="min-w-21 flex-none text-xs text-dim">
+          {{ t('infra.editor.login.account') }}
+        </span>
         <!-- Account id đọc thẳng từ ARN của `login_session`, không cần gọi STS —
-             biết thì hiện, không biết thì để dấu gạch, không đoán. -->
-        <code class="apl-v">{{ accountId || t('infra.editor.login.accountUnknown') }}</code>
+             biết thì hiện, không biết thì để dấu gạch, không đoán.
+             mono-ok: account id / ARN phiên là giá trị copy-paste vào terminal. -->
+        <code class="font-mono text-sm wrap-anywhere text-foreground">
+          {{ accountId || t('infra.editor.login.accountUnknown') }}
+        </code>
       </div>
-      <div v-if="session" class="apl-row">
-        <span class="apl-k">{{ t('infra.editor.login.session') }}</span>
-        <code class="apl-v">{{ session }}</code>
+      <div v-if="session" class="flex items-baseline gap-2">
+        <span class="min-w-21 flex-none text-xs text-dim">
+          {{ t('infra.editor.login.session') }}
+        </span>
+        <code class="font-mono text-sm wrap-anywhere text-foreground">{{ session }}</code>
       </div>
     </div>
 
-    <p class="apl-body">{{ t('infra.editor.login.body') }}</p>
+    <p class="m-0 text-sm text-muted-foreground">{{ t('infra.editor.login.body') }}</p>
 
     <!-- Hai profile cho CÙNG một phiên (ca thật 2026-09-14). Nói ngay trong màn
          sửa vì đây là chỗ người dùng đang nhìn khi tự hỏi "sao lại có hai cái". -->
-    <p v-if="sameSession.length > 0" class="apl-warn">
+    <p v-if="sameSession.length > 0" class="m-0 text-xs text-warning">
       {{ t('infra.editor.login.sameSession', { names: sameSession.join(', ') }) }}
     </p>
 
-    <Button type="button" class="apl-btn" variant="outline" size="sm" @click="emit('relogin')">
-      <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+    <Button type="button" class="self-start" variant="outline" size="sm" @click="emit('relogin')">
+      <Icon name="refresh" class="size-3" />
       {{ t('infra.editor.login.relogin') }}
     </Button>
   </div>
@@ -93,64 +97,3 @@ const sameSession = computed(() =>
   props.profile ? otherProfilesWithSameSession(props.profile, props.profiles, props.name) : [],
 )
 </script>
-
-<style scoped>
-.apl {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 13px 14px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.apl-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.apl-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.apl-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.apl-k {
-  flex: 0 0 auto;
-  min-width: 84px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.apl-v {
-  /* mono-ok: account id / ARN phiên là giá trị copy-paste vào terminal. */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.apl-body {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.apl-warn {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-}
-.apl-btn {
-  align-self: flex-start;
-}
-</style>

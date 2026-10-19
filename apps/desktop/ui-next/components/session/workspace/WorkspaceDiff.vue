@@ -14,7 +14,8 @@
       <span class="ml-auto flex items-center gap-0.5">
         <Button
           variant="ghost"
-          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('sessions.workspace.openGit')"
           :aria-label="t('sessions.workspace.openGit')"
           @click="openGit"
@@ -23,7 +24,8 @@
         </Button>
         <Button
           variant="ghost"
-          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('sessions.workspace.refresh')"
           :aria-label="t('sessions.workspace.refresh')"
           @click="load"
@@ -34,14 +36,23 @@
     </div>
 
     <!-- Unavailable / no-repo / empty states -->
-    <div v-if="!ready" class="empty" style="padding: 30px">
-      <div class="et">{{ unavailableMsg }}</div>
+    <div
+      v-if="!ready"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ unavailableMsg }}</div>
     </div>
-    <div v-else-if="noRepo" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.diff.noRepo') }}</div>
+    <div
+      v-else-if="noRepo"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.diff.noRepo') }}</div>
     </div>
-    <div v-else-if="!files.length" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.diff.none') }}</div>
+    <div
+      v-else-if="!files.length"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.diff.none') }}</div>
     </div>
 
     <template v-else>
@@ -53,7 +64,8 @@
           v-for="f in files"
           :key="f.path"
           variant="ghost"
-          class="h-auto p-0 flex h-7 w-full items-center gap-2 px-3 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-accent"
+          size="xs"
+          class="w-full justify-start rounded-none px-3 text-left font-mono font-normal text-muted-foreground"
           @click="openFile(f)"
         >
           <!-- status letter — M amber / A green / D red -->
@@ -65,8 +77,8 @@
             v-if="f.additions || f.deletions"
             class="ml-auto flex shrink-0 items-center gap-1.5 text-xs tabular-nums"
           >
-            <span v-if="f.additions" class="text-success">+{{ f.additions }}</span>
-            <span v-if="f.deletions" class="text-destructive">−{{ f.deletions }}</span>
+            <span v-if="f.additions" class="text-diff-add">+{{ f.additions }}</span>
+            <span v-if="f.deletions" class="text-diff-del">−{{ f.deletions }}</span>
           </span>
         </Button>
       </div>
@@ -193,9 +205,10 @@ const STATUS_LETTER: Record<GitFileChangeType, string> = {
 const statusLetter = (c: GitFileChangeType): string => STATUS_LETTER[c] ?? 'M'
 // M → warning, A/U → success, D/! → destructive (proto diff-list convention).
 const statusClass = (c: GitFileChangeType): string => {
-  if (c === 'added' || c === 'untracked') return 'text-success'
-  if (c === 'deleted' || c === 'conflicted') return 'text-destructive'
-  return 'text-warning'
+  if (c === 'added' || c === 'untracked') return 'text-diff-add'
+  if (c === 'deleted') return 'text-diff-del'
+  if (c === 'conflicted') return 'text-destructive'
+  return 'text-diff-mod'
 }
 
 const gitCodeOf = (err: unknown): string | null => {

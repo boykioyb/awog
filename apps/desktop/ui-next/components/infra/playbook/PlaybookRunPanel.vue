@@ -2,42 +2,52 @@
   <!-- Chạy + hồ sơ sau khi chạy (việc 5.5). Hồ sơ là bản GHI BẤT BIẾN: bản nào, ai
        duyệt, chạy lúc nào, bước nào mất bao lâu, bước nào lỗi — nên nó không sửa
        được, chỉ đọc. Chưa chạy lượt nào trong phiên này thì panel nói cách bắt đầu. -->
-  <section class="pbr">
-    <h3 class="pbr-hd">{{ t('playbooks.run.title') }}</h3>
+  <section class="flex flex-col gap-2">
+    <h3 class="text-sm font-semibold text-muted-foreground">{{ t('playbooks.run.title') }}</h3>
 
     <!-- Lượt chạy vừa xong trong phiên này -->
-    <div v-if="run" class="pbr-card">
-      <div class="pbr-line">
-        <span class="pbr-st" :class="`st-${run.status}`">
+    <div v-if="run" class="flex flex-col gap-1.5 rounded-md border bg-card px-2.5 py-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-medium" :class="STATUS_CLASS[run.status] ?? 'text-dim'">
           {{ t(`playbooks.status.${run.status}`) }}
         </span>
-        <span class="pbr-when">{{ when(run.createdAt) }}</span>
-        <span class="pbr-done">{{ doneLabel(run) }}</span>
+        <span class="text-xs text-dim tabular-nums">{{ when(run.createdAt) }}</span>
+        <span class="text-xs text-dim">{{ doneLabel(run) }}</span>
       </div>
-      <div class="pbr-line muted">
+      <div class="flex flex-wrap items-center gap-2 text-xs text-dim">
         <span>{{ approverLabel(run) }}</span>
       </div>
       <!-- Đóng băng vào Wiki là bề mặt PHỤ: hỏng nó không làm lượt chạy hỏng, nên
            đây chỉ là một dòng ghi chú — nhưng phải có, đừng nuốt. -->
-      <div v-if="run.frozen || run.freezeError" class="pbr-line muted">
-        <span v-if="run.frozen" class="pbr-ok">
+      <div
+        v-if="run.frozen || run.freezeError"
+        class="flex flex-wrap items-center gap-2 text-xs text-dim"
+      >
+        <span v-if="run.frozen" class="text-success">
           {{ t('playbooks.run.frozen', { page: run.wikiPage ?? '' }) }}
         </span>
-        <span v-if="run.freezeError" class="pbr-bad">
+        <span v-if="run.freezeError" class="text-warning">
           {{ t('playbooks.run.freezeError', { error: run.freezeError }) }}
         </span>
       </div>
-      <ol class="pbr-steps">
-        <li v-for="res in run.steps" :key="res.stepId" class="pbr-step">
-          <span class="pbr-step-no">{{ indexOf(res.stepId) + 1 }}</span>
-          <span class="pbr-step-ttl" :title="res.command">{{ titleOf(res.stepId) }}</span>
-          <span class="pbr-step-st" :class="`st-${res.status}`">
+      <ol class="m-0 flex list-none flex-col gap-0.5 p-0">
+        <li v-for="res in run.steps" :key="res.stepId" class="flex min-w-0 items-center gap-2">
+          <span class="min-w-4 shrink-0 text-xs text-faint tabular-nums">
+            {{ indexOf(res.stepId) + 1 }}
+          </span>
+          <span
+            class="min-w-0 truncate text-xs leading-(--lh-sm) text-foreground"
+            :title="res.command"
+          >
+            {{ titleOf(res.stepId) }}
+          </span>
+          <span class="ml-auto text-xs" :class="STEP_CLASS[res.status] ?? 'text-dim'">
             {{ t(`playbooks.run.state.${res.status}`) }}
           </span>
-          <span class="pbr-step-time">
+          <span class="text-xs text-dim tabular-nums">
             {{ t('playbooks.run.duration', { ms: res.durationMs }) }}
           </span>
-          <span v-if="res.exitCode !== null" class="pbr-step-exit">
+          <span v-if="res.exitCode !== null" class="text-xs text-dim tabular-nums">
             {{ t('playbooks.run.exit', { code: res.exitCode }) }}
           </span>
         </li>
@@ -45,38 +55,55 @@
     </div>
 
     <!-- Chưa chạy: kết quả kiểm tra trước (nếu đã bấm) hoặc lời mời bắt đầu -->
-    <div v-else-if="preflight" class="pbr-card">
-      <div class="pbr-line">
-        <span class="pbr-hd-sub">{{ t('playbooks.run.preflightTitle') }}</span>
+    <div v-else-if="preflight" class="flex flex-col gap-1.5 rounded-md border bg-card px-2.5 py-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold text-muted-foreground">
+          {{ t('playbooks.run.preflightTitle') }}
+        </span>
       </div>
       <!-- `PlaybookCheckResult` chỉ có `ok` — nó KHÔNG phải một bước đã chạy, nên
            không có thời lượng. Đừng bịa một con số cho vừa bảng. -->
-      <ol class="pbr-steps">
-        <li v-for="res in preflight" :key="res.stepId" class="pbr-step">
-          <span class="pbr-step-no">{{ indexOf(res.stepId) + 1 }}</span>
-          <span class="pbr-step-ttl" :title="res.command">{{ titleOf(res.stepId) }}</span>
-          <span class="pbr-step-st" :class="res.ok ? 'st-ok' : 'st-failed'">
+      <ol class="m-0 flex list-none flex-col gap-0.5 p-0">
+        <li v-for="res in preflight" :key="res.stepId" class="flex min-w-0 items-center gap-2">
+          <span class="min-w-4 shrink-0 text-xs text-faint tabular-nums">
+            {{ indexOf(res.stepId) + 1 }}
+          </span>
+          <span
+            class="min-w-0 truncate text-xs leading-(--lh-sm) text-foreground"
+            :title="res.command"
+          >
+            {{ titleOf(res.stepId) }}
+          </span>
+          <span class="ml-auto text-xs" :class="res.ok ? 'text-success' : 'text-destructive'">
             {{ t(`playbooks.run.state.${res.ok ? 'ok' : 'failed'}`) }}
           </span>
-          <span v-if="res.reason" class="pbr-step-exit">{{ res.reason }}</span>
+          <span v-if="res.reason" class="text-xs text-dim tabular-nums">{{ res.reason }}</span>
         </li>
       </ol>
     </div>
 
-    <p v-else class="pbr-empty">{{ t('playbooks.run.none') }}</p>
+    <p v-else class="text-xs leading-(--lh-sm) text-dim">{{ t('playbooks.run.none') }}</p>
 
     <!-- Hồ sơ các lần chạy trước -->
-    <div class="pbr-hist">
-      <h4 class="pbr-hd-sub">{{ t('playbooks.run.historyTitle') }}</h4>
-      <p v-if="!runs.length" class="pbr-empty">{{ t('playbooks.run.historyNone') }}</p>
-      <ul v-else class="pbr-hitems">
-        <li v-for="rec in runs" :key="rec.id" class="pbr-hitem">
-          <span class="pbr-st" :class="`st-${rec.status}`">
+    <div class="flex flex-col gap-1">
+      <h4 class="text-xs font-semibold text-muted-foreground">
+        {{ t('playbooks.run.historyTitle') }}
+      </h4>
+      <p v-if="!runs.length" class="text-xs leading-(--lh-sm) text-dim">
+        {{ t('playbooks.run.historyNone') }}
+      </p>
+      <ul v-else class="m-0 flex list-none flex-col gap-0.5 p-0">
+        <li
+          v-for="rec in runs"
+          :key="rec.id"
+          class="flex flex-wrap items-center gap-2 rounded-sm bg-muted px-1.5 py-1"
+        >
+          <span class="text-xs font-medium" :class="STATUS_CLASS[rec.status] ?? 'text-dim'">
             {{ t(`playbooks.status.${rec.status}`) }}
           </span>
-          <span class="pbr-when">{{ when(rec.createdAt) }}</span>
-          <span class="pbr-done">{{ doneLabel(rec) }}</span>
-          <span class="pbr-approver">{{ approverLabel(rec) }}</span>
+          <span class="text-xs text-dim tabular-nums">{{ when(rec.createdAt) }}</span>
+          <span class="text-xs text-dim">{{ doneLabel(rec) }}</span>
+          <span class="text-xs text-dim">{{ approverLabel(rec) }}</span>
         </li>
       </ul>
     </div>
@@ -96,6 +123,26 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+
+/** Màu trạng thái của LƯỢT CHẠY. Bị cổng quyền chặn KHÔNG phải hỏng: lượt chạy về
+ *  lại `approved` và chạy tiếp được kèm vé — tô màu cảnh báo, không tô đỏ. */
+const STATUS_CLASS: Record<string, string> = {
+  done: 'text-success',
+  ok: 'text-success',
+  approved: 'text-success',
+  'rolled-back': 'text-success',
+  failed: 'text-destructive',
+  running: 'text-primary',
+  'awaiting-approval': 'text-warning',
+  blocked: 'text-warning',
+}
+
+/** Màu trạng thái của TỪNG BƯỚC (cùng luật: chặn ≠ hỏng). */
+const STEP_CLASS: Record<string, string> = {
+  ok: 'text-success',
+  failed: 'text-destructive',
+  blocked: 'text-warning',
+}
 
 function indexOf(stepId: string): number {
   return props.columns.findIndex((c) => c.step.id === stepId)
@@ -123,192 +170,3 @@ function approverLabel(runRecord: PlaybookRun): string {
     : t('playbooks.run.noApprover')
 }
 </script>
-
-<style scoped>
-.pbr {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.pbr-hd {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 650;
-}
-
-.pbr-hd-sub {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 650;
-}
-
-.pbr-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-}
-
-.pbr-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pbr-line.muted {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pbr-st {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 550;
-}
-
-.pbr-st.st-done,
-.pbr-st.st-ok,
-.pbr-st.st-approved,
-.pbr-st.st-rolled-back {
-  color: var(--green);
-}
-
-.pbr-st.st-failed {
-  color: var(--red);
-}
-
-.pbr-st.st-running {
-  color: var(--accent);
-}
-
-.pbr-st.st-awaiting-approval {
-  color: var(--amber);
-}
-
-/* Bước bị cổng quyền chặn KHÔNG phải bước hỏng: lượt chạy về lại `approved` và
-   chạy tiếp được kèm vé — tô màu cảnh báo, không tô đỏ. */
-.pbr-st.st-blocked {
-  color: var(--amber);
-}
-
-.pbr-when,
-.pbr-step-time,
-.pbr-step-exit {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.pbr-done,
-.pbr-approver {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pbr-ok {
-  color: var(--green);
-}
-
-.pbr-bad {
-  color: var(--amber);
-}
-
-.pbr-steps {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.pbr-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.pbr-step-no {
-  flex: 0 0 auto;
-  min-width: 16px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.pbr-step-ttl {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pbr-step-st {
-  margin-left: auto;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pbr-step-st.st-ok {
-  color: var(--green);
-}
-
-.pbr-step-st.st-failed {
-  color: var(--red);
-}
-
-.pbr-step-st.st-blocked {
-  color: var(--amber);
-}
-
-.pbr-empty {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pbr-hist {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.pbr-hitems {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.pbr-hitem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 4px 6px;
-  border-radius: var(--r-xs);
-  background: var(--bgHover);
-}
-</style>

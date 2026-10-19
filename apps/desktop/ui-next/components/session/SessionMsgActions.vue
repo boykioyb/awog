@@ -1,35 +1,47 @@
 <template>
-  <div class="hoveract bottom">
-    <button
+  <!-- Hiện/ẩn theo hover do CHA quyết (class truyền xuống root) — component này chỉ
+       dựng hàng nút. -->
+  <div class="flex items-center gap-0.5">
+    <!-- Nút icon ghost 24px + icon 14px. Bật (đã bookmark / vừa copy) = icon primary.
+         Destructive (rewind / resend / regen / retry-model): đỏ khi hover — cảnh báo
+         trước cú click, không phải sau dialog (session-destructive-action-guard §4.3). -->
+    <Button
       v-for="a in primary"
       :key="a.icon"
       type="button"
-      class="ha"
-      :class="{ danger: a.danger, on: a.active, off: a.disabled }"
+      variant="ghost"
+      size="iconSm"
+      class="size-6 rounded-sm text-muted-foreground hover:text-foreground disabled:opacity-40"
+      :class="{
+        'hover:bg-destructive/10 hover:text-destructive': a.danger,
+        'text-primary': a.active,
+      }"
       :disabled="a.disabled"
       :title="a.title"
       :aria-label="a.title"
       @click="a.run"
     >
-      <Icon :name="a.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
+      <Icon :name="a.icon" />
+    </Button>
 
     <!-- Overflow. Everything rare or destructive lives here (session-ui-refactor §3.3):
          a destructive action must never sit unlabelled next to `copy` at the same
          weight. Anchored to this span, opening UPWARD because the footer is the last
          row of a turn — a downward menu would fall off the transcript. -->
-    <span v-if="overflow.length" ref="moreRef" class="hamore">
-      <button
+    <span v-if="overflow.length" ref="moreRef" class="relative inline-flex">
+      <Button
         type="button"
-        class="ha"
-        :class="{ on: open }"
+        variant="ghost"
+        size="iconSm"
+        class="size-6 rounded-sm text-muted-foreground hover:text-foreground"
+        :class="{ 'text-primary': open }"
         :title="t('sessions.message.more')"
         :aria-label="t('sessions.message.more')"
         :aria-expanded="open"
         @click.stop="open = !open"
       >
-        <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="dots" />
+      </Button>
 
       <!-- Teleport ra <body> + định vị FIXED.
            ⚠ Bản trước là `position: absolute; bottom: 130%`, tức luôn mở LÊN TRÊN từ
@@ -40,12 +52,35 @@
            bởi tổ tiên, không phải bị đè. -->
       <Teleport to="body">
         <template v-if="open">
-          <div class="habackdrop" @click.stop="open = false" />
-          <div ref="menuRef" class="smenu hamenu" :style="menuStyle" @click.stop>
+          <!-- Bắt click ra ngoài. Thang z "trên-modal": teleport ra body nên phải vượt
+               mọi overlay chứa nó — `.wsed-ovl` 160 (board item), `.apeek.full` 400,
+               `.ftovl` 470 — nếu không thì mở `⋯` trong modal/peek full sẽ bị overlay
+               đó đè chìm hoàn toàn. -->
+          <div class="fixed inset-0 z-560" @click.stop="open = false" />
+          <!-- `left` + `top`|`bottom` + `max-height` do updatePosition đặt inline. -->
+          <!-- role=dialog + data-state=open: khớp selector `[role="dialog"][data-state="open"]`
+               trong OVERLAYS (useEmbeddedBrowser.ts) để trình duyệt nhúng nhường chỗ. -->
+          <div
+            ref="menuRef"
+            role="dialog"
+            data-state="open"
+            class="fixed z-570 min-w-49 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
+            :style="menuStyle"
+            @click.stop
+          >
             <template v-for="(a, i) in overflow" :key="i">
-              <div v-if="'sep' in a" class="hasep" />
-              <div v-else class="mi" :class="{ dmi: a.danger }" @click="run(a)">
-                <Icon :name="a.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Separator v-if="'sep' in a" class="mx-1.5 my-1 w-auto" />
+              <div
+                v-else
+                class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm [&_svg]:size-3.5"
+                :class="
+                  a.danger
+                    ? 'text-destructive hover:bg-destructive/10'
+                    : 'hover:bg-accent hover:text-accent-foreground'
+                "
+                @click="run(a)"
+              >
+                <Icon :name="a.icon" />
                 {{ a.title }}
               </div>
             </template>
@@ -150,105 +185,3 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', onReposition, true)
 })
 </script>
-
-<style scoped>
-.hamore {
-  position: relative;
-  display: inline-flex;
-}
-/* Ghost icon button — proto `size-6` hit box (24px) + icon `size-3.5` (14px).
-   Global `.ha` vẫn là hộp có viền 26px của skin cũ; scoped này override thành
-   ghost: borderless, hover = accent-wash trung tính (shadcn ghost). */
-.ha {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ha:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.ha:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-/* Bật (bookmarked / menu đang mở / vừa copy xong): icon mang primary thay vì
-   muted — cùng quy ước `.stab-btn.on`. */
-.ha.on {
-  color: var(--primary);
-}
-.ha:disabled,
-.ha.off {
-  opacity: 0.4;
-  cursor: default;
-}
-.ha:disabled:hover,
-.ha.off:hover {
-  background: transparent;
-  color: var(--muted-foreground);
-}
-/* Destructive (rewind / resend / regen / retry-model): đỏ khi hover — cảnh báo
-   trước cú click, không phải sau dialog (session-destructive-action-guard §4.3). */
-.ha.danger:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-/* Click-away catcher. Below the menu, above everything else in the transcript.
-   Thang z "trên-modal": teleported ra body nên phải vượt mọi overlay chứa nó —
-   `.wsed-ovl` 160 (board item), `.apeek.full` 400, `.ftovl` 470 — nếu không thì
-   mở `⋯` trong modal/peek full sẽ bị overlay đó đè chìm hoàn toàn. */
-.habackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 560;
-}
-/* Teleported to <body>; `left` + `top`|`bottom` + `max-height` are set inline by
-   updatePosition. See the comment in the template for what it is escaping.
-   Skin = popover chuẩn (bg-popover + hairline border + radius) thay vì .smenu
-   global vốn viền borderStrong. */
-.hamenu {
-  position: fixed;
-  z-index: 570;
-  min-width: 196px;
-  overflow-y: auto;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 4px;
-  box-shadow: var(--shadow-md);
-}
-/* Item trong popover này siết nhịp hơn .smenu global: text popover-foreground,
-   radius kế thừa menu, hover accent-wash. */
-.hamenu .mi {
-  padding: 6px 8px;
-  border-radius: var(--r-xs);
-  color: var(--popover-foreground);
-}
-.hamenu .mi:hover {
-  background: var(--accent-wash);
-  color: var(--popover-foreground);
-}
-.hamenu .mi .ck {
-  color: var(--primary);
-}
-.hamenu .mi.dmi {
-  color: var(--destructive);
-}
-.hamenu .mi.dmi:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-.hasep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border);
-}
-</style>

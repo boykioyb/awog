@@ -1,34 +1,47 @@
 <template>
   <!-- Repo access whitelist — registered-project checkboxes (search auto when
        >8 rows) + free-form paths (sub-repo of a container, unregistered
-       checkout…), styles global (.awp-*). Empty/undefined = unrestricted. -->
+       checkout…), khung dùng chung AgentPickList / AgentPickRow. Empty/undefined = unrestricted. -->
   <div>
-    <Input v-if="searchable" v-model="q" :placeholder="t('common.search')" class="awp-search" />
-    <div class="awp-list">
-      <label v-for="p in filteredRows" :key="p.id" class="awp-row" :class="{ on: isOn(p.path) }">
-        <input type="checkbox" :checked="isOn(p.path)" class="awp-cbx" @change="toggle(p.path)" />
-        <span class="awp-name">{{ p.name }}</span>
-        <span class="awp-tier mono">{{ p.path }}</span>
-      </label>
-      <div v-if="filteredRows.length === 0" class="awp-empty">
-        {{ t('agents.editor.reposEmpty') }}
-      </div>
-    </div>
-    <div v-if="extraRepos.length" class="awp-chips">
-      <span v-for="r in extraRepos" :key="r" class="chip mono">
+    <Input v-if="searchable" v-model="q" :placeholder="t('common.search')" class="mb-2" />
+    <AgentPickList
+      :is-empty="filteredRows.length === 0"
+      :empty-text="t('agents.editor.reposEmpty')"
+    >
+      <AgentPickRow
+        v-for="p in filteredRows"
+        :key="p.id"
+        :checked="isOn(p.path)"
+        @toggle="toggle(p.path)"
+      >
+        <span class="text-sm font-medium text-foreground">{{ p.name }}</span>
+        <!-- mono-ok: đường dẫn repo -->
+        <span class="truncate font-mono text-xs text-faint">{{ p.path }}</span>
+      </AgentPickRow>
+    </AgentPickList>
+    <div v-if="extraRepos.length" class="flex flex-wrap gap-1">
+      <!-- mono-ok: đường dẫn repo -->
+      <Badge v-for="r in extraRepos" :key="r" variant="outline" class="font-mono">
         {{ r }}
-        <button class="awp-chipx" :title="t('agents.editor.removeTool')" @click="remove(r)">
-          <Icon name="x" style="width: 10px; height: 10px" />
-        </button>
-      </span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-4 text-dim hover:bg-transparent hover:text-destructive"
+          :title="t('agents.editor.removeTool')"
+          @click="remove(r)"
+        >
+          <Icon name="x" class="size-2.5!" />
+        </Button>
+      </Badge>
     </div>
+    <!-- mono-ok: đường dẫn repo -->
     <Input
       v-model="input"
       :placeholder="t('agents.editor.reposPh')"
-      class="mono"
+      class="font-mono"
       @keydown.enter.prevent="add"
     />
-    <div class="awp-hint">{{ t('agents.editor.reposHint') }}</div>
+    <div class="text-xs text-dim">{{ t('agents.editor.reposHint') }}</div>
   </div>
 </template>
 

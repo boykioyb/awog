@@ -1,17 +1,31 @@
 <template>
-  <!-- Unified-diff view (read-only, line-colored). -->
-  <div v-if="mode === 'diff'" class="edview-diff">
-    <div v-for="(line, i) in diffLines" :key="i" class="edview-diffline" :class="line.kind">
+  <!-- Unified-diff view (read-only, line-colored). Ghim 12px để hàng không xê dịch theo
+       Appearance; leading CHẴN cố định giữ mọi hàng trên lưới pixel. -->
+  <div v-if="mode === 'diff'" :class="DIFF_PANE">
+    <div
+      v-for="(line, i) in diffLines"
+      :key="i"
+      class="px-3.5 whitespace-pre"
+      :class="DIFF_LINE_CLASS[line.kind]"
+    >
       {{ line.text || ' ' }}
     </div>
   </div>
 
   <!-- Rendered markdown preview (marked + mermaid; mirrors PreviewModal). -->
-  <div v-else class="edview-md" :class="{ split: isSplit }">
-    <div class="edview-mdscroll">
+  <div
+    v-else
+    class="h-full min-w-0 overflow-hidden bg-muted"
+    :class="isSplit ? 'w-1/2 flex-[0_0_50%] border-l' : 'flex-1'"
+  >
+    <div class="flex h-full flex-col items-center overflow-auto px-5.5 pt-6.5 pb-15">
       <!-- A file-path link in the doc opens in the shared PreviewModal; it must never
            reach the SPA router (dead route → full-page 404). See useMdFileLink. -->
-      <div ref="mdBody" class="mdbody" @click="onMdLinkClick">
+      <div
+        ref="mdBody"
+        class="mdbody w-full max-w-220 leading-(--lh-prose) text-foreground"
+        @click="onMdLinkClick"
+      >
         <template v-for="(seg, i) in segments" :key="i">
           <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
           <pre v-else-if="seg.type === 'widget'" class="mmdstream"><code>{{ seg.code }}</code></pre>
@@ -60,6 +74,19 @@ useCodeBlockControls(mdBody, () => segments.value)
 
 type DiffLine = { text: string; kind: 'add' | 'del' | 'hunk' | 'meta' | 'ctx' }
 
+// mono: nội dung diff
+const DIFF_PANE =
+  // px-ok: ghim 12px / leading 20px — diff không scale theo Appearance (xem comment template)
+  'h-full min-w-0 flex-1 overflow-auto bg-background py-2 font-mono text-[12px] leading-[20px]'
+
+const DIFF_LINE_CLASS: Record<DiffLine['kind'], string> = {
+  add: 'bg-diff-add/10 text-diff-add',
+  del: 'bg-diff-del/10 text-diff-del',
+  hunk: 'text-primary',
+  meta: 'text-faint',
+  ctx: 'text-dim',
+}
+
 // Classify each unified-diff line for coloring. Mirrors the diffStats regexes used
 // in the page so the visual matches the header count.
 const diffLines = computed<DiffLine[]>(() => {
@@ -76,67 +103,8 @@ const diffLines = computed<DiffLine[]>(() => {
 </script>
 
 <style scoped>
-.edview-diff {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  overflow: auto;
-  background: var(--bg);
-  font-family: var(--code);
-  font-size: 12px;
-  /* The diff pane pins 12px so rows stay put across Appearance; an EVEN fixed leading
-     keeps every row — and the gutter digits centred in it — on the pixel grid. */
-  line-height: 20px;
-  padding: 8px 0;
-}
-.edview-diffline {
-  white-space: pre;
-  padding: 0 14px;
-  color: var(--textDim);
-}
-.edview-diffline.add {
-  background: var(--addBg);
-  color: var(--add);
-}
-.edview-diffline.del {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.edview-diffline.hunk {
-  color: var(--accent);
-}
-.edview-diffline.meta {
-  color: var(--textFaint);
-}
-
-.edview-md {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bgSubtle);
-}
-.edview-md.split {
-  flex: 0 0 50%;
-  width: 50%;
-  border-left: 1px solid var(--border);
-}
-.edview-mdscroll {
-  height: 100%;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 26px 22px 60px;
-}
-
-/* Rendered markdown prose (v-html content → :deep), mirrors PreviewModal. */
-.mdbody {
-  width: 100%;
-  max-width: 880px;
-  line-height: var(--lh-prose);
-  color: var(--text);
-}
+/* style-ok: HTML markdown render ra (v-html) — class không chạm tới được, chỉ :deep.
+   Bám PreviewModal. */
 .mdbody :deep(h1),
 .mdbody :deep(h2),
 .mdbody :deep(h3) {

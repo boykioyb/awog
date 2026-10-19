@@ -1,127 +1,116 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on wfpc-ovl" @click.self="onBackdrop">
-      <div class="wfpc" role="dialog" aria-modal="true">
-        <div class="wfpc-hd">
-          <Icon
-            name="sparkles"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
-          <span class="wfpc-title">{{ t('workflow.creator.headline') }}</span>
-          <span class="wfpc-sub">{{ t('workflow.creator.subheadline') }}</span>
-          <span style="flex: 1" />
-          <Button
-            :title="t('common.close')"
-            class="wfpc-x"
-            variant="outline"
-            size="iconMd"
-            @click="emit('close')"
-          >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </Button>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <!-- Không đóng bằng scrim/Esc khi đang generate — không bỏ dở lượt đang chạy. -->
+    <DialogContent
+      class="flex max-h-[86vh] w-170 max-w-[94vw] flex-col gap-0 overflow-hidden border-input bg-card p-0 sm:max-w-170 sm:rounded-2xl"
+      @pointer-down-outside="guardDismiss"
+      @focus-outside.prevent
+      @escape-key-down="guardDismiss"
+    >
+      <DialogHeader class="flex-none flex-row items-center gap-2 border-b px-4 py-3 pr-12">
+        <Icon name="sparkles" class="size-3.5 text-primary" />
+        <DialogTitle class="text-base font-semibold">
+          {{ t('workflow.creator.headline') }}
+        </DialogTitle>
+        <DialogDescription class="text-xs text-dim">
+          {{ t('workflow.creator.subheadline') }}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3.5">
+        <LibraryScopePicker v-model="scope" :projects="projects" />
+
+        <Textarea
+          v-model="promptText"
+          class="min-h-28 resize-y rounded-lg p-3"
+          rows="5"
+          :disabled="isGenerating"
+          :placeholder="t('workflow.creator.placeholder')"
+          @keydown.enter.exact.prevent="onGenerate"
+        />
+
+        <div
+          v-if="error"
+          class="rounded-md border border-destructive bg-muted px-3 py-2 text-sm text-destructive"
+        >
+          {{ error }}
         </div>
 
-        <div class="wfpc-body">
-          <LibraryScopePicker v-model="scope" :projects="projects" />
-
-          <textarea
-            v-model="promptText"
-            class="wfpc-ta"
-            rows="5"
-            :disabled="isGenerating"
-            :placeholder="t('workflow.creator.placeholder')"
-            @keydown.enter.exact.prevent="onGenerate"
-          />
-
-          <div v-if="error" class="wfpc-err">{{ error }}</div>
-
-          <!-- generated draft preview -->
-          <div v-if="draft" class="wfpc-draft">
-            <div class="wfpc-draft-hd">
-              <Icon
-                name="workflows"
-                style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
-              />
-              <span class="wfpc-draft-name">{{ draft.name }}</span>
-            </div>
-            <div class="wfpc-draft-desc">{{ draft.description }}</div>
-            <!-- Steps grouped by agent (project agents first), the agent name as
-                 the group header and its skills/steps listed underneath. -->
-            <div v-if="draft.nodes.length" class="wfpc-groups">
-              <div v-for="grp in groupedSteps" :key="grp.agentId" class="wfpc-group">
-                <div class="wfpc-group-hd">
+        <!-- generated draft preview -->
+        <div v-if="draft" class="rounded-lg border bg-muted p-3">
+          <div class="mb-1 flex items-center gap-2">
+            <Icon name="workflows" class="size-3 text-dim" />
+            <span class="text-sm font-semibold text-foreground">{{ draft.name }}</span>
+          </div>
+          <div class="text-sm text-muted-foreground">{{ draft.description }}</div>
+          <!-- Steps grouped by agent (project agents first), the agent name as
+               the group header and its skills/steps listed underneath. -->
+          <div v-if="draft.nodes.length" class="mt-2 flex flex-col gap-2">
+            <div v-for="grp in groupedSteps" :key="grp.agentId">
+              <div class="flex items-baseline gap-1.5">
+                <Icon name="agents" class="size-3 text-dim" />
+                <span class="text-sm font-semibold text-foreground">{{ grp.agentName }}</span>
+                <span v-if="grp.role" class="text-xs text-faint">{{ grp.role }}</span>
+              </div>
+              <div class="mt-0.5 flex flex-col gap-0.5 pl-4.5">
+                <div v-for="s in grp.steps" :key="s.id" class="flex items-center gap-1.5 text-sm">
+                  <span class="text-xs tabular-nums text-faint">{{ s.num }}</span>
+                  <span class="text-dim">
+                    {{ s.skillId || t('workflow.node.noSkill') }}
+                  </span>
                   <Icon
-                    name="agents"
-                    style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
+                    v-if="s.approval"
+                    name="shield"
+                    class="size-3 text-warning"
+                    :title="t('workflow.node.approvalGate')"
                   />
-                  <span class="wfpc-group-name">{{ grp.agentName }}</span>
-                  <span v-if="grp.role" class="wfpc-group-role">{{ grp.role }}</span>
-                </div>
-                <div class="wfpc-group-steps">
-                  <div v-for="s in grp.steps" :key="s.id" class="wfpc-step">
-                    <span class="wfpc-step-n tnum">{{ s.num }}</span>
-                    <span class="wfpc-step-skill">
-                      {{ s.skillId || t('workflow.node.noSkill') }}
-                    </span>
-                    <Icon
-                      v-if="s.approval"
-                      name="shield"
-                      style="width: var(--icon-xs); height: var(--icon-xs); color: var(--amber)"
-                      :title="t('workflow.node.approvalGate')"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
-            <div class="wfpc-draft-hint">
-              {{
-                draft.nodes.length
-                  ? t('workflow.creator.stepsGenerated', { count: draft.nodes.length })
-                  : t('workflow.creator.dragHint')
-              }}
-            </div>
+          </div>
+          <div class="mt-2 text-xs text-faint">
+            {{
+              draft.nodes.length
+                ? t('workflow.creator.stepsGenerated', { count: draft.nodes.length })
+                : t('workflow.creator.dragHint')
+            }}
           </div>
         </div>
-
-        <div class="wfpc-foot">
-          <span class="wfpc-foothint">{{ t('workflow.creator.sendHint') }}</span>
-          <span style="flex: 1" />
-          <Button
-            v-if="draft"
-            :disabled="isGenerating"
-            variant="outline"
-            size="sm"
-            @click="onGenerate"
-          >
-            <Icon
-              name="refresh"
-              :class="{ spin: isGenerating }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            {{ t('workflow.creator.regenerate') }}
-          </Button>
-          <Button
-            v-if="!draft"
-            :disabled="!canGenerate"
-            variant="default"
-            size="sm"
-            @click="onGenerate"
-          >
-            <Icon
-              :name="isGenerating ? 'refresh' : 'sparkles'"
-              :class="{ spin: isGenerating }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            {{ isGenerating ? t('workflow.creator.generating') : t('workflow.creator.generate') }}
-          </Button>
-          <Button v-if="draft" variant="default" size="sm" @click="onCreate">
-            <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('workflow.creator.create') }}
-          </Button>
-        </div>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex flex-none items-center gap-2 border-t px-4 py-3">
+        <span class="text-xs text-faint">{{ t('workflow.creator.sendHint') }}</span>
+        <span class="flex-1" />
+        <Button
+          v-if="draft"
+          :disabled="isGenerating"
+          variant="outline"
+          size="sm"
+          @click="onGenerate"
+        >
+          <Icon name="refresh" :class="{ 'animate-spin': isGenerating }" />
+          {{ t('workflow.creator.regenerate') }}
+        </Button>
+        <Button
+          v-if="!draft"
+          :disabled="!canGenerate"
+          variant="default"
+          size="sm"
+          @click="onGenerate"
+        >
+          <Icon
+            :name="isGenerating ? 'refresh' : 'sparkles'"
+            :class="{ 'animate-spin': isGenerating }"
+          />
+          {{ isGenerating ? t('workflow.creator.generating') : t('workflow.creator.generate') }}
+        </Button>
+        <Button v-if="draft" variant="default" size="sm" @click="onCreate">
+          <Icon name="save" />
+          {{ t('workflow.creator.create') }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -266,185 +255,8 @@ const onCreate = () => {
   emit('save', { ...draft.value }, scope.value)
 }
 
-const onBackdrop = () => {
-  if (isGenerating.value) return
-  emit('close')
+// Chặn đóng bằng scrim/Esc khi đang generate (nút X vẫn đóng như trước).
+const guardDismiss = (e: Event) => {
+  if (isGenerating.value) e.preventDefault()
 }
 </script>
-
-<style scoped>
-.wfpc-ovl {
-  align-items: center;
-  padding-top: 0;
-}
-.wfpc {
-  width: 680px;
-  max-width: 94vw;
-  max-height: 86vh;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-panel);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-.wfpc-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.wfpc-title {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.wfpc-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.wfpc-x {
-  width: 28px;
-  height: 28px;
-}
-.wfpc-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.wfpc-ta {
-  width: 100%;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-  outline: none;
-  resize: vertical;
-  min-height: 7rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.wfpc-ta:focus {
-  border-color: var(--borderStrong);
-}
-.wfpc-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.wfpc-draft {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 12px;
-}
-.wfpc-draft-hd {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 5px;
-}
-.wfpc-draft-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.wfpc-draft-desc {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-sm);
-}
-.wfpc-groups {
-  margin-top: 9px;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.wfpc-group-hd {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.wfpc-group-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.wfpc-group-role {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.wfpc-group-steps {
-  margin-top: 3px;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.wfpc-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wfpc-step-n {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.wfpc-step-skill {
-  color: var(--textDim);
-}
-.wfpc-draft-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  margin-top: 9px;
-}
-.wfpc-foot {
-  flex: 0 0 auto;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wfpc-foothint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.btn.pri.sm:disabled,
-.btn.sm:disabled {
-  opacity: 0.45;
-  cursor: default;
-  filter: none;
-}
-.spin {
-  animation: wfpc-spin 0.9s linear infinite;
-}
-@keyframes wfpc-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

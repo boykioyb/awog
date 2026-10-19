@@ -1,40 +1,52 @@
 <template>
-  <div class="cap-tab">
-    <div v-if="!segments.length && !total" class="cap-note">{{ t('capture.timing.none') }}</div>
+  <div :class="CAP_TAB">
+    <div v-if="!segments.length && !total" :class="CAP_NOTE">{{ t('capture.timing.none') }}</div>
     <template v-else>
-      <section class="cap-sec">
-        <h4>{{ t('capture.timing.waterfall') }}</h4>
-        <div class="cw-wf" role="img" :aria-label="t('capture.timing.waterfall')">
+      <section :class="CAP_SEC">
+        <h4 :class="CAP_SEC_TITLE">{{ t('capture.timing.waterfall') }}</h4>
+        <div
+          class="flex h-3 gap-px overflow-hidden rounded-sm bg-muted ring-1 ring-border ring-inset"
+          role="img"
+          :aria-label="t('capture.timing.waterfall')"
+        >
           <span
             v-for="s in segments"
             :key="s.key"
-            class="cw-seg"
-            :class="`seg-${s.key}`"
+            class="min-w-0.5"
+            :class="SEG_CLASS[s.key]"
             :style="{ width: `${s.pct}%` }"
             :title="`${t(`capture.timing.${s.key}`)}: ${fmt(s.ms)}`"
           />
         </div>
       </section>
-      <section class="cap-sec">
-        <table class="cap-kv">
-          <tbody>
-            <tr v-for="s in segments" :key="s.key">
-              <th>
-                <span class="cw-swatch" :class="`seg-${s.key}`" aria-hidden="true" />
+      <section :class="CAP_SEC">
+        <Table :class="CAP_KV">
+          <TableBody>
+            <TableRow v-for="s in segments" :key="s.key">
+              <TableHead>
+                <span
+                  class="mr-1.5 inline-block size-2.5 rounded-xs align-middle"
+                  :class="SEG_CLASS[s.key]"
+                  aria-hidden="true"
+                />
                 {{ t(`capture.timing.${s.key}`) }}
-              </th>
-              <td class="tnum">{{ fmt(s.ms) }}</td>
-              <td class="cw-cell" aria-hidden="true">
-                <span class="cw-bar" :class="`seg-${s.key}`" :style="{ width: `${s.pct}%` }" />
-              </td>
-            </tr>
-            <tr>
-              <th>{{ t('capture.timing.total') }}</th>
-              <td class="tnum font-semibold">{{ fmt(total) }}</td>
-              <td />
-            </tr>
-          </tbody>
-        </table>
+              </TableHead>
+              <TableCell class="tnum">{{ fmt(s.ms) }}</TableCell>
+              <TableCell class="w-2/5" aria-hidden="true">
+                <span
+                  class="block h-1.5 rounded-xs"
+                  :class="SEG_CLASS[s.key]"
+                  :style="{ width: `${s.pct}%` }"
+                />
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableHead>{{ t('capture.timing.total') }}</TableHead>
+              <TableCell class="tnum font-semibold">{{ fmt(total) }}</TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
       </section>
     </template>
   </div>
@@ -43,11 +55,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CaptureEntry, CaptureTiming } from '~/types/network-capture'
+import { CAP_KV, CAP_NOTE, CAP_SEC, CAP_SEC_TITLE, CAP_TAB } from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()
 
 const ORDER = ['blocked', 'dns', 'connect', 'ssl', 'send', 'wait', 'receive'] as const
+
+// Màu từng pha của waterfall (swatch + thanh dùng chung).
+const SEG_CLASS: Record<(typeof ORDER)[number], string> = {
+  blocked: 'bg-dim',
+  dns: 'bg-lavender',
+  connect: 'bg-warning',
+  ssl: 'bg-primary',
+  send: 'bg-info',
+  wait: 'bg-success',
+  receive: 'bg-info/60',
+}
 
 const parts = computed(() => {
   const tm: CaptureTiming = props.entry.timing ?? {}
@@ -69,56 +93,3 @@ const segments = computed(() => {
 const fmt = (ms: number): string =>
   ms < 1000 ? `${ms.toFixed(ms < 10 ? 2 : 0)} ms` : `${(ms / 1000).toFixed(2)} s`
 </script>
-
-<style scoped>
-.cw-wf {
-  display: flex;
-  height: 12px;
-  gap: 1px;
-  border-radius: var(--r-xs);
-  overflow: hidden;
-  background: var(--bgSubtle);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-.cw-seg {
-  min-width: 2px;
-}
-.cw-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: 6px;
-  border-radius: 3px; /* design-token-ok: swatch shape */
-  vertical-align: middle;
-}
-.cw-cell {
-  width: 40%;
-}
-.cw-bar {
-  display: block;
-  height: 6px;
-  border-radius: 3px; /* design-token-ok: bar shape */
-}
-.seg-blocked {
-  background: var(--textDim);
-}
-.seg-dns {
-  background: var(--violet);
-}
-.seg-connect {
-  background: var(--amber);
-}
-.seg-ssl {
-  background: var(--accent);
-}
-.seg-send {
-  background: var(--blue);
-}
-.seg-wait {
-  background: var(--green);
-}
-.seg-receive {
-  background: var(--blue);
-  opacity: 0.6;
-}
-</style>

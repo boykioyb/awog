@@ -3,49 +3,58 @@
        có option là cho vào session hiện tại hay mở session mới".
        Một host duy nhất cho MỌI màn (Tổng quan · Logs · Explorer · Nhật ký ·
        Kubernetes), vì bốn bản sao của hộp này là bốn chỗ để "phiên mới" hiểu khác
-       nhau về việc nó nên rơi vào project nào. -->
-  <Teleport to="body">
-    <div v-if="chooser.open" class="ovl on" @click.self="closeChooser">
-      <div class="ixa" role="dialog" aria-modal="true" @keydown.esc="closeChooser">
-        <header class="ixa-hd">
-          <Icon name="sparkles" />
-          <span class="ixa-ttl">{{ t('infra.ask.chooseTitle') }}</span>
-        </header>
-        <p v-if="chooser.source" class="ixa-src">{{ chooser.source }}</p>
-        <pre class="ixa-preview">{{ preview }}</pre>
-        <div class="ixa-opts">
-          <button
-            class="ixa-opt"
-            type="button"
-            :disabled="!hasActiveSession"
-            @click="deliver(chooser.text, 'current')"
-          >
-            <Icon name="message" />
-            <span class="ixa-opt-ttl">{{ t('infra.ask.chooseCurrent') }}</span>
-            <span class="ixa-opt-hint">
-              {{ hasActiveSession ? t('infra.ask.chooseCurrentHint') : t('infra.ask.noSession') }}
-            </span>
-          </button>
-          <button class="ixa-opt" type="button" @click="deliver(chooser.text, 'new')">
-            <Icon name="plus" />
-            <span class="ixa-opt-ttl">{{ t('infra.ask.chooseNew') }}</span>
-            <span class="ixa-opt-hint">{{ t('infra.ask.chooseNewHint') }}</span>
-          </button>
-        </div>
-        <footer class="ixa-ft">
-          <Button type="button" variant="outline" @click="closeChooser">
-            {{ t('common.cancel') }}
-          </Button>
-        </footer>
+       nhau về việc nó nên rơi vào project nào.
+       shadcn Dialog (role=dialog ⇒ OVERLAYS đã phủ). Esc / bấm ngoài / X = đóng: hộp
+       này là một quyết định, không phải một bước bắt buộc. -->
+  <Dialog :open="chooser.open" @update:open="(v: boolean) => !v && closeChooser()">
+    <DialogContent
+      class="flex w-[min(32.5rem,calc(100vw-2rem))] flex-col gap-2.5 bg-card px-4 pt-3.5 pb-3"
+      :aria-describedby="undefined"
+    >
+      <DialogHeader class="flex-row items-center gap-2 pr-8 text-primary">
+        <Icon name="sparkles" />
+        <DialogTitle class="text-base font-semibold text-foreground">
+          {{ t('infra.ask.chooseTitle') }}
+        </DialogTitle>
+      </DialogHeader>
+      <p v-if="chooser.source" class="m-0 text-xs text-muted-foreground">{{ chooser.source }}</p>
+      <pre
+        class="m-0 max-h-45 overflow-auto rounded-md border bg-muted px-2.5 py-2 font-sans text-xs break-words whitespace-pre-wrap text-muted-foreground"
+        >{{ preview }}</pre
+      >
+      <div class="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          :class="OPTION"
+          :disabled="!hasActiveSession"
+          @click="deliver(chooser.text, 'current')"
+        >
+          <Icon name="message" />
+          <span class="text-sm font-medium text-foreground">
+            {{ t('infra.ask.chooseCurrent') }}
+          </span>
+          <span class="text-xs text-dim">
+            {{ hasActiveSession ? t('infra.ask.chooseCurrentHint') : t('infra.ask.noSession') }}
+          </span>
+        </Button>
+        <Button variant="outline" :class="OPTION" @click="deliver(chooser.text, 'new')">
+          <Icon name="plus" />
+          <span class="text-sm font-medium text-foreground">{{ t('infra.ask.chooseNew') }}</span>
+          <span class="text-xs text-dim">{{ t('infra.ask.chooseNewHint') }}</span>
+        </Button>
       </div>
-    </div>
-  </Teleport>
+      <DialogFooter>
+        <Button variant="outline" @click="closeChooser">
+          {{ t('common.cancel') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
-import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { chooser, closeChooser, deliver, hasActiveSession } = useInfraAskAgent()
@@ -57,115 +66,7 @@ const preview = computed(() => {
   return text.length > 600 ? `${text.slice(0, 600)}…` : text
 })
 
-/** Esc đóng: hộp này là một quyết định, không phải một bước bắt buộc. */
-function onKey(e: KeyboardEvent): void {
-  if (chooser.open && e.key === 'Escape') closeChooser()
-}
-
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+// Ô lựa chọn: cả khối là một nút, chữ trái-trên.
+const OPTION =
+  'h-auto flex-col items-start justify-start gap-0.5 whitespace-normal bg-muted px-3 py-2.5 text-left font-normal text-muted-foreground shadow-none hover:border-ring hover:bg-accent disabled:opacity-55'
 </script>
-
-<style scoped>
-.ixa {
-  width: min(520px, calc(100vw - 32px));
-  margin-top: 6vh;
-  padding: 14px 16px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  background: var(--card);
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ixa-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--primary);
-}
-
-.ixa-ttl {
-  color: var(--foreground);
-  font-weight: 650;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-
-.ixa-src {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ixa-preview {
-  margin: 0;
-  max-height: 180px;
-  overflow: auto;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-  color: var(--muted-foreground);
-  font-family: var(--sans);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.ixa-opts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.ixa-opt {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 10px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-  color: var(--muted-foreground);
-  text-align: left;
-  cursor: pointer;
-}
-
-.ixa-opt:hover:not(:disabled) {
-  border-color: var(--ring);
-  background: var(--accent-wash);
-}
-
-.ixa-opt:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-
-.ixa-opt:disabled {
-  opacity: 0.55;
-}
-
-.ixa-opt-ttl {
-  color: var(--foreground);
-  font-weight: 550;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.ixa-opt-hint {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.ixa-ft {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

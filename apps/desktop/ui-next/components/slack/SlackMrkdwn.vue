@@ -1,11 +1,19 @@
 <template>
-  <div class="slk-mrk">
+  <div class="text-base leading-(--lh-prose) text-foreground wrap-anywhere [&>p+p]:mt-1">
     <template v-for="(b, i) in blocks" :key="i">
-      <p v-if="b.t === 'para'" class="slk-p"><SlackMrkInline :nodes="b.c" /></p>
-      <blockquote v-else-if="b.t === 'quote'" class="slk-quote">
+      <p v-if="b.t === 'para'" class="m-0 whitespace-pre-wrap"><SlackMrkInline :nodes="b.c" /></p>
+      <blockquote
+        v-else-if="b.t === 'quote'"
+        class="mx-0 mb-0 mt-1 whitespace-pre-wrap border-l-3 border-input pl-2.5 text-dim"
+      >
         <SlackMrkInline :nodes="b.c" />
       </blockquote>
-      <pre v-else class="slk-pre">{{ b.v }}</pre>
+      <!-- mono-ok: khối code ``` trong tin Slack -->
+      <pre
+        v-else
+        class="mb-0 mt-1 overflow-x-auto whitespace-pre-wrap rounded-md border bg-muted px-2.5 py-2 font-mono text-sm"
+        >{{ b.v }}</pre
+      >
     </template>
   </div>
 </template>
@@ -20,41 +28,3 @@ const props = defineProps<{ text: string }>()
 
 const blocks = computed(() => parseMrkdwn(props.text))
 </script>
-
-<style scoped>
-.slk-mrk {
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.slk-p {
-  margin: 0;
-  white-space: pre-wrap;
-}
-.slk-p + .slk-p,
-.slk-quote,
-.slk-pre {
-  margin-top: 4px;
-}
-.slk-quote {
-  margin: 4px 0 0;
-  padding-left: 10px;
-  border-left: 3px solid var(--borderStrong);
-  color: var(--textDim);
-  white-space: pre-wrap;
-}
-.slk-pre {
-  /* mono-ok: khối code ``` trong tin Slack */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  margin-bottom: 0;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgSubtle);
-  white-space: pre-wrap;
-  overflow-x: auto;
-}
-</style>

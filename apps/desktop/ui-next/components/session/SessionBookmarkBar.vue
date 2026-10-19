@@ -10,101 +10,146 @@
   <!-- Biến thể `chip` (session-ui-refactor §3.2): đánh dấu sống trong hàng ngữ cảnh
        dùng chung. Luật AC-B7 giữ nguyên — không có đánh dấu thì VẮNG MẶT khỏi DOM,
        không phải ẩn. -->
-  <span v-if="variant === 'chip' && session.loaded && count" class="ctxwrap2">
-    <button
-      ref="chipEl"
-      class="ctxchip"
-      :class="{ on: expanded }"
+  <span v-if="variant === 'chip' && session.loaded && count" class="relative inline-flex shrink-0">
+    <SessionCtxChip
+      ref="chipRef"
+      icon="bookmark"
+      chev
+      :on="expanded"
       :title="t('sessions.bookmark.barTitle')"
       @click.stop="expanded = !expanded"
     >
-      <Icon name="bookmark" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="bmb-n">{{ count }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+      <!-- Huy hiệu, không phải chữ thân: cỡ cố định để vẫn là viên gọn ở mọi cỡ chữ. -->
+      <span
+        class="ml-auto min-w-4.5 shrink-0 rounded-sm bg-primary/14 px-1 py-0.5 text-center text-sm leading-3 text-primary tabular-nums"
+      >
+        {{ count }}
+      </span>
+    </SessionCtxChip>
     <Teleport to="body">
-      <div v-if="expanded" class="ctxbackdrop2" @click="expanded = false" />
-      <div v-if="expanded" ref="popEl" class="pop bmbpop" :style="popStyle" @click.stop>
-        <div class="pl">{{ t('sessions.bookmark.barTitle') }}</div>
-        <div class="bmb-list">
-          <div v-for="row in rows" :key="row.id" class="bmb-row" :class="{ dead: row.dangling }">
-            <button
-              type="button"
-              class="bmb-jump"
+      <div v-if="expanded" class="fixed inset-0 z-40" @click="expanded = false" />
+      <SessionCtxPop v-if="expanded" ref="popRef" class="w-80" :style="popStyle" @click.stop>
+        <div class="mb-2 flex justify-between text-sm text-dim">
+          {{ t('sessions.bookmark.barTitle') }}
+        </div>
+        <div class="flex flex-col">
+          <div
+            v-for="row in rows"
+            :key="row.id"
+            class="flex min-w-0 items-center gap-1 rounded-sm px-1 py-px hover:bg-accent"
+            :class="row.dangling && 'opacity-55'"
+          >
+            <!-- `disabled` is the whole of AC-B14: a dangling row swallows both the click
+                 and Enter, so it can never scroll to some other message. -->
+            <Button
+              variant="ghost"
+              class="h-auto min-w-0 flex-auto justify-start gap-2.5 px-0 py-1 text-left text-base font-normal text-foreground hover:bg-transparent disabled:cursor-default disabled:opacity-100"
               :disabled="row.dangling"
               :title="row.dangling ? t('sessions.bookmark.dangling') : t('sessions.bookmark.jump')"
               @click="onJump(row)"
             >
-              <span class="bmb-ex">{{ row.excerpt }}</span>
-              <span class="bmb-when">{{ formatRelativeAgo(row.at, t, now) }}</span>
-            </button>
-            <button
-              type="button"
-              class="bmb-act dgr"
+              <span class="min-w-0 flex-auto truncate" :class="row.dangling && 'italic'">
+                {{ row.excerpt }}
+              </span>
+              <span class="shrink-0 text-sm leading-3 text-muted-foreground tabular-nums">
+                {{ formatRelativeAgo(row.at, t, now) }}
+              </span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="shrink-0 text-muted-foreground hover:bg-destructive/14 hover:text-destructive"
               :title="
+                row.dangling ? t('sessions.bookmark.danglingRemove') : t('sessions.bookmark.remove')
+              "
+              :aria-label="
                 row.dangling ? t('sessions.bookmark.danglingRemove') : t('sessions.bookmark.remove')
               "
               @click="remove(row)"
             >
-              <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+              <Icon name="x" class="size-3.5" />
+            </Button>
           </div>
         </div>
-      </div>
+      </SessionCtxPop>
     </Teleport>
   </span>
 
-  <div v-else-if="variant === 'bar' && session.loaded && count" class="bmb">
-    <div class="bmb-head">
-      <button
-        type="button"
-        class="bmb-toggle"
+  <div
+    v-else-if="variant === 'bar' && session.loaded && count"
+    class="mx-3.5 mt-2.5 shrink-0 rounded-lg border bg-card"
+  >
+    <div class="flex min-w-0 items-center gap-2 px-2.5 py-1.5">
+      <Button
+        variant="ghost"
+        class="h-auto shrink-0 gap-2 p-0 text-base font-semibold text-foreground select-none hover:bg-transparent"
         :title="expanded ? t('sessions.bookmark.collapse') : t('sessions.bookmark.expand')"
         @click="expanded = !expanded"
       >
-        <Icon name="chev" class="bmb-chev" :class="{ open: expanded }" />
-        <Icon name="bookmark" class="bmb-ic" />
-        <span class="bmb-title">{{ t('sessions.bookmark.barTitle') }}</span>
-      </button>
+        <Icon
+          name="chev"
+          class="size-3 text-muted-foreground transition-transform"
+          :class="!expanded && '-rotate-90'"
+        />
+        <Icon name="bookmark" class="size-3.5 text-primary" />
+        <span>{{ t('sessions.bookmark.barTitle') }}</span>
+      </Button>
       <!-- Collapsed: the newest bookmark rides in the same row, so the bar costs ONE
            line until the user asks for the list. -->
-      <button
+      <Button
         v-if="!expanded && latest"
-        type="button"
-        class="bmb-peek"
-        :class="{ dead: latest.dangling }"
+        variant="ghost"
+        class="h-auto min-w-0 flex-auto justify-start p-0 text-left text-base font-normal text-muted-foreground hover:bg-transparent hover:text-foreground disabled:cursor-default"
+        :class="latest.dangling && 'opacity-55 disabled:opacity-55'"
         :disabled="latest.dangling"
         :title="latest.dangling ? t('sessions.bookmark.dangling') : t('sessions.bookmark.jump')"
         @click="onJump(latest)"
       >
-        {{ latest.excerpt }}
-      </button>
-      <span class="bmb-n">{{ count }}</span>
+        <span class="truncate">{{ latest.excerpt }}</span>
+      </Button>
+      <span
+        class="ml-auto min-w-4.5 shrink-0 rounded-sm bg-primary/14 px-1 py-0.5 text-center text-sm leading-3 text-primary tabular-nums"
+      >
+        {{ count }}
+      </span>
     </div>
-    <div v-if="expanded" class="bmb-list">
-      <div v-for="row in rows" :key="row.id" class="bmb-row" :class="{ dead: row.dangling }">
+    <div v-if="expanded" class="flex flex-col px-1.5 pb-1.5">
+      <div
+        v-for="row in rows"
+        :key="row.id"
+        class="flex min-w-0 items-center gap-1 rounded-sm px-1 py-px hover:bg-accent"
+        :class="row.dangling && 'opacity-55'"
+      >
         <!-- `disabled` is the whole of AC-B14: a dangling row swallows both the click
              and Enter, so it can never scroll to some other message. -->
-        <button
-          type="button"
-          class="bmb-jump"
+        <Button
+          variant="ghost"
+          class="h-auto min-w-0 flex-auto justify-start gap-2.5 px-0 py-1 text-left text-base font-normal text-foreground hover:bg-transparent disabled:cursor-default disabled:opacity-100"
           :disabled="row.dangling"
           :title="row.dangling ? t('sessions.bookmark.dangling') : t('sessions.bookmark.jump')"
           @click="onJump(row)"
         >
-          <span class="bmb-ex">{{ row.excerpt }}</span>
-          <span class="bmb-when">{{ formatRelativeAgo(row.at, t, now) }}</span>
-        </button>
-        <button
-          type="button"
-          class="bmb-act dgr"
+          <span class="min-w-0 flex-auto truncate" :class="row.dangling && 'italic'">
+            {{ row.excerpt }}
+          </span>
+          <span class="shrink-0 text-sm leading-3 text-muted-foreground tabular-nums">
+            {{ formatRelativeAgo(row.at, t, now) }}
+          </span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="shrink-0 text-muted-foreground hover:bg-destructive/14 hover:text-destructive"
           :title="
+            row.dangling ? t('sessions.bookmark.danglingRemove') : t('sessions.bookmark.remove')
+          "
+          :aria-label="
             row.dangling ? t('sessions.bookmark.danglingRemove') : t('sessions.bookmark.remove')
           "
           @click="remove(row)"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" class="size-3.5" />
+        </Button>
       </div>
     </div>
   </div>
@@ -128,8 +173,12 @@ const { rows, count, latest, expanded, jump, remove } = useSessionBookmarks(() =
 
 // Chip nằm trên hàng header `.dh` — neo fixed + kẹp viewport (align 'right' giữ
 // thói quen neo mép phải của popover cũ, nhưng giờ sát mép nào cũng không tràn).
-const chipEl = ref<HTMLElement | null>(null)
-const popEl = ref<HTMLElement | null>(null)
+// Chip + popover là component (Button / SessionCtxPop) ⇒ template ref là instance,
+// phần tử DOM nằm ở `$el`.
+const chipRef = useTemplateRef<{ $el: HTMLElement }>('chipRef')
+const popRef = useTemplateRef<{ $el: HTMLElement }>('popRef')
+const chipEl = computed(() => chipRef.value?.$el ?? null)
+const popEl = computed(() => popRef.value?.$el ?? null)
 const { style: popStyle } = usePopoverAnchor(chipEl, popEl, expanded, {
   align: 'right',
   maxHeight: 340,
@@ -143,164 +192,3 @@ const onJump = (row: BookmarkRow) => {
   void jump(row)
 }
 </script>
-
-<style scoped>
-.bmb {
-  flex: 0 0 auto;
-  margin: 10px 14px 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--card);
-}
-.bmb-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  min-width: 0;
-}
-.bmb-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  color: var(--foreground);
-  font-size: 1em;
-  font-weight: 600;
-  user-select: none;
-}
-.bmb-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--primary);
-}
-.bmb-chev {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--muted-foreground);
-  transform: rotate(-90deg);
-  transition: transform 0.15s var(--ease, ease);
-}
-.bmb-chev.open {
-  transform: none;
-}
-.bmb-peek {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: left;
-  font-size: 1em;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.bmb-peek:hover:not(:disabled) {
-  color: var(--foreground);
-}
-/* Badge, not body text: fixed 12px so it stays a compact pill at any base font size. */
-.bmb-n {
-  margin-left: auto;
-  flex: 0 0 auto;
-  min-width: 18px;
-  padding: 2px 5px;
-  border-radius: var(--r-xs);
-  background: color-mix(in srgb, var(--primary) 14%, transparent);
-  color: var(--primary);
-  font-family: var(--code, monospace);
-  font-size: 12px;
-  line-height: 12px;
-  text-align: center;
-}
-.bmb-list {
-  display: flex;
-  flex-direction: column;
-  padding: 0 6px 6px;
-}
-.bmb-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 4px;
-  border-radius: var(--r-xs);
-  min-width: 0;
-}
-.bmb-row:hover {
-  background: var(--accent-wash);
-}
-.bmb-jump {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 4px 0;
-  text-align: left;
-  color: var(--foreground);
-  font-size: 1em;
-}
-.bmb-ex {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.bmb-when {
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 12px;
-  font-family: var(--code, monospace);
-}
-/* Dangling: dimmed and inert — the anchor stays on disk, only the jump is gone. */
-.bmb-row.dead,
-.bmb-peek.dead {
-  opacity: 0.55;
-}
-.bmb-jump:disabled,
-.bmb-peek:disabled {
-  cursor: default;
-}
-.bmb-row.dead .bmb-ex {
-  font-style: italic;
-}
-.bmb-act {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  padding: 6px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  transition:
-    color 0.12s var(--ease, ease),
-    background 0.12s var(--ease, ease);
-}
-.bmb-act.dgr:hover {
-  background: color-mix(in srgb, var(--destructive) 14%, transparent);
-  color: var(--destructive);
-}
-
-/* ── Biến thể chip: popover neo vào chip trong hàng ngữ cảnh ────────────── */
-.ctxwrap2 {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-.ctxbackdrop2 {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-/* Neo `fixed` qua usePopoverAnchor — `.pop` lo position/z-index; đây chỉ còn skin. */
-.bmbpop {
-  width: 320px;
-  overflow-y: auto;
-}
-.bmbpop .bmb-list {
-  padding: 0;
-}
-.bmb-n {
-  font-variant-numeric: tabular-nums;
-}
-</style>

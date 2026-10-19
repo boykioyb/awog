@@ -1,108 +1,137 @@
 <template>
-  <div class="mondisk">
-    <div v-if="error" class="monerr">
-      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div class="flex flex-col gap-4">
+    <div
+      v-if="error"
+      class="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    >
+      <Icon name="alert" class="size-3.5" />
       {{ error }}
     </div>
 
     <!-- Ổ đĩa. Chỉ ổ chứa thư mục nhà + ổ gắn ngoài; các mount ảo của APFS bị lọc
          ở sidecar, nếu không sẽ hiện bảy dòng cùng dung lượng. -->
-    <div class="mondiskvols">
-      <div v-for="v in volumes" :key="v.filesystem" class="tile mondiskvol">
-        <div class="monclbl">{{ v.mount }}</div>
-        <div class="moncbig tnum" :style="{ color: levelColor(volLevel(v)) }">
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-2.5">
+      <Card v-for="v in volumes" :key="v.filesystem" class="min-w-0 gap-1 px-3.5 py-3">
+        <div class="truncate text-xs text-faint">{{ v.mount }}</div>
+        <div class="text-xl tabular-nums" :class="levelText(volLevel(v))">
           {{ formatMem(v.usedKb) }} / {{ formatMem(v.totalKb) }}
         </div>
-        <div class="monmeter">
-          <i :style="{ width: `${pct(v)}%`, background: levelColor(volLevel(v)) }" />
+        <!-- Vạch mức 4px (h-1): độ dày chính là hình dạng. -->
+        <div class="h-1 overflow-hidden rounded-full bg-muted">
+          <i
+            class="block h-full rounded-full transition-[width] duration-250"
+            :class="levelBg(volLevel(v))"
+            :style="{ width: `${pct(v)}%` }"
+          />
         </div>
-        <div class="mondiskvolft">
-          <span class="moncsub">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs text-dim">
             {{ t('disk.free', { free: formatMem(v.freeKb), pct: Math.round(pct(v)) }) }}
           </span>
           <!-- Lối vào để trả lời "chỗ trống đi đâu". Không có nút này thì tab Đĩa
                chỉ có danh mục rác soạn sẵn, và mọi thứ ngoài danh mục đó vô hình. -->
           <Button
             :title="v.mount"
-            class="mondiskbrowse"
+            class="shrink-0"
             variant="outline"
             @click="emit('open', v.mount)"
           >
-            <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="search" class="size-3.5" />
             {{ t('disk.browse') }}
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
 
     <!-- Lối tắt tới những thư mục hay chiếm chỗ nhất, ngoài danh mục rác. -->
-    <div class="mondiskroots">
-      <span class="fd">{{ t('disk.roots.label') }}</span>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-sm text-dim">{{ t('disk.roots.label') }}</span>
       <Button v-for="r in roots" :key="r.path" variant="outline" @click="emit('open', r.path)">
-        <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="folder" class="size-3.5" />
         {{ r.name }}
       </Button>
     </div>
 
     <!-- Gợi ý dọn -->
-    <div class="tile monsec">
-      <div class="monsech">
-        <span class="monsect">{{ t('disk.clean.title') }}</span>
-        <span class="fd">{{ countLabel }}</span>
+    <Card class="gap-2 px-3.5 pt-3 pb-1">
+      <div class="flex items-center gap-2">
+        <!-- Tiêu đề không được co: nhãn phụ bên cạnh dài hơn nhiều, flex mặc định sẽ
+             bóp chính cái tên mục xuống hai dòng. -->
+        <span class="shrink-0 text-base text-foreground">{{ t('disk.clean.title') }}</span>
+        <span class="text-sm text-dim">{{ countLabel }}</span>
         <Button
           :disabled="measuring > 0"
-          class="monscanbtn"
+          class="ml-auto"
           variant="outline"
           @click="emit('measure')"
         >
           <!-- Thước, không phải khung quét: `scan` là bốn góc ngắm — nó đọc ra
                "quét mã QR", còn việc ở đây là ĐO dung lượng. -->
-          <Icon name="ruler" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="ruler" class="size-3.5" />
           {{ buttonLabel }}
         </Button>
       </div>
       <!-- Chỉ cộng mục "an toàn": gộp cả mục cần cân nhắc vào một con số "dọn được"
            là mời người dùng xoá thứ họ sẽ tiếc. -->
-      <div v-if="totalSafeKb > 0" class="mondisksum">
+      <div v-if="totalSafeKb > 0" class="text-sm text-dim">
         {{ t('disk.clean.total', { size: formatMem(totalSafeKb) }) }}
       </div>
 
-      <table class="montbl">
-        <thead>
-          <tr>
-            <th>{{ t('disk.clean.col.item') }}</th>
-            <th class="num size">{{ t('disk.clean.col.size') }}</th>
-            <th class="act" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="x in sorted" :key="x.id" @contextmenu="emit('menu', $event, x.path, 'dir')">
-            <td>
-              <div class="mondisknm">
+      <Table class="table-fixed">
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead class="h-auto px-2.5 py-1.5 whitespace-nowrap text-faint">
+              {{ t('disk.clean.col.item') }}
+            </TableHead>
+            <TableHead class="h-auto px-2.5 py-1.5 whitespace-nowrap text-faint w-23 text-right">
+              {{ t('disk.clean.col.size') }}
+            </TableHead>
+            <!-- BỐN nút cạnh nhau: 4 × 32px + 3 × 4px khoảng cách + padding ô 20px.
+                 ⚠ Cột này từng ghim 88px (đúng cho hai nút). Thêm nút thứ ba và tư thì
+                 con flex bị BÓP — nên nút để `shrink-0`: lần sau thêm nút sẽ TRÀN
+                 (nhìn thấy ngay) thay vì âm thầm bóp cả hàng. -->
+            <TableHead class="h-auto px-2.5 py-1.5 whitespace-nowrap text-faint w-40 text-right" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow
+            v-for="x in sorted"
+            :key="x.id"
+            class="hover:bg-transparent"
+            @contextmenu="emit('menu', $event, x.path, 'dir')"
+          >
+            <TableCell class="px-2.5 py-2 align-top text-dim">
+              <div class="flex min-w-0 items-center gap-1.5 overflow-hidden">
                 <!-- Icon theo LOẠI rác: hai mươi dòng chữ thuần thì phải đọc từng
-                     dòng mới biết cái nào là cache, cái nào là kho gói. -->
+                     dòng mới biết cái nào là cache, cái nào là kho gói. Mục "cân
+                     nhắc" dùng màu cảnh báo cho khớp với thẻ bên cạnh nó. -->
                 <Icon
                   :name="kindIcon(x.kind)"
-                  class="mondiskicn"
-                  :class="{ warn: x.safety === 'review' }"
-                  style="width: var(--icon-sm); height: var(--icon-sm)"
+                  class="size-3.5 shrink-0"
+                  :class="x.safety === 'review' ? 'text-warning' : 'text-primary'"
                 />
-                <span class="mondisklbl mondiskdir" :title="x.label" @click="emit('open', x.path)">
+                <span
+                  class="cursor-pointer whitespace-nowrap text-foreground hover:text-primary hover:underline"
+                  :title="x.label"
+                  @click="emit('open', x.path)"
+                >
                   {{ x.label }}
                 </span>
-                <span
-                  class="tag"
-                  :class="{ acc: x.safety === 'safe', warn: x.safety === 'review' }"
-                >
+                <Badge variant="outline" class="rounded-sm" :class="safetyClass(x.safety)">
                   {{ t(`disk.safety.${x.safety}`) }}
-                </span>
+                </Badge>
               </div>
-              <div class="mondiskhint">{{ x.hint }}</div>
-              <div class="mondiskpath mono" :title="x.path">{{ x.path }}</div>
-            </td>
-            <td class="num size tnum">{{ sizeText(x.path) }}</td>
-            <td class="act">
-              <div class="mondiskacts">
+              <div class="mt-0.5 text-xs text-dim">{{ x.hint }}</div>
+              <!-- Đường dẫn là thứ người dùng copy vào terminal để tự kiểm ⇒ mono hợp lệ. -->
+              <div class="mt-0.5 truncate font-mono text-xs text-faint" :title="x.path">
+                {{ x.path }}
+              </div>
+            </TableCell>
+            <TableCell class="px-2.5 py-2 align-top text-dim w-23 text-right tabular-nums">
+              {{ sizeText(x.path) }}
+            </TableCell>
+            <TableCell class="px-2.5 py-2 align-top text-dim w-40 text-right">
+              <div class="flex justify-end gap-1 *:shrink-0">
                 <!-- Quét sâu phải là một NÚT. Trước đó lối vào duy nhất là bấm vào
                    chữ tên mục — không có gì báo hiệu nó bấm được, nên coi như không
                    tồn tại với người chưa biết. -->
@@ -112,7 +141,7 @@
                   size="iconMd"
                   @click="emit('open', x.path)"
                 >
-                  <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <Icon name="search" />
                 </Button>
                 <!-- Hiện trong Finder + Sao chép đường dẫn: hai việc người dùng
                      làm ngay sau khi thấy một mục to, trước cả khi quyết định xoá.
@@ -124,7 +153,7 @@
                   size="iconMd"
                   @click="emit('reveal', x.path)"
                 >
-                  <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <Icon name="folder" />
                 </Button>
                 <Button
                   :title="t('disk.copyPath.action')"
@@ -132,7 +161,7 @@
                   size="iconMd"
                   @click="emit('copy-path', x.path)"
                 >
-                  <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <Icon name="copy" />
                 </Button>
                 <!-- Cùng luật với drawer: đọc phủ cả đĩa, XOÁ chỉ trong nhà. Một
                      project nằm ở ổ ngoài vẫn sinh ra dòng `node_modules` ở đây,
@@ -140,12 +169,12 @@
                 <Button
                   v-if="canTrash(x.path)"
                   :title="t('disk.trash.action')"
-                  class="mondisktrash"
+                  class="hover:bg-destructive/10 hover:text-destructive"
                   variant="outline"
                   size="iconMd"
                   @click="emit('trash', x.path, x.label, sizes[x.path] ?? undefined)"
                 >
-                  <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <Icon name="trash" />
                 </Button>
                 <!-- Giữ chỗ đúng khổ nút nhờ `size="iconMd"` — nút thật và
                      placeholder cùng một ladder --ctrl-h-sm ở mọi theme. Render
@@ -153,19 +182,19 @@
                 <Button
                   v-else
                   :title="t('disk.trash.outsideHome')"
-                  class="mondisknotrash"
+                  class="cursor-default border-transparent text-faint shadow-none hover:bg-transparent hover:text-faint"
                   as="span"
                   variant="outline"
                   size="iconMd"
                 >
-                  <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <Icon name="info" />
                 </Button>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Card>
 
     <!-- Dọn bằng công cụ.
          Có những chỗ Thùng rác KHÔNG với tới được: layer của Docker nằm trong
@@ -174,36 +203,46 @@
          để chính công cụ đó dọn phần thừa của nó.
          Lệnh hiện NGUYÊN VĂN ngay trên hàng — không giấu sau một cái nhãn — vì
          đây là nhóm xoá KHÔNG hoàn tác được, khác hẳn phần Thùng rác ở trên. -->
-    <div v-if="cleanupActions.length > 0" class="tile monsec">
-      <div class="monsech">
-        <span class="monsect">{{ t('disk.cleanup.title') }}</span>
-        <span class="fd mondiskcleansub">{{ t('disk.cleanup.subtitle') }}</span>
+    <Card v-if="cleanupActions.length > 0" class="gap-2 px-3.5 pt-3 pb-1">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 text-base text-foreground">{{ t('disk.cleanup.title') }}</span>
+        <span class="min-w-0 text-sm text-dim">{{ t('disk.cleanup.subtitle') }}</span>
       </div>
-      <div class="mondiskclean">
-        <div v-for="a in cleanupActions" :key="a.id" class="mondiskcleanrow">
-          <div class="mondiskcleanmain">
-            <div class="mondiskcleanlbl">{{ a.label }}</div>
-            <!-- mono-ok: dòng lệnh shell thật, người dùng copy thẳng vào terminal -->
-            <div class="mondiskcleancmd" :title="a.command">{{ a.command }}</div>
-            <div class="mondiskhint">{{ a.hint }}</div>
+      <div class="flex flex-col gap-0.5 py-1">
+        <!-- Grid chứ không flex: cột nút phải thẳng hàng giữa các hàng, và `1fr`
+             kèm `min-w-0` là thứ duy nhất cho lệnh dài cắt ellipsis thay vì đẩy nút
+             tràn ra ngoài thẻ. -->
+        <div
+          v-for="a in cleanupActions"
+          :key="a.id"
+          class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md px-2.5 py-2 hover:bg-accent"
+        >
+          <div class="min-w-0">
+            <div class="text-base text-foreground">{{ a.label }}</div>
+            <!-- Dòng lệnh shell thật, người dùng copy thẳng vào terminal ⇒ mono hợp lệ. -->
+            <div class="mt-0.5 truncate font-mono text-xs text-primary" :title="a.command">
+              {{ a.command }}
+            </div>
+            <div class="mt-0.5 text-xs text-dim">{{ a.hint }}</div>
           </div>
           <Button
             :disabled="cleanupRunning !== ''"
             variant="outline"
             @click="emit('cleanup', a.id)"
           >
-            <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="sparkles" class="size-3.5" />
             {{ cleanupRunning === a.id ? t('disk.cleanup.running') : t('disk.cleanup.run') }}
           </Button>
         </div>
       </div>
-    </div>
+    </Card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { formatMem, levelColor, type UsageLevel } from '~/composables/useMonitorManager'
+import { formatMem, type UsageLevel } from '~/composables/useMonitorManager'
+import { levelBg, levelText } from './monitor-level'
 import type { CleanupAction, DiskVolume, JunkTarget, SizeState } from '~/composables/useDiskManager'
 import Button from '~/components/ui/button/Button.vue'
 
@@ -303,255 +342,14 @@ function kindIcon(kind: JunkTarget['kind']): string {
   return 'refresh'
 }
 
+// Thẻ mức an toàn: "an toàn" = brand, "cân nhắc" = vàng, còn lại viền trung tính.
+const safetyClass = (safety: JunkTarget['safety']): string => {
+  if (safety === 'safe') return 'border-primary/40 bg-primary/10 text-primary'
+  if (safety === 'review') return 'border-warning/40 text-warning'
+  return 'text-muted-foreground'
+}
+
 const sorted = computed(() =>
   [...props.targets].sort((a, b) => (props.sizes[b.path] ?? -1) - (props.sizes[a.path] ?? -1)),
 )
 </script>
-
-<style scoped>
-.mondisk {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.mondiskvols {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 10px;
-}
-.mondiskroots {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.mondiskvolft {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.mondiskbrowse {
-  flex: 0 0 auto;
-}
-.mondiskvol {
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.monclbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.moncbig {
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-}
-.moncsub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.monmeter {
-  height: 4px; /* design-token-ok: độ dày vạch chính là hình dạng */
-  border-radius: var(--r-pill);
-  background: var(--bgActive);
-  overflow: hidden;
-}
-.monmeter > i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  transition: width 0.25s ease;
-}
-.monsec {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px 4px;
-}
-.monsech {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.monsect {
-  /* Tiêu đề không được co: nhãn phụ bên cạnh dài hơn nhiều, flex mặc định sẽ
-     bóp chính cái tên mục xuống hai dòng ("Dọn bằng công / cụ"). */
-  flex: 0 0 auto;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-.monscanbtn {
-  margin-left: auto;
-}
-.mondisksum {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.montbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  table-layout: fixed;
-}
-.montbl th {
-  text-align: left;
-  padding: 6px 10px;
-  color: var(--textFaint);
-  font-weight: 500;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.montbl th.num,
-.montbl td.num {
-  text-align: right;
-}
-.montbl th.size,
-.montbl td.size {
-  width: 92px;
-}
-.montbl th.act,
-.montbl td.act {
-  /* BỐN nút cạnh nhau: 4 × 32px + 3 × 4px khoảng cách + padding ô 20px.
-     ⚠ Cột này từng ghim 88px (đúng cho hai nút). Thêm nút thứ ba và tư thì con
-     flex bị BÓP — `width: 32px` chỉ là basis, `flex-shrink` mặc định là 1 — nên
-     bốn nút vuông biến thành bốn viên thuốc hẹp. `flex: 0 0 auto` bên dưới khiến
-     lần sau thêm nút sẽ TRÀN (nhìn thấy ngay) thay vì âm thầm bóp cả hàng. */
-  width: 160px;
-  text-align: right;
-}
-/* Ô `td` không tự xếp ngang được (padding ăn mất chỗ rồi nút rơi xuống dòng),
-   nên bọc hai nút trong một hàng flex. */
-.mondiskacts {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-}
-.mondiskacts > * {
-  flex: 0 0 auto;
-}
-.montbl td {
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textDim);
-  vertical-align: top;
-}
-.mondisknm {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-}
-.mondiskicn {
-  flex: 0 0 auto;
-  color: var(--accent);
-}
-/* Mục "cân nhắc" dùng màu cảnh báo cho khớp với thẻ bên cạnh nó. */
-.mondiskicn.warn {
-  color: var(--amber);
-}
-.mondisklbl {
-  color: var(--text);
-  white-space: nowrap;
-}
-.mondiskdir {
-  cursor: pointer;
-}
-.mondiskdir:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-.mondiskhint {
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Đường dẫn là thứ người dùng copy vào terminal để tự kiểm ⇒ mono hợp lệ. */
-.mondiskpath {
-  margin-top: 2px;
-  font-family: var(--code); /* mono-ok: đường dẫn hệ thống, copy-paste được */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mondisktrash:hover {
-  color: var(--danger);
-  background: var(--dangerBg);
-}
-.monerr {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  background: var(--dangerBg);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* Dọn bằng công cụ — mỗi hàng: nhãn + lệnh + giải thích, nút ở cuối.
-   Grid chứ không flex: cột nút phải thẳng hàng giữa các hàng, và `1fr` kèm
-   `min-width: 0` là thứ duy nhất cho lệnh dài cắt ellipsis thay vì đẩy nút
-   tràn ra ngoài thẻ. */
-.mondisknotrash {
-  border-color: transparent;
-  box-shadow: none;
-  color: var(--textFaint);
-  cursor: default;
-}
-.mondiskcleansub {
-  min-width: 0;
-}
-.mondiskclean {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px 0;
-}
-.mondiskcleanrow {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-}
-.mondiskcleanrow:hover {
-  background: var(--bgHover);
-}
-.mondiskcleanmain {
-  min-width: 0;
-}
-.mondiskcleanlbl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-.mondiskcleancmd {
-  margin-top: 2px;
-  overflow: hidden;
-  /* mono-ok: dòng lệnh shell thật — người dùng đối chiếu/copy vào terminal. */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--accent);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>

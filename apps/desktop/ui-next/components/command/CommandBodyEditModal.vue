@@ -6,13 +6,13 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="cbe">
-      <div class="cbe-hint">{{ t('commands.bodyEdit.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('commands.bodyEdit.hint') }}</div>
 
-      <div v-if="!draft" class="cbe-promptbox">
-        <textarea
+      <div v-if="!draft">
+        <Textarea
           v-model="prompt"
-          class="cbe-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('commands.bodyEdit.placeholder')"
@@ -20,14 +20,19 @@
         />
       </div>
 
-      <div v-if="error" class="cbe-err">{{ error }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
 
-      <div v-if="draft" class="cbe-preview">
-        <div class="cbe-prow">
-          <span class="mono cbe-pname">/{{ draft.name }}</span>
-          <span v-if="draft.argumentHint" class="tag mono">{{ draft.argumentHint }}</span>
+      <div v-if="draft" class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- mono-ok: lệnh slash -->
+          <span class="font-mono text-sm font-medium text-foreground">/{{ draft.name }}</span>
+          <Badge v-if="draft.argumentHint" variant="secondary" class="font-mono">
+            {{ draft.argumentHint }}
+          </Badge>
         </div>
-        <div class="cbe-pdesc">{{ draft.description }}</div>
+        <div class="text-sm text-muted-foreground">{{ draft.description }}</div>
         <LibraryMarkdownBody
           :title="t('commands.bodyEdit.proposed')"
           :content="draft.body || t('commands.bodyEdit.emptyBody')"
@@ -57,7 +62,10 @@
         variant="default"
         @click="onGenerate"
       >
-        <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+        <Icon
+          :name="isGenerating ? 'refresh' : 'sparkles'"
+          :class="{ 'animate-spin': isGenerating }"
+        />
         {{ isGenerating ? t('commands.bodyEdit.generating') : t('commands.bodyEdit.generate') }}
       </Button>
       <Button v-else variant="default" @click="onApply">
@@ -197,73 +205,3 @@ const onGenerateSave = () => {
   })
 }
 </script>
-
-<style scoped>
-.cbe {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.cbe-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.cbe-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.cbe-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.cbe-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.cbe-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cbe-prow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.cbe-pname {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.cbe-pdesc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.spin {
-  animation: cbe-spin 0.9s linear infinite;
-}
-@keyframes cbe-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

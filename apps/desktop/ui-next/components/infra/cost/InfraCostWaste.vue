@@ -3,11 +3,13 @@
        Xem `InfraCostMonth.vue` cho lý do tách. Hai phép dò có tính tiền
        (`ec2-idle`, `nat-idle`) mặc định TẮT và nói ra giá ngay tại ô bật. -->
   <!-- ── 7.2 Dò lãng phí ────────────────────────────────────────────── -->
-  <section class="icst-sec">
-    <div class="icst-sec-hd">
-      <span class="icst-sec-ttl">{{ t('infra.cost.waste.title') }}</span>
-      <span class="icst-hint">{{ t('infra.cost.waste.regionWhy', { r: region || '—' }) }}</span>
-      <span class="icst-gap" />
+  <Card class="gap-2.5 px-3.5 py-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-base text-foreground">{{ t('infra.cost.waste.title') }}</span>
+      <span class="text-xs text-faint">
+        {{ t('infra.cost.waste.regionWhy', { r: region || '—' }) }}
+      </span>
+      <span class="flex-1" />
       <Button
         type="button"
         :disabled="wasteLoading || enabled.size === 0"
@@ -16,94 +18,104 @@
         size="sm"
         @click="scanWaste"
       >
-        <Icon name="search" class="icst-ic" :class="wasteLoading ? 'icst-spin' : ''" />
+        <Icon name="search" class="size-3" :class="wasteLoading ? 'animate-spin' : ''" />
         {{ t('infra.cost.waste.scan') }}
       </Button>
     </div>
 
     <!-- Bảy công tắc. Hai phép trả tiền mang nhãn riêng và mặc định TẮT — bật chúng
          là thêm một lô `get-metric-data` vào lượt dò, và người dùng phải biết trước. -->
-    <div class="icst-checks">
+    <div class="flex flex-wrap gap-x-3.5 gap-y-1.5">
       <label
         v-for="c in checks"
         :key="c"
-        class="icst-check"
-        :class="{ paid: paidChecks.includes(c) }"
+        class="inline-flex items-center gap-1.5 text-sm whitespace-nowrap text-foreground"
         :title="t(`infra.cost.check.${c}.why`)"
       >
-        <input type="checkbox" :checked="enabled.has(c)" @change="toggleCheck(c)" />
+        <Checkbox :model-value="enabled.has(c)" @update:model-value="toggleCheck(c)" />
         {{ t(`infra.cost.check.${c}.label`) }}
-        <span v-if="paidChecks.includes(c)" class="icst-paid">
+        <Badge
+          v-if="paidChecks.includes(c)"
+          variant="outline"
+          class="border-warning/40 px-1.5 py-0 font-normal text-warning"
+        >
           {{ t('infra.cost.waste.paid') }}
-        </span>
+        </Badge>
       </label>
     </div>
-    <p v-if="paidEnabled > 0" class="iwarn">
+    <p v-if="paidEnabled > 0" class="m-0 text-xs text-warning">
       {{ t('infra.cost.waste.paidWarn', { n: paidEnabled }) }}
     </p>
 
-    <p v-if="wasteError" class="ierr">{{ wasteError }}</p>
+    <p v-if="wasteError" class="m-0 text-xs text-destructive">{{ wasteError }}</p>
 
     <template v-if="report">
       <!-- Phép dò HỎNG phải hiện ra. Nuốt nó đi thì bảng trông như đã sạch. -->
-      <ul v-if="report.failed.length" class="icst-failed">
+      <ul
+        v-if="report.failed.length"
+        class="m-0 flex list-disc flex-col gap-1 pl-4.5 text-xs text-destructive"
+      >
         <li v-for="f in report.failed" :key="f.check">
           {{ t('infra.cost.waste.failed', { c: t(`infra.cost.check.${f.check}.label`) }) }}
           — {{ f.error }}
         </li>
       </ul>
 
-      <div class="icst-sum">
+      <div class="flex flex-wrap items-baseline gap-2.5 text-sm text-foreground">
         <span>
           {{ t('infra.cost.waste.found', { n: report.findings.length }) }}
           · {{ t('infra.cost.waste.total', { v: usd(report.totalMonthlyUsd) }) }}
         </span>
-        <span v-if="report.unpricedCount > 0" class="icst-muted">
+        <span v-if="report.unpricedCount > 0" class="text-faint">
           {{ t('infra.cost.waste.unpriced', { n: report.unpricedCount }) }}
         </span>
-        <span v-if="pricing" class="icst-muted">
+        <span v-if="pricing" class="text-faint">
           {{ t('infra.cost.waste.pricingWhy', { d: pricing.asOf, r: pricing.region }) }}
         </span>
       </div>
 
-      <table v-if="report.findings.length" class="icst-tbl">
-        <thead>
-          <tr>
-            <th class="icst-pick">
-              <input
-                type="checkbox"
-                :checked="picked.size === report.findings.length && picked.size > 0"
+      <Table v-if="report.findings.length">
+        <TableHeader>
+          <TableRow>
+            <TableHead class="w-7">
+              <Checkbox
+                :model-value="picked.size === report.findings.length && picked.size > 0"
                 :title="t('infra.cost.waste.pickAll')"
-                @change="pickAll"
+                :aria-label="t('infra.cost.waste.pickAll')"
+                @update:model-value="pickAll()"
               />
-            </th>
-            <th>{{ t('infra.cost.waste.col.check') }}</th>
-            <th>{{ t('infra.cost.waste.col.resource') }}</th>
+            </TableHead>
+            <TableHead>{{ t('infra.cost.waste.col.check') }}</TableHead>
+            <TableHead>{{ t('infra.cost.waste.col.resource') }}</TableHead>
             <!-- Cột thô (`volumeId gp3 · 120 GiB`…) — chỉ ở Chuyên sâu. -->
-            <th v-if="isExpert">{{ t('infra.cost.waste.col.detail') }}</th>
-            <th class="icst-right">{{ t('infra.cost.waste.col.monthly') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="f in report.findings" :key="findingKey(f)">
-            <td class="icst-pick">
-              <input type="checkbox" :checked="picked.has(findingKey(f))" @change="togglePick(f)" />
-            </td>
-            <td>{{ t(`infra.cost.check.${f.check}.label`) }}</td>
-            <td class="icst-res">{{ f.label }}</td>
-            <td v-if="isExpert" class="icst-muted">{{ detailText(f) }}</td>
-            <td class="icst-right tnum">
+            <TableHead v-if="isExpert">{{ t('infra.cost.waste.col.detail') }}</TableHead>
+            <TableHead class="text-right">{{ t('infra.cost.waste.col.monthly') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="f in report.findings" :key="findingKey(f)">
+            <TableCell class="w-7 align-top">
+              <Checkbox
+                :model-value="picked.has(findingKey(f))"
+                @update:model-value="togglePick(f)"
+              />
+            </TableCell>
+            <TableCell class="align-top">{{ t(`infra.cost.check.${f.check}.label`) }}</TableCell>
+            <!-- mono-ok: id tài nguyên, người dùng copy vào lệnh aws -->
+            <TableCell class="align-top font-mono break-all">{{ f.label }}</TableCell>
+            <TableCell v-if="isExpert" class="align-top text-faint">{{ detailText(f) }}</TableCell>
+            <TableCell class="text-right align-top tabular-nums">
               <!-- `null` hiện "—", KHÔNG hiện 0: "không biết giá" khác "miễn phí". -->
               <template v-if="f.monthlyUsd === null">—</template>
               <template v-else>{{ f.overEstimate ? '≤ ' : '' }}{{ usd(f.monthlyUsd) }}</template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="icst-empty">{{ t('infra.cost.waste.clean') }}</p>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <p v-else class="m-0 text-xs text-faint">{{ t('infra.cost.waste.clean') }}</p>
 
       <!-- ── 7.3 ──────────────────────────────────────────────────── -->
-      <div v-if="report.findings.length" class="icst-acts">
+      <div v-if="report.findings.length" class="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           :disabled="pickedFindings.length === 0 || building"
@@ -111,15 +123,15 @@
           size="sm"
           @click="onCleanup"
         >
-          <Icon name="book" class="icst-ic" />
+          <Icon name="book" class="size-3" />
           {{ t('infra.cost.cleanup.build', { n: pickedFindings.length }) }}
         </Button>
-        <span v-if="pickedFindings.length" class="icst-hint">
+        <span v-if="pickedFindings.length" class="text-xs text-faint">
           {{ t('infra.cost.cleanup.picked', { v: usd(pickedMonthlyUsd) }) }}
         </span>
       </div>
     </template>
-  </section>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -192,124 +204,3 @@ async function onCleanup(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-/* Vỏ khối (`.icst-sec*`, `.icst-hint`, `.icst-ic`, `.icst-spin`) lặp ở cả ba tab con.
-   Cố ý: ba bản sao của bảy luật ngắn rẻ hơn một stylesheet dùng chung hoặc một
-   chuỗi `:deep()` từ component cha — và giữ mỗi tab con đọc được một mình. */
-
-.icst-muted {
-  color: var(--textFaint);
-}
-
-.icst-empty {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-.icst-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-}
-
-.icst-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.icst-paid {
-  padding: 0 6px;
-  border: 1px solid var(--amberBorder);
-  border-radius: var(--r-pill);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-}
-
-.icst-failed {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  padding-left: 18px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-
-.icst-sum {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-
-.icst-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.icst-tbl th {
-  text-align: left;
-  padding: 5px 8px;
-  color: var(--textDim);
-  font-weight: 500;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.icst-tbl td {
-  padding: 5px 8px;
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-
-.icst-right {
-  text-align: right;
-}
-
-.icst-pick {
-  width: 28px;
-}
-
-.icst-res {
-  font-family: var(--code); /* mono-ok: id tài nguyên, người dùng copy vào lệnh aws */
-  word-break: break-all;
-}
-
-.icst-acts {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.icst-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex-shrink: 0;
-}
-
-.icst-spin {
-  animation: icst-rot 1s linear infinite;
-}
-
-@keyframes icst-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

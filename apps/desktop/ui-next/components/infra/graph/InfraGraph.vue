@@ -8,14 +8,17 @@
 
        BỐ CỤC: thanh điểm vào/độ sâu → các dải nói thật (nguồn lưu lượng · chạm trần
        độ sâu · ghi chú · lỗi) → canvas + panel chi tiết. -->
-  <div class="ig">
-    <!-- Thanh công cụ là một CARD nổi trên canvas full-bleed, không phải một dải
-         hairline nữa: đây là màn thứ tư tự dựng khuôn nhãn-trên-control của riêng
-         nó (`.ig-field`/`.ig-lbl`) trong khi Giám sát · Bảng · Triển khai dùng
-         `.ifield`/`.ilbl`. Một khuôn cho cả khu — xem `.itoolbar` ở app-shell.css. -->
-    <header class="itoolbar ifields ig-top">
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.graph.root.label') }}</div>
+  <div class="flex h-full min-h-0 flex-col">
+    <!-- Thanh công cụ là một CARD nổi trên canvas full-bleed (margin thay padding để
+         thanh vẫn là một khối tách khỏi canvas bên dưới). Ô nhãn-trên-control nên
+         thanh căn theo ĐÁY: nhãn cao thấp khác nhau thì căn giữa đẩy các ô lệch. -->
+    <header
+      class="mx-3.5 mt-2.5 mb-2 flex shrink-0 flex-wrap items-end gap-2.5 rounded-xl border bg-card px-2.5 py-2 shadow-sm"
+    >
+      <div class="flex min-w-35 flex-col gap-1">
+        <Label class="text-xs font-normal text-muted-foreground">
+          {{ t('infra.graph.root.label') }}
+        </Label>
         <AppSelect
           :model-value="activeRootId"
           :options="rootOptions"
@@ -26,8 +29,10 @@
         />
       </div>
 
-      <div class="ifield narrow">
-        <div class="ilbl">{{ t('infra.graph.depth.label') }}</div>
+      <div class="flex min-w-27.5 flex-col gap-1">
+        <Label class="text-xs font-normal text-muted-foreground">
+          {{ t('infra.graph.depth.label') }}
+        </Label>
         <AppSelect
           :model-value="String(depth)"
           :options="depthOptions"
@@ -37,17 +42,18 @@
         />
       </div>
 
-      <div class="itoolgrp iend">
-        <span
+      <!-- `ml-auto` đẩy cụm về mép phải mà không cần một <div> trống làm spacer. -->
+      <div class="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+        <Badge
           v-if="hasGraph"
-          class="chip"
-          :class="`s-${trafficSource}`"
+          variant="outline"
+          :class="TRAFFIC_TONE[trafficSource]"
           :title="t('infra.graph.traffic.label')"
         >
-          <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="act" />
           {{ trafficLabel }}
-        </span>
-        <span v-if="loadedAt" class="ig-when">
+        </Badge>
+        <span v-if="loadedAt" class="text-xs text-faint tabular-nums">
           {{ t('infra.graph.loadedAt', { time: hhmm }) }}
         </span>
 
@@ -59,11 +65,7 @@
           size="sm"
           @click="onReload"
         >
-          <Icon
-            name="refresh"
-            :class="{ spin: resolving }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon name="refresh" :class="{ 'motion-safe:animate-spin': resolving }" />
           {{ t('infra.graph.reload') }}
         </Button>
       </div>
@@ -71,7 +73,10 @@
 
     <!-- G4: dải nói rõ sơ đồ đang bị lọc theo một request, kèm đường thoát. Không
          có dải này thì một sơ đồ mờ quá nửa trông như sơ đồ hỏng. -->
-    <p v-if="traceHighlight.on.value" class="ig-info ig-trace">
+    <p
+      v-if="traceHighlight.on.value"
+      :class="[BAND, 'flex flex-wrap items-center gap-2 text-muted-foreground']"
+    >
       <span>
         {{
           t('infra.graph.trace.banner', {
@@ -80,22 +85,25 @@
           })
         }}
       </span>
-      <span v-if="tracePathCount === 0" class="ig-trace-warn">
+      <span v-if="tracePathCount === 0" class="text-warning">
         {{ t('infra.graph.trace.noMatch') }}
       </span>
       <Button type="button" variant="outline" size="sm" @click="traceHighlight.clear()">
         {{ t('infra.graph.trace.clear') }}
       </Button>
     </p>
-    <p v-if="hasGraph" class="ig-info">{{ trafficNote }}</p>
-    <p v-if="truncated" class="ig-warn">
+    <p v-if="hasGraph" :class="[BAND, 'text-muted-foreground']">{{ trafficNote }}</p>
+    <p v-if="truncated" :class="[BAND, 'text-warning']">
       {{ t('infra.graph.depth.truncated', { max: GRAPH_MAX_DEPTH }) }}
     </p>
-    <p v-if="notes.length" class="ig-info">{{ t('infra.graph.notes.title') }}: {{ notesText }}</p>
-    <p v-if="graphError && hasGraph" class="ig-error">{{ graphError }}</p>
+    <p v-if="notes.length" :class="[BAND, 'text-muted-foreground']">
+      {{ t('infra.graph.notes.title') }}: {{ notesText }}
+    </p>
+    <p v-if="graphError && hasGraph" :class="[BAND, 'text-destructive']">{{ graphError }}</p>
 
-    <div class="ig-body">
-      <div class="ig-canvas">
+    <div class="flex min-h-0 flex-1">
+      <!-- hook-ok: `.ig-canvas` là gốc phạm vi cho khối style toàn cục (DOM VueFlow) bên dưới -->
+      <div class="ig-canvas relative min-w-0 flex-1">
         <!-- `:nodes-draggable="false"`: toạ độ do bố cục tầng ở `useInfraGraph` tính
              ra và KHÔNG có đường ghi ngược (khác `WorkflowCanvas` — ở đó kéo xong là
              ghi `x/y` về store). Để kéo được thì cú chạm lại của lượt dựng sau sẽ
@@ -131,11 +139,13 @@
           <MiniMap position="bottom-left" pannable zoomable />
         </VueFlow>
 
-        <div v-if="!hasGraph && !resolving" class="ig-overlay">
+        <!-- Lớp phủ trạng thái rỗng KHÔNG được nuốt thao tác kéo/zoom của canvas:
+             chỉ thẻ bên trong mới nhận con trỏ. -->
+        <div v-if="!hasGraph && !resolving" :class="[OVERLAY, 'bg-background']">
           <template v-if="graphError">
-            <p class="ig-overlay-err">{{ graphError }}</p>
+            <p class="text-center text-sm text-destructive">{{ graphError }}</p>
             <Button type="button" variant="outline" size="sm" @click="onRetry">
-              <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="refresh" />
               {{ t('infra.graph.retry') }}
             </Button>
           </template>
@@ -150,13 +160,17 @@
           />
         </div>
 
-        <div v-else-if="resolving" class="ig-overlay" :class="{ ghost: hasGraph }">
-          <p class="ig-overlay-busy">
-            <Icon
-              name="refresh"
-              class="spin"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+        <!-- Đang dựng LẠI mà graph đã có sẵn (đổi độ sâu, bấm ↻): graph cũ vẫn là thứ
+             người dùng đang đọc nên không phủ mờ nó — chỉ treo một nhãn nhỏ ở giữa. -->
+        <div
+          v-else-if="resolving"
+          :class="[OVERLAY, hasGraph ? 'bg-transparent' : 'bg-background']"
+        >
+          <p
+            class="flex items-center gap-2 text-sm text-muted-foreground"
+            :class="hasGraph && 'rounded-full border bg-card px-3 py-1.5 shadow-md'"
+          >
+            <Icon name="refresh" class="size-3.5 motion-safe:animate-spin" />
             {{ t('infra.graph.loading') }}
           </p>
         </div>
@@ -210,6 +224,18 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/** Màu badge nguồn lưu lượng: X-Ray (đo thật) xanh, CloudWatch (suy từ số đo) vàng. */
+const TRAFFIC_TONE: Record<string, string> = {
+  xray: 'border-success text-success',
+  cloudwatch: 'border-warning text-warning',
+  none: 'text-dim',
+}
+/** Dải nói thật full-bleed phía trên canvas (nguồn lưu lượng · trần độ sâu · lỗi). */
+const BAND = 'shrink-0 bg-muted px-3.5 py-1.5 text-xs'
+/** Lớp phủ trên canvas; `*:pointer-events-auto` để chỉ thẻ bên trong nhận con trỏ. */
+const OVERLAY =
+  'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-4 *:pointer-events-auto'
 
 const {
   roots,
@@ -379,162 +405,9 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.ig {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-/* Card nổi: `margin` thay cho `padding` cũ, giữ nguyên khoảng cách ngoài mà thanh
-   vẫn là một khối tách khỏi canvas bên dưới. Canvas ở lại full-bleed — nó là mặt
-   vẽ, không phải nội dung đọc. */
-.ig-top {
-  margin: 10px 14px 8px;
-}
-
-.ig-when {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-
-.chip.s-xray {
-  color: var(--green);
-  border-color: var(--green);
-}
-
-.chip.s-cloudwatch {
-  color: var(--amber);
-  border-color: var(--amber);
-}
-
-.chip.s-none {
-  color: var(--textDim);
-}
-
-.ig-info,
-.ig-warn,
-.ig-error {
-  margin: 0;
-  padding: 6px 14px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  flex: 0 0 auto;
-}
-
-.ig-trace {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.ig-trace-warn {
-  color: var(--warn);
-}
-
-.ig-info {
-  color: var(--textMuted);
-  background: var(--bgSubtle);
-}
-
-.ig-warn {
-  color: var(--amber);
-  background: var(--bgSubtle);
-}
-
-.ig-error {
-  color: var(--red);
-  background: var(--bgSubtle);
-}
-
-.ig-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.ig-canvas {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-/* Lớp phủ trạng thái rỗng KHÔNG được nuốt thao tác kéo/zoom của canvas: chỉ thẻ
-   bên trong mới nhận con trỏ. */
-.ig-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  background: var(--bgCanvas);
-  pointer-events: none;
-}
-
-.ig-overlay > * {
-  pointer-events: auto;
-}
-
-/* Đang dựng LẠI mà graph đã có sẵn (đổi độ sâu, bấm ↻): graph cũ vẫn là thứ người
-   dùng đang đọc nên không phủ mờ nó — chỉ treo một nhãn nhỏ ở giữa. */
-.ig-overlay.ghost {
-  background: transparent;
-}
-
-.ig-overlay.ghost .ig-overlay-busy {
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: var(--bgPanel);
-  box-shadow: var(--shadow-md);
-}
-
-.ig-overlay-err {
-  margin: 0;
-  color: var(--red);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-
-.ig-overlay-busy {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* Cùng khuôn với `.iad-spin` của InfraAccountsDetail.vue: `.spin` KHÔNG phải class
-   toàn cục, style scoped nên mỗi SFC tự khai keyframes của mình. */
-.spin {
-  animation: ig-spin 0.8s linear infinite;
-}
-
-@keyframes ig-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-</style>
-
 <style>
-/* Hoà VueFlow vào bảng màu AWOG (không scoped — phải chạm tới nội bộ của VueFlow). */
+/* style-ok: DOM nội bộ của VueFlow (handle · chồng zoom · minimap) — class không chạm
+   tới được, nên hoà nó vào bảng màu AWOG bằng selector toàn cục dưới `.ig-canvas`. */
 .ig-canvas .vue-flow__node {
   font-family: var(--sans);
 }
@@ -563,7 +436,7 @@ onMounted(() => {
 }
 
 /* Cụm nút TỰ KHAI TỪ ĐẦU. Bản của thư viện để nút `content-box` 16×16 + đệm 5px và
-   một `border-bottom: 1px solid #eee` ghim cứng — màu đó không theo theme, và với
+   một `border-bottom` xám nhạt ghim cứng — màu đó không theo theme, và với
    hàng NGANG thì nó vẽ gạch chân dưới từng nút chứ không ngăn được gì. Nền đặt ở
    CỤM, nút để trong suốt: nút có nền riêng thì mỗi nút thành một viên nổi bên trong
    một cái khung, đúng thứ trông lộn xộn ở ảnh người dùng. */

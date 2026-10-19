@@ -12,7 +12,8 @@
       <div class="flex shrink-0 items-center gap-0.5">
         <Button
           variant="ghost"
-          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('files.ctx.newFile')"
           :aria-label="t('files.ctx.newFile')"
           @click="createAtRoot('file')"
@@ -21,7 +22,8 @@
         </Button>
         <Button
           variant="ghost"
-          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('files.ctx.newFolder')"
           :aria-label="t('files.ctx.newFolder')"
           @click="createAtRoot('dir')"
@@ -30,7 +32,8 @@
         </Button>
         <Button
           variant="ghost"
-          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('sessions.workspace.files.collapseAll')"
           :aria-label="t('sessions.workspace.files.collapseAll')"
           @click="collapseAll"
@@ -39,7 +42,8 @@
         </Button>
         <Button
           variant="ghost"
-          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          size="iconSm"
+          class="text-muted-foreground"
           :disabled="treeLoading"
           :title="t('sessions.workspace.files.reload')"
           :aria-label="t('sessions.workspace.files.reload')"
@@ -54,8 +58,8 @@
          tree stays empty: never stand in a sample tree, which would look like the
          user's own files. -->
     <div v-if="!ready" class="min-h-0 flex-1 overflow-y-auto">
-      <div class="empty" style="padding: 30px">
-        <div class="et">
+      <div class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim">
+        <div class="text-lg text-muted-foreground">
           {{ available ? t('sessions.workspace.noProject') : t('sessions.workspace.unavailable') }}
         </div>
       </div>
@@ -65,8 +69,11 @@
          preview) via usePreview — there is exactly ONE file-preview surface. -->
     <div v-else class="min-h-0 flex-1 overflow-y-auto pb-2 font-mono text-xs">
       <SessionFileTree :nodes="rootNodes" :ctrl="ctrl" />
-      <div v-if="!rootNodes.length && !treeLoading" class="empty" style="padding: 24px">
-        <div class="et">{{ t('sessions.workspace.files.empty') }}</div>
+      <div
+        v-if="!rootNodes.length && !treeLoading"
+        class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-dim"
+      >
+        <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.files.empty') }}</div>
       </div>
     </div>
 

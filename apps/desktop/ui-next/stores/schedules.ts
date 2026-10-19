@@ -37,6 +37,14 @@ export type ScheduleJob =
       title: string
       description: string
     }
+  | {
+      // Chạy một chương trình không qua model (ADR 0108). Duyệt nằm ở sổ duyệt của
+      // sidecar, không ở file lịch — xem `Schedule.approved`.
+      kind: 'command'
+      program: string
+      args: string[]
+      timeoutMinutes?: number
+    }
 
 export type ScheduleRunStatus = 'running' | 'ok' | 'error' | 'skipped'
 
@@ -50,6 +58,8 @@ export type ScheduleRun = {
   taskId?: string
   sessionId?: string
   message?: string
+  // Job `command`: có log đầy đủ của lượt này (RPC `schedules.runLog`).
+  hasLog?: boolean
 }
 
 export type Schedule = {
@@ -64,11 +74,21 @@ export type Schedule = {
   lastRunAt?: string
   lastStatus?: ScheduleRunStatus
   runs: ScheduleRun[]
+  // Chỉ job `command`: sidecar vừa kiểm lệnh + nội dung file với sổ duyệt. false ⇒ lệnh
+  // mới, hoặc nó / file nó chạy đã đổi từ lần duyệt — lượt chạy sẽ bị từ chối.
+  approved?: boolean
+  // Lịch do agent đề xuất (tool `propose_schedule`): tắt, chưa chạy được tới khi người
+  // dùng mở ra Sửa → Lưu (upsert dựng lại lịch nên trường này mất).
+  proposedBy?: { sessionId: string; at: string }
 }
 
 // Đúng những trường người dùng đặt được. `nextRunAt` / `runs` / `lastStatus` do
 // sidecar tính và giữ — UI không gửi lên, để không tự bịa được lịch sử chạy.
-export type ScheduleInput = Pick<Schedule, 'id' | 'name' | 'enabled' | 'trigger' | 'job'>
+// `approve` chỉ cho job `command`, và chỉ gửi SAU khi người dùng xác nhận program + từng
+// arg trong hộp thoại (ScheduleEditor) — đó là bước duyệt lệnh duy nhất.
+export type ScheduleInput = Pick<Schedule, 'id' | 'name' | 'enabled' | 'trigger' | 'job'> & {
+  approve?: boolean
+}
 
 type ListResponse = { schedules: Schedule[] }
 type UpsertResponse = { schedule: Schedule }
@@ -125,18 +145,18 @@ export const useSchedulesStore = defineStore('schedules', () => {
     }
   }
 
-  // Bật/tắt nhanh từ danh sách. Đi qua upsert nên `nextRunAt` được tính lại ở
-  // sidecar khi bật lại (bật lại một lịch với mốc cũ đã trôi qua = chạy ngay).
+  // Bật/tắt nhanh từ danh sách. RPC riêng chỉ đổi cờ — KHÔNG gửi lại `job` đọc từ đĩa
+  // qua upsert: với job `command` đó là đường "lưu" một lệnh lạ mà không ai đọc nó
+  // (ADR 0108). Sidecar tính lại `nextRunAt` khi bật lại.
   async function toggleSchedule(id: string): Promise<void> {
     const s = scheduleById(id)
-    if (!s) return
-    await saveSchedule({
-      id: s.id,
-      name: s.name,
+    if (!s || !available.value) return
+    const res = await sc.request<UpsertResponse>('schedules.setEnabled', {
+      id,
       enabled: !s.enabled,
-      trigger: s.trigger,
-      job: s.job,
     })
+    const idx = schedules.value.findIndex((x) => x.id === id)
+    if (idx >= 0) schedules.value[idx] = { ...res.schedule, approved: s.approved }
   }
 
   // "Chạy ngay". Trả về dòng lịch sử vừa mở (`running`), hoặc `skipped` khi lần
@@ -145,6 +165,12 @@ export const useSchedulesStore = defineStore('schedules', () => {
     if (!available.value) return null
     const res = await sc.request<RunNowResponse>('schedules.runNow', { id })
     return res.run
+  }
+
+  // Log đầy đủ (đã che secret) của một lượt chạy job `command`.
+  async function fetchRunLog(id: string, runId: string): Promise<string> {
+    const res = await sc.request<{ text: string }>('schedules.runLog', { id, runId })
+    return res.text
   }
 
   // Mở phiên do lịch tạo. Phải là CỬA SỔ RIÊNG: cửa sổ chính chỉ nạp danh sách
@@ -182,5 +208,6 @@ export const useSchedulesStore = defineStore('schedules', () => {
     toggleSchedule,
     runNow,
     openRunSession,
+    fetchRunLog,
   }
 })

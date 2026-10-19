@@ -94,6 +94,8 @@ export const SURFACE_TOOL_NAMES = [
   // `mcp__awogsurfaces__<tool>` về tên trần. Thiếu dòng này thì cùng một lời gọi
   // hiện là "Wake-up" trên Pi và "awogsurfaces: schedule_wakeup" trên SDK.
   'schedule_wakeup',
+  // Cùng lý do: `propose_schedule` (ADR 0108) cũng đi nhờ `awogsurfaces`.
+  'propose_schedule',
 ] as const
 
 // Every string the model reads about these tools. Shared by the TypeBox schemas

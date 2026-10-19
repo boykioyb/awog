@@ -1,5 +1,6 @@
 <template>
-  <div class="setpane">
+  <!-- data-settings-pane: hook cho SettingsModal (⌘K tìm dòng cài đặt trong pane). -->
+  <div data-settings-pane class="min-w-0 px-5 py-4">
     <SettingsAppearance v-if="active === 'appearance'" />
     <SettingsPet v-else-if="active === 'pet'" />
     <SettingsDefaults v-else-if="active === 'defaults'" />

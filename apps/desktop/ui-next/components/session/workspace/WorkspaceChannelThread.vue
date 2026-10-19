@@ -25,28 +25,15 @@
 
     <!-- Thanh nổi khi bôi đen text trong feed — cùng bộ ba của tab Comment:
          Quote (chèn `> excerpt` vào composer), Translate, Copy MD. -->
-    <div
+    <WorkspaceQuoteBar
       v-if="selBar"
-      class="btsel"
-      :style="{ '--sel-x': `${selBar.x}px`, '--sel-y': `${selBar.y}px` }"
-      @mousedown.prevent
-    >
-      <button class="btselbtn" @click="onQuote">
-        <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('sessions.quote.action') }}
-      </button>
-      <button class="btselbtn" @click="onTranslate">
-        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('translate.action') }}
-      </button>
-      <button class="btselbtn" @click="onCopyMd">
-        <Icon
-          :name="mdCopied ? 'check' : 'copy'"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        {{ mdCopied ? t('common.copied') : t('common.copyMarkdown') }}
-      </button>
-    </div>
+      :x="selBar.x"
+      :y="selBar.y"
+      :copied="mdCopied"
+      @quote="onQuote"
+      @translate="onTranslate"
+      @copy-md="onCopyMd"
+    />
 
     <!-- Composer khuôn session — y hệt tab Comment (@ tag file/skill, đính
          kèm, Enter theo composerSendKey); `@TênMember` trong text được resolve
@@ -69,7 +56,8 @@
         @submit="post"
       />
     </div>
-    <input ref="fileInput" type="file" multiple style="display: none" @change="onPick" />
+    <!-- raw-ok: input file ẩn, chỉ để mở hộp chọn file của hệ điều hành -->
+    <input ref="fileInput" type="file" multiple class="hidden" @change="onPick" />
   </div>
 </template>
 
@@ -85,7 +73,7 @@
 // Gửi qua `team.channelPost` — broadcast tới ê-kíp, TỰ GẮN itemId khi đang
 // ở ngữ cảnh một item. Phần cấu trúc bôi-đen/quote/đính-kèm giữ nguyên bản
 // sao của WorkspaceBoardThread — codebase đã nhận cách trùng lặp này với
-// SessionDetail (xem comment `.btsel` bên dưới).
+// SessionDetail (thanh nổi dùng chung qua WorkspaceQuoteBar).
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useBoardStore, type TeamChannelKind } from '~/stores/board'
@@ -98,6 +86,7 @@ import { useBoardAtts } from '~/composables/useBoardAtts'
 import { rawMarkdownForSelection } from '~/utils/selection-markdown'
 import { channelEntryToMessage } from '~/utils/board-comment-message'
 import SessionTranscript from '~/components/session/SessionTranscript.vue'
+import WorkspaceQuoteBar from './WorkspaceQuoteBar.vue'
 import WorkspaceBoardComposer from './WorkspaceBoardComposer.vue'
 
 const props = defineProps<{
@@ -405,49 +394,3 @@ onUnmounted(() => {
   typingTimers.clear()
 })
 </script>
-
-<style scoped>
-/* Thanh nổi Quote/Translate/Copy-MD — bản sao `.btsel` của WorkspaceBoardThread
-   (scoped CSS không tái dùng được; gốc sao chép từ `.selactions` của
-   SessionDetail). */
-.btsel {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 80;
-  transform: translate(
-    clamp(8px, calc(var(--sel-x, 0px) - 50%), calc(100vw - 100% - 8px)),
-    max(8px, calc(var(--sel-y, 0px) - 100%))
-  );
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  max-width: calc(100vw - 16px);
-  padding: 4px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-}
-.btselbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--popover-foreground);
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.btselbtn:hover {
-  background: var(--accent-wash);
-}
-.btselbtn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-</style>

@@ -1,16 +1,29 @@
 <template>
   <!-- verify step: connection-test banner (running / connected / failed) -->
-  <div v-if="isVerify" class="lcp-verify" :class="verifyClass">
-    <Icon :name="verifyIcon" :class="{ spin: state === 'running' }" class="lcp-verify-ic" />
-    <div class="lcp-verify-body">
-      <div class="lcp-verify-title">{{ verifyTitle }}</div>
-      <pre v-if="stderr.length" class="lcp-verify-pre">{{ stderr.join('\n') }}</pre>
+  <div
+    v-if="isVerify"
+    class="flex gap-2 rounded-lg border bg-muted px-3 py-2 text-sm"
+    :class="verifyClass"
+  >
+    <Icon
+      :name="verifyIcon"
+      :class="{ 'animate-spin': state === 'running' }"
+      class="mt-px size-3.5 flex-none"
+    />
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <div class="font-semibold">{{ verifyTitle }}</div>
+      <!-- mono-ok: output lệnh kiểm tra kết nối -->
+      <pre
+        v-if="stderr.length"
+        class="m-0 max-h-35 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-dim"
+        >{{ stderr.join('\n') }}</pre
+      >
     </div>
   </div>
 
   <!-- ordinary tool step: zap + label -->
-  <div v-else class="lcp-step">
-    <Icon name="zap" style="width: var(--icon-xs); height: var(--icon-xs)" />
+  <div v-else class="flex items-center gap-1.5 text-xs text-dim tabular-nums">
+    <Icon name="zap" class="size-3" />
     <span>{{ step.label ?? step.id }}</span>
   </div>
 </template>
@@ -48,8 +61,8 @@ const stderr = computed<string[]>(() =>
 )
 
 const verifyClass = computed(() => {
-  if (state.value === 'running') return 'run'
-  return ok.value ? 'ok' : 'err'
+  if (state.value === 'running') return 'border-border text-muted-foreground'
+  return ok.value ? 'border-selected-border text-primary' : 'border-destructive/40 text-destructive'
 })
 const verifyIcon = computed(() => {
   if (state.value === 'running') return 'refresh'
@@ -65,70 +78,3 @@ const verifyTitle = computed(() => {
   return t('library.creator.verify.fail')
 })
 </script>
-
-<style scoped>
-.lcp-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--textDim);
-}
-.lcp-verify {
-  display: flex;
-  gap: 9px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.lcp-verify.ok {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-}
-.lcp-verify.err {
-  border-color: var(--dangerBorder);
-  color: var(--danger);
-}
-.lcp-verify-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-.lcp-verify-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.lcp-verify-title {
-  font-weight: 600;
-}
-.lcp-verify-pre {
-  margin: 0;
-  max-height: 140px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  /* mono-ok: verification command output */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.spin {
-  animation: lcp-row-spin 0.9s linear infinite;
-}
-@keyframes lcp-row-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

@@ -4,38 +4,39 @@
 
     <!-- Segmented picker — one bucket at a time, each with its own count. -->
     <div class="mb-2 flex gap-1">
-      <button
+      <Button
         v-for="tab in TABS"
         :key="tab"
-        type="button"
+        variant="ghost"
+        size="xs"
         :class="[
-          'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium leading-4 transition-colors',
+          'gap-1.5 border',
           tab === active
-            ? 'border-ring bg-primary/10 text-primary'
-            : 'border-transparent text-dim hover:bg-accent hover:text-foreground',
+            ? 'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary'
+            : 'border-transparent text-dim hover:text-foreground',
         ]"
         @click="pick(tab)"
       >
         <span>{{ t(`sessions.info.mld.tab.${tab}`) }}</span>
         <span
           v-if="counts[tab]"
-          class="text-xs leading-4 tabular-nums"
+          class="text-xs tabular-nums"
           :class="tab === active ? 'text-primary' : 'text-faint'"
         >
           {{ counts[tab] }}
         </span>
-      </button>
+      </Button>
     </div>
 
     <!-- Media — thumbnail grid (images resolve their bytes lazily; video/audio show
          a play tile). Clicking opens the shared PreviewModal. -->
     <template v-if="active === 'media'">
       <div v-if="media.length" class="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1.5">
-        <button
+        <Button
           v-for="m in media"
           :key="m.key"
-          type="button"
-          class="group flex min-w-0 flex-col items-stretch gap-1 overflow-hidden text-left"
+          variant="ghost"
+          class="group h-auto min-w-0 flex-col items-stretch gap-1 overflow-hidden whitespace-normal p-0 text-left font-normal hover:bg-transparent"
           :title="m.detail"
           @click="openFile(m)"
         >
@@ -51,12 +52,10 @@
           >
             <component :is="m.isImage ? File : Play" class="size-4" />
           </span>
-          <span
-            class="line-clamp-2 w-full min-w-0 text-xs leading-4 text-dim [overflow-wrap:anywhere]"
-          >
+          <span class="line-clamp-2 w-full min-w-0 text-xs text-dim wrap-anywhere">
             {{ m.name }}
           </span>
-        </button>
+        </Button>
       </div>
       <p v-else class="py-1 text-faint">{{ t('sessions.info.mld.emptyMedia') }}</p>
     </template>
@@ -70,22 +69,21 @@
       >
         <Button
           variant="ghost"
-          type="button"
-          class="h-auto p-0 flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left"
+          class="h-auto min-w-0 flex-1 justify-start gap-2 rounded-none px-1 py-1.5 text-left font-normal hover:bg-transparent [&_svg]:size-3"
           :title="l.url"
           @click="openLink(l)"
         >
           <Link class="size-3 shrink-0 text-dim" />
           <span class="flex min-w-0 flex-1 flex-col gap-px">
             <span class="truncate text-foreground">{{ l.label }}</span>
-            <span class="truncate text-xs leading-4 text-faint">{{ l.host }}</span>
+            <span class="truncate text-xs text-faint">{{ l.host }}</span>
           </span>
           <ExternalLink class="size-3 shrink-0 text-faint" />
         </Button>
         <Button
           variant="ghost"
-          type="button"
-          class="h-auto p-0 flex size-6 shrink-0 items-center justify-center rounded-sm text-faint transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="shrink-0 text-faint hover:text-foreground [&_svg]:size-3"
           :title="copiedKey === l.key ? t('common.copied') : t('common.copy')"
           :aria-label="copiedKey === l.key ? t('common.copied') : t('common.copy')"
           @click="copyLink(l)"
@@ -102,21 +100,20 @@
       <Button
         v-for="d in docs"
         :key="d.key"
-        variant="outline"
-        type="button"
-        class="h-auto p-0 flex w-full items-center gap-2 border-b border-border px-1 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+        variant="ghost"
+        class="h-auto w-full justify-start gap-2 rounded-none border-b border-border px-1 py-1.5 text-left font-normal text-foreground [&_svg]:size-3"
         :title="d.detail"
         @click="openFile(d)"
       >
         <File class="size-3 shrink-0 text-dim" />
         <span class="flex min-w-0 flex-1 flex-col gap-px">
           <span class="truncate">{{ d.name }}</span>
-          <span class="truncate text-xs leading-4 text-faint">{{ d.detail }}</span>
+          <span class="truncate text-xs text-faint">{{ d.detail }}</span>
         </span>
-        <span v-if="d.size != null" class="shrink-0 text-xs leading-4 tabular-nums text-faint">
+        <span v-if="d.size != null" class="shrink-0 text-xs tabular-nums text-faint">
           {{ formatBytes(d.size) }}
         </span>
-        <span class="shrink-0 text-xs leading-4 text-muted-foreground">
+        <span class="shrink-0 text-xs text-muted-foreground">
           {{ t(`sessions.info.mld.origin.${d.origin}`) }}
         </span>
       </Button>

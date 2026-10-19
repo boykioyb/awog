@@ -1,21 +1,39 @@
 <template>
-  <div class="wfpal">
-    <div class="wfpal-hd">{{ t('workflow.palette.title') }}</div>
-    <div class="wfpal-list">
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden border-t">
+    <div class="shrink-0 border-b px-3 py-2 text-xs text-dim">
+      {{ t('workflow.palette.title') }}
+    </div>
+    <div class="flex flex-col gap-1 overflow-y-auto p-2">
       <div
         v-for="agent in agents"
         :key="agent.id"
-        class="wfpal-item"
+        class="flex cursor-grab items-center gap-2 rounded-md border bg-card px-2 py-1.5 hover:border-input active:cursor-grabbing"
         draggable="true"
         @dragstart="onDragStart($event, agent.id)"
       >
-        <span class="wfpal-badge">{{ roleBadge(agent) }}</span>
-        <div class="wfpal-name">{{ agent.name }}</div>
-        <span class="tag" :class="{ acc: agent.source === 'project' }">
-          {{ scopeLabel(agent) }}
+        <span
+          class="grid size-5 shrink-0 place-items-center rounded-sm bg-selected text-xs font-semibold text-primary"
+        >
+          {{ roleBadge(agent) }}
         </span>
+        <div class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {{ agent.name }}
+        </div>
+        <Badge
+          variant="outline"
+          class="rounded-sm"
+          :class="
+            agent.source === 'project'
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : 'text-muted-foreground'
+          "
+        >
+          {{ scopeLabel(agent) }}
+        </Badge>
       </div>
-      <div v-if="!agents.length" class="wfpal-empty">{{ t('workflow.palette.empty') }}</div>
+      <div v-if="!agents.length" class="px-2 py-3 text-center text-sm text-faint">
+        {{ t('workflow.palette.empty') }}
+      </div>
     </div>
   </div>
 </template>
@@ -51,76 +69,3 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
 }
 </script>
-
-<style scoped>
-.wfpal {
-  border-top: 1px solid var(--border);
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.wfpal-hd {
-  padding: 9px 11px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.wfpal-list {
-  overflow-y: auto;
-  padding: 7px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.wfpal-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgEl);
-  cursor: grab;
-}
-.wfpal-item:hover {
-  border-color: var(--borderStrong);
-}
-.wfpal-item:active {
-  cursor: grabbing;
-}
-.wfpal-badge {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  background: var(--accentDim);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-.wfpal-name {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wfpal-empty {
-  padding: 14px 9px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-  text-align: center;
-}
-</style>

@@ -1,5 +1,8 @@
+import { access, constants } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
+import { approveCommand, isCommandApproved } from '../schedules/command-approval.js'
 import { loadProject } from '../projects/store.js'
 import { loadWorkflowByIdAnyTier } from '../workflows/store.js'
 import { firstRunAfter } from '../schedules/cron.js'
@@ -21,6 +24,9 @@ const Params = z.object({
   enabled: z.boolean(),
   trigger: ScheduleTriggerSchema,
   job: ScheduleJobSchema,
+  // Job `command`: người dùng vừa xác nhận program + từng arg trong hộp thoại ⇒ ghi
+  // sổ duyệt. Vắng ⇒ lưu mà KHÔNG duyệt (lệnh đổi so với bản đã duyệt sẽ không chạy).
+  approve: z.boolean().optional(),
 })
 
 register('schedules.upsert', async (raw) => {
@@ -40,7 +46,7 @@ register('schedules.upsert', async (raw) => {
 
   // Fail fast ở biên: lịch chỉ mang ID, sidecar tự resolve ra đường dẫn khi chạy.
   // Kiểm ngay lúc lưu để người dùng biết liền, thay vì im lặng tới 3 giờ sáng.
-  const { projectId } = params.job
+  const projectId = 'projectId' in params.job ? params.job.projectId : undefined
   if (projectId) {
     const project = await loadProject(projectId)
     if (!project) throw new RpcError(-32602, `Project not found: ${projectId}`)
@@ -48,6 +54,17 @@ register('schedules.upsert', async (raw) => {
   if (params.job.kind === 'workflow-task') {
     const workflow = await loadWorkflowByIdAnyTier(params.job.workflowId, [params.job.projectId])
     if (!workflow) throw new RpcError(-32602, `Workflow not found: ${params.job.workflowId}`)
+  }
+  if (params.job.kind === 'command') {
+    const { program } = params.job
+    if (!isAbsolute(program)) {
+      throw new RpcError(-32602, `Program must be an absolute path: ${program}`)
+    }
+    try {
+      await access(program, constants.X_OK)
+    } catch {
+      throw new RpcError(-32602, `Program not found or not executable: ${program}`)
+    }
   }
 
   const now = new Date()
@@ -79,5 +96,10 @@ register('schedules.upsert', async (raw) => {
   if (existing?.lastStatus !== undefined) schedule.lastStatus = existing.lastStatus
 
   await saveSchedule(schedule)
+  // Ghi sổ duyệt SAU khi lưu (digest gắn với id) — schedules/command-approval.ts.
+  if (schedule.job.kind === 'command') {
+    if (params.approve) await approveCommand(schedule.id, schedule.job)
+    return { schedule: { ...schedule, approved: await isCommandApproved(schedule.id, schedule.job) } }
+  }
   return { schedule }
 })

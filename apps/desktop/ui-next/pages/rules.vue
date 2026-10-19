@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="rules">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="rules">
     <LibraryView
       :items="rules"
       :item-key="ruleKey"
@@ -15,17 +15,24 @@
       @imported="onImported"
     >
       <template #row="{ item: r }">
-        <div class="lrow">
+        <div class="flex items-center gap-2">
           <span
-            class="sdot"
-            :style="{ background: r.enabled ? 'var(--accent)' : 'var(--textFaint)' }"
+            class="size-2 shrink-0 rounded-full"
+            :class="r.enabled ? 'bg-primary' : 'bg-faint'"
           />
-          <span class="ttl">{{ r.name }}</span>
-          <span class="tag" :class="{ acc: r.source === 'project' }" style="padding: 1px 6px">
+          <span class="min-w-0 flex-1 truncate text-base font-medium">{{ r.name }}</span>
+          <Badge
+            variant="outline"
+            :class="
+              r.source === 'project'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'text-muted-foreground'
+            "
+          >
             {{ t('rules.tier.' + r.source) }}
-          </span>
+          </Badge>
         </div>
-        <div class="sub">{{ r.description }}</div>
+        <div class="mt-1 truncate text-sm text-muted-foreground">{{ r.description }}</div>
       </template>
 
       <template #detail="{ item: r }">

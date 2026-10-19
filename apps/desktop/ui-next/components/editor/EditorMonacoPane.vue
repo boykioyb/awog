@@ -1,5 +1,5 @@
 <template>
-  <div class="edpane" :class="{ split: isSplit }">
+  <div class="h-full min-w-0" :class="isSplit ? 'w-1/2 flex-[0_0_50%] border-r' : 'flex-1'">
     <MonacoEditor
       ref="editorRef"
       :path="path"
@@ -49,16 +49,3 @@ defineExpose({
   focus: () => editorRef.value?.focus(),
 })
 </script>
-
-<style scoped>
-.edpane {
-  height: 100%;
-  min-width: 0;
-  flex: 1;
-}
-.edpane.split {
-  flex: 0 0 50%;
-  width: 50%;
-  border-right: 1px solid var(--border);
-}
-</style>

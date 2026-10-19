@@ -3,58 +3,77 @@
        VueFlow (id/data/selected); `data` mang node + cờ điểm vào + callback mở rộng
        (node VueFlow không emit được lên canvas nên handler đi qua `data`, cùng khuôn
        với WorkflowNode). -->
-  <!-- G4: `dim` nghĩa là NGOÀI đường đi của request đang lần theo, không phải
+  <!-- G4: `dim` (mờ) nghĩa là NGOÀI đường đi của request đang lần theo, không phải
        "không quan trọng" — và nó chỉ bật khi thật sự có một đường đi đang tô
-       (`matchOf` trả `null` khi không có, xem `useInfraTraceHighlight`). -->
+       (`matchOf` trả `null` khi không có, xem `useInfraTraceHighlight`). Node ngoài
+       đường MỜ ĐI chứ không bị ẩn: ẩn sẽ làm sơ đồ đứt quãng và người đọc mất luôn
+       ngữ cảnh "request này KHÔNG đi qua chỗ kia", vốn là nửa câu trả lời.
+       Node ngoài ngữ cảnh đang ghim (`external`) viền đứt để nó không đọc như một
+       tài nguyên trong tài khoản hiện tại. -->
   <div
-    class="ign"
-    :class="{
-      sel: selected,
-      ext: data.node.kind === 'external',
-      dim: data.offPath,
-      path: data.onPath,
-      bad: data.failed,
-    }"
+    class="relative w-52 cursor-pointer rounded-lg border border-input bg-card px-3 pt-2 pb-2 shadow-md"
+    :class="[
+      data.node.kind === 'external' && 'border-dashed',
+      data.offPath && 'opacity-35',
+      data.failed
+        ? 'border-destructive ring-1 ring-destructive'
+        : (selected || data.onPath) && 'border-primary ring-1 ring-primary',
+    ]"
   >
     <Handle type="target" :position="Position.Left" />
 
-    <div class="ign-hd">
-      <span class="ign-ico">
-        <Icon :name="icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <div class="flex items-center gap-2">
+      <span class="grid size-5.5 shrink-0 place-items-center rounded-sm bg-selected text-primary">
+        <Icon :name="icon" class="size-3.5" />
       </span>
-      <span class="ign-name" :title="data.node.label">{{ data.node.label }}</span>
+      <span class="min-w-0 truncate text-sm font-semibold text-foreground" :title="data.node.label">
+        {{ data.node.label }}
+      </span>
     </div>
 
-    <div class="ign-sub">
+    <div class="mt-1.5 flex min-w-0 items-center gap-1.5">
       <!-- `service`/`region` là ĐỊNH DANH, không dịch: chúng là thứ người dùng tra
            tiếp trong console/CLI. -->
-      <span class="ign-svc">{{ data.node.service }}</span>
-      <span v-if="data.node.region" class="ign-reg">{{ data.node.region }}</span>
+      <span class="truncate text-xs text-dim">{{ data.node.service }}</span>
+      <span v-if="data.node.region" class="shrink-0 text-xs text-faint tabular-nums">
+        {{ data.node.region }}
+      </span>
     </div>
 
-    <div class="ign-foot">
-      <span v-if="data.isRoot" class="ign-chip root">{{ t('infra.graph.node.root') }}</span>
-      <span v-if="data.node.inferred" class="ign-chip inf">
+    <div class="mt-2 flex min-h-5 items-center gap-1 border-t pt-1.5">
+      <Badge v-if="data.isRoot" variant="outline" class="border-selected-border text-primary">
+        {{ t('infra.graph.node.root') }}
+      </Badge>
+      <!-- Nhãn "suy luận" phải đọc được như một CẢNH BÁO về độ tin, không phải trang trí. -->
+      <Badge v-if="data.node.inferred" variant="outline" class="border-warning text-warning">
         {{ t('infra.graph.node.inferred') }}
-      </span>
-      <span v-if="data.node.kind === 'external'" class="ign-chip ext">
+      </Badge>
+      <Badge
+        v-if="data.node.kind === 'external'"
+        variant="outline"
+        class="border-dashed text-muted-foreground"
+      >
         {{ t('infra.graph.node.external') }}
-      </span>
-      <span class="ign-gap" />
-      <button
+      </Badge>
+      <span class="flex-1" />
+      <Button
         v-if="data.node.expandable"
-        class="ign-exp"
+        variant="outline"
+        size="iconSm"
+        class="size-5.5 text-muted-foreground hover:border-selected-border hover:bg-selected hover:text-primary"
         type="button"
         :disabled="data.isExpanding"
         :title="data.isExpanding ? t('infra.graph.node.expanding') : t('infra.graph.node.expand')"
+        :aria-label="
+          data.isExpanding ? t('infra.graph.node.expanding') : t('infra.graph.node.expand')
+        "
         @click.stop="onExpand"
       >
         <Icon
           :name="data.isExpanding ? 'refresh' : 'plus'"
-          :class="{ spin: data.isExpanding }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          :class="{ 'motion-safe:animate-spin': data.isExpanding }"
         />
-      </button>
+      </Button>
     </div>
 
     <Handle type="source" :position="Position.Right" />
@@ -93,185 +112,3 @@ function onExpand(): void {
   props.data.onExpand(props.id)
 }
 </script>
-
-<style scoped>
-.ign {
-  width: 208px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
-  padding: 9px 11px 8px;
-  box-shadow: var(--shadow-md);
-  position: relative;
-  cursor: pointer;
-}
-
-.ign.sel {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    var(--shadow-md);
-}
-
-/* ── Tô đường đi của một request (G4) ────────────────────────────────────────
-   Node ngoài đường MỜ ĐI chứ không bị ẩn: ẩn sẽ làm sơ đồ đứt quãng và người đọc
-   mất luôn ngữ cảnh "request này KHÔNG đi qua chỗ kia", vốn là nửa câu trả lời. */
-.ign.dim {
-  opacity: 0.35;
-}
-
-.ign.path {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    var(--shadow-md);
-}
-
-.ign.bad {
-  border-color: var(--danger);
-  box-shadow:
-    0 0 0 1px var(--danger),
-    var(--shadow-md);
-}
-
-/* Node ngoài ngữ cảnh đang ghim: viền đứt để nó không đọc như một tài nguyên
-   trong tài khoản hiện tại. */
-.ign.ext {
-  border-style: dashed;
-}
-
-.ign-hd {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.ign-ico {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  background: var(--accentDim);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-
-.ign-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ign-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  min-width: 0;
-}
-
-.ign-svc {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ign-reg {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-  flex: 0 0 auto;
-}
-
-.ign-foot {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px solid var(--border);
-  min-height: 20px;
-}
-
-.ign-gap {
-  flex: 1;
-}
-
-.ign-chip {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  color: var(--textDim);
-  white-space: nowrap;
-}
-
-/* Nhãn "suy luận" phải đọc được như một CẢNH BÁO về độ tin, không phải trang trí. */
-.ign-chip.inf {
-  color: var(--amber);
-  border-color: var(--amber);
-}
-
-.ign-chip.root {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-
-.ign-chip.ext {
-  color: var(--textMuted);
-  border-style: dashed;
-}
-
-.ign-exp {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--borderStrong);
-  background: var(--bgEl);
-  color: var(--textMuted);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.ign-exp:hover:not(:disabled) {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  color: var(--accent);
-}
-
-.ign-exp:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* Cùng khuôn với `.iad-spin` của InfraAccountsDetail.vue — `.spin` không phải class
-   toàn cục nên SFC tự khai keyframes. */
-.spin {
-  animation: ign-spin 0.8s linear infinite;
-}
-
-@keyframes ign-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-</style>

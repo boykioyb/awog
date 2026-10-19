@@ -1,79 +1,104 @@
 <template>
-  <div class="ssh-sn-surface">
-    <div class="ssh-sn-head">
-      <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="ssh-sn-head-t">{{ t('ssh.nav.snippets') }}</span>
-      <span class="ssh-sn-count">{{ snippetsStore.snippets.length }}</span>
-      <div class="ssh-sn-tools">
-        <button
-          class="ssh-sn-tool"
+  <div class="flex h-full flex-col overflow-hidden">
+    <div class="flex shrink-0 items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+      <Icon name="commands" class="size-3.5" />
+      <span class="font-semibold">{{ t('ssh.nav.snippets') }}</span>
+      <Badge variant="secondary">{{ snippetsStore.snippets.length }}</Badge>
+      <div class="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.snippet.new')"
           :aria-label="t('ssh.snippet.new')"
           @click="openNew"
         >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ssh-sn-tool"
+          <Icon name="plus" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.panel.close')"
           :aria-label="t('ssh.panel.close')"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
     </div>
+    <Separator />
 
-    <div v-if="!connId" class="ssh-sn-note">{{ t('ssh.snippet.noTarget') }}</div>
-
-    <div class="ssh-sn-scroll">
-      <div v-if="!snippetsStore.snippets.length" class="ssh-sn-empty">
-        <Icon name="commands" style="width: 22px; height: 22px; opacity: 0.5" />
-        <span class="ssh-sn-empty-t">{{ t('ssh.snippet.emptyTitle') }}</span>
-        <span class="ssh-sn-empty-b">{{ t('ssh.snippet.emptyBody') }}</span>
+    <template v-if="!connId">
+      <div class="shrink-0 px-3 py-2 text-sm text-muted-foreground">
+        {{ t('ssh.snippet.noTarget') }}
       </div>
-      <div v-else class="ssh-sn-list">
-        <div v-for="s in snippetsStore.snippets" :key="s.id" class="ssh-sn-row">
-          <div class="ssh-sn-main" @dblclick="run(s)">
-            <span class="ssh-sn-name">{{ s.name }}</span>
-            <span class="ssh-sn-cmd mono">{{ s.command }}</span>
+      <Separator />
+    </template>
+
+    <div class="min-h-0 flex-auto overflow-y-auto">
+      <div
+        v-if="!snippetsStore.snippets.length"
+        class="flex flex-col items-center gap-2 px-5 py-10 text-center text-muted-foreground"
+      >
+        <Icon name="commands" class="size-5 opacity-50" />
+        <span class="text-base font-medium text-foreground">{{ t('ssh.snippet.emptyTitle') }}</span>
+        <span class="text-sm">{{ t('ssh.snippet.emptyBody') }}</span>
+      </div>
+      <div v-else class="flex flex-col gap-1.5 p-2">
+        <Card
+          v-for="s in snippetsStore.snippets"
+          :key="s.id"
+          class="flex-row items-center gap-2 rounded-md px-2.5 py-2 shadow-none"
+        >
+          <div class="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5" @dblclick="run(s)">
+            <span class="text-sm font-medium text-foreground">{{ s.name }}</span>
+            <span class="truncate font-mono text-sm text-muted-foreground">{{ s.command }}</span>
           </div>
-          <div class="ssh-sn-acts">
-            <button
-              class="ssh-sn-act"
+          <div class="flex shrink-0 items-center gap-px">
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground disabled:pointer-events-auto disabled:cursor-not-allowed"
               :disabled="!connId"
               :title="connId ? t('ssh.snippet.run') : t('ssh.snippet.noTarget')"
               :aria-label="t('ssh.snippet.run')"
               @click="run(s)"
             >
-              <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="ssh-sn-act"
+              <Icon name="play" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground"
               :title="t('ssh.snippet.copy')"
               :aria-label="t('ssh.snippet.copy')"
               @click="copy(s)"
             >
-              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="ssh-sn-act"
+              <Icon name="copy" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground"
               :title="t('ssh.snippet.edit')"
               :aria-label="t('ssh.snippet.edit')"
               @click="openEdit(s)"
             >
-              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="ssh-sn-act del"
+              <Icon name="edit" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               :title="t('ssh.snippet.delete')"
               :aria-label="t('ssh.snippet.delete')"
               @click="del(s)"
             >
-              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+              <Icon name="trash" />
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
 
@@ -154,155 +179,3 @@ async function del(snippet: SshSnippet): Promise<void> {
   if (ok) snippetsStore.remove(snippet.id)
 }
 </script>
-
-<style scoped>
-.ssh-sn-surface {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.ssh-sn-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-}
-.ssh-sn-head-t {
-  font-weight: 600;
-}
-.ssh-sn-count {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 2px 7px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.ssh-sn-tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-.ssh-sn-tool {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ssh-sn-tool:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-sn-note {
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-}
-.ssh-sn-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-.ssh-sn-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--textDim);
-}
-.ssh-sn-empty-t {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-  color: var(--text);
-}
-.ssh-sn-empty-b {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ssh-sn-list {
-  padding: 8px;
-}
-.ssh-sn-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-}
-.ssh-sn-row + .ssh-sn-row {
-  margin-top: 6px;
-}
-.ssh-sn-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  cursor: pointer;
-}
-.ssh-sn-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.ssh-sn-cmd {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ssh-sn-acts {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  flex: 0 0 auto;
-}
-.ssh-sn-act {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ssh-sn-act:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-sn-act:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.ssh-sn-act.del:hover:not(:disabled) {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-</style>

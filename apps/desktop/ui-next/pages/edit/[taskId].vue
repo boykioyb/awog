@@ -1,5 +1,5 @@
 <template>
-  <div class="editpage">
+  <div class="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
     <EditorTopBar
       :back-label="t('editor.backToTasks')"
       :title="currentFile?.name ?? t('editor.artifact')"
@@ -13,12 +13,12 @@
     >
       <template #actions>
         <Button :title="t('editor.copy')" variant="outline" size="iconMd" @click="copyContent">
-          <Icon name="copy" class="acticon" />
+          <Icon name="copy" />
         </Button>
       </template>
     </EditorTopBar>
 
-    <div class="editbody">
+    <div class="flex min-h-0 flex-1">
       <EditorArtifactList
         :files="files"
         :task-id="taskId"
@@ -26,8 +26,8 @@
         @select="selectFile"
       />
 
-      <div class="editmain">
-        <div v-if="currentFile" class="editsurface">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div v-if="currentFile" class="flex min-h-0 flex-1 overflow-hidden">
           <!-- Diff artifact → single diff viewer (no code/preview split). -->
           <EditorViewerPane v-if="currentKind === 'diff'" :content="content" mode="diff" />
 
@@ -35,8 +35,8 @@
             <!-- Read-only Monaco for the raw artifact (code / split). -->
             <div
               v-if="effectiveView !== 'preview'"
-              class="editcode"
-              :class="{ split: effectiveView === 'split' }"
+              class="h-full min-w-0"
+              :class="effectiveView === 'split' ? 'w-1/2 shrink-0 grow-0 border-r' : 'flex-1'"
             >
               <MonacoViewer :value="content" :language="monacoLang" :read-only="true" />
             </div>
@@ -51,17 +51,22 @@
           </template>
         </div>
 
-        <div v-else class="editempty">
-          <Icon name="text" class="editempty-icon" />
+        <div
+          v-else
+          class="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground"
+        >
+          <Icon name="text" class="size-10 text-faint" />
           <p>{{ loaded ? t('editor.noArtifactSelected') : t('editor.loading') }}</p>
         </div>
 
         <!-- Status bar -->
-        <div class="editstatus">
+        <div
+          class="flex shrink-0 items-center gap-4 border-t bg-sidebar px-3.5 py-1 text-sm text-muted-foreground tabular-nums"
+        >
           <span>{{ languageLabel }}</span>
           <span>UTF-8</span>
           <span>LF</span>
-          <span class="editstatus-spacer" />
+          <span class="flex-1" />
           <span>{{ t('editor.lines', { n: lineCount }) }}</span>
           <span>{{ t('editor.words', { n: wordCount }) }}</span>
           <span>{{ t('editor.chars', { n: charCount }) }}</span>
@@ -124,76 +129,3 @@ onMounted(() => {
   void init()
 })
 </script>
-
-<style scoped>
-.editpage {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-}
-.acticon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.editbody {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-.editmain {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-.editsurface {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.editcode {
-  height: 100%;
-  min-width: 0;
-  flex: 1;
-}
-.editcode.split {
-  flex: 0 0 50%;
-  width: 50%;
-  border-right: 1px solid var(--border);
-}
-.editempty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--textDim);
-}
-.editempty-icon {
-  width: 40px;
-  height: 40px;
-  color: var(--textFaint);
-}
-.editstatus {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 4px 14px;
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  background: var(--bgPanel);
-  border-top: 1px solid var(--border);
-}
-.editstatus-spacer {
-  flex: 1;
-}
-</style>

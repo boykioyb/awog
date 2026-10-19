@@ -38,6 +38,7 @@ import { RpcError } from '../transport/rpc.js'
 import { terminalManager } from '../terminal/manager.js'
 import { resolveClaudeBinary } from '../runtime/claude-sdk/binary.js'
 import { resolveCodexBinary } from '../runtime/codex/binary.js'
+import { envWithoutSecrets } from '../util/child-env.js'
 import { ensureCodexHome } from '../runtime/codex/home.js'
 import { buildSdkEnv } from '../runtime/claude-sdk/shared.js'
 import { resolveAccount, resolveCredential } from '../credentials/credential-resolver.js'
@@ -81,24 +82,10 @@ export function isCliAttached(sessionId: string): boolean {
 }
 
 // ─── Base env (sanitized) ───────────────────────────────────────────────────
-// Sao chép tối thiểu của `sanitizedEnv()` trong terminal/manager.ts — hàm đó
-// private và không đáng nới surface chỉ vì chỗ này (rule-of-three: bản thứ
-// hai thì copy). Cùng 3 lớp lọc: credential exact/suffix (invariant #1 — một
-// shell tương tác không được `env | grep` ra token), rồi cờ runtime của host
-// (ELECTRON_RUN_AS_NODE/NODE_OPTIONS sẽ cướp mọi `node` con chạy trong PTY).
-// Nhánh claude KHÔNG đi qua đây — nó cần token trong env nên dùng buildSdkEnv.
-const SENSITIVE_EXACT = new Set(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY'])
-const SENSITIVE_SUFFIX = /(_TOKEN|_KEY|_SECRET)$/i
-const HOST_RUNTIME_VARS = ['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'ELECTRON_NO_ATTACH_CONSOLE']
-
+// Bộ lọc credential + cờ runtime của host ở util/child-env.ts; nhánh claude KHÔNG
+// đi qua đây — nó cần token trong env nên dùng buildSdkEnv.
 function sanitizedBaseEnv(): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value === undefined) continue
-    if (SENSITIVE_EXACT.has(key) || SENSITIVE_SUFFIX.test(key)) continue
-    if (HOST_RUNTIME_VARS.includes(key)) continue
-    out[key] = value
-  }
+  const out = envWithoutSecrets()
   out.TERM_PROGRAM = 'AWOG'
   out.COLORTERM = 'truecolor'
   if (!out.LANG) out.LANG = 'en_US.UTF-8'

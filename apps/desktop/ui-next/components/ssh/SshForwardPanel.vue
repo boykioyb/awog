@@ -1,72 +1,96 @@
 <template>
-  <div class="ssh-fp-surface">
-    <div class="ssh-fp-head">
-      <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="ssh-fp-head-t">{{ t('ssh.section.forwards') }}</span>
-      <span class="ssh-fp-count">{{ forwards.length }}</span>
-      <button
-        class="ssh-fp-x"
+  <!-- Bề mặt live trong vùng panel của detail — cùng dáng surface terminal của
+       SshDetail: khung viền hairline + head sentence-case (icon + tiêu đề + đếm + đóng). -->
+  <div class="overflow-hidden rounded-lg border">
+    <div class="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+      <Icon name="move" class="size-3.5" />
+      <span class="min-w-0 flex-1 font-semibold">{{ t('ssh.section.forwards') }}</span>
+      <Badge variant="secondary">{{ forwards.length }}</Badge>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-muted-foreground"
         :title="t('ssh.panel.close')"
         :aria-label="t('ssh.panel.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </div>
+    <Separator />
 
     <!-- Active tunnels -->
-    <div v-if="!forwards.length" class="ssh-fp-empty">{{ t('ssh.fwd.empty') }}</div>
-    <div v-else class="ssh-fp-list">
-      <div v-for="f in forwards" :key="f.forwardId" class="ssh-fp-row">
-        <span class="ssh-fp-type">{{ t('ssh.forward.' + f.forward.type) }}</span>
-        <span class="mono ssh-fp-body">{{ forwardLabel(f) }}</span>
-        <span
-          class="ssh-fp-status"
-          :style="{ color: f.status === 'error' ? 'var(--danger)' : 'var(--green)' }"
+    <div v-if="!forwards.length" class="px-3.5 py-3 text-sm text-muted-foreground">
+      {{ t('ssh.fwd.empty') }}
+    </div>
+    <div v-else class="flex flex-col divide-y">
+      <div v-for="f in forwards" :key="f.forwardId" class="flex items-center gap-2.5 px-3.5 py-2">
+        <Badge variant="secondary" class="shrink-0">
+          {{ t('ssh.forward.' + f.forward.type) }}
+        </Badge>
+        <span class="min-w-0 flex-1 font-mono text-sm break-all text-foreground">
+          {{ forwardLabel(f) }}
+        </span>
+        <!-- Trạng thái = viền + chấm theo màu chữ (currentColor) trên nền trong suốt. -->
+        <Badge
+          variant="outline"
+          class="shrink-0 border-current tabular-nums"
+          :class="f.status === 'error' ? 'text-destructive' : 'text-success'"
           :title="f.error || undefined"
         >
-          <span class="ssh-fp-dot" />
+          <span class="size-2 shrink-0 rounded-full bg-current" />
           {{ t('ssh.fwd.status.' + f.status) }}
-        </span>
-        <button
-          class="ssh-fp-stop"
+        </Badge>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.fwd.stop')"
           :aria-label="t('ssh.fwd.stop')"
           @click="stop(f.forwardId)"
         >
-          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
     </div>
 
     <!-- Add a tunnel -->
-    <div class="ssh-fp-add">
-      <div class="ssh-fp-add-row">
-        <AppSelect v-model="draft.type" :options="typeOptions" class="ssh-fp-type-sel" />
+    <Separator />
+    <div class="flex flex-col gap-2 px-3.5 py-2.5">
+      <div class="flex flex-wrap items-center gap-2">
+        <AppSelect v-model="draft.type" :options="typeOptions" class="shrink-0" />
         <Input
           v-model.number="draft.bindPort"
           type="number"
+          class="min-w-0 flex-1 basis-22"
           :placeholder="t('ssh.fwd.bindPort')"
           min="0"
           max="65535"
         />
         <template v-if="draft.type !== 'dynamic'">
-          <span class="ssh-fp-arrow mono">{{ draft.type === 'local' ? '→' : '←' }}</span>
-          <Input v-model="draft.destHost" type="text" :placeholder="t('ssh.fwd.destHost')" />
+          <span class="shrink-0 font-mono text-muted-foreground">
+            {{ draft.type === 'local' ? '→' : '←' }}
+          </span>
+          <Input
+            v-model="draft.destHost"
+            type="text"
+            class="min-w-0 flex-1 basis-22"
+            :placeholder="t('ssh.fwd.destHost')"
+          />
           <Input
             v-model.number="draft.destPort"
             type="number"
             :placeholder="t('ssh.fwd.destPort')"
             min="1"
             max="65535"
-            class="ssh-fp-input-sm"
+            class="w-21 shrink-0"
           />
         </template>
       </div>
-      <div class="ssh-fp-add-actions">
-        <span class="ssh-fp-hint">{{ t('ssh.fwd.bindHint') }}</span>
+      <div class="flex items-center justify-between gap-2.5">
+        <span class="text-sm text-muted-foreground">{{ t('ssh.fwd.bindHint') }}</span>
         <Button :disabled="!canAdd || adding" variant="default" size="sm" @click="add">
-          <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="plus" />
           {{ t('ssh.fwd.add') }}
         </Button>
       </div>
@@ -194,189 +218,3 @@ onBeforeUnmount(() => {
   unlisten = null
 })
 </script>
-
-<style scoped>
-/* Live surface shown inside the detail's panel area — mirrors SshDetail's terminal
-   surface: a hairline-bordered card with a sentence-case head (icon + title +
-   count + close). A scoped parent reaches only a child's root, so the head/rows
-   are styled locally rather than inherited. */
-.ssh-fp-surface {
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-}
-.ssh-fp-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 12px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-}
-.ssh-fp-head-t {
-  font-weight: 600;
-  flex: 1;
-  min-width: 0;
-}
-.ssh-fp-count {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.ssh-fp-x {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ssh-fp-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-fp-x:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.ssh-fp-empty {
-  padding: 12px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.ssh-fp-list {
-  display: flex;
-  flex-direction: column;
-}
-.ssh-fp-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 14px;
-}
-.ssh-fp-row + .ssh-fp-row {
-  border-top: 1px solid var(--border);
-}
-.ssh-fp-type {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-  flex: 0 0 auto;
-}
-.ssh-fp-body {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  word-break: break-all;
-}
-/* Status = colored border + dot on a transparent pill; the color comes from an
-   inline token (green/danger) and border/dot follow it via currentColor. */
-.ssh-fp-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 12px;
-  padding: 3px 8px;
-  border: 1px solid currentColor;
-  border-radius: var(--r-sm);
-  background: transparent;
-  flex: 0 0 auto;
-}
-.ssh-fp-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: 0 0 auto;
-}
-.ssh-fp-stop {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ssh-fp-stop:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-fp-stop:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.ssh-fp-add {
-  border-top: 1px solid var(--border);
-  padding: 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.ssh-fp-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ssh-fp-type-sel {
-  width: 116px;
-  flex: 0 0 auto;
-}
-.ssh-fp-input {
-  height: 30px;
-  min-width: 0;
-  flex: 1 1 90px;
-  padding: 0 8px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ssh-fp-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.ssh-fp-input-sm {
-  flex: 0 0 84px;
-}
-.ssh-fp-arrow {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.ssh-fp-add-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.ssh-fp-hint {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-</style>

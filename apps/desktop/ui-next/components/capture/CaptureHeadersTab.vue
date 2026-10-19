@@ -1,10 +1,10 @@
 <template>
-  <div class="cap-tab">
-    <div class="cap-bar">
+  <div :class="CAP_TAB">
+    <div :class="CAP_BAR">
       <Button
         variant="ghost"
         size="xs"
-        :class="raw && 'cap-on'"
+        :class="raw && CAP_ON"
         :aria-pressed="raw"
         :title="t('capture.headers.rawHint')"
         @click="raw = !raw"
@@ -13,20 +13,20 @@
       </Button>
     </div>
 
-    <section class="cap-sec">
-      <h4>{{ t('capture.headers.general') }}</h4>
-      <table class="cap-kv">
-        <tbody>
-          <tr v-for="row in general" :key="row[0]">
-            <th>{{ row[0] }}</th>
-            <td class="cap-code cap-wrap">{{ row[1] }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">{{ t('capture.headers.general') }}</h4>
+      <Table :class="CAP_KV">
+        <TableBody>
+          <TableRow v-for="row in general" :key="row[0]">
+            <TableHead>{{ row[0] }}</TableHead>
+            <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">{{ row[1] }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </section>
 
-    <section class="cap-sec">
-      <h4>
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">
         {{ t('capture.headers.response', { n: entry.responseHeaders.length }) }}
         <Button
           variant="ghost"
@@ -39,20 +39,20 @@
           <Icon :name="iconFor('response')" />
         </Button>
       </h4>
-      <pre v-if="raw" class="cap-pre cap-code">{{ responseText }}</pre>
-      <table v-else-if="entry.responseHeaders.length" class="cap-kv">
-        <tbody>
-          <tr v-for="(h, i) in entry.responseHeaders" :key="i">
-            <th class="cap-code">{{ h[0] }}</th>
-            <td class="cap-code cap-wrap">{{ h[1] }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="cap-note">{{ t('capture.headers.none') }}</div>
+      <pre v-if="raw" :class="CAP_PRE">{{ responseText }}</pre>
+      <Table v-else-if="entry.responseHeaders.length" :class="CAP_KV">
+        <TableBody>
+          <TableRow v-for="(h, i) in entry.responseHeaders" :key="i">
+            <TableHead class="font-mono">{{ h[0] }}</TableHead>
+            <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">{{ h[1] }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <div v-else :class="CAP_NOTE">{{ t('capture.headers.none') }}</div>
     </section>
 
-    <section class="cap-sec">
-      <h4>
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">
         {{ t('capture.headers.request', { n: entry.requestHeaders.length }) }}
         <Button
           variant="ghost"
@@ -65,16 +65,16 @@
           <Icon :name="iconFor('request')" />
         </Button>
       </h4>
-      <pre v-if="raw" class="cap-pre cap-code">{{ requestText }}</pre>
-      <table v-else-if="entry.requestHeaders.length" class="cap-kv">
-        <tbody>
-          <tr v-for="(h, i) in entry.requestHeaders" :key="i">
-            <th class="cap-code">{{ h[0] }}</th>
-            <td class="cap-code cap-wrap">{{ h[1] }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="cap-note">{{ t('capture.headers.none') }}</div>
+      <pre v-if="raw" :class="CAP_PRE">{{ requestText }}</pre>
+      <Table v-else-if="entry.requestHeaders.length" :class="CAP_KV">
+        <TableBody>
+          <TableRow v-for="(h, i) in entry.requestHeaders" :key="i">
+            <TableHead class="font-mono">{{ h[0] }}</TableHead>
+            <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">{{ h[1] }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <div v-else :class="CAP_NOTE">{{ t('capture.headers.none') }}</div>
     </section>
   </div>
 </template>
@@ -82,6 +82,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { CaptureEntry, HeaderPair } from '~/types/network-capture'
+import {
+  CAP_BAR,
+  CAP_KV,
+  CAP_NOTE,
+  CAP_ON,
+  CAP_PRE,
+  CAP_SEC,
+  CAP_SEC_TITLE,
+  CAP_TAB,
+} from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()

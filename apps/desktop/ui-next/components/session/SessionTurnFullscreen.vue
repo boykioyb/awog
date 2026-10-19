@@ -3,34 +3,57 @@
        top-level full-window overlay (escapes any ancestor stacking context / overflow),
        mirroring PreviewModal. Click the scrim (@click.self) or Esc / the header × to close. -->
   <Teleport to="body">
-    <div class="ovl on ftovl" @click.self="emit('close')">
-      <div class="ftcard">
-        <div class="fthead">
-          <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="ftname">{{ title }}</span>
-          <span v-if="streaming" class="ftstream">
-            <span class="ftdot" />
+    <!-- Overlay phủ cả cửa sổ: scrim kín, thẻ kéo tràn mép (như PreviewModal). z-470:
+         lượt-fullscreen mở được từ trong board item (`.wsed-ovl` 160) và peek full
+         (`.apeek.full` 400) nên phải nổi trên cả hai; vẫn dưới preview 480 vì preview
+         mở được TỪ đây (link/ảnh trong lượt). `.ftovl` được useSessionFind.ts đọc để
+         nhường phím ⌘F cho overlay này.
+         hook-ok: `.ovl.on` (OVERLAYS của useEmbeddedBrowser.ts), `.ftovl` (useSessionFind) -->
+    <div class="ovl on ftovl" :class="OVERLAY_CLASS" @click.self="emit('close')">
+      <div class="relative flex size-full flex-col overflow-hidden bg-background">
+        <!-- Lề ngang bằng header PreviewModal — chừa chỗ cho nút cửa sổ OS mà overlay này
+             phủ lên (app-shell.css công bố hai dải inset). -->
+        <div
+          class="flex items-center gap-2 border-b py-2.5 pr-[calc(14px+var(--titlebar-inset-end))] pl-[calc(14px+var(--titlebar-inset-start))] text-foreground"
+        >
+          <Icon name="layers" class="size-3.5" />
+          <span class="min-w-0 truncate font-semibold">{{ title }}</span>
+          <span
+            v-if="streaming"
+            class="inline-flex flex-none items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            <span class="inline-block size-2 rounded-full bg-primary opacity-50" />
             {{ t('sessions.message.waiting') }}
           </span>
-          <span style="flex: 1" />
-          <button
-            class="ftx"
-            :class="{ on: findOpen }"
+          <span class="flex-1" />
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground hover:text-foreground"
+            :class="{ 'bg-accent text-foreground': findOpen }"
             :title="t('common.search')"
             :aria-label="t('common.search')"
             @click="toggleFind"
           >
-            <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button class="ftx" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="search" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground hover:text-foreground"
+            :title="t('common.close')"
+            @click="emit('close')"
+          >
+            <Icon name="x" />
+          </Button>
         </div>
 
         <!-- Find-in-turn (⌘/Ctrl+F or the header search button): floats below the header,
              clear of the OS window controls, over the body without shifting layout. Same
              FindBar + DOM-wrap engine as the PreviewModal / transcript find. -->
-        <div v-if="findOpen" class="ftfind">
+        <!-- Neo cỡ 0 cho FindBar nổi (`.pvfind` của nó absolute top/right): dời xuống
+             dưới hàng header cho khỏi đè nút tìm/đóng; thẻ là tổ tiên định vị. -->
+        <div v-if="findOpen" class="absolute top-11 right-4 z-5">
           <FindBar
             v-model:query="findQuery"
             v-model:match-case="findMatchCase"
@@ -44,12 +67,17 @@
           />
         </div>
 
-        <!-- Internal scroll region. Renders the SAME `.abody` tree as the transcript by
+        <!-- Internal scroll region. Renders the SAME body tree as the transcript by
              reusing the parent's `grouped` computed (DRY — no grouping logic duplicated).
              Auto-scrolls to the bottom while streaming ONLY when the user is already at the
              bottom (3.c). -->
-        <div ref="scrollEl" class="ftbody" @scroll="onScroll">
-          <div class="abody">
+        <div
+          ref="scrollEl"
+          class="min-h-0 flex-1 overflow-auto px-5.5 pt-6.5 pb-15"
+          @scroll="onScroll"
+        >
+          <!-- Cột lượt căn giữa, bề rộng đọc thoải mái như transcript. -->
+          <div class="mx-auto flex w-full max-w-220 flex-col gap-2">
             <template v-for="(g, gi) in grouped" :key="g.key">
               <SessionTurnActivities
                 v-if="g.type === 'activities'"
@@ -67,9 +95,15 @@
               />
               <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" />
               <SessionBrowserCard v-else-if="g.type === 'browser'" :block="g.step" />
-              <div v-else-if="g.type === 'error'" class="merr">
-                <Icon name="alert" class="merr-ic" />
-                <div class="merr-msg">{{ g.text }}</div>
+              <!-- Lỗi của lượt (chỉ đọc trong overlay — không có nút thử lại). -->
+              <div
+                v-else-if="g.type === 'error'"
+                class="my-1 flex items-start gap-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2.5"
+              >
+                <Icon name="alert" class="mt-px size-4 flex-none text-destructive" />
+                <div class="min-w-0 leading-(--lh-md) wrap-anywhere text-foreground">
+                  {{ g.text }}
+                </div>
               </div>
               <!-- Gates render read-only here (3.d) — answer / approve in the transcript. -->
               <!-- Model-initiated surfaces (#24/#26/#27/#34): the transcript renders
@@ -126,6 +160,10 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
+
+// Utility của overlay (đè lên `.ovl` cũ — utilities thắng layer legacy): kéo tràn mép,
+// không đệm, scrim tối.
+const OVERLAY_CLASS = 'fixed inset-0 z-470 flex items-stretch bg-black/55 p-0'
 
 // Auto-scroll to the bottom on new stream deltas, but only when the user is already
 // pinned to the bottom — if they scrolled up to read, stay put (3.c).
@@ -223,128 +261,3 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
 })
 </script>
-
-<style scoped>
-/* Full-window overlay: scrim fills the window, card stretches edge-to-edge (PreviewModal
-   parity). No heavy entrance animation — the shared `.ovl.on` handles a subtle fade only. */
-.ftovl {
-  align-items: stretch;
-  padding: 0;
-  cursor: default;
-  /* `.ovl` mặc định z-100 — lượt-fullscreen mở được từ trong board item
-     (`.wsed-ovl` 160) và peek full (`.apeek.full` 400), phải nổi trên cả hai;
-     vẫn dưới preview 480 vì preview mở được TỪ đây (link/ảnh trong lượt). */
-  z-index: 470;
-}
-.ftcard {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  background: var(--background);
-  overflow: hidden;
-}
-.fthead {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  /* Same full-bleed inset as PreviewModal's header — clears the OS window controls
-     this overlay covers (app-shell.css publishes both strips). */
-  padding: 10px calc(14px + var(--titlebar-inset-end)) 10px calc(14px + var(--titlebar-inset-start));
-  border-bottom: 1px solid var(--border);
-  color: var(--foreground);
-}
-.ftname {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.ftstream {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  flex: 0 0 auto;
-}
-.ftdot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-pill);
-  background: var(--primary);
-  opacity: 0.5;
-}
-.ftx {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.ftx:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.ftx.on {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.ftx:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-/* Zero-size anchor for the floating FindBar (its `.pvfind` is absolute top:10/right:14).
-   Offsets it below the header row so it clears the close/search buttons; the card is the
-   positioned ancestor (position: relative). Mirrors SessionDetail's `.findwrap`. */
-.ftfind {
-  position: absolute;
-  top: 44px;
-  right: 16px;
-  z-index: 5;
-}
-.ftbody {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 26px 22px 60px;
-}
-/* Center the turn column and give it a comfortable reading width, like the transcript. */
-.abody {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
-}
-/* Turn-error alert (read-only in the overlay — no retry button here). */
-.merr {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin: 4px 0;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--destructive) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
-}
-.merr-ic {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: var(--destructive);
-}
-.merr-msg {
-  color: var(--foreground);
-  line-height: var(--lh-md);
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-</style>

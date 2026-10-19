@@ -1,13 +1,17 @@
 <template>
-  <div class="list" style="flex: 0 0 240px">
-    <div class="ltop">
-      <div class="srch">
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <Input v-model="query" unstyled :placeholder="t('projects.list.search')" />
+  <!-- hook-ok: `.list` — app-shell.css `.app.compact .list` biến cột thành drawer -->
+  <div class="list flex flex-none basis-60 flex-col overflow-hidden border-r bg-sidebar">
+    <div class="flex items-center gap-2 border-b p-3">
+      <div class="relative flex-1">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input v-model="query" class="pl-9" :placeholder="t('projects.list.search')" />
       </div>
       <Button
         :title="t('projects.list.new')"
-        style="width: 32px; height: 32px"
+        :aria-label="t('projects.list.new')"
         variant="outline"
         size="iconMd"
         @click="emit('new')"
@@ -15,26 +19,38 @@
         <Icon name="plus" />
       </Button>
     </div>
-    <div class="lscroll">
+    <div class="flex-1 overflow-y-auto px-3 py-2">
       <div
         v-for="p in visible"
         :key="p.id"
-        class="libli"
-        :class="{ on: p.id === selectedId }"
+        class="mb-0.5 cursor-pointer rounded-md border px-3 py-2"
+        :class="
+          p.id === selectedId
+            ? 'border-selected-border bg-selected shadow-[inset_2px_0_0_var(--primary)]'
+            : 'border-transparent hover:bg-accent'
+        "
         @click="emit('select', p.id)"
       >
-        <div class="lrow">
-          <span class="ttl">{{ p.name }}</span>
-          <span class="tag" style="padding: 1px 6px">
-            {{ p.language || t('projects.list.noLang') }}
+        <div class="flex items-center gap-2">
+          <span
+            class="min-w-0 flex-1 truncate text-base"
+            :class="p.id === selectedId ? 'font-semibold text-foreground' : 'font-medium'"
+          >
+            {{ p.name }}
           </span>
+          <Badge variant="outline" class="px-1.5 py-0 text-muted-foreground">
+            {{ p.language || t('projects.list.noLang') }}
+          </Badge>
         </div>
-        <div class="sub">
-          <span class="mono" style="color: var(--textDim)">{{ p.path }}</span>
+        <div class="mt-1 truncate text-xs text-dim">
+          <!-- mono-ok: đường dẫn project -->
+          <span class="font-mono">{{ p.path }}</span>
         </div>
       </div>
-      <div v-if="!filtered.length" class="empty" style="padding: 28px">
-        <div class="et">{{ query ? t('projects.list.noMatch') : t('projects.list.none') }}</div>
+      <div v-if="!filtered.length" class="flex flex-col items-center p-7 text-center">
+        <div class="text-lg text-muted-foreground">
+          {{ query ? t('projects.list.noMatch') : t('projects.list.none') }}
+        </div>
       </div>
 
       <LoadMoreSentinel v-if="hasMore" auto :remaining="remaining" @load="loadMore()" />
@@ -47,6 +63,7 @@
 // mono path). Binds the real Project entities; selection emits the project id.
 import { computed, ref, watch } from 'vue'
 import type { Project } from '~/types'
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
 

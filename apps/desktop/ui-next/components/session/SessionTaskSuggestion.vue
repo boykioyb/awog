@@ -1,16 +1,30 @@
 <template>
-  <div v-if="!dismissed" class="sugg">
-    <Icon name="bulb" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    <div class="suggmain">
-      <div class="suggtitle">{{ block.title }}</div>
-      <div v-if="block.tldr" class="suggtldr">{{ block.tldr }}</div>
+  <!-- Chip gợi ý — hàng viền hairline, icon warning (là lời mời, không phải lỗi),
+       nút hành động viền + × nhẹ. -->
+  <div v-if="!dismissed" class="flex items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2">
+    <Icon name="bulb" class="size-3.5 flex-none text-warning" />
+    <div class="min-w-0 flex-1">
+      <div class="text-lg font-medium text-foreground">{{ block.title }}</div>
+      <div v-if="block.tldr" class="text-sm text-muted-foreground">{{ block.tldr }}</div>
     </div>
-    <button class="suggbtn" :title="t('sessionsSurfaces.suggestion.startTitle')" @click="start">
+    <Button
+      variant="outline"
+      size="xs"
+      class="flex-none px-2.5 text-base shadow-none"
+      :title="t('sessionsSurfaces.suggestion.startTitle')"
+      @click="start"
+    >
       {{ t('sessionsSurfaces.suggestion.start') }}
-    </button>
-    <button class="suggx" :title="t('sessionsSurfaces.suggestion.dismiss')" @click="dismiss">
-      <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="size-5.5 flex-none text-muted-foreground [&_svg]:size-3"
+      :title="t('sessionsSurfaces.suggestion.dismiss')"
+      @click="dismiss"
+    >
+      <Icon name="x" />
+    </Button>
   </div>
 </template>
 
@@ -72,80 +86,3 @@ function start(): void {
   dismiss()
 }
 </script>
-
-<style scoped>
-/* Suggestion chip — hairline border row, warning icon (an offer, not an error),
-   ghost action button + quiet ×. */
-.sugg {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-}
-.sugg .icn {
-  flex: 0 0 auto;
-  color: var(--warning);
-}
-.suggmain {
-  flex: 1;
-  min-width: 0;
-}
-.suggtitle {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  color: var(--foreground);
-}
-.suggtldr {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted-foreground);
-}
-.suggbtn {
-  flex: 0 0 auto;
-  padding: 4px 10px;
-  border: 1px solid var(--input);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
-}
-.suggbtn:hover {
-  background: var(--accent-wash);
-  border-color: var(--input);
-}
-.suggx {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.suggx:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-@media (prefers-reduced-motion: reduce) {
-  .suggbtn,
-  .suggx {
-    transition: none;
-  }
-}
-</style>

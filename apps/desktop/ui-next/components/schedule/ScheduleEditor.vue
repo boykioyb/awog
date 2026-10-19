@@ -21,6 +21,9 @@
           <span :class="{ on: jobKind === 'workflow-task' }" @click="jobKind = 'workflow-task'">
             {{ t('schedules.job.workflowTask') }}
           </span>
+          <span :class="{ on: jobKind === 'command' }" @click="jobKind = 'command'">
+            {{ t('schedules.job.command') }}
+          </span>
         </div>
       </div>
 
@@ -51,6 +54,13 @@
           <div class="sef-static">{{ modelSummary }}</div>
         </div>
       </template>
+
+      <ScheduleCommandFields
+        v-else-if="jobKind === 'command'"
+        v-model:program="program"
+        v-model:args-text="argsText"
+        v-model:timeout-minutes="timeoutMinutes"
+      />
 
       <template v-else>
         <div class="sef-field">
@@ -143,6 +153,7 @@
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import AppSelect from '~/components/common/AppSelect.vue'
+import ScheduleCommandFields from './ScheduleCommandFields.vue'
 import { useProjects } from '~/composables/useProjects'
 import { useSettingsStore } from '~/stores/settings'
 import { useWorkflowsStore } from '~/stores/workflows'
@@ -160,6 +171,7 @@ const props = defineProps<{ open: boolean; schedule: Schedule | null }>()
 const emit = defineEmits<{ save: [ScheduleInput]; cancel: [] }>()
 
 const { t } = useI18n()
+const { confirm } = useConfirm()
 const { projects } = useProjects()
 const settings = useSettingsStore()
 const workflowsStore = useWorkflowsStore()
@@ -182,6 +194,12 @@ const taskProjectId = ref('')
 const workflowId = ref('')
 const taskTitle = ref('')
 const taskDescription = ref('')
+
+// command — tham số nhập mỗi dòng một cái (không có shell để tách theo dấu cách)
+const DEFAULT_TIMEOUT_MINUTES = 10
+const program = ref('')
+const argsText = ref('')
+const timeoutMinutes = ref(DEFAULT_TIMEOUT_MINUTES)
 
 // trigger
 const triggerKind = ref<ScheduleTrigger['kind']>('daily')
@@ -277,6 +295,9 @@ watch(
       workflowId.value = ''
       taskTitle.value = ''
       taskDescription.value = ''
+      program.value = ''
+      argsText.value = ''
+      timeoutMinutes.value = DEFAULT_TIMEOUT_MINUTES
       triggerKind.value = 'daily'
       intervalN.value = 30
       intervalUnit.value = 'minutes'
@@ -285,7 +306,8 @@ watch(
       return
     }
     name.value = s.name
-    enabled.value = s.enabled
+    // Mở một đề xuất của agent là để duyệt và bật nó — Lưu xong thì lịch chạy luôn.
+    enabled.value = s.proposedBy ? true : s.enabled
     jobKind.value = s.job.kind
     if (s.job.kind === 'session-prompt') {
       prompt.value = s.job.prompt
@@ -293,6 +315,11 @@ watch(
       projectId.value = s.job.projectId ?? NO_PROJECT
       mode.value = s.job.settings.mode
       storedSettings.value = s.job.settings
+    } else if (s.job.kind === 'command') {
+      program.value = s.job.program
+      argsText.value = s.job.args.join('\n')
+      timeoutMinutes.value = s.job.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES
+      storedSettings.value = null
     } else {
       taskProjectId.value = s.job.projectId
       workflowId.value = s.job.workflowId
@@ -355,6 +382,19 @@ function buildJob(): ScheduleJob | null {
     if (projectId.value) job.projectId = projectId.value
     return job
   }
+  if (jobKind.value === 'command') {
+    const timeout = Math.floor(timeoutMinutes.value)
+    if (!program.value.trim().startsWith('/') || !(timeout >= 1 && timeout <= 60)) return null
+    return {
+      kind: 'command',
+      program: program.value.trim(),
+      args: argsText.value
+        .split('\n')
+        .map((a) => a.trim())
+        .filter(Boolean),
+      timeoutMinutes: timeout,
+    }
+  }
   if (!taskProjectId.value || !workflowId.value) return null
   return {
     kind: 'workflow-task',
@@ -365,7 +405,7 @@ function buildJob(): ScheduleJob | null {
   }
 }
 
-function onSave(): void {
+async function onSave(): Promise<void> {
   error.value = ''
   if (!name.value.trim()) {
     error.value = t('schedules.form.needName')
@@ -381,15 +421,28 @@ function onSave(): void {
   }
   const job = buildJob()
   if (!job) {
-    error.value =
-      jobKind.value === 'session-prompt'
-        ? t('schedules.form.needPrompt')
-        : t('schedules.form.needWorkflow')
+    const missing = {
+      'session-prompt': 'schedules.form.needPrompt',
+      'workflow-task': 'schedules.form.needWorkflow',
+      command: 'schedules.form.needProgram',
+    } as const
+    error.value = t(missing[jobKind.value])
     return
   }
   if (job.kind === 'session-prompt' && !job.settings.accountId) {
     error.value = t('schedules.form.needAccount')
     return
+  }
+  // Lệnh chỉ được duyệt sau khi người dùng đọc đúng thứ sẽ chạy: program + MỖI arg một
+  // dòng (nối bằng dấu cách thì không phân biệt được một arg có dấu cách với hai arg).
+  if (job.kind === 'command') {
+    const ok = await confirm({
+      title: t('schedules.approve.title'),
+      description: `${t('schedules.approve.body')}\n\n${[job.program, ...job.args].join('\n')}`,
+      confirmLabel: t('schedules.approve.confirm'),
+      kind: 'primary',
+    })
+    if (!ok) return
   }
   emit('save', {
     id: props.schedule?.id ?? slugify(name.value),
@@ -397,6 +450,7 @@ function onSave(): void {
     enabled: enabled.value,
     trigger,
     job,
+    ...(job.kind === 'command' ? { approve: true } : {}),
   })
 }
 </script>

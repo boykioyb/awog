@@ -304,6 +304,8 @@ import './methods/tasks.resume.js'
 import './methods/schedules.list.js'
 import './methods/schedules.upsert.js'
 import './methods/schedules.delete.js'
+import './methods/schedules.set-enabled.js'
+import './methods/schedules.run-log.js'
 import './methods/schedules.run-now.js'
 import './methods/schedules.tick.js'
 import './methods/git.check-installed.js'
@@ -428,6 +430,11 @@ import './methods/terminal.write.js'
 import './methods/terminal.resize.js'
 import './methods/terminal.kill.js'
 import './methods/terminal.list.js'
+// Snippet của terminal — thư viện lệnh hay dùng, UI và tool của agent dùng chung.
+import './methods/terminalSnippets.list.js'
+import './methods/terminalSnippets.upsert.js'
+import './methods/terminalSnippets.delete.js'
+import './methods/terminalSnippets.import.js'
 import './methods/hooks.list.js'
 import './methods/hooks.upsert.js'
 import './methods/hooks.delete.js'
@@ -589,6 +596,14 @@ async function gracefulShutdown(code: number): Promise<void> {
     closeAllOneShotSpares('sidecar shutdown')
   } catch {
     /* never loaded (no Anthropic one-shot this run) — nothing to stop */
+  }
+  // Lệnh của lịch `command` (ADR 0108) chạy trong process group riêng (detached) nên
+  // không chết theo sidecar — giết ở đây, không để mồ côi.
+  try {
+    const { killCommandGroups } = await import('./schedules/runner.js')
+    killCommandGroups()
+  } catch {
+    /* never loaded — no schedule ran this boot */
   }
   // Socket transport goes down WITH the engine (ADR 0093 — no standalone
   // daemon): close the listener + remove the endpoint file so a CLI doesn't

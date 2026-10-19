@@ -1,7 +1,9 @@
 <template>
-  <div class="lsp">
-    <span class="lsp-label">{{ t('library.saveTo') }}</span>
-    <AppSelect v-model="model" :options="options" width="100%" />
+  <div class="flex items-center gap-2.5">
+    <span class="flex-none text-sm font-medium text-dim">{{ t('library.saveTo') }}</span>
+    <div class="min-w-0 flex-1">
+      <AppSelect v-model="model" :options="options" width="100%" />
+    </div>
   </div>
 </template>
 
@@ -9,8 +11,8 @@
 // Shared "Save to" tier picker for every library creator (skills, agents,
 // commands, rules, hooks). Port of the old UI CreatorScopePicker. The bound
 // value is 'global' (→ ~/.awog) or a projectId (→ {project}/.awog); callers map
-// it to { source, projectId } before persisting. Uses AppSelect (no native
-// <select>, per ui-next convention).
+// it to { source, projectId } before persisting. Uses AppSelect (không dùng
+// select gốc của trình duyệt, theo quy ước ui-next).
 import { computed } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 
@@ -27,22 +29,3 @@ const options = computed<AppSelectOption[]>(() => [
   ...props.projects.map((p) => ({ value: p.id, label: p.name })),
 ])
 </script>
-
-<style scoped>
-.lsp {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.lsp-label {
-  flex: 0 0 auto;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--textDim);
-}
-.lsp :deep(.asel) {
-  flex: 1;
-  min-width: 0;
-}
-</style>

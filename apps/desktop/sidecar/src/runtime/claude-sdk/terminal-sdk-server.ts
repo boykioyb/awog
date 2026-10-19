@@ -27,8 +27,30 @@ import {
   TERMINAL_MCP_SERVER,
   runReadTerminal,
 } from '../tools/read-terminal-tool.js'
+import {
+  MAX_SNIPPET_COMMAND_LEN,
+  MAX_SNIPPET_NAME_LEN,
+} from '../../terminal/snippets.js'
+import {
+  TERMINAL_SNIPPET_TEXT,
+  runSnippetDelete,
+  runSnippetList,
+  runSnippetRun,
+  runSnippetSave,
+  snippetProjectOf,
+  type SnippetToolResult,
+} from '../tools/terminal-snippet-tools.js'
 
-export function buildTerminalToolsSdkServer(cwd: string): McpSdkServerConfigWithInstance {
+// Kết quả tool snippet → content của SDK; `isError` phải qua cầu (cùng lý do read_terminal).
+function snippetResult(r: SnippetToolResult): { content: { type: 'text'; text: string }[]; isError?: boolean } {
+  return { content: [{ type: 'text', text: r.text }], ...(r.isError ? { isError: true } : {}) }
+}
+
+// Snippet của terminal đi chung server này: chạy snippet rồi read_terminal là một vòng
+// làm việc, và tên server `awogterm` nói đúng họ của chúng (một luật quyền viết cho
+// `mcp__awogterm__*` là luật về terminal của người dùng). Handler là hàm nhánh Pi gọi.
+export function buildTerminalToolsSdkServer(cwd: string, sessionId: string): McpSdkServerConfigWithInstance {
+  const project = (): Promise<string | null> => snippetProjectOf(sessionId)
   return createSdkMcpServer({
     name: TERMINAL_MCP_SERVER,
     version: '1.0.0',
@@ -55,6 +77,35 @@ export function buildTerminalToolsSdkServer(cwd: string): McpSdkServerConfigWith
             ...(r.isError ? { isError: true } : {}),
           }
         },
+      ),
+      tool('terminal_snippet_list', TERMINAL_SNIPPET_TEXT.list.description, {}, async () =>
+        snippetResult(await runSnippetList(await project())),
+      ),
+      tool(
+        'terminal_snippet_save',
+        TERMINAL_SNIPPET_TEXT.save.description,
+        {
+          id: z.string().optional().describe(TERMINAL_SNIPPET_TEXT.save.id),
+          name: z.string().max(MAX_SNIPPET_NAME_LEN).describe(TERMINAL_SNIPPET_TEXT.save.name),
+          command: z.string().max(MAX_SNIPPET_COMMAND_LEN).describe(TERMINAL_SNIPPET_TEXT.save.command),
+          scope: z.enum(['project', 'global']).optional().describe(TERMINAL_SNIPPET_TEXT.save.scope),
+        },
+        async (args) => snippetResult(await runSnippetSave(await project(), args)),
+      ),
+      tool(
+        'terminal_snippet_delete',
+        TERMINAL_SNIPPET_TEXT.delete.description,
+        { id: z.string().describe(TERMINAL_SNIPPET_TEXT.delete.id) },
+        async (args) => snippetResult(await runSnippetDelete(await project(), args)),
+      ),
+      tool(
+        'terminal_snippet_run',
+        TERMINAL_SNIPPET_TEXT.run.description,
+        {
+          id: z.string().describe(TERMINAL_SNIPPET_TEXT.run.id),
+          terminalId: z.string().optional().describe(TERMINAL_SNIPPET_TEXT.run.terminalId),
+        },
+        async (args) => snippetResult(await runSnippetRun(cwd, await project(), args)),
       ),
     ],
   })

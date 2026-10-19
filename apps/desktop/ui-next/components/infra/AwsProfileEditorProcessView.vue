@@ -1,17 +1,15 @@
 <template>
-  <div class="ape-process">
-    <div class="ape-process-head">
-      <Icon
-        name="shield"
-        style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-      />
-      <span class="ape-process-title">{{ t('infra.editor.process.title') }}</span>
+  <div class="flex flex-col gap-2.5 rounded-lg border bg-muted p-3">
+    <div class="flex items-center gap-2 text-sm font-semibold text-foreground">
+      <Icon name="shield" class="size-3.5 text-primary" />
+      <span>{{ t('infra.editor.process.title') }}</span>
     </div>
-    <p class="ape-process-body">{{ t('infra.editor.process.body') }}</p>
-    <div class="ape-process-path">
-      <code class="ape-process-code">~/.aws/config</code>
+    <p class="m-0 text-sm text-muted-foreground">{{ t('infra.editor.process.body') }}</p>
+    <div class="flex items-center gap-2">
+      <!-- mono-ok: đường dẫn file copy-paste được vào terminal/file manager. -->
+      <code class="font-mono text-sm text-foreground">~/.aws/config</code>
       <Button type="button" variant="outline" size="sm" @click="copyConfigPath">
-        <Icon name="copy" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <Icon name="copy" class="size-3" />
         {{ copied ? t('common.copied') : t('common.copy') }}
       </Button>
     </div>
@@ -52,42 +50,3 @@ onBeforeUnmount(() => {
   if (copyResetTimer) clearTimeout(copyResetTimer)
 })
 </script>
-
-<style scoped>
-.ape-process {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 13px 14px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.ape-process-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.ape-process-body {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.ape-process-path {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ape-process-code {
-  /* mono-ok: đường dẫn file copy-paste được vào terminal/file manager. */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-</style>

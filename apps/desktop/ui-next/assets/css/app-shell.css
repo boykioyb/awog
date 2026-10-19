@@ -2302,7 +2302,7 @@ body[data-code-wrap='on'] .codewrap {
 }
 /* Every other page has no leading rail, so the dock spans the full work area and the
    page itself reserves the room. */
-.body > .page:not([data-page='sessions']) {
+.body > [data-page]:not([data-page='sessions']) {
   padding-bottom: var(--awog-dock-h, 0px);
 }
 /* Compact shell: the list is an off-canvas drawer, so there is no rail to clear and the

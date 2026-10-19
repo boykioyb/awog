@@ -1,11 +1,16 @@
 <template>
   <div v-if="files.length || unfurls.length" class="mt-1.5 flex flex-col gap-1.5">
-    <div v-if="media.length" class="slk-media" :class="`n${Math.min(media.length, 4)}`">
+    <div
+      v-if="media.length"
+      class="grid max-w-105 gap-1"
+      :class="media.length === 1 ? 'grid-cols-1' : 'grid-cols-2'"
+    >
       <Button
         v-for="f in media.slice(0, 4)"
         :key="f.id"
         variant="ghost"
-        class="slk-tile"
+        class="relative overflow-hidden rounded-md border bg-muted p-0"
+        :class="media.length === 1 ? 'h-60' : 'h-35'"
         :title="f.name"
         @click="actions.open(teamId, f)"
       >
@@ -16,16 +21,26 @@
           :size="media.length === 1 ? 720 : 360"
           :alt="f.name"
         />
-        <span v-else class="slk-tile-name">{{ f.name }}</span>
-        <span v-if="f.kind === 'video'" class="slk-play"><Icon name="play" /></span>
-        <span v-if="media.length > 4 && f === media[3]" class="slk-more">
+        <span v-else class="whitespace-normal p-2 text-xs text-dim">{{ f.name }}</span>
+        <span
+          v-if="f.kind === 'video'"
+          class="absolute inset-0 grid place-items-center text-foreground"
+        >
+          <Icon name="play" class="size-10! rounded-full bg-sidebar p-2.5 opacity-90" />
+        </span>
+        <span
+          v-if="media.length > 4 && f === media[3]"
+          class="absolute inset-0 grid place-items-center bg-background/60 text-xl font-semibold"
+        >
           +{{ media.length - 4 }}
         </span>
       </Button>
     </div>
 
-    <div v-for="f in snippets" :key="f.id" class="slk-snippet">
-      <div class="slk-snippet-hd">
+    <div v-for="f in snippets" :key="f.id" class="max-w-140 overflow-hidden rounded-md border">
+      <div
+        class="flex items-center justify-between gap-2 border-b bg-muted py-0.5 pl-2.5 pr-1 text-xs text-dim"
+      >
         <span class="truncate">{{ f.title || f.name }}</span>
         <Button
           variant="ghost"
@@ -36,7 +51,10 @@
           <Icon name="eye" />
         </Button>
       </div>
-      <pre class="slk-snippet-body">{{ f.preview }}</pre>
+      <!-- mono-ok: nội dung snippet là code/văn bản thô người dùng copy -->
+      <pre class="m-0 max-h-60 overflow-auto whitespace-pre px-2.5 py-2 font-mono text-sm">{{
+        f.preview
+      }}</pre>
     </div>
 
     <SlackFileCard
@@ -47,19 +65,25 @@
       :project-id="projectId"
     />
 
-    <div v-for="(u, i) in unfurls" :key="`u${i}`" class="slk-unfurl">
+    <div
+      v-for="(u, i) in unfurls"
+      :key="`u${i}`"
+      class="max-w-130 border-l-3 border-input py-0.5 pl-2.5"
+    >
       <div v-if="u.serviceName" class="text-xs text-dim">{{ u.serviceName }}</div>
       <a
         v-if="u.url && u.title"
         :href="u.url"
         target="_blank"
         rel="noopener noreferrer"
-        class="slk-unfurl-t"
+        class="block text-base font-semibold text-info no-underline"
       >
         {{ u.title }}
       </a>
-      <div v-else-if="u.title" class="slk-unfurl-t">{{ u.title }}</div>
-      <div v-if="u.text" class="slk-unfurl-x">{{ u.text }}</div>
+      <div v-else-if="u.title" class="block text-base font-semibold text-info">{{ u.title }}</div>
+      <div v-if="u.text" class="line-clamp-4 whitespace-pre-wrap text-sm text-dim">
+        {{ u.text }}
+      </div>
     </div>
   </div>
 </template>
@@ -90,113 +114,3 @@ const snippets = computed(() =>
 )
 const cards = computed(() => props.files.filter((f) => !isMedia(f) && !snippets.value.includes(f)))
 </script>
-
-<style scoped>
-.slk-media {
-  display: grid;
-  gap: 4px;
-  max-width: 420px;
-}
-.slk-media.n1 {
-  grid-template-columns: 1fr;
-}
-.slk-media:not(.n1) {
-  grid-template-columns: 1fr 1fr;
-}
-.slk-tile {
-  position: relative;
-  height: 140px;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-}
-.slk-media.n1 .slk-tile {
-  height: 240px;
-}
-.slk-tile-name {
-  padding: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  white-space: normal;
-}
-.slk-play {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--text);
-}
-.slk-play .icn {
-  width: 40px;
-  height: 40px;
-  padding: 10px;
-  border-radius: 50%;
-  background: var(--bgPanel);
-  opacity: 0.9;
-}
-.slk-more {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--bg) 60%, transparent);
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  font-weight: 600;
-}
-.slk-snippet {
-  max-width: 560px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-.slk-snippet-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 4px 2px 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  background: var(--bgSubtle);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.slk-snippet-body {
-  /* mono-ok: nội dung snippet là code/văn bản thô người dùng copy */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  margin: 0;
-  padding: 8px 10px;
-  max-height: 240px;
-  overflow: auto;
-  white-space: pre;
-}
-.slk-unfurl {
-  max-width: 520px;
-  padding: 2px 0 2px 10px;
-  border-left: 3px solid var(--borderStrong);
-}
-.slk-unfurl-t {
-  display: block;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--blue);
-  text-decoration: none;
-}
-.slk-unfurl-x {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  white-space: pre-wrap;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-</style>

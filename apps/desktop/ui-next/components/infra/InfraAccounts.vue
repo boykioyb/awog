@@ -1,78 +1,77 @@
 <template>
-  <div class="ia">
+  <div class="flex size-full min-h-0 min-w-0 flex-col">
     <!-- Card nổi, không còn là dải hairline: thanh này đứng ngay dưới dải hairline
          của hàng tab, nên hai vạch mảnh chồng nhau đọc ra thành một vùng chrome
-         phẳng không có gì nổi lên. Cùng `.itoolbar` với mọi màn khác của khu. -->
-    <div class="itoolbar ia-toolbar">
+         phẳng không có gì nổi lên. Cùng dáng thanh công cụ với mọi màn khác của khu. -->
+    <div
+      class="mx-4 my-3 flex flex-none flex-wrap items-center gap-2.5 rounded-xl border bg-card px-2.5 py-2 shadow-sm"
+    >
       <!-- "Thêm profile" là MENU, không phải một hành động đơn: người dùng tới
            đây từ hai thế giới khác nhau — có sẵn bộ ba Account ID/alias + IAM
            username + mật khẩu (đăng nhập Console, không gõ gì thêm) hoặc có
            access key trong tay (tự điền form). Đăng nhập Console đứng ĐẦU vì đó
            là đường ít thao tác nhất, và là câu trả lời cho đúng nhóm người dùng
            KHÔNG có credential nào khác để điền vào form. -->
-      <div ref="newMenuWrapRef" class="ia-menuwrap">
-        <Button
-          type="button"
-          aria-haspopup="menu"
-          :aria-expanded="newMenuOpen"
-          variant="default"
-          @click="toggleNewMenu"
-        >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('infra.list.toolbar.new') }}
-          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </Button>
-        <div v-if="newMenuOpen" class="smenu ia-newmenu">
-          <div class="mi ia-mi2" @click="onPickNewConsole">
-            <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="ia-mibody">
-              <span class="ia-mititle">{{ t('infra.list.toolbar.newConsole') }}</span>
-              <span class="ia-mihint">{{ t('infra.list.toolbar.newConsoleHint') }}</span>
+      <DropdownMenu v-model:open="newMenuOpen">
+        <DropdownMenuTrigger as-child>
+          <Button type="button" variant="default">
+            <Icon name="plus" class="size-3.5" />
+            {{ t('infra.list.toolbar.new') }}
+            <Icon name="chev" class="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <!-- Rộng hơn menu thường vì mỗi mục có một dòng phụ: người không rành chọn
+             được lối đi mà không phải đoán "access key" là gì. -->
+        <DropdownMenuContent align="start" class="min-w-67" data-infra-overlay>
+          <DropdownMenuItem class="items-start" @select="onPickNewConsole">
+            <Icon name="shield" class="mt-0.5 size-3.5" />
+            <span class="flex min-w-0 flex-col gap-px">
+              <span>{{ t('infra.list.toolbar.newConsole') }}</span>
+              <span class="text-xs text-faint">{{ t('infra.list.toolbar.newConsoleHint') }}</span>
             </span>
-          </div>
-          <div class="mi ia-mi2" @click="onPickNewManual">
-            <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="ia-mibody">
-              <span class="ia-mititle">{{ t('infra.list.toolbar.newManual') }}</span>
-              <span class="ia-mihint">{{ t('infra.list.toolbar.newManualHint') }}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem class="items-start" @select="onPickNewManual">
+            <Icon name="edit" class="mt-0.5 size-3.5" />
+            <span class="flex min-w-0 flex-col gap-px">
+              <span>{{ t('infra.list.toolbar.newManual') }}</span>
+              <span class="text-xs text-faint">{{ t('infra.list.toolbar.newManualHint') }}</span>
             </span>
-          </div>
-        </div>
-      </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      <div ref="importMenuWrapRef" class="ia-menuwrap">
-        <Button
-          type="button"
-          aria-haspopup="menu"
-          :aria-expanded="importMenuOpen"
-          variant="outline"
-          @click="toggleImportMenu"
-        >
-          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('infra.list.toolbar.import') }}
-          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </Button>
-        <div v-if="importMenuOpen" class="smenu ia-importmenu">
-          <div class="mi" @click="onPickImportFile">
-            <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <DropdownMenu v-model:open="importMenuOpen">
+        <DropdownMenuTrigger as-child>
+          <Button type="button" variant="outline">
+            <Icon name="download" class="size-3.5" />
+            {{ t('infra.list.toolbar.import') }}
+            <Icon name="chev" class="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" data-infra-overlay>
+          <DropdownMenuItem @select="onPickImportFile">
+            <Icon name="file" class="size-3.5" />
             {{ t('infra.list.toolbar.importFile') }}
-          </div>
-          <div class="mi" @click="onPickImportSso">
-            <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="onPickImportSso">
+            <Icon name="globe" class="size-3.5" />
             {{ t('infra.list.toolbar.importSso') }}
-          </div>
-        </div>
-      </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Button type="button" variant="outline" @click="emit('export')">
-        <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="external" class="size-3.5" />
         {{ t('infra.list.toolbar.export') }}
       </Button>
 
-      <div class="srch ia-search">
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div class="relative ml-auto max-w-65 min-w-0 flex-1">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-dim"
+        />
         <Input
-          unstyled
+          class="h-ctrl-sm pl-8"
           :model-value="search"
           :placeholder="t('infra.list.search')"
           @update:model-value="emit('update:search', $event)"
@@ -84,22 +83,25 @@
          biết account id. `accountKindOf()` phía sidecar coi vắng accountId là
          production (mức nghiêm nhất) — banner nói rõ MỘT LẦN vì sao đáng bấm,
          thay vì lặp lại câu này ở mọi nơi có nút liên quan. -->
-    <div v-if="!loading && !error && missingAccountIdProfiles.length" class="ia-accid-banner">
-      <Icon
-        name="info"
-        style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 1px"
-      />
-      <p>{{ t('infra.list.accountId.explain') }}</p>
+    <div
+      v-if="!loading && !error && missingAccountIdProfiles.length"
+      class="flex flex-none items-start gap-2.5 border-b bg-muted px-4 py-2.5"
+    >
+      <Icon name="info" class="mt-px size-3.5 flex-none" />
+      <p class="m-0 min-w-0 flex-1 text-sm leading-relaxed text-muted-foreground">
+        {{ t('infra.list.accountId.explain') }}
+      </p>
       <Button
         type="button"
+        class="flex-none"
         :disabled="fillingMissingAccountIds"
         variant="outline"
         @click="onFillMissingAccountIds"
       >
         <Icon
           :name="fillingMissingAccountIds ? 'refresh' : 'search'"
-          :class="{ 'iad-spin': fillingMissingAccountIds }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5"
+          :class="{ 'animate-spin': fillingMissingAccountIds }"
         />
         {{
           fillingMissingAccountIds
@@ -111,47 +113,58 @@
 
     <!-- Icon quay: đọc danh sách profile là việc chạm đĩa, im lìm vài trăm ms thì
          người dùng tưởng màn trắng là màn hỏng. -->
-    <div v-if="loading" class="empty">
-      <span class="ei">
-        <Icon name="refresh" class="ikspin" style="width: var(--icon-lg); height: var(--icon-lg)" />
+    <div
+      v-if="loading"
+      class="flex flex-1 flex-col items-center justify-center gap-3.5 p-10 text-center text-dim"
+    >
+      <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+        <Icon name="refresh" class="size-5 animate-spin" />
       </span>
-      <div class="et" role="status" aria-busy="true">{{ t('infra.list.loading') }}</div>
+      <div class="text-lg text-muted-foreground" role="status" aria-busy="true">
+        {{ t('infra.list.loading') }}
+      </div>
     </div>
 
-    <div v-else-if="error" class="empty">
-      <span class="ei">
-        <Icon name="alert" style="width: var(--icon-lg); height: var(--icon-lg)" />
+    <div
+      v-else-if="error"
+      class="flex flex-1 flex-col items-center justify-center gap-3.5 p-10 text-center text-dim"
+    >
+      <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+        <Icon name="alert" class="size-5" />
       </span>
-      <div class="et">{{ error }}</div>
+      <div class="text-lg text-muted-foreground">{{ error }}</div>
     </div>
 
-    <div v-else-if="!profiles.length" class="empty">
-      <span class="ei">
-        <Icon name="layers" style="width: var(--icon-lg); height: var(--icon-lg)" />
+    <div
+      v-else-if="!profiles.length"
+      class="flex flex-1 flex-col items-center justify-center gap-3.5 p-10 text-center text-dim"
+    >
+      <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+        <Icon name="layers" class="size-5" />
       </span>
       <template v-if="search.trim()">
-        <div class="et">{{ t('infra.list.noMatch') }}</div>
+        <div class="text-lg text-muted-foreground">{{ t('infra.list.noMatch') }}</div>
         <Button type="button" variant="outline" @click="emit('update:search', '')">
           {{ t('infra.list.clearSearch') }}
         </Button>
       </template>
       <template v-else>
-        <div class="et">{{ t('infra.list.empty') }}</div>
+        <div class="text-lg text-muted-foreground">{{ t('infra.list.empty') }}</div>
         <!-- Người chưa có profile nào là đúng nhóm cần "Đăng nhập Console" nhất
              (chỉ có tài khoản + mật khẩu AWS), nên ở màn trống hai lối này hiện
              thẳng ra thay vì giấu sau menu — bớt được một cú bấm so với toolbar. -->
         <Button type="button" variant="default" @click="emit('console-login')">
-          <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="shield" class="size-3.5" />
           {{ t('infra.list.toolbar.newConsole') }}
         </Button>
         <Button type="button" variant="outline" @click="emit('new-profile')">
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="edit" class="size-3.5" />
           {{ t('infra.list.toolbar.newManual') }}
         </Button>
       </template>
     </div>
 
-    <div v-else class="md ia-mdwrap">
+    <div v-else class="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <InfraAccountsList
         :profiles="profiles"
         :selected="selected"
@@ -161,7 +174,7 @@
         @select="emit('select', $event)"
         @activate="onActivate"
       />
-      <div class="detail">
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <InfraAccountsDetail
           v-if="currentProfile"
           :profile="currentProfile"
@@ -181,11 +194,14 @@
           @resolve-account-id="onResolveAccountId(currentProfile)"
           @forget-account-id="onForgetAccountId(currentProfile)"
         />
-        <div v-else class="empty">
-          <span class="ei">
-            <Icon name="folder" style="width: var(--icon-lg); height: var(--icon-lg)" />
+        <div
+          v-else
+          class="flex flex-1 flex-col items-center justify-center gap-3.5 p-10 text-center text-dim"
+        >
+          <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+            <Icon name="folder" class="size-5" />
           </span>
-          <div class="et">{{ t('infra.list.detail.choose') }}</div>
+          <div class="text-lg text-muted-foreground">{{ t('infra.list.detail.choose') }}</div>
         </div>
       </div>
     </div>
@@ -198,7 +214,7 @@
       :width="420"
       @close="replaceOpen = false"
     >
-      <p class="ia-modalnote">
+      <p class="mt-0 mb-3 text-sm leading-relaxed text-muted-foreground">
         {{ t('infra.list.replaceDefault.body', { name: pendingDeleteAfterReplace?.name ?? '' }) }}
       </p>
       <AppSelect
@@ -208,7 +224,7 @@
         width="100%"
       />
       <template #footer>
-        <span style="flex: 1" />
+        <span class="flex-1" />
         <Button type="button" variant="outline" @click="replaceOpen = false">
           {{ t('common.cancel') }}
         </Button>
@@ -238,7 +254,7 @@
 // đúng hình dạng này, KHÔNG tự đổi (xem CLAUDE.md "Luật phân chia file"). Cần đổi
 // gì thì ghi vào openIssues cho pha Tích hợp, đừng sửa `pages/infra.vue`/
 // `useInfraPage.ts` từ đây.
-import { computed, onBeforeUnmount, onMounted, reactive, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import InfraAccountsDetail, {
   type InfraIdentityState,
@@ -311,12 +327,6 @@ onMounted(() => {
   // người dùng nên CHỈ được gọi từ tay bấm, xem onFillMissingAccountIds/
   // onResolveAccountId bên dưới.
   void accountIds.load()
-  window.addEventListener('mousedown', onWindowMousedown)
-  window.addEventListener('keydown', onWindowKeydown)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('mousedown', onWindowMousedown)
-  window.removeEventListener('keydown', onWindowKeydown)
 })
 
 const currentProfile = computed<AwsProfile | null>(
@@ -571,36 +581,11 @@ async function confirmReplaceThenDelete(): Promise<void> {
 }
 
 // ── menu thanh công cụ: "Thêm profile" (Console vs tự điền) và "Nhập" ─────────
-// Hai menu dùng chung một khuôn; chỉ MỘT cái mở tại một thời điểm (mở cái này
-// đóng cái kia) và cả hai đóng khi bấm ra ngoài hoặc Esc — người dùng không phải
-// hiểu rằng đây là hai widget riêng.
+// Hai menu dùng chung một khuôn (`DropdownMenu` của shadcn): chỉ MỘT cái mở tại một
+// thời điểm (menu modal — bấm nút kia là bấm ra ngoài menu này) và cả hai đóng khi
+// bấm ra ngoài hoặc Esc — người dùng không phải hiểu rằng đây là hai widget riêng.
 const newMenuOpen = ref(false)
 const importMenuOpen = ref(false)
-const newMenuWrapRef = useTemplateRef<HTMLElement>('newMenuWrapRef')
-const importMenuWrapRef = useTemplateRef<HTMLElement>('importMenuWrapRef')
-
-function toggleNewMenu(): void {
-  newMenuOpen.value = !newMenuOpen.value
-  if (newMenuOpen.value) importMenuOpen.value = false
-}
-function toggleImportMenu(): void {
-  importMenuOpen.value = !importMenuOpen.value
-  if (importMenuOpen.value) newMenuOpen.value = false
-}
-
-function onWindowMousedown(e: MouseEvent): void {
-  const target = e.target
-  if (!(target instanceof Node)) return
-  if (newMenuOpen.value && !newMenuWrapRef.value?.contains(target)) newMenuOpen.value = false
-  if (importMenuOpen.value && !importMenuWrapRef.value?.contains(target)) {
-    importMenuOpen.value = false
-  }
-}
-function onWindowKeydown(e: KeyboardEvent): void {
-  if (e.key !== 'Escape') return
-  newMenuOpen.value = false
-  importMenuOpen.value = false
-}
 
 // Đăng nhập Console (`aws login`) đứng đầu menu "Thêm profile": không tạo access
 // key, không mở terminal, không gõ gì — CLI tự mở trình duyệt.
@@ -643,103 +628,3 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 </script>
-
-<style scoped>
-.ia {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* Bố cục + da ở `.itoolbar`; `margin` giữ đúng khoảng cách ngoài mà `padding` cũ
-   cho, nhưng nay là khoảng cách CỦA CARD với mép pane. */
-.ia-toolbar {
-  margin: 12px 16px;
-}
-
-.ia-menuwrap {
-  position: relative;
-}
-
-.ia-importmenu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-}
-
-/* Menu "Thêm profile" rộng hơn menu thường vì mỗi mục có một dòng phụ: người
-   không rành chọn được lối đi mà không phải đoán "access key" là gì. */
-.ia-newmenu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 268px;
-}
-.ia-mi2 .ia-mibody {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.ia-mi2 .ia-mihint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.ia-search {
-  margin-left: auto;
-  max-width: 260px;
-}
-
-.ia-mdwrap {
-  flex: 1;
-  min-height: 0;
-}
-
-.ia-modalnote {
-  margin: 0 0 12px;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-
-.ia-accid-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 16px;
-  flex: 0 0 auto;
-  background: var(--bgHover);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.ia-accid-banner p {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-.ia-accid-banner .btn {
-  flex: 0 0 auto;
-}
-
-/* Cùng khuôn animation với .iad-spin của InfraAccountsDetail.vue — style scoped
-   nên không dùng chung được, chép lại tại chỗ thay vì tách file CSS riêng cho
-   một keyframe 6 dòng (YAGNI). */
-@keyframes ia-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-.iad-spin {
-  animation: ia-spin 0.8s linear infinite;
-}
-</style>

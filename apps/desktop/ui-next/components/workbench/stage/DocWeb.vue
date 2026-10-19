@@ -5,10 +5,7 @@
        AWOG" và PR từ explorer đổ vào), `pinnedTabId` khóa đúng tab mà doc này
        đại diện — đổi doc không bị con trỏ active của scope kéo trang đi. -->
   <div class="flex min-h-0 flex-1 flex-col">
-    <div
-      v-if="!available"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
-    >
+    <div v-if="!available" class="grid min-h-0 flex-1 place-items-center text-sm text-faint">
       {{ t('workbench.unavailable') }}
     </div>
     <template v-else>
@@ -30,7 +27,7 @@
       />
       <div
         ref="viewportEl"
-        class="relative flex min-h-0 flex-1 items-center justify-center bg-[var(--bg)]"
+        class="relative flex min-h-0 flex-1 items-center justify-center bg-background"
       >
         <img
           v-if="frozen"
@@ -38,10 +35,7 @@
           alt=""
           class="pointer-events-none absolute inset-0 h-full w-full object-fill"
         />
-        <div
-          v-if="tabGone"
-          class="absolute inset-0 grid place-items-center text-sm text-[var(--textFaint)]"
-        >
+        <div v-if="tabGone" class="absolute inset-0 grid place-items-center text-sm text-faint">
           {{ t('workbench.web.tabGone') }}
         </div>
       </div>

@@ -3,26 +3,29 @@
        Start blank (form tay) | Build with AI (chat/draft). Hai page Agents và
        Teams dùng chung. -->
   <LibraryEntityModal :open="open" :title="title" :width="520" @close="emit('close')">
-    <div class="cc-grid">
-      <button class="cc-opt" @click="emit('blank')">
-        <span class="cc-ic">
-          <Icon name="edit" class="size-[18px]" />
+    <div class="grid grid-cols-1 gap-2.5 min-[520px]:grid-cols-2">
+      <Button variant="outline" :class="OPTION" @click="emit('blank')">
+        <span :class="ICON_TILE">
+          <Icon name="edit" />
         </span>
-        <span class="cc-t">{{ t('collection.create.blank') }}</span>
-        <span class="cc-d">{{ blankDesc }}</span>
-      </button>
-      <button class="cc-opt" @click="emit('ai')">
-        <span class="cc-ic acc">
-          <Icon name="sparkles" class="size-[18px]" />
+        <span class="text-sm font-semibold text-foreground">
+          {{ t('collection.create.blank') }}
         </span>
-        <span class="cc-t">{{ t('collection.create.ai') }}</span>
-        <span class="cc-d">{{ aiDesc }}</span>
-      </button>
+        <span class="text-xs text-muted-foreground">{{ blankDesc }}</span>
+      </Button>
+      <Button variant="outline" :class="OPTION" @click="emit('ai')">
+        <span :class="cn(ICON_TILE, 'border-primary/45 text-primary')">
+          <Icon name="sparkles" />
+        </span>
+        <span class="text-sm font-semibold text-foreground">{{ t('collection.create.ai') }}</span>
+        <span class="text-xs text-muted-foreground">{{ aiDesc }}</span>
+      </Button>
     </div>
   </LibraryEntityModal>
 </template>
 
 <script setup lang="ts">
+import { cn } from '~/lib/utils'
 import Icon from '~/components/Icon.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useI18n } from '~/composables/useI18n'
@@ -36,62 +39,10 @@ defineProps<{
 
 const emit = defineEmits<{ close: []; blank: []; ai: [] }>()
 const { t } = useI18n()
-</script>
 
-<style scoped>
-.cc-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.cc-opt {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 14px;
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: transparent;
-  font-family: var(--sans);
-  cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-.cc-opt:hover {
-  border-color: var(--ring);
-  box-shadow: var(--shadow-sm);
-}
-.cc-ic {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--muted);
-  color: var(--muted-foreground);
-}
-.cc-ic.acc {
-  color: var(--primary);
-  border-color: rgb(from var(--primary) r g b / 45%);
-}
-.cc-t {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--foreground);
-}
-.cc-d {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-@media (max-width: 520px) {
-  .cc-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
+// Card lựa chọn: cả khối là một nút, chữ trái-trên, hover nhấn viền ring + bóng nhẹ.
+const OPTION =
+  'h-auto flex-col items-start justify-start gap-2 whitespace-normal p-3.5 text-left font-normal shadow-none hover:border-ring hover:bg-transparent hover:shadow-sm [&_svg]:size-4.5'
+const ICON_TILE =
+  'inline-flex size-8 items-center justify-center rounded-md border bg-muted text-muted-foreground'
+</script>

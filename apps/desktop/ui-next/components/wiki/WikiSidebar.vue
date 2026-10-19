@@ -1,31 +1,32 @@
 <template>
   <aside
-    class="wsidebar"
-    :style="{
-      background: 'var(--bgPanel)',
-      borderRight: '1px solid var(--border)',
-      flex: `0 0 ${width}px`,
-      width: `${width}px`,
-    }"
+    class="flex h-full min-w-50 flex-col overflow-hidden border-r bg-sidebar"
+    :style="{ flex: `0 0 ${width}px`, width: `${width}px` }"
   >
-    <div class="wsb-top">
-      <div class="wsb-search">
-        <Icon name="search" :size="13" />
+    <div class="flex flex-col gap-1.5 p-2">
+      <div class="relative">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
-          unstyled
+          class="h-ctrl-sm pr-8 pl-8"
           :model-value="query"
           :placeholder="t('wiki.searchPlaceholder')"
           @keydown.enter="emit('search')"
           @update:model-value="emit('update:query', $event)"
         />
-        <button
+        <Button
           v-if="query"
-          class="wsb-clear"
+          variant="ghost"
+          size="iconSm"
+          class="absolute top-1/2 right-1 size-6 -translate-y-1/2 text-faint"
           :title="t('common.clear')"
+          :aria-label="t('common.clear')"
           @click="emit('clear-search')"
         >
-          <Icon name="x" :size="12" />
-        </button>
+          <Icon name="x" class="size-3" />
+        </Button>
       </div>
       <!-- Lọc theo tier: toàn bộ / global / từng project — cây và kết quả
            search đều bám filter này (useWikiManager.matchTier). -->
@@ -35,34 +36,42 @@
         width="100%"
         @update:model-value="(v) => emit('update:tierFilter', v)"
       />
-      <div class="wsb-actions">
-        <Button :title="t('wiki.newPage')" variant="outline" size="sm" @click="emit('new-page')">
-          <Icon name="plus" :size="13" />
+      <div class="flex gap-1.5">
+        <Button
+          :title="t('wiki.newPage')"
+          variant="outline"
+          size="sm"
+          class="flex-1"
+          @click="emit('new-page')"
+        >
+          <Icon name="plus" class="size-3.5" />
           {{ t('wiki.newPage') }}
         </Button>
         <Button
           :title="t('wiki.newSpace.hint')"
           variant="outline"
           size="sm"
+          class="flex-1"
           @click="emit('new-space')"
         >
-          <Icon name="folder" :size="13" />
+          <Icon name="folder" class="size-3.5" />
           {{ t('wiki.newSpace.action') }}
         </Button>
         <Button
           :title="t('wiki.import.files')"
           variant="outline"
           size="sm"
+          class="flex-1"
           @click="emit('import-files')"
         >
-          <Icon name="download" :size="13" />
+          <Icon name="download" class="size-3.5" />
           {{ t('wiki.import.short') }}
         </Button>
       </div>
     </div>
 
-    <div class="wsb-tree">
-      <div v-if="tree.length === 0" class="wsb-empty" :style="{ color: 'var(--textFaint)' }">
+    <div class="flex-1 overflow-y-auto px-1 pb-2">
+      <div v-if="tree.length === 0" class="px-2 py-4 text-base text-faint">
         {{ t('wiki.tree.empty') }}
       </div>
 
@@ -77,14 +86,19 @@
       />
     </div>
 
-    <div
-      class="wsb-foot"
-      :style="{ borderTop: '1px solid var(--border)', color: 'var(--textFaint)' }"
-    >
+    <div class="border-t px-2 py-1.5 text-sm text-faint">
       {{ t('wiki.footer.budget', { pages: contextPageCount, chars: chars }) }}
     </div>
   </aside>
-  <div ref="resizeEl" class="wsb-resize" :class="{ drag: dragging }" @pointerdown="onPointerDown" />
+  <!-- Grip kéo đổi bề rộng (pointer capture), không phải control. -->
+  <div
+    ref="resizeEl"
+    role="separator"
+    aria-orientation="vertical"
+    class="w-1 flex-none cursor-col-resize bg-transparent transition-colors hover:bg-selected"
+    :class="{ 'bg-selected': dragging }"
+    @pointerdown="onPointerDown"
+  />
 </template>
 
 <script setup lang="ts">
@@ -159,132 +173,3 @@ const chars = computed(() =>
   props.indexChars >= 1000 ? `${(props.indexChars / 1000).toFixed(1)}k` : String(props.indexChars),
 )
 </script>
-
-<style scoped>
-.wsidebar {
-  display: flex;
-  flex-direction: column;
-  min-width: 200px;
-  height: 100%;
-  overflow: hidden;
-}
-.wsb-resize {
-  flex: 0 0 4px;
-  cursor: col-resize;
-  background: transparent;
-  transition: background var(--dur) var(--ease);
-}
-.wsb-resize:hover,
-.wsb-resize.drag {
-  background: var(--accentDim);
-}
-.wsb-top {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.wsb-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--textDim);
-}
-.wsb-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-}
-.wsb-clear {
-  background: transparent;
-  border: 0;
-  color: var(--textFaint);
-  cursor: pointer;
-  padding: 0;
-}
-.wsb-actions {
-  display: flex;
-  gap: 6px;
-}
-.wsb-actions .btn {
-  flex: 1;
-  justify-content: center;
-}
-.wsb-tree {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 4px 8px;
-}
-.wsb-empty {
-  padding: 16px 8px;
-  font-size: 1em;
-  line-height: var(--lh-md);
-}
-.wsb-space {
-  margin-bottom: 2px;
-}
-.wsb-spacerow,
-.wsb-page {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 6px;
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  cursor: pointer;
-  text-align: left;
-  font-size: 1em;
-}
-.wsb-spacerow {
-  color: var(--text);
-  font-weight: 500;
-}
-.wsb-spacerow:hover,
-.wsb-page:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.wsb-page.on {
-  background: var(--bgActive);
-  color: var(--text);
-}
-.wsb-page {
-  padding-left: 20px;
-}
-.wsb-spacename,
-.wsb-pagetitle {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsb-count {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 12px;
-  min-width: 18px;
-  text-align: right;
-  color: var(--textFaint);
-}
-.wsb-hidden {
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-.wsb-foot {
-  padding: 6px 8px;
-  font-size: 12px;
-  line-height: 18px;
-}
-</style>

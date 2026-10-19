@@ -1,60 +1,71 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open && prompt" class="ovl on skh-ovl" @click.self="reject">
-      <div class="skh-card" role="dialog" aria-modal="true">
-        <div class="skh-head">
-          <Icon
-            name="shield"
-            class="skh-icn"
-            :style="{ color: changed ? 'var(--danger)' : 'var(--accent)' }"
-          />
-          <span class="skh-title">
-            {{ changed ? t('ssh.hostKey.titleChanged') : t('ssh.hostKey.title') }}
+  <!-- Escape do listener window trong script xử lý (giữ hành vi cũ) nên chặn Escape
+       của Dialog để không reject hai lần; bấm nền / nút X → reject như bấm scrim cũ.
+       z-200: band hộp thoại trên cùng (khớp LibraryConfirmDelete) — đè mọi modal. -->
+  <Dialog :open="open && !!prompt" @update:open="(v: boolean) => !v && reject()">
+    <DialogContent
+      v-if="prompt"
+      class="z-200 flex max-w-[92vw] flex-col gap-3.5 rounded-xl p-4.5 sm:max-w-115"
+      @escape-key-down.prevent
+    >
+      <DialogHeader class="flex-row items-center gap-2">
+        <Icon
+          name="shield"
+          class="size-4 shrink-0"
+          :class="changed ? 'text-destructive' : 'text-primary'"
+        />
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          {{ changed ? t('ssh.hostKey.titleChanged') : t('ssh.hostKey.title') }}
+        </DialogTitle>
+      </DialogHeader>
+
+      <DialogDescription
+        class="text-sm"
+        :class="changed ? 'text-destructive' : 'text-muted-foreground'"
+      >
+        {{ changed ? t('ssh.hostKey.bodyChanged') : t('ssh.hostKey.body') }}
+      </DialogDescription>
+
+      <div class="flex flex-col divide-y overflow-hidden rounded-lg border bg-muted">
+        <div class="flex gap-3 px-3 py-2 text-sm">
+          <span class="min-w-32 shrink-0 text-muted-foreground">
+            {{ t('ssh.hostKey.endpoint') }}
+          </span>
+          <span class="min-w-0 flex-1 font-mono break-all text-foreground select-text">
+            {{ prompt.host }}:{{ prompt.port }}
           </span>
         </div>
-
-        <div class="skh-body" :class="{ warn: changed }">
-          {{ changed ? t('ssh.hostKey.bodyChanged') : t('ssh.hostKey.body') }}
+        <div class="flex gap-3 px-3 py-2 text-sm">
+          <span class="min-w-32 shrink-0 text-muted-foreground">
+            {{ t('ssh.hostKey.keyType') }}
+          </span>
+          <span class="min-w-0 flex-1 font-mono break-all text-foreground select-text">
+            {{ prompt.keyType }}
+          </span>
         </div>
-
-        <div class="skh-kv">
-          <div class="skh-row">
-            <span class="skh-k">{{ t('ssh.hostKey.endpoint') }}</span>
-            <span class="skh-v mono">{{ prompt.host }}:{{ prompt.port }}</span>
-          </div>
-          <div class="skh-row">
-            <span class="skh-k">{{ t('ssh.hostKey.keyType') }}</span>
-            <span class="skh-v mono">{{ prompt.keyType }}</span>
-          </div>
-          <div class="skh-row">
-            <span class="skh-k">{{ t('ssh.hostKey.fingerprint') }}</span>
-            <span class="skh-v mono skh-fp">{{ prompt.fingerprint }}</span>
-          </div>
-        </div>
-
-        <label class="skh-remember">
-          <input v-model="remember" type="checkbox" />
-          <span>{{ t('ssh.hostKey.remember') }}</span>
-        </label>
-
-        <div class="skh-foot">
-          <Button variant="outline" @click="reject">{{ t('ssh.hostKey.reject') }}</Button>
-          <Button
-            :class="{ pri: !changed }"
-            :style="
-              changed
-                ? { background: 'var(--danger)', color: 'var(--bg)', borderColor: 'transparent' }
-                : undefined
-            "
-            variant="outline"
-            @click="accept"
-          >
-            {{ t('ssh.hostKey.accept') }}
-          </Button>
+        <div class="flex gap-3 px-3 py-2 text-sm">
+          <span class="min-w-32 shrink-0 text-muted-foreground">
+            {{ t('ssh.hostKey.fingerprint') }}
+          </span>
+          <span class="min-w-0 flex-1 font-mono break-all text-primary select-text">
+            {{ prompt.fingerprint }}
+          </span>
         </div>
       </div>
-    </div>
-  </Teleport>
+
+      <label class="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox :model-value="remember" @update:model-value="remember = $event === true" />
+        <span>{{ t('ssh.hostKey.remember') }}</span>
+      </label>
+
+      <DialogFooter class="gap-2">
+        <Button variant="outline" @click="reject">{{ t('ssh.hostKey.reject') }}</Button>
+        <Button :variant="changed ? 'destructive' : 'default'" @click="accept">
+          {{ t('ssh.hostKey.accept') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -92,99 +103,3 @@ const onKey = (e: KeyboardEvent) => {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-.skh-ovl {
-  align-items: center;
-  padding-top: 0;
-  /* Topmost dialog band (matches LibraryConfirmDelete) — stacks above any modal. */
-  z-index: 200;
-}
-.skh-card {
-  width: 460px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.skh-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.skh-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-}
-.skh-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.skh-body {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.skh-body.warn {
-  color: var(--danger);
-}
-.skh-kv {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  overflow: hidden;
-}
-.skh-row {
-  display: flex;
-  gap: 12px;
-  padding: 9px 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.skh-row + .skh-row {
-  border-top: 1px solid var(--border);
-}
-.skh-k {
-  flex: 0 0 auto;
-  min-width: 130px;
-  color: var(--textDim);
-}
-.skh-v {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  word-break: break-all;
-  user-select: text;
-}
-.skh-fp {
-  color: var(--accent);
-}
-.skh-remember {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  cursor: pointer;
-}
-.skh-remember input {
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-.skh-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

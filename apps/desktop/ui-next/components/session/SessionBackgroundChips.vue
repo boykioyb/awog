@@ -6,54 +6,86 @@
 
        Two rules keep the strip from silting up (it used to grow all session long):
        a finished chip retires once the model has read its result, and anything
-       left over collapses behind one summary chip. -->
-  <div v-if="visible.length" class="bgsh">
-    <div class="bgsh-in">
-      <button
+       left over collapses behind one summary chip.
+
+       Cùng cấu trúc composer: padding --padX ở ngoài + inner max-w 860px căn giữa —
+       dải chip thẳng mép với card composer thay vì trôi về lề chat. Màu trạng thái
+       chỉ tô viền/glyph (running → primary, ok → success, fail → destructive). -->
+  <div v-if="visible.length" class="px-(--padX) pt-1.5">
+    <div class="mx-auto flex max-w-215 flex-wrap gap-1.5">
+      <Button
         v-if="visible.length > 1"
-        type="button"
-        class="bgsh-chip bgsh-sum"
-        :class="[`is-${summaryKind}`, { open: expanded }]"
+        variant="outline"
+        size="xs"
+        class="h-auto max-w-80 gap-1.5 rounded-md bg-transparent px-2 py-0.5 text-sm leading-4 font-semibold text-foreground"
+        :class="
+          summaryKind === 'running'
+            ? 'border-primary/45'
+            : summaryKind === 'fail'
+              ? 'border-destructive/45'
+              : 'border-border'
+        "
         :title="expanded ? t('sessions.bg.summary.collapse') : t('sessions.bg.summary.expand')"
         @click="expanded = !expanded"
       >
-        <span v-if="runningCount" class="bgsh-dot" />
+        <span v-if="runningCount" class="size-2 animate-pulse rounded-full bg-primary" />
         <Icon
           v-else
           :name="failedCount ? 'alert' : 'check'"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
+          class="size-3"
+          :class="failedCount ? 'text-destructive' : 'text-success'"
         />
         <span>{{ summaryText }}</span>
-        <Icon name="chev" class="bgsh-chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon
+          name="chev"
+          class="size-3 opacity-55 transition-transform"
+          :class="expanded && 'rotate-180'"
+        />
+      </Button>
       <div
         v-for="sh in shown"
         :key="sh.shellId"
-        class="bgsh-chip"
-        :class="`is-${statusKind(sh)}`"
+        class="inline-flex max-w-80 items-center gap-1.5 rounded-md border bg-muted px-2 py-0.5 text-sm leading-4 text-foreground"
+        :class="
+          statusKind(sh) === 'running'
+            ? 'border-primary/45'
+            : statusKind(sh) === 'fail'
+              ? 'border-destructive/45'
+              : ''
+        "
         :title="sh.command"
       >
-        <span v-if="sh.status === 'running'" class="bgsh-dot" />
-        <Icon v-else :name="iconFor(sh)" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="bgsh-cmd">{{ shortCmd(sh.command) }}</span>
-        <span class="bgsh-hint">{{ hintFor(sh) }}</span>
-        <button
-          type="button"
-          class="bgsh-act"
+        <span v-if="sh.status === 'running'" class="size-2 animate-pulse rounded-full bg-primary" />
+        <Icon
+          v-else
+          :name="iconFor(sh)"
+          class="size-3"
+          :class="statusKind(sh) === 'ok' ? 'text-success' : 'text-destructive'"
+        />
+        <!-- mono: lệnh shell -->
+        <span class="truncate font-mono">{{ shortCmd(sh.command) }}</span>
+        <span class="whitespace-nowrap text-muted-foreground">{{ hintFor(sh) }}</span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-4 rounded-sm text-muted-foreground hover:text-foreground"
           :title="t('sessionsBg.view')"
+          :aria-label="t('sessionsBg.view')"
           @click="openOutput(sh.shellId)"
         >
-          <Icon name="terminal" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
-        <button
+          <Icon name="terminal" class="size-3" />
+        </Button>
+        <Button
           v-if="sh.status === 'running'"
-          type="button"
-          class="bgsh-act bgsh-stop"
+          variant="ghost"
+          size="iconSm"
+          class="size-4 rounded-sm text-muted-foreground hover:text-destructive"
           :title="t('sessions.bg.stop')"
+          :aria-label="t('sessions.bg.stop')"
           @click="onStop(sh.shellId)"
         >
-          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
+          <Icon name="x" class="size-3" />
+        </Button>
       </div>
     </div>
   </div>
@@ -148,107 +180,3 @@ function onStop(shellId: string): void {
   if (props.session.engineId) void store.killBackgroundShell(props.session.engineId, shellId)
 }
 </script>
-
-<style scoped>
-/* Status chips — proto chip idiom on shadcn tokens: muted fill + hairline border +
-   rounded-md, semantic tint on the status edge/glyph only (running → primary,
-   ok → success, fail → destructive). */
-.bgsh {
-  /* Cùng cấu trúc composer: padding --padX ở ngoài + inner max-width 860px
-     margin auto — chip strip căn thẳng mép với card .cbox thay vì trôi về
-     lề chat. */
-  padding: 6px var(--padX) 0;
-}
-.bgsh-in {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-width: 860px;
-  margin: 0 auto;
-}
-.bgsh-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 320px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--muted);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--foreground);
-}
-.bgsh-chip.is-running {
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
-}
-.bgsh-chip.is-fail {
-  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
-}
-.bgsh-sum {
-  font-weight: 600;
-  background: transparent;
-}
-.bgsh-sum:hover {
-  background: var(--accent-wash);
-}
-.bgsh-chev {
-  opacity: 0.55;
-  transition: transform 0.14s var(--ease, ease);
-}
-.bgsh-sum.open .bgsh-chev {
-  transform: rotate(180deg);
-}
-.bgsh-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--primary);
-  animation: bgsh-pulse 1.4s ease-in-out infinite;
-}
-.bgsh-cmd {
-  font-family: var(--code, monospace);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.bgsh-hint {
-  color: var(--muted-foreground);
-  white-space: nowrap;
-}
-/* Direct child only: the status glyph. The action buttons below carry their own
-   color and must not be tinted by the chip's status. */
-.bgsh-chip.is-ok > .icn {
-  color: var(--success);
-}
-.bgsh-chip.is-fail > .icn {
-  color: var(--destructive);
-}
-.bgsh-act {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  transition:
-    color 0.12s var(--ease, ease),
-    background 0.12s var(--ease, ease);
-}
-.bgsh-act:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.bgsh-stop:hover {
-  color: var(--destructive);
-}
-@keyframes bgsh-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-</style>

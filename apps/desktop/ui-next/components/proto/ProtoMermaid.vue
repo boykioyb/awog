@@ -5,7 +5,7 @@
       class="overflow-hidden rounded-lg border border-border"
       :class="
         fullscreen
-          ? 'fixed inset-4 z-[85] flex flex-col bg-background shadow-2xl'
+          ? 'fixed inset-4 z-85 flex flex-col bg-background shadow-2xl'
           : 'flex h-64 flex-col bg-muted/50'
       "
     >
@@ -36,7 +36,7 @@
         <Button variant="ghost" size="iconSm" class="size-6" title="Fit" @click="fit">
           <Maximize />
         </Button>
-        <Separator orientation="vertical" class="mx-0.5 !h-4" />
+        <Separator orientation="vertical" class="mx-0.5 h-4!" />
         <Button variant="ghost" size="iconSm" class="size-6" title="Copy source" @click="copy">
           <Check v-if="copied" class="text-success" />
           <Copy v-else />
@@ -103,6 +103,7 @@ import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ code: string }>()
 
+// theme-ok: chọn theme dark/light cho mermaid
 const { isDark } = useTheme()
 const svg = ref('')
 const error = ref('')

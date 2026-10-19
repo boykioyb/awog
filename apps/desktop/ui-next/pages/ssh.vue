@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="ssh">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="ssh">
     <SshWorkspace
       :hosts="hosts"
       :identities="identities"

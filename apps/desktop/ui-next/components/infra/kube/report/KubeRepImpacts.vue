@@ -10,16 +10,39 @@
        thẳng terminal của pod.
 
        Component chỉ HIỂN THỊ: nó không biết `kube` là gì, chỉ bắn sự kiện lên cho
-       `InfraKubeReport.vue` gọi controller. -->
-  <div class="ikri">
-    <div v-for="item in items" :key="item.key" class="ikri-i">
-      <div class="ikri-row">
-        <span class="ikri-chip" :class="`k-${item.kind}`">{{ item.label }}</span>
-        <code v-if="item.object" class="ikri-obj" :title="item.object">{{ item.object }}</code>
-        <span class="ikri-txt">{{ item.text }}</span>
+       `InfraKubeReport.vue` gọi controller.
+
+       Các việc ngăn nhau bằng hairline, không bằng khung riêng: khối này đã nằm
+       trong một card, thêm khung nữa là hai đường viền lồng nhau quanh cùng một nền. -->
+  <div class="flex min-w-0 flex-col">
+    <div
+      v-for="item in items"
+      :key="item.key"
+      class="flex min-w-0 flex-col gap-1.5 py-2.5 first:pt-0 not-first:border-t"
+    >
+      <div class="flex min-w-0 flex-wrap items-baseline gap-2">
+        <!-- Màu chip đi theo `kind`, không phải theo component: cùng một hàng dùng
+             cho ba nhóm (đang ảnh hưởng · sắp hỏng · nên xem), và tô đỏ hết thì
+             "lệch phiên bản kubelet" hét ngang với "pod đang chết". -->
+        <Badge
+          variant="outline"
+          class="shrink-0 font-semibold"
+          :class="KIND_TONE[item.kind] ?? 'bg-card text-muted-foreground'"
+        >
+          {{ item.label }}
+        </Badge>
+        <!-- mono-ok: tên object là thứ dán vào kubectl -->
+        <code
+          v-if="item.object"
+          class="max-w-full truncate font-mono text-xs text-foreground"
+          :title="item.object"
+        >
+          {{ item.object }}
+        </code>
+        <span class="text-sm text-muted-foreground">{{ item.text }}</span>
       </div>
 
-      <div v-if="item.pod" class="ikri-acts">
+      <div v-if="item.pod" class="flex flex-wrap gap-1.5">
         <Button type="button" variant="outline" size="sm" @click="emit('open-logs', item.pod)">
           {{ t('infra.kube.report.act.prevLogs') }}
         </Button>
@@ -33,8 +56,13 @@
 
       <!-- Lệnh chép được đi CÙNG dòng việc chứ không nằm trong một khối "lệnh gợi
            ý" riêng: nó chỉ có nghĩa với đúng đối tượng ngay phía trên. -->
-      <div v-if="item.command" class="ikri-cmd">
-        <code class="ikri-cmdt">{{ item.command }}</code>
+      <div v-if="item.command" class="flex min-w-0 flex-wrap items-center gap-2">
+        <!-- mono-ok: đây là lệnh để dán vào terminal -->
+        <code
+          class="min-w-0 flex-[1_1_16.25rem] truncate rounded-sm border bg-card px-2 py-1 font-mono text-xs text-foreground"
+        >
+          {{ item.command }}
+        </code>
         <Button
           type="button"
           :title="t('infra.kube.report.act.copyCmd')"
@@ -42,7 +70,7 @@
           size="sm"
           @click="emit('copy-cmd', item.command)"
         >
-          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="copy" />
           {{ t('infra.kube.report.act.copyCmd') }}
         </Button>
       </div>
@@ -62,101 +90,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-</script>
 
-<style scoped>
-.ikri {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+const KIND_TONE: Record<string, string> = {
+  impact: 'border-destructive/40 bg-destructive/10 text-destructive',
+  risk: 'border-warning/40 bg-warning/10 text-warning',
 }
-/* Ngăn nhau bằng hairline, không bằng khung riêng: khối này đã nằm trong một
-   `.icard`, thêm khung nữa là hai đường viền lồng nhau quanh cùng một nền trắng
-   (xem ghi chú ở `InfraKubeReport.vue`). */
-.ikri-i {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 10px 0;
-}
-.ikri-i:first-child {
-  padding-top: 0;
-}
-.ikri-i:not(:first-child) {
-  border-top: 1px solid var(--border);
-}
-.ikri-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-/* Màu chip đi theo `kind`, không phải theo component: cùng một hàng dùng cho ba
-   nhóm (đang ảnh hưởng · sắp hỏng · nên xem), và tô đỏ hết thì "lệch phiên bản
-   kubelet" hét ngang với "pod đang chết". */
-.ikri-chip {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: var(--bgEl);
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-}
-.ikri-chip.k-impact {
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.ikri-chip.k-risk {
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
-  color: var(--amber);
-}
-.ikri-obj {
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: tên object là thứ dán vào kubectl */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-.ikri-txt {
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ikri-acts {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.ikri-cmd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.ikri-cmdt {
-  flex: 1 1 260px;
-  min-width: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgEl);
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: đây là lệnh để dán vào terminal */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>
+</script>

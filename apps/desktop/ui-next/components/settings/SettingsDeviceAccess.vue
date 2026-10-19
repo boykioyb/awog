@@ -1,15 +1,16 @@
 <template>
-  <div class="acc">
-    <div class="acc-row">
-      <div class="acc-main">
-        <div class="acc-title">{{ t('settings.devices.access.title') }}</div>
-        <div class="acc-hint">{{ t('settings.devices.access.hint') }}</div>
+  <div class="mb-4 rounded-lg border bg-muted px-3.5 py-3">
+    <div class="flex items-center gap-2.5">
+      <div class="min-w-0 flex-1">
+        <div class="text-base font-semibold text-foreground">
+          {{ t('settings.devices.access.title') }}
+        </div>
+        <div class="mt-0.5 text-sm text-muted-foreground">
+          {{ t('settings.devices.access.hint') }}
+        </div>
       </div>
       <Button :title="t('settings.devices.access.copy')" variant="outline" size="sm" @click="copy">
-        <Icon
-          :name="copied ? 'check' : 'copy'"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
+        <Icon :name="copied ? 'check' : 'copy'" class="size-3.5" />
         {{ copied ? t('settings.devices.access.copied') : t('settings.devices.access.copy') }}
       </Button>
       <Button
@@ -18,16 +19,26 @@
         size="sm"
         @click="showQr = !showQr"
       >
-        <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="scan" class="size-3.5" />
         {{ showQr ? t('settings.devices.access.hideQr') : t('settings.devices.access.qr') }}
       </Button>
     </div>
 
-    <code class="acc-url">{{ url }}</code>
+    <!-- mono-ok: URL truy cập gateway -->
+    <code
+      class="mt-2.5 block overflow-x-auto rounded-md border bg-background px-2.5 py-1.5 font-mono text-base whitespace-nowrap text-foreground"
+    >
+      {{ url }}
+    </code>
 
-    <div v-if="showQr" class="acc-qr">
-      <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('settings.devices.access.qr')" />
-      <div class="acc-qr-hint">{{ t('settings.devices.access.qrHint') }}</div>
+    <div v-if="showQr" class="mt-3 flex flex-col items-center gap-2">
+      <img
+        v-if="qrDataUrl"
+        :src="qrDataUrl"
+        :alt="t('settings.devices.access.qr')"
+        class="block size-50 rounded-lg border"
+      />
+      <div class="text-center text-sm text-faint">{{ t('settings.devices.access.qrHint') }}</div>
     </div>
   </div>
 </template>
@@ -41,7 +52,6 @@
 // leave on screen — scanning it grants nothing on its own.
 import QRCode from 'qrcode'
 import { computed, ref, watch } from 'vue'
-import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ host: string; port: number }>()
 
@@ -83,69 +93,3 @@ async function copy(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.acc {
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgSubtle);
-  padding: 12px 14px;
-  margin-bottom: 14px;
-}
-.acc-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.acc-main {
-  flex: 1;
-  min-width: 0;
-}
-.acc-title {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.acc-hint {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--textMuted);
-  line-height: 18px;
-}
-.acc-url {
-  display: block;
-  margin-top: 10px;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  /* mono-ok: pairing URL */
-  font-family: var(--code);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-  overflow-x: auto;
-  white-space: nowrap;
-}
-.acc-qr {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-.acc-qr img {
-  width: 200px;
-  height: 200px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  display: block;
-}
-.acc-qr-hint {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  text-align: center;
-}
-</style>

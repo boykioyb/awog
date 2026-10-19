@@ -33,7 +33,7 @@
       <!-- Raw (sanitized) git stderr, for the curious / for filing bugs -->
       <pre
         v-if="error?.message"
-        class="m-0 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md border border-input bg-transparent p-3 font-mono text-xs text-muted-foreground"
+        class="m-0 max-h-32 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-input bg-transparent p-3 font-mono text-xs text-muted-foreground"
         >{{ error.message }}</pre
       >
 

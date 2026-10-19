@@ -6,7 +6,7 @@
   <TabsContent
     v-bind="$attrs"
     :value="value"
-    :class="cn('focus-visible:outline-none data-[state=inactive]:hidden', $attrs.class)"
+    :class="cn('focus-visible:outline-hidden data-[state=inactive]:hidden', $attrs.class)"
   >
     <slot />
   </TabsContent>

@@ -11,7 +11,9 @@
        vẽ (biến thể `chip`): logic của chúng ở lại đúng chỗ cũ, strip này chỉ lo bố
        cục. Điều kiện hiện/ẩn vì thế phải tính LẠI ở đây — con không nói ngược lên
        cha được, mà cha thì cần biết có nên render hàng hay không. -->
-  <div v-if="show" class="ctxstrip">
+  <!-- Hàng sống TRONG header `.dh` của SessionDetail: chỉ là một cụm chip inline co
+       được (min-w-0 + chip tự cắt ellipsis), không lề/đường kẻ riêng. -->
+  <div v-if="show" class="flex min-w-0 shrink items-center gap-2">
     <!-- Issue trên board mà phiên đang làm — đứng ĐẦU hàng: "phiên này là việc gì,
          đang ở đâu" là câu hỏi đầu tiên khi quay lại một phiên. -->
     <SessionIssueChip :session="session" />
@@ -22,32 +24,29 @@
 
     <!-- Task (ADR 0055): bấm thẳng là mở task, như banner cũ — không popover, vì nó
          chỉ có đúng một hành động. -->
-    <button
+    <SessionCtxChip
       v-if="session.aboutTaskId"
-      class="ctxchip"
+      icon="workflows"
+      :label="aboutTaskTitle ?? ''"
       :title="t('sessions.detail.aboutTask')"
       @click="openTask(session.aboutTaskId)"
-    >
-      <Icon name="workflows" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="ctxchip-lbl">{{ aboutTaskTitle }}</span>
-    </button>
+    />
 
     <!-- SSH (ADR 0064). Mức duyệt nằm trong popover; `auto` nhuộm chip sang màu cảnh
          báo — thay cho một HÀNG warn riêng, vì cảnh báo thuộc về chính cái công tắc
          gây ra nó chứ không phải một dải chữ đỏ ngang màn hình. -->
-    <span v-if="session.aboutSshHostId" class="ctxwrap">
-      <button
-        ref="sshChipEl"
-        class="ctxchip"
-        :class="{ warn: sshApprovalMode === 'auto', on: open === 'ssh' }"
+    <span v-if="session.aboutSshHostId" class="relative inline-flex min-w-0 shrink">
+      <SessionCtxChip
+        ref="sshChipRef"
+        icon="ssh"
+        :label="aboutSshHostName ?? ''"
+        :sub="`· ${sshApprovalShort}`"
+        chev
+        :warn="sshApprovalMode === 'auto'"
+        :on="open === 'ssh'"
         :title="t('sessions.detail.aboutSshHost')"
         @click.stop="toggle('ssh')"
-      >
-        <Icon name="ssh" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="ctxchip-lbl">{{ aboutSshHostName }}</span>
-        <span class="ctxchip-sub">· {{ sshApprovalShort }}</span>
-        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+      />
     </span>
 
     <!-- Hạ tầng (ADR 0088): chip tự quản popover + màu của nó, đúng khuôn chip SSH
@@ -65,24 +64,38 @@
          chip giờ nằm trên hàng header `.dh` nên `absolute; left:0` sát mép phải
          sẽ thò ra ngoài cửa sổ. -->
     <Teleport to="body">
-      <div v-if="open" class="ctxbackdrop" @click="open = null" />
-      <div v-if="open === 'ssh'" ref="sshPopEl" class="pop ctxpop" :style="sshPopStyle" @click.stop>
-        <div class="pl">{{ t('sessions.detail.sshApproval.label') }}</div>
+      <div v-if="open" class="fixed inset-0 z-40" @click="open = null" />
+      <SessionCtxPop
+        v-if="open === 'ssh'"
+        ref="sshPopRef"
+        class="w-71 min-w-58"
+        :style="sshPopStyle"
+        @click.stop
+      >
+        <div class="mb-1.5 flex justify-between text-sm text-dim">
+          {{ t('sessions.detail.sshApproval.label') }}
+        </div>
         <AppSelect
           :model-value="sshApprovalMode"
           :options="sshApprovalOptions"
           width="100%"
           @update:model-value="onSshApprovalMode"
         />
-        <p v-if="sshApprovalMode === 'auto'" class="ctxwarn">
+        <p v-if="sshApprovalMode === 'auto'" class="mt-2 mb-0 text-xs leading-4.5 text-warning">
           {{ t('sessions.detail.sshApproval.autoWarn') }}
         </p>
-        <button class="ctxpop-act" @click="goSshHost">
-          <Icon name="ssh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <!-- Hàng hành động trong popover — cùng nhịp menu item: padding gọn, hover wash. -->
+        <Button
+          variant="ghost"
+          size="sm"
+          class="mt-2 h-auto w-full justify-start gap-2 rounded-sm px-2 py-1.5 text-sm font-normal text-popover-foreground [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
+          @click="goSshHost"
+        >
+          <Icon name="ssh" />
           {{ t('sessions.detail.aboutSshHost') }}
-          <Icon name="chev" class="ctxpop-chev" />
-        </button>
-      </div>
+          <Icon name="chev" class="ml-auto -rotate-90" />
+        </Button>
+      </SessionCtxPop>
     </Teleport>
   </div>
 </template>
@@ -185,71 +198,11 @@ function toggle(k: 'ssh') {
 
 // Neo popover SSH: fixed + kẹp viewport — chip đứng sát mép phải vẫn không tràn.
 const sshPopOpen = computed(() => open.value === 'ssh')
-const sshChipEl = ref<HTMLElement | null>(null)
-const sshPopEl = ref<HTMLElement | null>(null)
+// Chip + popover là component (Button / SessionCtxPop) ⇒ template ref là instance,
+// phần tử DOM nằm ở `$el`.
+const sshChipRef = useTemplateRef<{ $el: HTMLElement }>('sshChipRef')
+const sshPopRef = useTemplateRef<{ $el: HTMLElement }>('sshPopRef')
+const sshChipEl = computed(() => sshChipRef.value?.$el ?? null)
+const sshPopEl = computed(() => sshPopRef.value?.$el ?? null)
 const { style: sshPopStyle } = usePopoverAnchor(sshChipEl, sshPopEl, sshPopOpen)
 </script>
-
-<style scoped>
-.ctxwrap {
-  position: relative;
-  display: inline-flex;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-/* Popover của chip SSH — neo `fixed` qua usePopoverAnchor (`.pop` lo position +
-   z-index); đây chỉ còn skin: siết viền về hairline --border + bg-popover. */
-.ctxpop {
-  min-width: 232px;
-  background: var(--popover);
-  border-color: var(--border);
-  border-radius: var(--radius);
-}
-.ctxpop .pl {
-  margin-bottom: 6px;
-}
-.ctxwarn {
-  margin: 8px 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--warning);
-}
-/* Hàng hành động trong popover — cùng nhịp menu item: padding gọn, hover wash. */
-.ctxpop-act {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 9px;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-xs);
-  color: var(--popover-foreground);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  text-align: left;
-}
-.ctxpop-act:hover {
-  background: var(--accent-wash);
-}
-.ctxpop-act:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.ctxpop-act .icn {
-  color: var(--muted-foreground);
-  flex: 0 0 auto;
-}
-.ctxpop-chev {
-  margin-left: auto;
-  transform: rotate(-90deg);
-}
-.ctxbackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-</style>

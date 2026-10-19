@@ -18,6 +18,7 @@ import { useProjectsStore } from '~/stores/projects'
 import { useSessionsStore } from '~/stores/sessions'
 import { useWorkbenchStore } from '~/stores/workbench'
 import type { WorkbenchDocKind } from '~/types/workbench'
+import { OFFICE_EXT } from '~/composables/useWorkbenchDocs'
 import { copyText } from '~/utils/clipboard'
 
 // Một hàng trong menu chuột phải của workbench — MenuItem có sẵn + action đính
@@ -161,6 +162,7 @@ export function docKindFor(name: string): WorkbenchDocKind {
   if (ext === 'md') return 'md'
   if (IMG_EXT[ext]) return 'img'
   if (VID_EXT[ext]) return 'vid'
+  if (OFFICE_EXT[ext]) return 'office'
   if (MMD_EXT[ext]) return 'mmd'
   return 'file'
 }
@@ -676,7 +678,7 @@ export function useWorkbenchExplorer() {
     const docId = wb.activeDoc
     if (!docId) return
     const doc = wb.docs.find((d) => d.id === docId)
-    if (!doc || !['file', 'md', 'img', 'vid', 'mmd'].includes(doc.kind)) return
+    if (!doc || !['file', 'md', 'img', 'vid', 'office', 'mmd'].includes(doc.kind)) return
     const rel = revealRel(doc)
     if (!rel) return
     await expandTo(rel)

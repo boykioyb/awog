@@ -3,103 +3,102 @@
     <!-- Zone header: collapse chevron + label + count + zone-wide Stage/Unstage.
          The Stage-all / Unstage-all action lives here (one per zone) so each area
          owns its verb — no ambiguous checkbox. -->
-    <div class="gstatsec" @click="collapsed = !collapsed">
-      <svg class="icn gchv" :class="{ col: collapsed }"><use href="#i-chev" /></svg>
-      <span class="gstatlbl">{{ label }}</span>
-      <span class="gstatct">{{ files.length }}</span>
-      <span class="gstatsp" />
-      <span
+    <div :class="ZONE_HEAD" @click="zoneCollapsed = !zoneCollapsed">
+      <Icon name="chev" :class="[CHEV, { '-rotate-90': zoneCollapsed }]" />
+      <span :class="ZONE_LABEL">{{ label }}</span>
+      <span :class="ZONE_COUNT">{{ files.length }}</span>
+      <span class="flex-1" />
+      <Button
         v-if="!staged && files.length"
-        class="gstatact"
+        variant="ghost"
+        size="iconSm"
+        class="size-5 rounded-sm text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
         :title="t('git.status.discardAll')"
+        :aria-label="t('git.status.discardAll')"
         @click.stop="discardAll"
       >
-        <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </span>
-      <button
-        class="gsecbtn"
-        :class="{ stage: !staged }"
+        <Icon name="revert" class="size-3" />
+      </Button>
+      <Button
+        variant="outline"
+        size="xs"
+        :class="[SEC_BTN, { [SEC_BTN_STAGE]: !staged }]"
         :disabled="!files.length"
         :title="staged ? t('git.changes.unstageAll') : t('git.changes.stageAll')"
         @click.stop="staged ? emit('unstage-all') : emit('stage-all')"
       >
-        <Icon
-          :name="staged ? 'minus' : 'plus'"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
-        />
+        <Icon :name="staged ? 'minus' : 'plus'" />
         <span>{{ staged ? t('git.changes.unstage') : t('git.changes.stage') }}</span>
-      </button>
+      </Button>
     </div>
 
-    <template v-if="!collapsed">
+    <template v-if="!zoneCollapsed">
       <!-- Empty zone → hint so the area still reads as a defined place files go. -->
-      <div v-if="!files.length" class="gsecempty">{{ emptyHint }}</div>
+      <div v-if="!files.length" :class="ZONE_EMPTY">{{ emptyHint }}</div>
 
       <!-- Tree view: real nested folders (single-child chains collapsed) -->
       <template v-else-if="chTree">
         <template v-for="row in treeRows" :key="row.id">
           <div
             v-if="row.kind === 'dir'"
-            class="gtdir"
+            :class="FILE_ROW"
             :style="{ paddingLeft: pad(row.depth) }"
             @click="toggleDir(row.path)"
             @contextmenu.prevent="emit('context-folder', $event, row.path, staged)"
           >
-            <svg class="icn fchv" :class="{ col: collapsedDirs.has(row.path) }">
-              <use href="#i-chev" />
-            </svg>
-            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
-            <span class="gtrunc">{{ row.label }}</span>
-            <span v-if="!staged" class="growact">
-              <span
-                class="gstage gdiscard"
+            <Icon name="chev" :class="[CHEV, { '-rotate-90': collapsedDirs.has(row.path) }]" />
+            <Icon name="folder" class="size-3 flex-none" />
+            <span :class="FILE_NAME">{{ row.label }}</span>
+            <span v-if="!staged" class="flex flex-none items-center gap-1">
+              <Button
+                variant="outline"
+                size="iconSm"
+                :class="[ROW_ACT, ROW_ACT_DISCARD]"
                 :title="t('git.ctxFolder.discard')"
+                :aria-label="t('git.ctxFolder.discard')"
                 @click.stop="discardFolder(row.path)"
               >
-                <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              </span>
+                <Icon name="revert" class="size-3" />
+              </Button>
             </span>
           </div>
           <div
             v-else
-            class="gfile"
-            :class="{
-              on: sel?.path === row.path && sel?.staged === staged,
-              msel: isMultiSel(row.path),
-            }"
+            :class="[FILE_ROW, { [FILE_ROW_ON]: isOn(row.path) || isMultiSel(row.path) }]"
             :style="{ paddingLeft: pad(row.depth) }"
             @click="emit('select', row.path, staged, { meta: $event.metaKey || $event.ctrlKey })"
             @contextmenu.prevent="emit('context-file', $event, row.path, staged)"
           >
-            <span
-              class="gsti"
-              :style="{ color: row.v.color }"
-              :title="t(`git.fileStatus.${row.v.key}`)"
-            >
+            <span :class="[STATUS_LETTER, row.v.cls]" :title="t(`git.fileStatus.${row.v.key}`)">
               {{ row.v.letter }}
             </span>
-            <span class="gnm2">
-              <span class="gn">{{ row.label }}</span>
+            <span :class="FILE_NAME">
+              <span :class="[FILE_BASE, { 'text-foreground': isOn(row.path) }]">
+                {{ row.label }}
+              </span>
             </span>
-            <span class="growact">
-              <span
-                class="gstage"
+            <span class="flex flex-none items-center gap-1">
+              <Button
+                variant="outline"
+                size="iconSm"
+                :class="[ROW_ACT, { [ROW_ACT_SHOWN]: isOn(row.path) }]"
                 :title="staged ? t('git.changes.unstage') : t('git.changes.stage')"
+                :aria-label="staged ? t('git.changes.unstage') : t('git.changes.stage')"
                 @click.stop="emit('toggle-stage', row.path, staged)"
               >
-                <Icon
-                  :name="staged ? 'minus' : 'plus'"
-                  style="width: var(--icon-sm); height: var(--icon-sm)"
-                />
-              </span>
-              <span
+                <Icon :name="staged ? 'minus' : 'plus'" class="size-3.5" />
+              </Button>
+              <Button
                 v-if="!staged"
-                class="gstage gdiscard"
+                variant="outline"
+                size="iconSm"
+                :class="[ROW_ACT, ROW_ACT_DISCARD, { [ROW_ACT_SHOWN]: isOn(row.path) }]"
                 :title="t('git.changes.discard')"
+                :aria-label="t('git.changes.discard')"
                 @click.stop="emit('discard', row.path)"
               >
-                <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              </span>
+                <Icon name="revert" class="size-3" />
+              </Button>
             </span>
           </div>
         </template>
@@ -110,40 +109,40 @@
         <div
           v-for="x in flatRows"
           :key="x.f"
-          class="gfile"
-          :class="{
-            on: sel?.path === x.f && sel?.staged === staged,
-            msel: isMultiSel(x.f),
-          }"
+          :class="[FILE_ROW, { [FILE_ROW_ON]: isOn(x.f) || isMultiSel(x.f) }]"
           @click="emit('select', x.f, staged, { meta: $event.metaKey || $event.ctrlKey })"
           @contextmenu.prevent="emit('context-file', $event, x.f, staged)"
         >
-          <span class="gsti" :style="{ color: x.v.color }" :title="t(`git.fileStatus.${x.v.key}`)">
+          <span :class="[STATUS_LETTER, x.v.cls]" :title="t(`git.fileStatus.${x.v.key}`)">
             {{ x.v.letter }}
           </span>
-          <span class="gnm2">
-            <span class="gp">{{ dirName(x.f) }}</span>
-            <span class="gn">{{ baseName(x.f) }}</span>
+          <span :class="FILE_NAME">
+            <!-- mono-ok: phần thư mục của path -->
+            <span :class="FILE_DIR">{{ dirName(x.f) }}</span>
+            <span :class="[FILE_BASE, { 'text-foreground': isOn(x.f) }]">{{ baseName(x.f) }}</span>
           </span>
-          <span class="growact">
-            <span
-              class="gstage"
+          <span class="flex flex-none items-center gap-1">
+            <Button
+              variant="outline"
+              size="iconSm"
+              :class="[ROW_ACT, { [ROW_ACT_SHOWN]: isOn(x.f) }]"
               :title="staged ? t('git.changes.unstage') : t('git.changes.stage')"
+              :aria-label="staged ? t('git.changes.unstage') : t('git.changes.stage')"
               @click.stop="emit('toggle-stage', x.f, staged)"
             >
-              <Icon
-                :name="staged ? 'minus' : 'plus'"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-            </span>
-            <span
+              <Icon :name="staged ? 'minus' : 'plus'" class="size-3.5" />
+            </Button>
+            <Button
               v-if="!staged"
-              class="gstage gdiscard"
+              variant="outline"
+              size="iconSm"
+              :class="[ROW_ACT, ROW_ACT_DISCARD, { [ROW_ACT_SHOWN]: isOn(x.f) }]"
               :title="t('git.changes.discard')"
+              :aria-label="t('git.changes.discard')"
               @click.stop="emit('discard', x.f)"
             >
-              <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
-            </span>
+              <Icon name="revert" class="size-3" />
+            </Button>
           </span>
         </div>
       </template>
@@ -159,6 +158,25 @@
 // gone (ticking-to-stage read as multi-select, which it was not).
 import type { GitFile, GitSelection, PathTreeRow, SelMods, StatusVisual } from './git-types'
 import { baseNameOf, buildPathTreeRows, shortPath, statusVisual } from './git-types'
+import {
+  CHEV,
+  FILE_BASE,
+  FILE_DIR,
+  FILE_NAME,
+  FILE_ROW,
+  FILE_ROW_ON,
+  ROW_ACT,
+  ROW_ACT_DISCARD,
+  ROW_ACT_SHOWN,
+  SEC_BTN,
+  SEC_BTN_STAGE,
+  STATUS_LETTER,
+  ZONE_COUNT,
+  ZONE_EMPTY,
+  ZONE_HEAD,
+  ZONE_LABEL,
+} from './git-ui'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   label: string
@@ -184,7 +202,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const collapsed = ref(false)
+const zoneCollapsed = ref(false)
 const collapsedDirs = ref<Set<string>>(new Set())
 
 // Rows carry their pre-resolved status visual so the template resolves it once
@@ -215,8 +233,11 @@ const pad = (depth: number) => `${8 + depth * 14}px`
 const baseName = (f: string) => baseNameOf(f)
 const dirName = (f: string) => shortPath(f)[0]
 
+// Hàng đang mở diff (selection của pane phải) trong zone này.
+const isOn = (path: string) => props.sel?.path === path && props.sel?.staged === props.staged
+
 // Accent-tint a row only for a genuine multi-selection (>1) — a lone selection is
-// just the diff-focused row (`.on`), so single-click looks exactly as before.
+// just the diff-focused row, so single-click looks exactly as before.
 const isMultiSel = (path: string) => props.selectedPaths.size > 1 && props.selectedPaths.has(path)
 
 function discardAll() {

@@ -12,24 +12,24 @@
     :name="t('settings.git.prReviewLlm.pick')"
     :desc="t('settings.git.prReviewLlm.pickDesc')"
   >
-    <div class="prl">
-      <div class="prl-row">
-        <span class="prl-label">{{ t('settings.git.prReviewLlm.provider') }}</span>
+    <div class="flex flex-col gap-2.5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span class="text-sm text-dim">{{ t('settings.git.prReviewLlm.provider') }}</span>
         <SettingsSeg v-model="provider" :options="PROVIDER_OPTIONS" />
       </div>
-      <div class="prl-row">
-        <span class="prl-label">{{ t('settings.git.prReviewLlm.account') }}</span>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span class="text-sm text-dim">{{ t('settings.git.prReviewLlm.account') }}</span>
         <AppSelect v-model="accountId" :options="accountOptions" width="240px" />
       </div>
-      <div class="prl-row">
-        <span class="prl-label">{{ t('settings.git.prReviewLlm.model') }}</span>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span class="text-sm text-dim">{{ t('settings.git.prReviewLlm.model') }}</span>
         <AppSelect v-model="modelId" :options="modelOptions" width="240px" />
       </div>
-      <div class="prl-row">
-        <span class="prl-label">{{ t('settings.git.prReviewLlm.effort') }}</span>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span class="text-sm text-dim">{{ t('settings.git.prReviewLlm.effort') }}</span>
         <SettingsSeg v-model="level" :options="levelOptions" />
       </div>
-      <div v-if="accountInherits" class="fd">
+      <div v-if="accountInherits" class="text-sm text-dim">
         {{ t('settings.git.prReviewLlm.accountSessionHint') }}
       </div>
     </div>
@@ -162,23 +162,3 @@ const levelOptions = computed(() =>
   THINKING_LEVELS.map((lv) => ({ label: t('common.thinking.' + lv), value: lv })),
 )
 </script>
-
-<style scoped>
-.prl {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.prl-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.prl-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-</style>

@@ -49,7 +49,7 @@
               <Icon name="sparkles" class="size-3.5" />
               <span
                 v-if="loading"
-                class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary-foreground"
+                class="absolute -inset-0.75 animate-spin rounded-full border border-transparent border-t-primary-foreground"
               />
             </span>
             {{ generated ? t('git.prSummary.regenerate') : t('git.prSummary.generate') }}
@@ -73,7 +73,7 @@
           <span class="relative inline-flex size-4 items-center justify-center">
             <Icon name="sparkles" class="size-4" />
             <span
-              class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary"
+              class="absolute -inset-0.75 animate-spin rounded-full border border-transparent border-t-primary"
             />
           </span>
           <span>{{ t('git.prSummary.generating') }}</span>
@@ -82,7 +82,7 @@
         <!-- Empty state (before the first generation) -->
         <div
           v-else-if="!generated"
-          class="flex min-h-[200px] flex-col items-center justify-center gap-2.5 py-10 text-center text-sm text-muted-foreground"
+          class="flex min-h-50 flex-col items-center justify-center gap-2.5 py-10 text-center text-sm text-muted-foreground"
         >
           <Icon name="sparkles" class="size-5 text-muted-foreground" />
           <span>{{ t('git.prSummary.emptyHint') }}</span>
@@ -117,7 +117,7 @@
               </span>
               <!-- segmented Write/Preview — shadcn tabs-list shape -->
               <div
-                class="inline-flex h-[var(--ctrl-h-xs)] items-center gap-0.5 rounded-md bg-muted p-0.5"
+                class="inline-flex h-(--ctrl-h-xs) items-center gap-0.5 rounded-md bg-muted p-0.5"
               >
                 <Button
                   variant="ghost"
@@ -125,7 +125,7 @@
                   class="h-auto p-0 rounded-sm px-2.5 text-xs font-medium transition-colors"
                   :class="
                     mode === 'write'
-                      ? 'bg-background text-foreground shadow-sm'
+                      ? 'bg-background text-foreground shadow-xs'
                       : 'text-muted-foreground hover:text-foreground'
                   "
                   @click="mode = 'write'"
@@ -138,7 +138,7 @@
                   class="h-auto p-0 rounded-sm px-2.5 text-xs font-medium transition-colors"
                   :class="
                     mode === 'preview'
-                      ? 'bg-background text-foreground shadow-sm'
+                      ? 'bg-background text-foreground shadow-xs'
                       : 'text-muted-foreground hover:text-foreground'
                   "
                   @click="mode = 'preview'"
@@ -178,12 +178,12 @@
               v-show="mode === 'write'"
               ref="ta"
               v-model="description"
-              class="max-h-[42vh] min-h-[200px] resize-none font-mono"
+              class="max-h-[42vh] min-h-50 resize-none font-mono"
               :placeholder="t('git.prSummary.descLabel')"
             />
             <div
               v-if="mode === 'preview'"
-              class="max-h-[42vh] min-h-[200px] overflow-y-auto rounded-md border border-input px-3 py-2.5 text-sm"
+              class="max-h-[42vh] min-h-50 overflow-y-auto rounded-md border border-input px-3 py-2.5 text-sm"
             >
               <ProjectGhMarkdown v-if="description.trim()" :source="description" />
               <div v-else class="italic text-muted-foreground">

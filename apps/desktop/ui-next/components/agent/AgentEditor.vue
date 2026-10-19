@@ -5,73 +5,90 @@
     :width="680"
     @close="emit('cancel')"
   >
-    <div class="age">
+    <div class="flex flex-col gap-4">
       <!-- Agents are global roles (~/.awog/agents) — no tier picker. An existing
            project-tier agent keeps its location silently (source preserved). -->
-      <div class="age-grid">
-        <div class="age-field">
-          <label class="age-label">{{ t('agents.editor.slug') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+            {{ t('agents.editor.slug') }}
+          </Label>
           <Input
             :model-value="draft.id"
             placeholder="e.g. tech-lead"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
             @update:model-value="onSlugInput"
           />
-          <div class="age-hint">
+          <div class="text-xs text-dim">
             {{ t('agents.editor.slugHint', { slug: draft.id || 'slug' }) }}
           </div>
         </div>
-        <div class="age-field">
-          <label class="age-label">{{ t('agents.editor.role') }}</label>
-          <Input v-model="draft.role" :placeholder="t('agents.editor.rolePh')" class="mono" />
-          <div class="age-hint">{{ t('agents.editor.roleHint') }}</div>
+        <div class="flex flex-col gap-1.5">
+          <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+            {{ t('agents.editor.role') }}
+          </Label>
+          <Input v-model="draft.role" :placeholder="t('agents.editor.rolePh')" class="font-mono" />
+          <div class="text-xs text-dim">{{ t('agents.editor.roleHint') }}</div>
         </div>
       </div>
 
-      <div class="age-field">
-        <label class="age-label">{{ t('agents.editor.name') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+          {{ t('agents.editor.name') }}
+        </Label>
         <Input v-model="draft.name" :placeholder="t('agents.editor.namePh')" />
       </div>
 
-      <div class="age-field">
-        <label class="age-label">{{ t('agents.editor.description') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+          {{ t('agents.editor.description') }}
+        </Label>
+        <Textarea
           v-model="draft.description"
-          class="age-input age-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('agents.editor.descPh')"
         />
-        <div class="age-hint">{{ t('agents.editor.descHint') }}</div>
+        <div class="text-xs text-dim">{{ t('agents.editor.descHint') }}</div>
       </div>
 
-      <div class="age-grid">
-        <div class="age-field">
-          <label class="age-label">{{ t('agents.editor.provider') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+            {{ t('agents.editor.provider') }}
+          </Label>
           <AppSelect v-model="providerSelect" :options="providerOptions" width="100%" />
         </div>
-        <div class="age-field">
-          <label class="age-label">{{ t('agents.editor.model') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+            {{ t('agents.editor.model') }}
+          </Label>
           <AppSelect v-model="draft.model" :options="modelOptions" width="100%" />
         </div>
       </div>
 
-      <div class="age-field">
-        <label class="age-label">{{ t('agents.editor.account') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+          {{ t('agents.editor.account') }}
+        </Label>
         <AppSelect
           v-model="accountSelect"
           :options="accountOptions"
           :placeholder="t('agents.editor.accountActive')"
           width="100%"
         />
-        <div class="age-hint">{{ t('agents.editor.accountHint') }}</div>
+        <div class="text-xs text-dim">{{ t('agents.editor.accountHint') }}</div>
       </div>
 
-      <div class="age-field">
-        <label class="age-label">{{ t('agents.editor.systemPrompt') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+          {{ t('agents.editor.systemPrompt') }}
+        </Label>
+        <!-- mono-ok: system prompt viết như file AGENT.md -->
+        <Textarea
           v-model="draft.systemPrompt"
-          class="age-input age-ta mono"
+          class="min-h-12 resize-y font-mono"
           rows="8"
           :placeholder="t('agents.editor.systemPromptPh')"
         />
@@ -79,8 +96,10 @@
 
       <!-- Whitelists — shared pickers (same components the detail tabs render
            inline). Empty model = unrestricted / inherit session. -->
-      <div class="age-field">
-        <label class="age-label">{{ t('agents.editor.tools') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+          {{ t('agents.editor.tools') }}
+        </Label>
         <AgentToolsPicker
           :model-value="draft.tools"
           :servers="mcpServers"
@@ -88,11 +107,11 @@
         />
       </div>
 
-      <div class="age-field">
-        <label class="age-label">
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
           {{ t('agents.editor.connections') }}
-          <span class="age-count">{{ mcpCountLabel }}</span>
-        </label>
+          <span class="tnum text-xs font-normal text-dim">{{ mcpCountLabel }}</span>
+        </Label>
         <AgentConnectionsPicker
           :model-value="mcpModel"
           :servers="mcpServers"
@@ -100,11 +119,11 @@
         />
       </div>
 
-      <div class="age-field">
-        <label class="age-label">
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
           {{ t('agents.editor.skills') }}
-          <span class="age-count">{{ skillCountLabel }}</span>
-        </label>
+          <span class="tnum text-xs font-normal text-dim">{{ skillCountLabel }}</span>
+        </Label>
         <AgentSkillsPicker
           :model-value="draft.skillIds"
           :skills="skills"
@@ -112,11 +131,11 @@
         />
       </div>
 
-      <div class="age-field">
-        <label class="age-label">
+      <div class="flex flex-col gap-1.5">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
           {{ t('agents.editor.repos') }}
-          <span class="age-count">{{ repoCountLabel }}</span>
-        </label>
+          <span class="tnum text-xs font-normal text-dim">{{ repoCountLabel }}</span>
+        </Label>
         <AgentReposPicker
           :model-value="draft.repos"
           :projects="projects"
@@ -135,8 +154,8 @@
 </template>
 
 <script setup lang="ts">
-// Agent form editor — port of the old UI AgentEditor logic, rendered in
-// prototype CSS inside LibraryEntityModal. Agents are global roles — new agents
+// Agent form editor — port of the old UI AgentEditor logic, rendered
+// inside LibraryEntityModal. Agents are global roles — new agents
 // always write to ~/.awog/agents; a legacy project-tier agent keeps its
 // source/projectId silently (no tier picker in the form). Slug is sanitized to
 // kebab-case. Provider/model/account selectors use AppSelect; the four
@@ -380,68 +399,3 @@ const onSave = () => {
   emit('save', payload)
 }
 </script>
-
-<style scoped>
-.age {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.age-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.age-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.age-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.age-count {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 400;
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-.age-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.age-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — tool names / model ids */
-  font-family: var(--code);
-}
-.age-input:focus {
-  border-color: var(--accent);
-}
-.age-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.age-hint {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-/* Whitelist list/chip styles live in assets/css/agent-whitelist.css (.awp-*) —
-   shared with the pickers the detail tabs render inline. */
-</style>

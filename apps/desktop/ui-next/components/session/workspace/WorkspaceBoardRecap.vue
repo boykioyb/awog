@@ -26,17 +26,18 @@
 
     <div class="mt-1 flex flex-col gap-1 border-t border-dashed border-border pt-2">
       <span class="text-xs text-muted-foreground">{{ t('sessions.issue.sessions') }}</span>
-      <button
+      <Button
         v-for="s in executors"
         :key="s.id"
-        type="button"
-        class="flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-accent-wash"
+        variant="ghost"
+        size="xs"
+        class="min-w-0 justify-start gap-2 px-2 text-left font-normal"
         @click="openSession(s.engineId!)"
       >
         <SessionStateDot :status="s.status" :unread="!!s.unread" />
         <span class="min-w-0 flex-1 truncate">{{ s.title }}</span>
         <span class="shrink-0 text-faint">{{ s.updatedAt ? fmtAt(s.updatedAt) : '' }}</span>
-      </button>
+      </Button>
       <p v-if="!executors.length" class="m-0 text-xs text-faint">
         {{ t('sessions.issue.noSessions') }}
       </p>

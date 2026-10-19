@@ -1,37 +1,46 @@
 <template>
-  <div class="nbv">
+  <div class="mx-auto w-full max-w-245 pt-1 pb-6">
     <!-- Not JSON / not nbformat: say so instead of rendering an empty shell. -->
-    <div v-if="!notebook" class="nbstate">
-      <Icon name="alert" style="width: var(--icon-lg); height: var(--icon-lg)" />
+    <div v-if="!notebook" :class="STATE">
+      <Icon name="alert" class="size-5" />
       <span>
         {{ t(truncated ? 'sessionsWidget.notebook.cut' : 'sessionsWidget.notebook.invalid') }}
       </span>
     </div>
-    <div v-else-if="!notebook.cells.length" class="nbstate">
-      <Icon name="book" style="width: var(--icon-lg); height: var(--icon-lg)" />
+    <div v-else-if="!notebook.cells.length" :class="STATE">
+      <Icon name="book" class="size-5" />
       <span>{{ t('sessionsWidget.notebook.empty') }}</span>
     </div>
 
     <template v-else>
-      <div class="nbbar">
-        <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div class="flex items-center gap-2 pb-3 text-sm text-dim">
+        <Icon name="book" class="size-3.5" />
         <span>{{ t('sessionsWidget.notebook.cells', { n: notebook.cells.length }) }}</span>
-        <span v-if="notebook.language" class="nbchip">{{ notebook.language }}</span>
-        <span v-if="hasMore" class="nbchip">
+        <Badge v-if="notebook.language" variant="outline" :class="CHIP">
+          {{ notebook.language }}
+        </Badge>
+        <Badge v-if="hasMore" variant="outline" :class="CHIP">
           {{
             t('sessionsWidget.notebook.showing', {
               n: cells.length,
               total: notebook.cells.length,
             })
           }}
-        </span>
+        </Badge>
       </div>
 
-      <div v-for="c in cells" :key="c.key" class="nbcell">
-        <div class="nbgut" :class="{ run: c.type === 'code' }">{{ c.gutter }}</div>
-        <div class="nbmain">
+      <div v-for="c in cells" :key="c.key" class="flex items-start gap-2.5 py-2">
+        <!-- Cột execution-count — `In [n]:` Jupyter hiện cạnh cell code. Mono cho cell
+             code: số đếm thẳng hàng với khối code nó gắn nhãn. -->
+        <div
+          class="flex-[0_0_2.875rem] pt-3 text-right text-xs text-muted-foreground"
+          :class="{ 'font-mono': c.type === 'code' }"
+        >
+          {{ c.gutter }}
+        </div>
+        <div class="min-w-0 flex-1">
           <!-- markdown cell: same renderer as every other markdown surface -->
-          <div v-if="c.type === 'markdown'" class="mdbody nbmd">
+          <div v-if="c.type === 'markdown'" class="mdbody text-base leading-(--lh-prose)">
             <template v-for="(seg, i) in c.segments" :key="i">
               <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
               <pre
@@ -43,39 +52,62 @@
             </template>
           </div>
 
-          <!-- code cell: Shiki-highlighted (Shiki escapes the source text) -->
+          <!-- code cell: Shiki-highlighted (Shiki escapes the source text). Shiki tự
+               sinh <pre>; .mdbody tô nó như mọi code fence, chỉ bỏ margin. -->
           <!-- eslint-disable-next-line vue/no-v-html -- Shiki output, source escaped -->
-          <div v-else-if="c.type === 'code'" class="mdbody nbsrc" v-html="c.html" />
+          <div v-else-if="c.type === 'code'" class="mdbody [&_pre]:m-0" v-html="c.html" />
 
-          <!-- raw cell: verbatim, never interpreted -->
-          <pre v-else class="nbraw">{{ c.text }}</pre>
+          <!-- raw cell: verbatim, never interpreted (mono: giữ nguyên từng byte nguồn) -->
+          <pre
+            v-else
+            class="overflow-x-auto rounded-md border bg-muted px-3.5 py-3 font-mono text-sm whitespace-pre-wrap text-dim"
+            >{{ c.text }}</pre
+          >
 
-          <div v-for="(o, oi) in c.outputs" :key="oi" class="nbout">
-            <pre v-if="o.k === 'text'" class="nbtext" :class="{ err: o.err }">{{ o.text }}</pre>
-            <img v-else-if="o.k === 'image'" class="nbimg" :src="o.src" :alt="o.alt" />
+          <div v-for="(o, oi) in c.outputs" :key="oi" class="mt-1.5">
+            <!-- mono: stdout/stderr của kernel là output terminal -->
+            <pre
+              v-if="o.k === 'text'"
+              :class="cn(OUT_TEXT, o.err ? OUT_ERR : 'border-l-border text-dim')"
+              >{{ o.text }}</pre
+            >
+            <!-- Plot vẽ cho nền trắng ⇒ nền ảnh trắng ở mọi theme. -->
+            <img
+              v-else-if="o.k === 'image'"
+              class="h-auto max-w-full rounded-sm border bg-white"
+              :src="o.src"
+              :alt="o.alt"
+            />
             <!-- Rich HTML output (pandas repr, plotly stub…) is model/kernel-produced
-                 L1 markup → fully-restricted sandbox, never the app document. -->
+                 L1 markup → fully-restricted sandbox, never the app document. Khung cao
+                 cố định (frame opaque-origin không báo được chiều cao) — cuộn bên trong;
+                 nền trắng khớp canvas của srcdoc. -->
             <iframe
               v-else-if="o.k === 'html'"
-              class="nbframe"
+              class="h-65 w-full rounded-md border bg-white"
               sandbox=""
               loading="lazy"
               referrerpolicy="no-referrer"
               :srcdoc="o.srcdoc"
               :title="t('sessionsWidget.notebook.outputHtml')"
             />
-            <div v-else-if="o.k === 'error'" class="nberr">
-              <div class="nberrhead">{{ o.title }}</div>
-              <pre v-if="o.trace" class="nbtext err">{{ o.trace }}</pre>
+            <div v-else-if="o.k === 'error'" class="border-l-2 border-l-destructive pl-0.5">
+              <div class="px-3 py-1 text-sm font-semibold text-destructive">{{ o.title }}</div>
+              <pre v-if="o.trace" :class="cn(OUT_TEXT, OUT_ERR, 'border-l-0')">{{ o.trace }}</pre>
             </div>
-            <div v-else class="nbskip">{{ o.label }}</div>
+            <div v-else class="px-3 py-1.5 text-xs text-muted-foreground">{{ o.label }}</div>
           </div>
         </div>
       </div>
 
-      <button v-if="hasMore" class="nbmore" @click="showMore">
+      <Button
+        v-if="hasMore"
+        variant="outline"
+        class="mt-3 w-full font-normal text-dim shadow-none hover:border-selected-border hover:bg-selected hover:text-foreground"
+        @click="showMore"
+      >
         {{ t('sessionsWidget.notebook.more', { n: remaining }) }}
-      </button>
+      </Button>
     </template>
   </div>
 </template>
@@ -102,6 +134,7 @@
 //   - text/html → an iframe with `sandbox` FULLY restricting (empty attribute: no
 //     scripts, no forms, no popups, no same-origin) plus a `default-src 'none'` CSP, so
 //     a DataFrame repr renders but a hostile one has no reachable sink.
+import { cn } from '~/lib/utils'
 import type { MdSegment } from '~/composables/useMarkdown'
 
 const props = defineProps<{
@@ -122,6 +155,12 @@ type NbCell = {
   outputs?: unknown[]
 }
 type Notebook = { cells: NbCell[]; language: string }
+
+// Class dùng chung trong template.
+const STATE = 'flex items-center gap-2.5 py-8 text-base text-dim'
+const CHIP = 'rounded-sm px-2 py-px font-normal text-dim'
+const OUT_TEXT = 'm-0 overflow-x-auto border-l-2 px-3 py-2 font-mono text-sm whitespace-pre-wrap'
+const OUT_ERR = 'border-l-destructive text-destructive'
 
 const CELL_PAGE = 30
 const SRC_MAX = 40_000
@@ -218,8 +257,12 @@ const OUTPUT_CSP =
   "default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none'; " +
   "form-action 'none'; base-uri 'none'"
 
+// CSS + màu (hex) dưới đây thuộc TÀI LIỆU iframe sandbox, không phải DOM của app: token
+// theme không vào được opaque origin, và output kernel (bảng pandas, plot) vẽ cho canvas
+// trắng ở mọi theme.
 function htmlOutputDoc(body: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${OUTPUT_CSP}"><style>html,body{margin:0;padding:8px;background:#fff;color:#111;font:13px/1.5 system-ui,sans-serif}table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:4px 8px}</style></head><body>${body}</body></html>`
+  // hex-ok: CSS bên trong iframe sandbox — token theme không vào được
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${OUTPUT_CSP}"><style>/* style-ok: canvas iframe sandbox */html,body{margin:0;padding:8px;background:#fff;color:#111;font:13px/1.5 system-ui,sans-serif}table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:4px 8px}</style></head><body>${body}</body></html>`
 }
 
 function imageOutput(data: Record<string, unknown>): NbOut | null {
@@ -331,151 +374,3 @@ const cells = computed<RenderedCell[]>(() => {
   })
 })
 </script>
-
-<style scoped>
-.nbv {
-  width: 100%;
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 4px 0 24px;
-}
-.nbbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 0 12px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.nbchip {
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  padding: 1px 8px;
-}
-.nbcell {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 8px 0;
-}
-/* Execution-count gutter — the `In [n]:` column Jupyter shows next to code cells. */
-.nbgut {
-  flex: 0 0 46px;
-  text-align: right;
-  padding-top: 12px;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.nbgut.run {
-  /* mono-ok: execution counter aligns with the code block it labels */
-  font-family: var(--code);
-}
-.nbmain {
-  flex: 1;
-  min-width: 0;
-}
-.nbmd {
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-}
-/* Shiki emits its own <pre>; .mdbody styles it like any other code fence. */
-.nbsrc :deep(pre) {
-  margin: 0;
-}
-.nbraw {
-  /* mono-ok: a raw cell is verbatim source, kept byte-for-byte */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-  overflow-x: auto;
-  background: var(--bgSubtle);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 12px 14px;
-  color: var(--textDim);
-}
-.nbout {
-  margin-top: 6px;
-}
-.nbtext {
-  /* mono-ok: kernel stdout/stderr is terminal output */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-  overflow-x: auto;
-  margin: 0;
-  padding: 8px 12px;
-  border-left: 2px solid var(--border);
-  color: var(--textDim);
-}
-.nbtext.err {
-  border-left-color: var(--danger);
-  color: var(--danger);
-}
-.nbimg {
-  max-width: 100%;
-  height: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: #fff; /* design-token-ok: plots are drawn for a white canvas */
-}
-/* Rich HTML output: fixed box (the frame is opaque-origin, so it cannot report its
-   own height back) — it scrolls internally instead of stretching the notebook. */
-.nbframe {
-  width: 100%;
-  height: 260px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: #fff; /* design-token-ok: matches the srcdoc's own canvas */
-}
-.nberr {
-  border-left: 2px solid var(--danger);
-  padding-left: 2px;
-}
-.nberrhead {
-  padding: 4px 12px;
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-.nberr .nbtext {
-  border-left: 0;
-}
-.nbskip {
-  padding: 6px 12px;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.nbmore {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.nbmore:hover {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--text);
-}
-.nbstate {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 32px 0;
-  color: var(--textDim);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-</style>

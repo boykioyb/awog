@@ -1,22 +1,22 @@
 <template>
-  <div class="obp">
-    <p class="ob-lead">{{ t('onboarding.project.desc') }}</p>
+  <div class="flex flex-col items-start gap-3.5">
+    <p class="text-muted-foreground">{{ t('onboarding.project.desc') }}</p>
 
-    <div v-if="linkedName" class="chip obp-ok">
+    <Badge v-if="linkedName" variant="outline" class="border-selected-border text-primary">
       <Icon name="check" />
       {{ t('onboarding.project.linked', { name: linkedName }) }}
-    </div>
+    </Badge>
 
     <template v-if="available">
-      <Button :disabled="busy" class="obp-pick" variant="outline" @click="onPick">
+      <Button :disabled="busy" class="self-start" variant="outline" @click="onPick">
         <Icon name="folder" />
         {{ busy ? t('onboarding.project.picking') : t('onboarding.project.pick') }}
       </Button>
-      <p v-if="error" class="obp-err">{{ t('onboarding.project.error') }}</p>
-      <p class="obp-hint">{{ t('onboarding.project.skipHint') }}</p>
+      <p v-if="error" class="text-destructive">{{ t('onboarding.project.error') }}</p>
+      <p class="text-dim">{{ t('onboarding.project.skipHint') }}</p>
     </template>
 
-    <p v-else class="obp-hint">{{ t('onboarding.project.browserOnly') }}</p>
+    <p v-else class="text-dim">{{ t('onboarding.project.browserOnly') }}</p>
   </div>
 </template>
 
@@ -25,7 +25,6 @@ import { ref } from 'vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useSidecar } from '~/composables/useSidecar'
 import { pickFolder } from '~/composables/useFolderPicker'
-import Button from '~/components/ui/button/Button.vue'
 
 // First-project step — the real "where do I work" choice in AWOG (the config home
 // is fixed). Pick a folder → inspect for sensible prefill → linkProject, reusing
@@ -65,30 +64,3 @@ const onPick = async () => {
   }
 }
 </script>
-
-<style scoped>
-.obp {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  align-items: flex-start;
-}
-.ob-lead {
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.obp-ok {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.obp-pick {
-  align-self: flex-start;
-}
-.obp-err {
-  color: var(--danger);
-}
-.obp-hint {
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-</style>

@@ -5,8 +5,8 @@
         <Button
           variant="outline"
           size="xs"
-          class="slk-chip"
-          :class="{ mine: r.mine }"
+          class="h-6 gap-1 rounded-full px-1.5 text-xs"
+          :class="{ 'border-selected-border bg-selected text-primary': r.mine }"
           :aria-pressed="r.mine"
           @click="emit('toggle', r.name)"
         >
@@ -17,7 +17,7 @@
       <TooltipContent>{{ whoReacted(r) }}</TooltipContent>
     </Tooltip>
     <SlackEmojiPicker :team-id="teamId" :custom-url="customUrl" @pick="(n) => emit('add', n)">
-      <Button variant="ghost" size="iconSm" class="slk-add" :title="t('slack.message.react')">
+      <Button variant="ghost" size="iconSm" class="text-dim" :title="t('slack.message.react')">
         <Icon name="smile" />
       </Button>
     </SlackEmojiPicker>
@@ -47,22 +47,3 @@ function whoReacted(r: SlackReaction): string {
   return `${extra > 0 ? t('slack.reaction.whoMore', { names: list, n: extra }) : list} — :${r.name}:`
 }
 </script>
-
-<style scoped>
-.slk-chip {
-  gap: 4px;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: var(--r-pill);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.slk-chip.mine {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.slk-add {
-  color: var(--textDim);
-}
-</style>

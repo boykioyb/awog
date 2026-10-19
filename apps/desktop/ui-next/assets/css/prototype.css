@@ -1048,27 +1048,6 @@ body {
   line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
   color: var(--textDim);
-}
-.grow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-}
-.grow:first-of-type {
-  border-top: none;
-}
-.grow .rn {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.grow .br {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-family: var(--code);
-  color: var(--textDim);
 } /* mono-ok: git branch name */
 .gchip {
   font-variant-numeric: tabular-nums;
@@ -5239,12 +5218,6 @@ body {
   color: var(--muted-foreground);
 }
 .prepo-br,
-.grow .br,
-.ritem .ph,
-.ritem .who {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
 /* meta phụ (timestamp/đếm) giữ nhỏ mono nhưng nâng contrast nhẹ */
 .mmeta,
 .tm,

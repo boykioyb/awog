@@ -1,39 +1,83 @@
 <template>
   <!-- Ngăn kéo trượt lên TỪ composer, không phải modal giữa màn hình: câu hỏi nằm
-       đúng chỗ mắt đang nhìn khi trả lời, transcript phía trên vẫn đọc được. -->
-  <Collapse :open="open" class="qdrw">
-    <div v-if="shown" class="qdrw-in" :class="{ folded }">
+       đúng chỗ mắt đang nhìn khi trả lời, transcript phía trên vẫn đọc được.
+
+       Ngăn kéo là một hàng trong cột chat (ngay trên composer), KHÔNG phải overlay:
+       không có scrim, không khoá thao tác — người dùng vẫn cuộn transcript, vẫn gõ.
+
+       `0 1 auto` chứ KHÔNG phải `none`: cột chat có thể ngắn (dock terminal dưới đáy
+       chiếm nửa cửa sổ), và một ngăn kéo không co được sẽ đẩy composer ra khỏi
+       `.chat{overflow:hidden}` — đúng lỗi "hiện câu hỏi là mất nút gửi". Vì `.msgs` có
+       basis 0 (flex:1), toàn bộ phần co rơi vào ngăn kéo: nó lấy đúng chỗ còn lại trên
+       composer rồi cuộn bên trong.
+
+       Chuỗi min-height:0 qua từng lớp (cả `.collapsible-in` bên trong <Collapse>) —
+       thiếu một mắt là phần tử con lấy chiều cao content và cái cuộn không bao giờ
+       xuất hiện. Lề hai bên = `--padX` như `.composer` và `.msgs` để ba khối chung
+       một lề trái; lề là padding ở `.collapsible-in` chứ không phải margin trên thẻ:
+       `overflow:hidden` cắt đến mép padding. -->
+  <Collapse
+    :open="open"
+    class="min-h-0 flex-[0_1_auto] [&>.collapsible-in]:flex [&>.collapsible-in]:min-h-0 [&>.collapsible-in]:flex-col [&>.collapsible-in]:px-(--padX)"
+  >
+    <!-- Thẻ ngăn kéo: rộng bằng ô soạn (cap 860px căn giữa), sàn `7em` = hàng đầu +
+         hàng nút + một chút thân (đơn vị em vì hai hàng đó cao theo cỡ chữ Appearance);
+         gập rồi thì sàn biến mất. Bề mặt card + viền ring, KHÔNG bóng đổ (người dùng
+         chốt 2026-10-16). Trồi lên từ đáy (phía ô soạn) với ease-out mạnh. -->
+    <div
+      v-if="shown"
+      class="mx-auto mb-2 flex max-h-[52vh] w-full max-w-215 flex-auto origin-bottom flex-col rounded-xl border border-ring bg-card px-4 pt-3 pb-3.5 animate-in fade-in-0 slide-in-from-bottom-4 duration-260 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none"
+      :class="folded ? 'min-h-0' : 'min-h-[7em]'"
+    >
       <!-- Cả hàng đầu là nút gập: vùng bấm to, và ở trạng thái gập nó là thứ duy
            nhất còn thấy nên phải bấm được ở bất cứ đâu trên đó. -->
       <div
-        class="qdrw-head"
-        :class="{ folded }"
+        class="group flex flex-none cursor-pointer items-center gap-2 select-none"
+        :class="folded ? 'mb-0' : 'mb-2'"
         :title="folded ? t('sessions.gate.drawerUnfold') : t('sessions.gate.drawerFold')"
         @click="folded = !folded"
       >
         <Icon
-          class="qdrw-chev"
-          :class="{ up: folded }"
           name="chev"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5 flex-none text-muted-foreground transition-transform duration-180 group-hover:text-foreground"
+          :class="{ '-rotate-180': folded }"
         />
-        <span class="qdrw-title">{{ t('sessions.gate.modalTitle') }}</span>
+        <span class="flex-none text-base font-semibold text-foreground">
+          {{ t('sessions.gate.modalTitle') }}
+        </span>
         <!-- Gập rồi thì dòng này là thứ duy nhất nhắc đang hỏi gì → cho nó chính câu
              hỏi, không phải câu hướng dẫn chung. -->
-        <span class="qdrw-hint">{{ folded ? summary : t('sessions.gate.modalHint') }}</span>
-        <button
-          class="p-1.5 rounded transition qdrw-x"
+        <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          {{ folded ? summary : t('sessions.gate.modalHint') }}
+        </span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="flex-none text-muted-foreground hover:text-foreground"
           :title="t('sessions.gate.modalDismiss')"
           @click.stop="onDismiss"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
       <!-- Chính thẻ câu hỏi của transcript, không phải bản sao: tab, auto-advance,
            "Other" và submit đều là của SessionGateCard, nên đóng ngăn kéo rồi trả lời
-           trong transcript vẫn y hệt. -->
-      <Collapse :open="!folded" class="qdrw-fold">
-        <SessionGateCard :block="shown" class="qdrw-body" />
+           trong transcript vẫn y hệt.
+
+           Thẻ trong ngăn kéo là một cột: tiêu đề đứng yên, thân (`data-qbody`) cuộn,
+           hàng nút ở lại đáy — sticky không bám được vì hàng nút là phần tử cuối của
+           thẻ, nên cách duy nhất là để nó NGOÀI vùng cuộn. Ngăn kéo ĐÃ là một cái thẻ
+           nên thẻ bên trong bỏ hết khung (viền, nền hổ phách, đệm, bóng — `!` vì phải
+           thắng class gốc của chính thẻ), và hàng "⚠ Question" (`data-qhead`) bị ẩn vì
+           lặp lại đúng điều tiêu đề ngăn kéo vừa nói. -->
+      <Collapse
+        :open="!folded"
+        class="min-h-0 flex-[0_1_auto] [&>.collapsible-in]:flex [&>.collapsible-in]:min-h-0 [&>.collapsible-in]:flex-col"
+      >
+        <SessionGateCard
+          :block="shown"
+          class="m-0! min-h-0 flex-auto border-0! bg-transparent! p-0! shadow-none! [&>*]:flex-none [&>[data-qbody]]:min-h-0 [&>[data-qbody]]:flex-auto [&>[data-qbody]]:overflow-y-auto [&>[data-qbody]]:pr-0.5 [&>[data-qhead]]:hidden"
+        />
       </Collapse>
     </div>
   </Collapse>
@@ -103,198 +147,3 @@ const onDismiss = (): void => {
   if (b && b.kind === 'question') dismiss(b.eid)
 }
 </script>
-
-<style scoped>
-/* Ngăn kéo là một hàng trong cột chat (ngay trên composer), KHÔNG phải overlay:
-   không có scrim, không khoá thao tác — người dùng vẫn cuộn transcript, vẫn gõ.
-
-   `0 1 auto` chứ KHÔNG phải `none`: cột chat có thể ngắn (dock terminal dưới đáy
-   chiếm nửa cửa sổ), và một ngăn kéo không co được sẽ đẩy composer ra khỏi
-   `.chat{overflow:hidden}` — đúng lỗi "hiện câu hỏi là mất nút gửi". Vì `.msgs` có
-   basis 0 (flex:1), toàn bộ phần co rơi vào ngăn kéo: nó lấy đúng chỗ còn lại trên
-   composer rồi cuộn bên trong. Transcript bị nén hết cỡ trong tình huống đó — nút
-   gập là lối ra để đọc lại nó. */
-.qdrw {
-  flex: 0 1 auto;
-  min-height: 0;
-}
-/* Chuỗi min-height:0 qua từng lớp — thiếu một mắt là phần tử con lấy chiều cao
-   content và cái cuộn không bao giờ xuất hiện. `> :deep()` để KHÔNG chạm vào
-   <Collapse> lồng bên trong (.qdrw-fold), vốn có luật riêng bên dưới. */
-.qdrw > :deep(.collapsible-in) {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  /* Lùi đúng `--padX` hai bên: `.composer` đệm `var(--padX)` rồi mới tới `.cbox`, và
-     `.msgs` cũng đệm chừng ấy — ba khối xếp chồng trong một cột thì phải chung một
-     lề trái, đó là lý do `--padX` tồn tại. Không có dòng này thì ngăn kéo trải hết
-     cột, rộng hơn ô soạn 22px mỗi bên, và cả cụm đọc ra lệch.
-     Lề là padding ở ĐÂY chứ không phải margin trên `.qdrw-in`: `overflow:hidden`
-     cắt đến mép padding, nên chỗ trống phải nằm BÊN TRONG hộp cắt thì bóng đổ hai
-     bên mới có đất mà vẽ. */
-  padding: 0 var(--padX);
-}
-.qdrw-in {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  /* Sàn = hàng đầu + hàng nút + một chút thân, tức cái ngưỡng dưới đó thì hàng nút
-     bị `.collapsible-in{overflow:hidden}` cắt mất. Đơn vị `em` chứ không phải px:
-     cả hai hàng đó cao theo cỡ chữ, mà cỡ chữ nền đổi được ở Settings → Appearance,
-     nên một con số px đúng ở base 13 sẽ lại cắt ở base 18. Dưới sàn này thì gập
-     ngăn kéo lại là lối ra — đó là việc của nút gập. */
-  min-height: 7em;
-  max-height: 52vh;
-  /* Rộng bằng ô soạn: `.cbox` là `width:100%` cap `max-width:860px` căn giữa, còn
-     ngăn kéo từng giãn hết cột ⇒ ở cột chat rộng nó "tràn" qua trần của ô soạn.
-     `margin: 0 auto` vừa căn giữa vừa tắt stretch của flex-item. KHÔNG dùng
-     `width:auto` — shrink-wrap làm nó thành thẻ nổi lơ lửng trông như modal. */
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto 8px;
-  /* Đây là lề TRONG duy nhất của cả thẻ: thân câu hỏi bỏ khung của nó (`.qdrw-body`
-     bên dưới) nên không còn lớp đệm thứ hai nào nữa. 12px là đệm của một cái chip,
-     không phải của một tấm thẻ bo xl — chữ dính mép. */
-  padding: 12px 15px 14px;
-  /* Bề mặt của ngăn kéo: `--card` (alias --bgEl) + viền `--ring` (alias
-     --accentBorder) — cùng ngôn ngữ popover. KHÔNG bóng đổ (người dùng chốt
-     2026-10-16): viền accent đã đủ tách nó khỏi transcript, bóng chỉ làm nhoè mép. */
-  background: var(--card);
-  border: 1px solid var(--ring, var(--border));
-  border-radius: var(--r-card);
-  /* Trồi lên TỪ ô soạn: <Collapse> lo chiều cao, dòng này lo cảm giác. Gốc biến đổi
-     ở ĐÁY (phía ô soạn) nên nó nở ra từ dưới lên chứ không phải rơi từ trên xuống,
-     và đường cong ease-out mạnh cho nó vọt lên rồi dừng hẳn — giống một tấm trượt
-     ra khỏi ô soạn, không phải một hộp mới xuất hiện. */
-  transform-origin: bottom center;
-  animation: qdrw-rise 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-/* Gập rồi thì chẳng còn hàng nút nào để chừa chỗ — sàn trên biến mất, ngăn kéo
-   thu về đúng một hàng. */
-.qdrw-in.folded {
-  min-height: 0;
-}
-@keyframes qdrw-rise {
-  from {
-    transform: translateY(16px) scaleY(0.985);
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .qdrw-in {
-    animation: none;
-  }
-}
-.qdrw-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  user-select: none;
-}
-/* Gập rồi thì hàng đầu LÀ ngăn kéo — bỏ khoảng cách thừa dưới nó. */
-.qdrw-head.folded {
-  margin-bottom: 0;
-}
-.qdrw-chev {
-  flex: none;
-  color: var(--muted-foreground);
-  transition: transform 0.18s ease;
-}
-.qdrw-chev.up {
-  transform: rotate(-180deg);
-}
-.qdrw-head:hover .qdrw-chev {
-  color: var(--foreground);
-}
-.qdrw-title {
-  flex: none;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--foreground);
-}
-.qdrw-hint {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.qdrw-x {
-  flex: none;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.qdrw-x:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-/* <Collapse> của phần thân: nó vừa phải co theo cột, vừa phải gập được. */
-.qdrw-fold {
-  flex: 0 1 auto;
-  min-height: 0;
-}
-.qdrw-fold > :deep(.collapsible-in) {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-/* Thẻ câu hỏi trong ngăn kéo là một cột: tiêu đề đứng yên, thân cuộn, hàng nút ở
-   lại đáy. Hàng nút KHÔNG dùng position:sticky được — nó là phần tử cuối của thẻ
-   nên containing block của nó kết thúc đúng chỗ nó kết thúc, sticky không có chỗ
-   nào để bám. Cách duy nhất giữ nó luôn thấy là để nó NGOÀI vùng cuộn, và vùng
-   cuộn là `.qbody` (SessionQuestionForm bọc sẵn). */
-.qdrw-body {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  /* Ngăn kéo ĐÃ là một cái thẻ (viền accent, nền, bo góc) → thẻ bên trong bỏ hết
-     khung của nó, nếu không là hai khung lồng nhau. Không chỉ cho đẹp: ở cột chat
-     ngắn, 26px padding + hàng "Question" là đúng phần chỗ mà hàng nút cần để còn
-     nằm trong khung. */
-  margin: 0;
-  border: none;
-  padding: 0;
-}
-/* Bỏ NỀN hổ phách của `.gate` khi thẻ nằm trong ngăn kéo. Ở transcript mảng màu đó
-   có việc: nhặt thẻ câu hỏi ra khỏi dòng tin nhắn trôi qua. Ở đây thì không còn việc
-   gì — viền accent của ngăn kéo, hàng "Agent đang hỏi bạn" và chỗ đứng ngay trên ô
-   soạn đã nói đủ — mà nó lại chạy sát mép trong của thẻ (thân bỏ đệm của mình), nên
-   chữ và ô chọn dính vào cạnh mảng màu: đọc ra chật.
-   Phải là tổ hợp DÀI chứ không phải `!important`: theme Cute khai
-   `body[data-theme-family='cute'] .gcard.gate` = (0,3,1) và nạp sau prototype.css,
-   nên muốn thắng thì phải hơn về số class — `.qdrw-in .qdrw-fold[data-v] .gcard.gate`
-   = (0,5,0). Chỉ đụng `background`: bo góc/khung đã do `.qdrw-body` gỡ. */
-.qdrw-in .qdrw-fold :deep(.gcard.gate) {
-  background: transparent;
-}
-.qdrw-body > :deep(*) {
-  flex: none;
-}
-/* Hàng "⚠ Question" của thẻ lặp lại đúng điều tiêu đề ngăn kéo vừa nói. */
-.qdrw-body > :deep(.gh) {
-  display: none;
-}
-.qdrw-body > :deep(.qbody) {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  /* Chừa chỗ cho thanh cuộn khỏi dính sát chữ khi nội dung dài. */
-  padding-right: 2px;
-}
-</style>

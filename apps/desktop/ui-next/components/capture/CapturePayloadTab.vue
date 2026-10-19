@@ -1,20 +1,20 @@
 <template>
-  <div class="cap-tab">
-    <section class="cap-sec">
-      <h4>{{ t('capture.payload.query', { n: params.length }) }}</h4>
-      <table v-if="params.length" class="cap-kv">
-        <tbody>
-          <tr v-for="(p, i) in params" :key="i">
-            <th class="cap-code">{{ p[0] }}</th>
-            <td class="cap-code cap-wrap">{{ p[1] }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="cap-note">{{ t('capture.payload.noQuery') }}</div>
+  <div :class="CAP_TAB">
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">{{ t('capture.payload.query', { n: params.length }) }}</h4>
+      <Table v-if="params.length" :class="CAP_KV">
+        <TableBody>
+          <TableRow v-for="(p, i) in params" :key="i">
+            <TableHead class="font-mono">{{ p[0] }}</TableHead>
+            <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">{{ p[1] }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <div v-else :class="CAP_NOTE">{{ t('capture.payload.noQuery') }}</div>
     </section>
 
-    <section class="cap-sec">
-      <h4>{{ t('capture.payload.body') }}</h4>
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">{{ t('capture.payload.body') }}</h4>
       <CaptureBodyView
         :body="entry.requestBody"
         :mime-type="requestMime"
@@ -29,6 +29,7 @@ import { computed } from 'vue'
 import type { CaptureEntry } from '~/types/network-capture'
 import { queryParams } from '~/utils/capture-export'
 import CaptureBodyView from './CaptureBodyView.vue'
+import { CAP_KV, CAP_NOTE, CAP_SEC, CAP_SEC_TITLE, CAP_TAB } from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()

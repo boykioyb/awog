@@ -13,15 +13,17 @@
 
        Cổng kiểm (`sidecar`/`profile`) và chip câu hỏi ở LẠI đây: chúng đúng cho cả
        ba tab, và nhân ba một cổng kiểm là ba chỗ để quên sửa. -->
-  <div class="icst">
-    <header class="icst-hd">
-      <div class="icst-hd-txt">
-        <h2 class="icst-ttl">{{ t(`infra.cost.view.${view}.title`) }}</h2>
-        <p class="icst-sub">{{ t(`infra.cost.view.${view}.subtitle`) }}</p>
-      </div>
+  <div class="flex h-full min-h-0 flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
+    <header class="flex flex-col gap-1">
+      <h2 class="m-0 text-lg font-semibold text-foreground">
+        {{ t(`infra.cost.view.${view}.title`) }}
+      </h2>
+      <p class="m-0 max-w-[72ch] text-sm leading-relaxed text-dim">
+        {{ t(`infra.cost.view.${view}.subtitle`) }}
+      </p>
     </header>
 
-    <p v-if="!sidecarAvailable" class="icst-state">{{ t('infra.cost.noSidecar') }}</p>
+    <p v-if="!sidecarAvailable" class="m-0 text-sm text-dim">{{ t('infra.cost.noSidecar') }}</p>
     <InfraEmpty
       v-else-if="!hasAccount"
       :title="t('infra.empty.noProfile.title')"
@@ -36,19 +38,22 @@
       <InfraCostWaste v-else />
 
       <!-- Luật 4 của infra-README: chip câu hỏi thay cho ô trống. Cùng khuôn với màn
-           Giám sát — tắt khi chưa có số liệu nào, vì câu trả lời sẽ rỗng. -->
-      <div class="icst-ask">
-        <span class="icst-hint">{{ t('infra.cost.title') }}</span>
-        <button
+           Giám sát — tắt khi chưa có số liệu nào, vì câu trả lời sẽ rỗng. Không có vạch
+           kẻ phía trên: các khối bên trên là card, đã có ranh giới nhìn thấy được. -->
+      <div class="flex flex-wrap items-center gap-1.5 pt-1">
+        <span class="text-xs text-faint">{{ t('infra.cost.title') }}</span>
+        <Button
           v-for="s in askSuggestions"
           :key="s.key"
           type="button"
-          class="icst-chip"
+          variant="outline"
+          size="xs"
+          class="rounded-full font-normal text-dim hover:border-selected-border hover:text-primary"
           :disabled="!hasSnapshot"
           @click="ask(s.text)"
         >
           {{ s.text }}
-        </button>
+        </Button>
       </div>
     </template>
   </div>
@@ -76,93 +81,3 @@ const { hasAccount, sidecarAvailable, askSuggestions, hasSnapshot, ask } = useIn
 // props không dùng ở script.
 const view = computed(() => props.view)
 </script>
-
-<style scoped>
-/* Tiền tố `icst-`, KHÔNG phải `ic-`: `prototype.css` có một class TOÀN CỤC `.ic` là
-   inline code (mono, nền xám, .92em), nên một root tên `.ic` biến cả màn thành chữ
-   monospace 11.96px trên nền xám (lỗi thật 2026-09-15). */
-/* Tiền tố `icst-`, KHÔNG phải `ic-`: `prototype.css` có một class TOÀN CỤC `.ic` là
-   inline code (mono · nền --bgActive · .92em). Đặt root màn là `.ic` thì cả màn bị
-   render như một đoạn code — đúng chuyện đã xảy ra ở đây và ở màn Triển khai. */
-.icst {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 14px 16px;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.icst-hd-txt {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.icst-ttl {
-  margin: 0;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  color: var(--text);
-}
-
-.icst-sub {
-  margin: 0;
-  max-width: 72ch;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-
-.icst-state {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  color: var(--textDim);
-}
-
-/* `.icst-sec`/`-hd`/`-ttl`/`.icst-hint`/`.icst-gap` nay ở app-shell.css — chúng
-   từng là bốn bản sao y hệt nhau, một bản trong mỗi file của nhóm Chi phí. */
-
-/* Không còn `border-top`: ba khối bên trên nay là card, nên đã có ranh giới nhìn
-   thấy được; thêm một vạch nữa chỉ là vạch chồng lên mép card. */
-.icst-ask {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding-top: 4px;
-}
-
-.icst-chip {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-
-.icst-chip:hover:not(:disabled) {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-}
-
-.icst-chip:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.icst-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex-shrink: 0;
-}
-
-.icst-spin {
-  animation: icst-rot 1s linear infinite;
-}
-</style>

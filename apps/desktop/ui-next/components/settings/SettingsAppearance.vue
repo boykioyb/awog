@@ -20,27 +20,15 @@
       :name="t('settings.appearance.language.name')"
       :desc="t('settings.appearance.language.desc')"
     >
-      <div class="seg">
-        <span :class="{ on: locale === 'vi' }" @click="setLocale('vi')">Tiếng Việt</span>
-        <span :class="{ on: locale === 'en' }" @click="setLocale('en')">English</span>
-      </div>
+      <SettingsSeg v-model="language" :options="LANGUAGE_OPTIONS" />
     </SettingsField>
 
     <SettingsField :desc="t('settings.appearance.accent.desc')">
       <template #name>
         {{ t('settings.appearance.accent.name') }}
-        <span style="color: var(--accent)">{{ t('settings.appearance.accent.live') }}</span>
+        <span class="text-primary">{{ t('settings.appearance.accent.live') }}</span>
       </template>
-      <div class="swatches">
-        <span
-          v-for="h in accents"
-          :key="h"
-          class="sw"
-          :class="{ on: h === accent }"
-          :style="{ background: h }"
-          @click="setAccent(h)"
-        />
-      </div>
+      <SettingsAccentSwatches :label="t('settings.appearance.accent.name')" />
     </SettingsField>
 
     <SettingsField
@@ -68,16 +56,7 @@
       :name="t('settings.appearance.fontSize.name')"
       :desc="t('settings.appearance.fontSize.desc')"
     >
-      <div class="seg">
-        <span
-          v-for="s in FONT_SIZES"
-          :key="s"
-          :class="{ on: s === fontSize }"
-          @click="setFontSize(s)"
-        >
-          {{ s }}
-        </span>
-      </div>
+      <SettingsSeg v-model="fontSizeValue" :options="FONT_SIZE_OPTIONS" />
     </SettingsField>
 
     <SettingsField
@@ -95,21 +74,26 @@
     </SettingsField>
 
     <!-- Live preview — reflects accent / surface depth / font / weight / size. -->
-    <div class="sech">{{ t('settings.appearance.preview.heading') }}</div>
-    <div class="apv">
-      <div class="apv-h">The quick brown fox · 0123456789</div>
-      <div class="apv-b">{{ t('settings.appearance.preview.body') }}</div>
-      <div class="apv-card">
+    <SettingsGroupLabel>{{ t('settings.appearance.preview.heading') }}</SettingsGroupLabel>
+    <Card class="mt-1 gap-2.5 p-3.5 shadow-none">
+      <div class="text-xl font-semibold text-foreground">The quick brown fox · 0123456789</div>
+      <div class="text-foreground">{{ t('settings.appearance.preview.body') }}</div>
+      <div class="rounded-md border bg-background px-3 py-2.5 text-foreground">
         {{ t('settings.appearance.preview.nested') }} ·
-        <span style="color: var(--textMuted)">{{ t('settings.appearance.preview.muted') }}</span>
+        <span class="text-muted-foreground">{{ t('settings.appearance.preview.muted') }}</span>
       </div>
-      <div class="apv-row">
+      <div class="flex items-center gap-2.5">
         <Button variant="default">{{ t('settings.appearance.preview.primary') }}</Button>
         <Button variant="outline">{{ t('settings.appearance.preview.secondary') }}</Button>
-        <a class="apv-link">Link</a>
+        <a class="cursor-pointer text-primary">Link</a>
       </div>
-      <pre class="codeblk apv-code">const sum = (a, b) =&gt; a + b</pre>
-    </div>
+      <!-- mono-ok: khối code mẫu để xem font code -->
+      <pre
+        class="m-0 rounded-lg border bg-muted p-3 font-mono text-sm whitespace-pre-wrap text-muted-foreground"
+      >
+const sum = (a, b) =&gt; a + b</pre
+      >
+    </Card>
   </div>
 </template>
 
@@ -118,19 +102,34 @@ import { computed, onMounted } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import type { FontWeight, SansFamily, SurfaceDepth, ThemeFamily } from '~/stores/settings'
 import { useAppearanceDom } from '~/composables/useAppearanceDom'
-import Button from '~/components/ui/button/Button.vue'
+import type { Locale } from '~/composables/useI18n'
 
 // Appearance panel — ports setSecHtml('appearance') and wires it to real state.
-// Mode/accent/font-size + locale live in useTheme()/useI18n(); theme family, sans
+// Mode/accent/font-size + locale live in useTheme/useI18n; theme family, sans
 // family, font weight, surface depth and glass live in the settings store's
 // appearance slice. Proper-noun seg options (AWOG, shadcn, Geist, Inter, System,
 // 300/400/500) stay literal; descriptive labels go through t() via { label, value }.
 const { t, locale, setLocale } = useI18n()
-const { accent, setAccent, fontSize, setFontSize, isDark, toggleTheme } = useTheme()
+// theme-ok: chỉ đọc/ghi trạng thái theme, không tô màu
+const { fontSize, setFontSize, isDark, toggleTheme } = useTheme()
 const store = useSettingsStore()
 
-const accents = ['#10b981', '#60a5fa', '#a78bfa', '#f59e0b', '#f43f5e', '#22d3ee', '#fafafa']
 const FONT_SIZES = [12, 13, 14, 15, 16, 18]
+const FONT_SIZE_OPTIONS = FONT_SIZES.map(String)
+const fontSizeValue = computed<string>({
+  get: () => String(fontSize.value),
+  set: (value) => setFontSize(Number(value)),
+})
+
+// Tên ngôn ngữ để nguyên chữ gốc (không dịch) — giá trị lưu là mã locale.
+const LANGUAGE_OPTIONS = [
+  { label: 'Tiếng Việt', value: 'vi' },
+  { label: 'English', value: 'en' },
+]
+const language = computed<string>({
+  get: () => locale.value,
+  set: (value) => setLocale(value as Locale),
+})
 
 // DOM appliers (shared with app.vue boot paint) — sans/weight/surface/family/glass.
 const {
@@ -243,45 +242,3 @@ onMounted(() => {
   applyFontWeight(store.appearance.fontWeight)
 })
 </script>
-
-<style scoped>
-/* Live preview card — uses theme tokens so it reflects accent / surface depth /
-   font / weight / size changes immediately. */
-.apv {
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.apv-h {
-  font-size: 1.3em;
-  font-weight: 650;
-  color: var(--text);
-}
-.apv-b {
-  color: var(--text);
-}
-.apv-card {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgCanvas);
-  color: var(--text);
-}
-.apv-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.apv-link {
-  color: var(--accent);
-  cursor: pointer;
-}
-.apv-code {
-  margin: 0;
-}
-</style>

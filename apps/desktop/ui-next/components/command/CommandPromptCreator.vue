@@ -6,15 +6,15 @@
     :width="540"
     @close="emit('close')"
   >
-    <div class="cpc">
-      <div class="cpc-hint">{{ t('commands.creator.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('commands.creator.hint') }}</div>
 
       <LibraryScopePicker v-model="scope" :projects="projects" />
 
-      <div v-if="!draft" class="cpc-promptbox">
-        <textarea
+      <div v-if="!draft">
+        <Textarea
           v-model="prompt"
-          class="cpc-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('commands.creator.placeholder')"
@@ -22,14 +22,21 @@
         />
       </div>
 
-      <div v-if="error" class="cpc-err">{{ error }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
 
-      <div v-if="draft" class="cpc-preview">
-        <div class="cpc-prow">
-          <span class="mono cpc-pname">/{{ slugify(draft.name) }}</span>
-          <span v-if="draft.argumentHint" class="tag mono">{{ draft.argumentHint }}</span>
+      <div v-if="draft" class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- mono-ok: định danh (slug / lệnh) -->
+          <span class="font-mono text-sm font-medium text-foreground">
+            /{{ slugify(draft.name) }}
+          </span>
+          <Badge v-if="draft.argumentHint" variant="secondary" class="font-mono">
+            {{ draft.argumentHint }}
+          </Badge>
         </div>
-        <div class="cpc-pdesc">{{ draft.description }}</div>
+        <div class="text-sm text-muted-foreground">{{ draft.description }}</div>
         <LibraryMarkdownBody
           :title="t('commands.creator.generated')"
           :content="draft.body || t('commands.creator.emptyBody')"
@@ -53,7 +60,10 @@
         variant="default"
         @click="onGenerate"
       >
-        <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+        <Icon
+          :name="isGenerating ? 'refresh' : 'sparkles'"
+          :class="{ 'animate-spin': isGenerating }"
+        />
         {{ isGenerating ? t('commands.creator.generating') : t('commands.creator.generate') }}
       </Button>
       <Button v-else variant="default" @click="onSave">
@@ -161,73 +171,3 @@ const onEditDetails = () => {
   emit('edit-details', draft.value)
 }
 </script>
-
-<style scoped>
-.cpc {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.cpc-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.cpc-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.cpc-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.cpc-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.cpc-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cpc-prow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.cpc-pname {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.cpc-pdesc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.spin {
-  animation: cpc-spin 0.9s linear infinite;
-}
-@keyframes cpc-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

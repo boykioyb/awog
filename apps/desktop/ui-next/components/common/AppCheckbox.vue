@@ -1,23 +1,18 @@
 <template>
-  <button
-    type="button"
-    role="checkbox"
-    :aria-checked="indeterminate ? 'mixed' : checked"
-    class="appcb"
-    :class="{ on: checked || indeterminate }"
-    @click.stop="toggle"
-    @keydown.space.prevent="toggle"
-  >
-    <Minus v-if="indeterminate && !checked" class="appcb-ic" />
-    <Check v-else-if="checked" class="appcb-ic" />
-  </button>
+  <Checkbox :model-value="state" @update:model-value="toggle" @click.stop>
+    <template #default="{ state: s }">
+      <Minus v-if="s === 'indeterminate'" class="size-3.5" />
+      <Check v-else class="size-3.5" />
+    </template>
+  </Checkbox>
 </template>
 
 <script setup lang="ts">
-// Checkbox nhỏ theo token (hàng bulk-select trong CollectionList) — shadcn
-// chưa có primitive Checkbox trong repo nên đây là button role=checkbox 16px,
-// click không nổi lên row cha (stop).
+// Checkbox nhỏ theo token (hàng bulk-select trong CollectionList…) — ruột là shadcn
+// `Checkbox`, API cũ giữ nguyên: `checked` + `indeterminate` vào, `update:checked`
+// ra. Click không nổi lên row cha (stop).
 import { Check, Minus } from 'lucide-vue-next'
+import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{ checked?: boolean; indeterminate?: boolean }>(), {
   checked: false,
@@ -25,41 +20,15 @@ const props = withDefaults(defineProps<{ checked?: boolean; indeterminate?: bool
 })
 const emit = defineEmits<{ 'update:checked': [value: boolean] }>()
 
+// reka nhận 'indeterminate' như một giá trị của modelValue; bản cũ chỉ vẽ dấu trừ
+// khi chưa `checked`.
+const state = computed<boolean | 'indeterminate'>(() =>
+  props.indeterminate && !props.checked ? 'indeterminate' : props.checked,
+)
+
+// Bỏ qua giá trị reka đề xuất — luôn phát đảo của `checked` như bản cũ (bấm khi
+// đang indeterminate ⇒ true).
 function toggle() {
   emit('update:checked', !props.checked)
 }
 </script>
-
-<style scoped>
-.appcb {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 1px solid var(--input);
-  border-radius: var(--r-xs);
-  background: transparent;
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease;
-}
-.appcb:hover {
-  border-color: var(--accent);
-}
-.appcb.on {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.appcb-ic {
-  width: 12px;
-  height: 12px;
-  color: var(--accent-foreground, #fff);
-}
-.appcb:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-</style>

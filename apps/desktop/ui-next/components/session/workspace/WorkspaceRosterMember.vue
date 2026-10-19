@@ -15,16 +15,18 @@
     <div class="min-w-0 flex-1">
       <div class="flex min-w-0 flex-wrap items-center gap-1.5">
         <span class="truncate font-medium text-foreground">{{ m.title }}</span>
-        <span
+        <Badge
           v-if="roleLabel"
-          class="shrink-0 rounded-full border border-ring px-1.5 py-px text-[10px] leading-4 text-primary"
+          variant="outline"
+          class="shrink-0 border-ring px-1.5 py-0 font-normal text-primary"
         >
           {{ roleLabel }}
-        </span>
+        </Badge>
         <!-- Agent "vai có thật" — bấm để gắn/đổi (menu do WorkspaceRoster giữ). -->
-        <button
+        <Button
+          variant="ghost"
           :class="[
-            'inline-flex max-w-[55%] shrink-0 items-center gap-1 truncate rounded-full border px-1.5 py-px text-[10px] leading-4 transition-colors hover:border-ring hover:text-primary',
+            'h-auto max-w-[55%] shrink-0 justify-start gap-1 truncate rounded-full border px-1.5 py-0 text-xs font-normal hover:border-ring hover:bg-transparent hover:text-primary [&_svg]:size-3',
             m.agent
               ? 'border-border text-muted-foreground'
               : 'border-dashed border-border text-faint',
@@ -34,7 +36,7 @@
         >
           <Users class="size-3 shrink-0" />
           {{ m.agent?.id ?? t('sessions.workspace.group.agent') }}
-        </button>
+        </Button>
       </div>
       <div class="flex min-w-0 items-center gap-1.5 text-xs text-dim">
         <span>{{ t(`sessions.status.${m.status}`) }}</span>
@@ -59,7 +61,8 @@
         <span>{{ t('sessions.workspace.group.pending', { n: pending }) }}</span>
         <Button
           variant="outline"
-          class="h-auto p-0 rounded-full border border-warning/40 px-2 py-px text-warning transition-colors hover:bg-warning/10 disabled:opacity-45"
+          size="xs"
+          class="h-auto rounded-full border-warning/40 px-2 py-0 font-normal text-warning hover:bg-warning/10 hover:text-warning disabled:opacity-45"
           :disabled="!canDeliver"
           :title="canDeliver ? t('sessionsInbox.capped') : t('sessionsInbox.waiting')"
           @click.stop="deliver"

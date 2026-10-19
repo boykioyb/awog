@@ -1,11 +1,13 @@
 <template>
-  <div class="shf">
+  <div class="my-0.5 flex flex-col gap-1.5">
     <div v-if="block.caption" class="text-xs text-muted-foreground">{{ block.caption }}</div>
     <div v-if="block.files.length" class="flex flex-col gap-1.5">
-      <button
+      <!-- Thẻ file — khung card, wash khi hover. -->
+      <Button
         v-for="f in block.files"
         :key="f.path"
-        class="shfcard"
+        variant="outline"
+        class="h-auto w-full justify-start gap-2.5 rounded-lg bg-card px-2.5 py-1.5 text-left font-normal shadow-none hover:border-input [&_svg]:size-3.5"
         :title="t('sessionsSurfaces.files.open', { path: f.path })"
         @click="openFile(f)"
       >
@@ -17,7 +19,7 @@
         <span v-if="fmtSize(f.size)" class="shrink-0 text-xs tabular-nums text-faint">
           {{ fmtSize(f.size) }}
         </span>
-      </button>
+      </Button>
     </div>
     <div v-else-if="block.status === 'running'" class="text-xs text-muted-foreground">
       {{ t('sessionsSurfaces.files.preparing') }}
@@ -48,36 +50,3 @@ function openFile(f: SharedFile): void {
 // Unknown / zero size → no label at all (a "0 B" chip says nothing useful here).
 const fmtSize = (n?: number): string => (n == null || n <= 0 ? '' : formatBytes(n))
 </script>
-
-<style scoped>
-.shf {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 2px 0;
-}
-/* File card — proto row idiom: card chrome, wash on hover. */
-.shfcard {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 6px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--card);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
-}
-.shfcard:hover {
-  background: var(--accent-wash);
-  border-color: var(--input);
-}
-.shfcard:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-</style>

@@ -1,5 +1,10 @@
 <template>
-  <div class="pet-root" @mousemove="onMouseMove" @mouseleave="onMouseLeave">
+  <!-- Không gì ở đây là tài liệu: không bôi chọn chữ, không ảnh kéo, không caret. -->
+  <div
+    class="relative h-screen w-screen overflow-hidden select-none"
+    @mousemove="onMouseMove"
+    @mouseleave="onMouseLeave"
+  >
     <!-- Design-size canvas: everything with TEXT in it (HUD, speech bubble, badge)
          stays at this size whatever the pet size setting says — only the sprite
          scales, below. Main still grows the window by the same factor, so the taller
@@ -8,8 +13,14 @@
          finds nothing, so the window falls back to fully click-through and no
          quip/trick/animation runs (the DOM isn't mounted). A new prompt in any session
          flips `dismissed` back off (usePetDismiss). -->
-    <div v-if="!isDismissed" class="pet-canvas">
-      <div v-if="hudOpen" ref="hudRef" class="pet-hudwrap">
+    <!-- Canvas cỡ thiết kế 320×280 (w-80 h-70) — PHẢI khớp BASE_WIDTH/BASE_HEIGHT trong
+         electron/src/pet-window.ts. Main co giãn cửa sổ theo `scale`, canvas này thì
+         KHÔNG; cả hai neo góc dưới-phải nên luôn khớp nhau. -->
+    <div
+      v-if="!isDismissed"
+      class="absolute right-0 bottom-0 flex h-70 w-80 flex-col items-end justify-end gap-1.5 p-1.5"
+    >
+      <div v-if="hudOpen" ref="hudRef" class="w-full min-w-0">
         <PetHud
           :model="model"
           :expanded="expanded"
@@ -21,11 +32,22 @@
 
       <!-- Speech bubble. Lives OUTSIDE the HUD so the pet can pipe up during a long
            turn without the whole panel opening; hidden when the HUD takes that space. -->
-      <div v-if="quip && !hudOpen" class="pet-quip">{{ quip }}</div>
+      <!-- pointer-events-none: bong bóng không bao giờ nuốt click dành cho desktop.
+           Góc dưới-phải gần vuông = đuôi bong bóng. -->
+      <div
+        v-if="quip && !hudOpen"
+        class="pointer-events-none max-w-full self-end rounded-lg rounded-br-xs border bg-card px-2.5 py-2 text-foreground shadow-lg"
+      >
+        {{ quip }}
+      </div>
 
+      <!-- THỨ DUY NHẤT co giãn theo cỡ pet: hộp bằng sprite đã scale (66×68 PHẢI khớp
+           .sprite-wrap trong components/pet/PetSprite.vue) để rect hit-test kéo/click-through
+           khớp với hình đang vẽ. Chữ (HUD, bong bóng, badge) giữ cỡ thiết kế.
+           px-ok: hình học sprite 66×68 nhân hệ số scale -->
       <div
         ref="petRef"
-        class="pet-anchor"
+        class="relative h-[calc(68px*var(--pet-scale,1))] w-[calc(66px*var(--pet-scale,1))] cursor-grab active:cursor-grabbing"
         :style="{ '--pet-scale': model.scale }"
         :title="tooltip"
         @pointerdown="onPointerDown"
@@ -37,20 +59,32 @@
              already covers it. Stops its own pointer/click so it never triggers the
              anchor's pin/drag; hides the pet locally AND sends `dismiss` (does NOT
              touch the enabled pref). -->
-        <button
+        <!-- Nằm GỌN trong rect anchor (góc trên-trái): phần thò ra ngoài rơi vào vùng
+             click-through nên click bị bỏ qua. -->
+        <Button
           v-if="hovering"
           type="button"
-          class="pet-dismiss"
+          variant="outline"
+          size="iconSm"
+          class="absolute top-0 left-0 z-2 size-4.5 rounded-full bg-card p-0 text-muted-foreground shadow-md hover:border-destructive hover:text-destructive [&_svg]:size-3"
           :title="t('pet.dismiss')"
+          :aria-label="t('pet.dismiss')"
           @pointerdown.stop
           @pointerup.stop
           @click.stop="onDismiss"
         >
-          <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
-        </button>
-        <div class="pet-sprite">
+        </Button>
+        <div class="absolute right-0 bottom-0 origin-bottom-right scale-(--pet-scale)">
           <PetSprite
             :state="model.state"
             :sprite="model.sprite"
@@ -59,7 +93,15 @@
             :special="special"
           />
         </div>
-        <span v-if="badge" class="pet-badge" :class="`is-${model.state}`">{{ badge }}</span>
+        <!-- Mực chữ tối CỐ ĐỊNH: badge nằm trên cửa sổ trong suốt (nền là desktop, không
+             phải theme) với nền chip sáng, nên màu chữ không đi theo theme sáng/tối. -->
+        <span
+          v-if="badge"
+          class="absolute -top-0.5 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-sm px-1 text-sm leading-3 font-semibold text-neutral-950 tabular-nums"
+          :class="BADGE_BG[model.state]"
+        >
+          {{ badge }}
+        </span>
       </div>
     </div>
   </div>
@@ -67,7 +109,16 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
-import type { AwogPetCommand, AwogPetItem, AwogPetModel } from '~/types/awog-bridge'
+import type { AwogPetCommand, AwogPetItem, AwogPetModel, AwogPetState } from '~/types/awog-bridge'
+
+// Nền badge đếm theo trạng thái pet.
+const BADGE_BG: Record<AwogPetState, string> = {
+  idle: 'bg-muted-foreground',
+  offline: 'bg-muted-foreground',
+  awaiting: 'bg-warning',
+  working: 'bg-primary',
+  done: 'bg-success',
+}
 
 // ── Desktop pet window (docs/features/desktop-pet.md) ────────────────────────
 // Renders in its own transparent, always-on-top, click-through window
@@ -486,6 +537,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+/* style-ok: html/body/#__nuxt nằm ngoài component — Tailwind trong template không chạm tới. */
 /* The window is transparent; the app shell paints an opaque body by default, which
    would show up as a grey rectangle around the pet. Scoped styles can't reach these
    elements, so this block is intentionally global — this renderer only ever shows
@@ -495,140 +547,5 @@ body,
 #__nuxt {
   background: transparent !important;
   overflow: hidden;
-}
-</style>
-
-<style scoped>
-.pet-root {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  /* Nothing here is a document: no text selection, no drag-image, no caret. */
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* Design-size canvas. 320x280 MUST match BASE_WIDTH/BASE_HEIGHT in
-   electron/src/pet-window.ts — main sizes the window by `scale`, this canvas does
-   NOT, and both anchor bottom-right so they stay in register. The window is
-   therefore always at least as tall as the stack, which is what lets the sprite
-   grow (below) without pushing the HUD out of the frame. */
-.pet-canvas {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 320px;
-  height: 280px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 6px;
-}
-
-/* Speech bubble — pointer-events:none so it never eats a click meant for the desktop
-   (the hit-test only ever makes the sprite and the HUD interactive). */
-.pet-quip {
-  align-self: flex-end;
-  max-width: 100%;
-  padding: 7px 10px;
-  /* design-token-ok: near-square corner = the speech-bubble tail (see LibraryCreatorPanel). */
-  border-radius: var(--r-btn) var(--r-btn) 3px var(--r-btn);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-  color: var(--text);
-  line-height: var(--lh-sm);
-  pointer-events: none;
-}
-
-.pet-hudwrap {
-  width: 100%;
-  min-width: 0;
-}
-
-/* THE ONLY THING THE SIZE SETTING SCALES. Text must not change size with it, so the
-   scale lives here instead of on the canvas — the HUD, the speech bubble and the count
-   badge all stay at design size. The box is sized to the scaled sprite (66x68 MUST
-   match .sprite-wrap in components/pet/PetSprite.vue) so the drag + click-through
-   hit-test rect keeps matching what is actually drawn. */
-.pet-anchor {
-  position: relative;
-  width: calc(66px * var(--pet-scale, 1));
-  height: calc(68px * var(--pet-scale, 1));
-  cursor: grab;
-}
-.pet-sprite {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  transform: scale(var(--pet-scale, 1));
-  transform-origin: bottom right;
-}
-.pet-anchor:active {
-  cursor: grabbing;
-}
-
-/* Temporary-dismiss X — top-left corner, opposite the count badge (top-right). Only
-   shown on hover (v-if), so it never covers the idle sprite. Phải nằm GỌN trong rect
-   anchor (66×68): offset âm trước đây thò nút ra ngoài rect, mà phần thò rơi vào vùng
-   click-through (setIgnoreMouseEvents khi hit() = false) nên click bị bỏ qua. */
-.pet-dismiss {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  color: var(--textMuted);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-.pet-dismiss:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.pet-dismiss svg {
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  fill: none;
-}
-
-.pet-badge {
-  position: absolute;
-  top: -2px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-family: var(--mono, ui-monospace, monospace);
-  line-height: 12px;
-  font-weight: 600;
-  color: #0b0b0c;
-  background: var(--textMuted);
-}
-.pet-badge.is-awaiting {
-  background: var(--amber);
-}
-.pet-badge.is-working {
-  background: var(--accent);
-}
-.pet-badge.is-done {
-  background: var(--green);
 }
 </style>

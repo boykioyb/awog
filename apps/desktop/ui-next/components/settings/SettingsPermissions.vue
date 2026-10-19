@@ -5,23 +5,36 @@
       :subtitle="t('settingsPermissions.subtitle')"
     />
 
-    <div v-if="!available" class="permnote">{{ t('settingsPermissions.unavailable') }}</div>
+    <div v-if="!available" class="mb-2.5 rounded-md border px-2.5 py-2 text-sm text-dim">
+      {{ t('settingsPermissions.unavailable') }}
+    </div>
 
     <template v-else>
-      <div v-if="lastError" class="permnote danger">{{ lastError }}</div>
+      <div
+        v-if="lastError"
+        class="mb-2.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
+      >
+        {{ lastError }}
+      </div>
 
       <!-- Tệp luật không đọc được: mọi luật trong đó — kể cả luật từ chối — đang
            vô hiệu, nên nó phải hiện lên đầu trang chứ không nằm im trong log. -->
-      <div v-for="err in fileErrors" :key="err.file" class="permnote danger">
-        <div class="permnoteh">{{ t('settingsPermissions.corrupt.title') }}</div>
+      <div
+        v-for="err in fileErrors"
+        :key="err.file"
+        class="mb-2.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
+      >
+        <div class="font-semibold">{{ t('settingsPermissions.corrupt.title') }}</div>
         <div>
           {{ t('settingsPermissions.corrupt.body', { file: err.file, reason: err.reason }) }}
         </div>
       </div>
 
       <!-- ── Gợi ý từ lịch sử ─────────────────────────────────────────────── -->
-      <div class="permhead">
-        <div class="sech">{{ t('settingsPermissions.suggest.heading') }}</div>
+      <div class="mt-5 mb-2 flex items-center justify-between gap-2">
+        <div data-set-label class="text-xs font-medium text-muted-foreground">
+          {{ t('settingsPermissions.suggest.heading') }}
+        </div>
         <Button :disabled="scanning" variant="outline" size="sm" @click="scan">
           <Icon name="scan" />
           {{
@@ -31,9 +44,9 @@
           }}
         </Button>
       </div>
-      <p class="permdesc">{{ t('settingsPermissions.suggest.desc') }}</p>
+      <p class="mt-0 mb-2 text-sm text-dim">{{ t('settingsPermissions.suggest.desc') }}</p>
 
-      <div v-if="scanReport" class="permscan">
+      <div v-if="scanReport" class="mb-2 text-xs text-faint">
         {{
           t('settingsPermissions.suggest.report', {
             sessions: scanReport.sessions,
@@ -43,10 +56,13 @@
         <span v-if="scanReport.truncated">{{ t('settingsPermissions.suggest.truncated') }}</span>
       </div>
 
-      <div v-for="s in suggestions" :key="s.id" class="permsug">
-        <div class="permsugmain">
-          <code class="permrule">{{ s.rule }}</code>
-          <div class="permmeta">
+      <div v-for="s in suggestions" :key="s.id" class="flex items-center gap-2 border-t py-2">
+        <div class="min-w-0 flex-1">
+          <!-- mono-ok: chuỗi luật là cú pháp máy đọc, copy thẳng được vào file luật JSON -->
+          <code class="font-mono text-sm wrap-anywhere text-foreground select-text">
+            {{ s.rule }}
+          </code>
+          <div class="mt-0.5 text-xs text-faint">
             {{ t('settingsPermissions.suggest.count', { n: s.count }) }}
             <span v-if="s.projects.length > 0">· {{ projectNames(s) }}</span>
           </div>
@@ -61,24 +77,27 @@
           {{ t('settingsPermissions.suggest.add') }}
         </Button>
       </div>
-      <div v-if="scanReport && suggestions.length === 0" class="permempty">
+      <div v-if="scanReport && suggestions.length === 0" class="px-0.5 py-2.5 text-sm text-faint">
         {{ t('settingsPermissions.suggest.none') }}
       </div>
-      <p class="permsafety">{{ t('settingsPermissions.suggest.safety') }}</p>
+      <p class="mt-2 mb-2 text-sm text-faint">{{ t('settingsPermissions.suggest.safety') }}</p>
 
       <!-- ── Chặn một tool ────────────────────────────────────────────────── -->
-      <div class="permhead">
-        <div class="sech">{{ t('settingsPermissions.deny.heading') }}</div>
+      <div class="mt-5 mb-2 flex items-center justify-between gap-2">
+        <div data-set-label class="text-xs font-medium text-muted-foreground">
+          {{ t('settingsPermissions.deny.heading') }}
+        </div>
       </div>
-      <p class="permdesc">{{ t('settingsPermissions.deny.desc') }}</p>
-      <div class="permdeny">
+      <p class="mt-0 mb-2 text-sm text-dim">{{ t('settingsPermissions.deny.desc') }}</p>
+      <div class="mb-3 flex items-center gap-2">
+        <!-- mono-ok: luật tool là cú pháp máy đọc -->
         <Input
           v-model="denyRule"
           :placeholder="t('settingsPermissions.deny.placeholder')"
-          class="mono permdenyi flex-1"
+          class="min-w-0 flex-1 font-mono"
           @keyup.enter="onAddDeny"
         />
-        <AppSelect v-model="denyTarget" :options="denyTargetOptions" class="permdenys" />
+        <AppSelect v-model="denyTarget" :options="denyTargetOptions" width="220px" />
         <Button
           :disabled="!denyRule.trim() || denyBusy"
           variant="outline"
@@ -91,44 +110,76 @@
       </div>
 
       <!-- ── Luật đã lưu ──────────────────────────────────────────────────── -->
-      <div class="permhead">
-        <div class="sech">{{ t('settingsPermissions.list.heading') }}</div>
+      <div class="mt-5 mb-2 flex items-center justify-between gap-2">
+        <div data-set-label class="text-xs font-medium text-muted-foreground">
+          {{ t('settingsPermissions.list.heading') }}
+        </div>
         <Button :disabled="loading" variant="outline" size="sm" @click="load">
           <Icon name="refresh" />
           {{ t('settingsPermissions.list.refresh') }}
         </Button>
       </div>
 
-      <div v-if="loaded && rules.length === 0" class="permempty">
+      <div v-if="loaded && rules.length === 0" class="px-0.5 py-2.5 text-sm text-faint">
         {{ t('settingsPermissions.list.empty') }}
       </div>
 
-      <div v-for="group in groups" :key="group.key" class="permgroup">
-        <div class="permgrouph">
-          <span class="permgroupt">{{ groupTitle(group) }}</span>
-          <span v-if="group.file" class="permfile" :title="group.file">{{ group.file }}</span>
+      <div v-for="group in groups" :key="group.key" class="mt-3">
+        <div class="mb-1 flex items-baseline gap-2">
+          <span class="text-sm font-semibold text-dim">{{ groupTitle(group) }}</span>
+          <!-- mono-ok: đường dẫn file luật, người dùng copy thẳng vào editor/terminal.
+               rtl để tên file vẫn thấy khi đường dẫn tràn. -->
+          <span
+            v-if="group.file"
+            class="min-w-0 flex-1 truncate text-left font-mono text-xs text-faint [direction:rtl]"
+            :title="group.file"
+          >
+            {{ group.file }}
+          </span>
         </div>
         <div
           v-for="row in group.rows"
           :key="permissionRuleKey(row)"
-          class="permrow"
-          :class="{ deny: row.action === 'deny', off: !row.active }"
+          class="flex items-center gap-2 border-t px-2 py-1.5"
+          :class="{
+            'rounded-sm border-t-destructive/40 bg-destructive/10': row.action === 'deny',
+            'opacity-60': !row.active,
+          }"
         >
-          <span class="permbadge" :class="row.action === 'deny' ? 'deny' : 'allow'">
+          <Badge
+            variant="outline"
+            class="shrink-0 rounded-sm font-semibold"
+            :class="
+              row.action === 'deny'
+                ? 'border-destructive/40 text-destructive'
+                : 'border-selected-border text-primary'
+            "
+          >
             {{ t('settingsPermissions.action.' + row.action) }}
-          </span>
-          <code class="permrule">{{ row.rule }}</code>
-          <span v-if="!row.active" class="tag" :title="t('settingsPermissions.inactiveHint')">
+          </Badge>
+          <!-- mono-ok: chuỗi luật là cú pháp máy đọc, copy thẳng được vào file luật JSON -->
+          <code class="min-w-0 flex-1 font-mono text-sm wrap-anywhere text-foreground select-text">
+            {{ row.rule }}
+          </code>
+          <Badge
+            v-if="!row.active"
+            variant="outline"
+            class="text-muted-foreground"
+            :title="t('settingsPermissions.inactiveHint')"
+          >
             {{ t('settingsPermissions.inactive') }}
-          </span>
-          <button
-            class="permdel"
+          </Badge>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0 text-dim hover:bg-destructive/10 hover:text-destructive"
             :disabled="busyKey === permissionRuleKey(row)"
             :title="t('settingsPermissions.delete')"
+            :aria-label="t('settingsPermissions.delete')"
             @click="onDelete(row)"
           >
             <Icon name="trash" />
-          </button>
+          </Button>
         </div>
       </div>
     </template>
@@ -144,8 +195,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import { useConfirm } from '~/composables/useConfirm'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 import {
   permissionRuleKey,
   type PermissionRuleGroup,
@@ -247,169 +296,3 @@ onMounted(() => {
   void load()
 })
 </script>
-
-<style scoped>
-.permdeny {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.permdenyi {
-  flex: 1;
-  min-width: 0;
-}
-.permdenys {
-  width: 220px;
-  flex: none;
-}
-.permnote {
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-.permnote.danger {
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.permnoteh {
-  font-weight: 600;
-}
-.permhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.permdesc,
-.permsafety {
-  margin: 0 0 8px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-.permsafety {
-  margin-top: 8px;
-  color: var(--textFaint);
-}
-.permscan {
-  margin-bottom: 8px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.permempty {
-  padding: 10px 2px;
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-}
-.permsug {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-}
-.permsugmain {
-  flex: 1;
-  min-width: 0;
-}
-.permmeta {
-  margin-top: 2px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.permgroup {
-  margin-top: 12px;
-}
-.permgrouph {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.permgroupt {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-.permfile {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  color: var(--textFaint);
-  /* mono-ok: đường dẫn file luật, người dùng copy thẳng vào editor/terminal */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.permrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-top: 1px solid var(--border);
-}
-.permrow.deny {
-  background: var(--dangerDim);
-  border-radius: var(--r-xs);
-  border-top-color: var(--dangerBorder);
-}
-.permrow.off {
-  opacity: 0.6;
-}
-.permbadge {
-  flex: 0 0 auto;
-  padding: 2px 7px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-}
-.permbadge.deny {
-  border-color: var(--dangerBorder);
-  color: var(--danger);
-}
-.permrule {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  /* mono-ok: chuỗi luật là cú pháp máy đọc, copy thẳng được vào file luật JSON */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  user-select: text;
-}
-.permdel {
-  flex: 0 0 auto;
-  padding: 5px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.permdel:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-.permdel .icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-</style>

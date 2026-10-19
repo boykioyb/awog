@@ -31,10 +31,10 @@ const SECS: { key: FKey; label: string; icon: Component; avatar?: boolean }[] = 
 
 // Label pill → cụm class màu; key tĩnh nên Record literal (không Map).
 const LBL_CLS: Record<string, string> = {
-  bug: 'text-[var(--danger)] bg-[var(--dangerDim)]',
-  feat: 'text-[var(--accent)] bg-[var(--accentDim)]',
+  bug: 'text-(--danger) bg-(--dangerDim)',
+  feat: 'text-(--accent) bg-(--accentDim)',
 }
-const LBL_CLS_DEFAULT = 'text-[var(--violet)] bg-[color-mix(in_srgb,var(--violet)_10%,transparent)]'
+const LBL_CLS_DEFAULT = 'text-(--violet) bg-[color-mix(in_srgb,var(--violet)_10%,transparent)]'
 
 // Màu avatar theo author — xoay vòng bảng màu theme.
 const AV_COLORS = [
@@ -141,11 +141,11 @@ export function useGithubViewManager() {
 
   // State pill → cụm class màu Tailwind (JIT quét được chuỗi literal ở đây).
   function stCls(it: GhThreadSummary): string {
-    if (it.isDraft) return 'text-[var(--textDim)] bg-[var(--bgActive)]'
+    if (it.isDraft) return 'text-(--textDim) bg-(--bgActive)'
     if (it.state === 'MERGED')
-      return 'text-[var(--violet)] bg-[color-mix(in_srgb,var(--violet)_12%,transparent)]'
-    if (it.state === 'CLOSED') return 'text-[var(--danger)] bg-[var(--dangerDim)]'
-    return 'text-[var(--accent)] bg-[var(--accentDim)]'
+      return 'text-(--violet) bg-[color-mix(in_srgb,var(--violet)_12%,transparent)]'
+    if (it.state === 'CLOSED') return 'text-(--danger) bg-(--dangerDim)'
+    return 'text-(--accent) bg-(--accentDim)'
   }
   function stTxt(it: GhThreadSummary): string {
     if (it.isDraft) return 'Draft'

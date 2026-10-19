@@ -1,101 +1,96 @@
 <template>
-  <div class="ghcomposer">
+  <div class="mt-3.5 rounded-md border bg-muted p-2">
     <!-- Toolbar: Write/Preview + markdown insert helpers -->
-    <div class="ghctoolbar">
-      <button
-        class="ghcseg"
-        :class="{ on: mode === 'write' }"
-        type="button"
-        @click="mode = 'write'"
+    <div class="mb-2 flex flex-wrap items-center gap-1">
+      <ToggleGroup
+        type="single"
+        :spacing="1"
+        :model-value="mode"
+        @update:model-value="(v) => v && (mode = v as 'write' | 'preview')"
       >
-        {{ t('projects.drawer.write') }}
-      </button>
-      <button
-        class="ghcseg"
-        :class="{ on: mode === 'preview' }"
-        type="button"
-        @click="mode = 'preview'"
-      >
-        {{ t('projects.drawer.preview') }}
-      </button>
-      <span class="ghcsep" />
-      <button
+        <ToggleGroupItem value="write" :class="SEG">
+          {{ t('projects.drawer.write') }}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="preview" :class="SEG">
+          {{ t('projects.drawer.preview') }}
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <Separator orientation="vertical" class="mx-1 h-5" />
+      <Button
         v-for="tool in TOOLS"
         :key="tool.k"
-        class="ghctool"
-        type="button"
+        variant="ghost"
+        size="iconSm"
+        class="text-dim"
         :title="t('projects.drawer.md.' + tool.k)"
         :aria-label="t('projects.drawer.md.' + tool.k)"
         :disabled="mode !== 'write' || posting"
         @click="tool.run()"
       >
-        <Icon :name="tool.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon :name="tool.icon" class="size-3.5" />
+      </Button>
     </div>
 
-    <textarea
+    <Textarea
       v-show="mode === 'write'"
       ref="ta"
-      :value="modelValue"
-      class="ghci"
+      :model-value="modelValue"
+      class="min-h-18 resize-y border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0"
       :placeholder="t('projects.drawer.commentPlaceholder')"
       :disabled="posting"
-      @input="onInput"
+      @update:model-value="onInput"
     />
-    <div v-if="mode === 'preview'" class="ghcpreview ghmd">
+    <div v-if="mode === 'preview'" class="min-h-18 px-0.5 pt-0.5 pb-1.5 text-base">
       <ProjectGhMarkdown v-if="modelValue.trim()" :source="modelValue" />
-      <div v-else class="fd">{{ t('projects.drawer.previewEmpty') }}</div>
+      <div v-else class="text-sm text-dim">{{ t('projects.drawer.previewEmpty') }}</div>
     </div>
 
-    <div class="ghcbar">
+    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
       <!-- Translate-draft (LLM) collapsed into one dropdown so the action bar stays
            roomy on a narrow drawer; selecting a language bubbles `translate`. -->
-      <button
-        class="ghclang ghctrlang"
-        type="button"
+      <Button
+        variant="outline"
+        size="xs"
+        class="font-normal text-dim hover:border-selected-border hover:text-primary"
         :disabled="busy || !modelValue.trim()"
         :title="t('projects.drawer.translate')"
         :aria-label="t('projects.drawer.translate')"
         @click.stop="toggleTrMenu"
       >
-        <Icon name="globe" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <Icon name="globe" class="size-3" />
         <span>{{ t('projects.drawer.translateMenu') }}</span>
-        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon name="chev" class="size-3" />
+      </Button>
       <Button
-        type="button"
         :title="enhancing ? t('projects.drawer.enhancing') : t('projects.drawer.enhance')"
         :aria-label="t('projects.drawer.enhance')"
         :disabled="busy || !modelValue.trim()"
-        style="width: 28px; height: 28px"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('enhance')"
       >
         <Icon
           name="skills"
-          class="enhicon"
-          :class="{ enhspin: enhancing }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5"
+          :class="{ 'animate-spin motion-reduce:animate-none': enhancing }"
         />
       </Button>
       <Button
         v-if="canUndo"
-        type="button"
         :title="t('projects.drawer.undo')"
         :aria-label="t('projects.drawer.undo')"
         :disabled="busy"
-        style="width: 28px; height: 28px"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('undo')"
       >
-        <Icon name="revert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="revert" class="size-3.5" />
       </Button>
-      <span v-if="translating" class="fd ghcbusy">{{ t('projects.drawer.translatingDraft') }}</span>
-      <span style="flex: 1" />
+      <span v-if="translating" class="text-sm text-dim">
+        {{ t('projects.drawer.translatingDraft') }}
+      </span>
+      <span class="flex-1" />
       <Button
-        type="button"
         :disabled="posting || !modelValue.trim()"
         :title="t('projects.drawer.comment')"
         variant="default"
@@ -130,6 +125,10 @@ import type { MenuItem } from '~/composables/useContextMenu'
 import { useContextMenu } from '~/composables/useContextMenu'
 import type { TranslateLang } from '~/composables/useSelectionTranslate'
 import Button from '~/components/ui/button/Button.vue'
+import Separator from '~/components/ui/separator/Separator.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
+import ToggleGroup from '~/components/ui/toggle-group/ToggleGroup.vue'
+import ToggleGroupItem from '~/components/ui/toggle-group/ToggleGroupItem.vue'
 
 const props = defineProps<{
   modelValue: string
@@ -148,7 +147,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const ta = useTemplateRef<HTMLTextAreaElement>('ta')
+// Textarea shadcn là component ⇒ template ref là instance, element ở `$el`.
+const taRef = useTemplateRef<{ $el: HTMLTextAreaElement }>('ta')
+const taEl = computed(() => taRef.value?.$el ?? null)
+// Tab Write/Preview: đang chọn = accent-tint.
+const SEG =
+  'h-6.5 rounded-sm border border-transparent px-2.5 text-base font-normal text-dim hover:bg-transparent hover:text-foreground data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:font-semibold data-[state=on]:text-primary'
 const mode = ref<'write' | 'preview'>('write')
 const LANGS: TranslateLang[] = ['vi', 'en', 'ja']
 // Any in-flight LLM/post action disables the toolbar's LLM buttons.
@@ -173,8 +177,8 @@ function onTrSelect(id: string): void {
   emit('translate', id as TranslateLang)
 }
 
-function onInput(e: Event): void {
-  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
+function onInput(v: string | number): void {
+  emit('update:modelValue', String(v))
 }
 
 // Emit the new value, then restore the selection on the controlled textarea after
@@ -182,7 +186,7 @@ function onInput(e: Event): void {
 function applyEdit(next: string, selStart: number, selEnd: number): void {
   emit('update:modelValue', next)
   nextTick(() => {
-    const el = ta.value
+    const el = taEl.value
     if (!el) return
     el.focus()
     el.setSelectionRange(selStart, selEnd)
@@ -192,7 +196,7 @@ function applyEdit(next: string, selStart: number, selEnd: number): void {
 // Wrap the current selection with markdown markers (bold/italic/code/link). Empty
 // selection → markers inserted with the caret between them.
 function surround(before: string, after: string): void {
-  const el = ta.value
+  const el = taEl.value
   if (!el) return
   const s = el.selectionStart
   const e = el.selectionEnd
@@ -204,7 +208,7 @@ function surround(before: string, after: string): void {
 
 // Prefix every line in the selection (list / quote).
 function prefixLines(prefix: string): void {
-  const el = ta.value
+  const el = taEl.value
   if (!el) return
   const s = el.selectionStart
   const e = el.selectionEnd
@@ -233,7 +237,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
 function focus(): void {
   mode.value = 'write'
   nextTick(() => {
-    const el = ta.value
+    const el = taEl.value
     if (!el) return
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
@@ -242,132 +246,3 @@ function focus(): void {
 
 defineExpose({ focus })
 </script>
-
-<style scoped>
-.ghcomposer {
-  margin-top: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  padding: 9px;
-}
-.ghctoolbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-.ghcseg {
-  font-size: 1em;
-  padding: 3px 10px;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.ghcseg:hover {
-  color: var(--text);
-}
-.ghcseg.on {
-  color: var(--accent);
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  font-weight: 600;
-}
-.ghcsep {
-  width: 1px;
-  align-self: stretch;
-  background: var(--border);
-  margin: 2px 4px;
-}
-.ghctool {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.ghctool:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--border);
-}
-.ghci {
-  width: 100%;
-  min-height: 4.5rem;
-  resize: vertical;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 1em;
-  line-height: var(--lh-md);
-}
-.ghci:disabled {
-  opacity: 0.6;
-}
-.ghcpreview {
-  min-height: 4.5rem;
-  padding: 2px 2px 6px;
-  font-size: 1em;
-  line-height: var(--lh-prose);
-}
-.ghcbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  flex-wrap: wrap;
-}
-.ghclang {
-  font-size: 12px;
-  line-height: 18px;
-  padding: 2px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.ghclang:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.ghctrlang {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--sans);
-}
-.ghcbusy {
-  font-size: 12px;
-  line-height: 18px;
-}
-.ghctool:disabled,
-.ghclang:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.enhicon {
-  transition: opacity 0.15s ease;
-}
-.enhicon.enhspin {
-  animation: ghenhspin 0.9s linear infinite;
-}
-@keyframes ghenhspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .enhicon.enhspin {
-    animation: none;
-  }
-}
-</style>

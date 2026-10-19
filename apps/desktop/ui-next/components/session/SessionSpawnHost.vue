@@ -1,172 +1,226 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="spw-ovl" @click.self="close">
-      <div class="spw-card" role="dialog" aria-modal="true" :aria-label="t('sessions.spawn.title')">
-        <div class="spw-head">
-          <div class="spw-headtx">
-            <div class="spw-title">{{ t('sessions.spawn.title') }}</div>
-            <div class="spw-sub">{{ subtitle }}</div>
-          </div>
-          <button class="spw-x" :aria-label="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
-
-        <div class="spw-body">
-          <div class="spw-sec">{{ t('sessions.spawn.brief') }}</div>
-          <textarea
-            v-model="brief"
-            class="spw-ta"
-            rows="3"
-            :placeholder="t('sessions.spawn.briefPh')"
-          />
-          <div class="spw-briefrow">
-            <button
-              class="spw-add"
-              :disabled="!brief.trim() || genBusy || fieldBusy"
-              @click="genTeam"
-            >
-              <Icon name="sparkles" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              {{ genBusy ? t('sessions.spawn.generating') : t('sessions.spawn.generate') }}
-            </button>
-            <span class="spw-briefhint">{{ t('sessions.spawn.briefHint') }}</span>
-          </div>
-
-          <button class="spw-chip" type="button" @click="sharedOpen = !sharedOpen">
-            <Icon
-              name="chev"
-              class="spw-ovr-chev"
-              :class="{ open: sharedOpen }"
-              style="width: var(--icon-xs); height: var(--icon-xs)"
-            />
-            <span>{{ t('sessions.spawn.shared') }}</span>
-            <span class="spw-chip-sum">{{ sharedSummary }}</span>
-          </button>
-          <div v-if="sharedOpen" class="spw-grid spw-chipgrid">
-            <div v-for="f in fieldsFor(shared, inheritParent)" :key="f.key" class="spw-field">
-              <span class="spw-fl">{{ f.label }}</span>
-              <AppSelect
-                :model-value="shared[f.key]"
-                :options="f.opts"
-                width="100%"
-                @update:model-value="(v: string) => setField(shared, f.key, v)"
-              />
-            </div>
-          </div>
-
-          <div class="spw-sec spw-secrow">
-            <span>{{ t('sessions.spawn.children', { n: children.length }) }}</span>
-            <button class="spw-add" :disabled="children.length >= MAX_CHILDREN" @click="addChild">
-              <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              {{ t('sessions.spawn.add') }}
-            </button>
-          </div>
-
-          <div v-for="(c, i) in children" :key="c.key" class="spw-child">
-            <div class="spw-crow">
-              <Input
-                v-model="c.title"
-                :placeholder="t('sessions.spawn.childTitle')"
-                maxlength="80"
-                class="spw-in"
-              />
-              <button
-                class="spw-cx spw-genbtn"
-                :disabled="fieldBusy || genBusy"
-                :aria-label="t('sessions.spawn.genField')"
-                :title="t('sessions.spawn.genField')"
-                @click="genField(c, 'title')"
-              >
-                <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              </button>
-              <Input
-                v-model="c.role"
-                :placeholder="t('sessions.spawn.childRole')"
-                maxlength="60"
-                class="spw-in spw-role"
-              />
-              <button
-                class="spw-cx"
-                :disabled="children.length <= 1"
-                :aria-label="t('sessions.spawn.childRemove')"
-                @click="children.splice(i, 1)"
-              >
-                <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              </button>
-            </div>
-            <textarea
-              v-model="c.prompt"
-              class="spw-ta"
-              rows="2"
-              :placeholder="t('sessions.spawn.childPrompt')"
-            />
-            <!-- "Vai có thật" của con (session-teams §3): agent AWOG gắn vào phiên
-                 con lúc spawn. '' = con trần; giá trị là agentKey (source|proj|id)
-                 để phân biệt hai agent trùng id ở hai tầng. -->
-            <div class="spw-crow2 spw-agentrow">
-              <span class="spw-fl">{{ t('sessions.spawn.f.agent') }}</span>
-              <AppSelect
-                :model-value="c.agentKey"
-                :options="agentOpts"
-                width="100%"
-                @update:model-value="(v: string) => (c.agentKey = v)"
-              />
-            </div>
-            <div class="spw-crow2">
-              <button
-                class="spw-ovr"
-                :disabled="fieldBusy || genBusy"
-                @click="genField(c, 'prompt')"
-              >
-                <Icon name="sparkles" style="width: var(--icon-xs); height: var(--icon-xs)" />
-                {{ fieldBusy ? t('sessions.spawn.generating') : t('sessions.spawn.genField') }}
-              </button>
-              <button class="spw-ovr" @click="toggleOvr(c)">
-                <Icon
-                  name="chev"
-                  class="spw-ovr-chev"
-                  :class="{ open: !!c.ovr }"
-                  style="width: var(--icon-xs); height: var(--icon-xs)"
-                />
-                {{ t('sessions.spawn.childCustom') }}
-              </button>
-            </div>
-            <div v-if="c.ovr" class="spw-grid spw-ovrgrid">
-              <div
-                v-for="f in fieldsFor(c.ovr, inheritShared, shared)"
-                :key="f.key"
-                class="spw-field"
-              >
-                <span class="spw-fl">{{ f.label }}</span>
-                <AppSelect
-                  :model-value="c.ovr[f.key]"
-                  :options="f.opts"
-                  width="100%"
-                  @update:model-value="(v: string) => setField(c.ovr!, f.key, v)"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="spw-foot">
-          <label class="spw-rm">
-            <input v-model="remember" type="checkbox" />
-            <span>{{ t('sessions.spawn.remember') }}</span>
-          </label>
-          <div class="spw-actions">
-            <Button :disabled="busy" variant="outline" @click="close">
-              {{ manual ? t('common.cancel') : t('sessions.spawn.deny') }}
-            </Button>
-            <Button :disabled="busy || !canSubmit" variant="default" @click="approve">
-              {{ t('sessions.spawn.approve', { n: children.length }) }}
-            </Button>
-          </div>
-          <div v-if="!canSubmit" class="spw-err">{{ t('sessions.spawn.invalid') }}</div>
+  <!-- Dialog shadcn (z-170): trên mọi form-modal (≤150) nhưng DƯỚI menu của AppSelect
+       (popper z-180, teleport ra body) — nên các select trong hộp không chìm. Esc do
+       `onEsc` bên dưới lo (né khi một menu AppSelect đang mở) nên chặn Esc của Dialog;
+       click nền / nút × đi đường `close` (từ chối ở đường duyệt / đóng ở thủ công). -->
+  <Dialog :open="open" @update:open="(v: boolean) => !v && void close()">
+    <DialogContent
+      class="flex max-h-[86vh] w-155 max-w-[94vw] flex-col gap-0 overflow-hidden bg-card p-0 text-card-foreground"
+      @escape-key-down.prevent
+    >
+      <div class="flex items-start gap-3 border-b px-4 pt-3.5 pr-10 pb-2.5">
+        <div class="min-w-0 flex-1">
+          <DialogTitle class="text-base font-semibold text-foreground">
+            {{ t('sessions.spawn.title') }}
+          </DialogTitle>
+          <DialogDescription class="mt-0.5 text-sm text-muted-foreground">
+            {{ subtitle }}
+          </DialogDescription>
         </div>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3">
+        <div class="text-xs font-semibold text-muted-foreground">
+          {{ t('sessions.spawn.brief') }}
+        </div>
+        <Textarea
+          v-model="brief"
+          class="min-h-10 resize-y rounded-sm bg-background px-2.5 py-1.75 text-sm"
+          rows="3"
+          :placeholder="t('sessions.spawn.briefPh')"
+        />
+        <div class="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            size="xs"
+            class="gap-1.25 font-normal text-muted-foreground shadow-none [&_svg]:size-3"
+            :disabled="!brief.trim() || genBusy || fieldBusy"
+            @click="genTeam"
+          >
+            <Icon name="sparkles" />
+            {{ genBusy ? t('sessions.spawn.generating') : t('sessions.spawn.generate') }}
+          </Button>
+          <span class="min-w-0 text-xs text-muted-foreground">
+            {{ t('sessions.spawn.briefHint') }}
+          </span>
+        </div>
+
+        <!-- Chip thu gọn "Cấu hình chung" — pill một dòng, bấm mở lưới select bên dưới. -->
+        <Button
+          variant="outline"
+          size="xs"
+          type="button"
+          class="max-w-full self-start rounded-full bg-muted px-2.5 gap-1.25 font-normal text-muted-foreground shadow-none [&_svg]:size-3"
+          @click="sharedOpen = !sharedOpen"
+        >
+          <Icon
+            name="chev"
+            class="transition-transform motion-reduce:transition-none"
+            :class="{ 'rotate-180': sharedOpen }"
+          />
+          <span>{{ t('sessions.spawn.shared') }}</span>
+          <span class="min-w-0 truncate">{{ sharedSummary }}</span>
+        </Button>
+        <div
+          v-if="sharedOpen"
+          class="grid grid-cols-2 gap-x-2.5 gap-y-2 rounded-md border border-dashed bg-muted p-2.5"
+        >
+          <div
+            v-for="f in fieldsFor(shared, inheritParent)"
+            :key="f.key"
+            class="flex min-w-0 flex-col gap-1"
+          >
+            <span class="text-xs text-muted-foreground">{{ f.label }}</span>
+            <AppSelect
+              :model-value="shared[f.key]"
+              :options="f.opts"
+              width="100%"
+              @update:model-value="(v: string) => setField(shared, f.key, v)"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+          <span>{{ t('sessions.spawn.children', { n: children.length }) }}</span>
+          <Button
+            variant="outline"
+            size="xs"
+            class="gap-1.25 font-normal text-muted-foreground shadow-none [&_svg]:size-3"
+            :disabled="children.length >= MAX_CHILDREN"
+            @click="addChild"
+          >
+            <Icon name="plus" />
+            {{ t('sessions.spawn.add') }}
+          </Button>
+        </div>
+
+        <div
+          v-for="(c, i) in children"
+          :key="c.key"
+          class="flex flex-col gap-1.5 rounded-md border bg-muted p-2.5"
+        >
+          <div class="flex gap-1.5">
+            <Input
+              v-model="c.title"
+              :placeholder="t('sessions.spawn.childTitle')"
+              maxlength="80"
+              class="h-auto min-w-0 flex-1 rounded-sm bg-background px-2.5 py-1.75 text-sm"
+            />
+            <!-- Nút sparkle hover ra accent; thùng rác mới là danger. -->
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="flex-none text-muted-foreground disabled:opacity-35 hover:text-primary"
+              :disabled="fieldBusy || genBusy"
+              :aria-label="t('sessions.spawn.genField')"
+              :title="t('sessions.spawn.genField')"
+              @click="genField(c, 'title')"
+            >
+              <Icon name="sparkles" />
+            </Button>
+            <Input
+              v-model="c.role"
+              :placeholder="t('sessions.spawn.childRole')"
+              maxlength="60"
+              class="h-auto min-w-0 flex-1 rounded-sm bg-background px-2.5 py-1.75 text-sm flex-none basis-[34%]"
+            />
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="flex-none text-muted-foreground disabled:opacity-35 hover:bg-destructive/10 hover:text-destructive"
+              :disabled="children.length <= 1"
+              :aria-label="t('sessions.spawn.childRemove')"
+              @click="children.splice(i, 1)"
+            >
+              <Icon name="trash" />
+            </Button>
+          </div>
+          <Textarea
+            v-model="c.prompt"
+            class="min-h-10 resize-y rounded-sm bg-background px-2.5 py-1.75 text-sm"
+            rows="2"
+            :placeholder="t('sessions.spawn.childPrompt')"
+          />
+          <!-- "Vai có thật" của con (session-teams §3): agent AWOG gắn vào phiên
+               con lúc spawn. '' = con trần; giá trị là agentKey (source|proj|id)
+               để phân biệt hai agent trùng id ở hai tầng. Nhãn cố định trái, select
+               chiếm phần còn lại. -->
+          <div class="flex items-center gap-2">
+            <span class="flex-none text-xs text-muted-foreground">
+              {{ t('sessions.spawn.f.agent') }}
+            </span>
+            <AppSelect
+              :model-value="c.agentKey"
+              :options="agentOpts"
+              width="100%"
+              @update:model-value="(v: string) => (c.agentKey = v)"
+            />
+          </div>
+          <div class="flex items-center gap-2.5">
+            <Button
+              variant="ghost"
+              size="xs"
+              class="h-auto self-start gap-1.25 px-1 py-0.5 text-xs font-normal text-muted-foreground [&_svg]:size-3"
+              :disabled="fieldBusy || genBusy"
+              @click="genField(c, 'prompt')"
+            >
+              <Icon name="sparkles" />
+              {{ fieldBusy ? t('sessions.spawn.generating') : t('sessions.spawn.genField') }}
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              class="h-auto self-start gap-1.25 px-1 py-0.5 text-xs font-normal text-muted-foreground [&_svg]:size-3"
+              @click="toggleOvr(c)"
+            >
+              <Icon
+                name="chev"
+                class="transition-transform motion-reduce:transition-none"
+                :class="{ 'rotate-180': !!c.ovr }"
+              />
+              {{ t('sessions.spawn.childCustom') }}
+            </Button>
+          </div>
+          <div v-if="c.ovr" class="grid grid-cols-2 gap-x-2.5 gap-y-2 border-t border-dashed pt-1">
+            <div
+              v-for="f in fieldsFor(c.ovr, inheritShared, shared)"
+              :key="f.key"
+              class="flex min-w-0 flex-col gap-1"
+            >
+              <span class="text-xs text-muted-foreground">{{ f.label }}</span>
+              <AppSelect
+                :model-value="c.ovr[f.key]"
+                :options="f.opts"
+                width="100%"
+                @update:model-value="(v: string) => setField(c.ovr!, f.key, v)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2 border-t px-4 py-3">
+        <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            :model-value="remember"
+            @update:model-value="(v: boolean | 'indeterminate') => (remember = v === true)"
+          />
+          <span>{{ t('sessions.spawn.remember') }}</span>
+        </label>
+        <div class="flex justify-end gap-2">
+          <Button :disabled="busy" variant="outline" @click="close">
+            {{ manual ? t('common.cancel') : t('sessions.spawn.deny') }}
+          </Button>
+          <Button :disabled="busy || !canSubmit" variant="default" @click="approve">
+            {{ t('sessions.spawn.approve', { n: children.length }) }}
+          </Button>
+        </div>
+        <div v-if="!canSubmit" class="text-xs text-destructive">
+          {{ t('sessions.spawn.invalid') }}
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -739,312 +793,3 @@ async function approve() {
   }
 }
 </script>
-
-<style scoped>
-.spw-ovl {
-  position: fixed;
-  inset: 0;
-  /* 155: trên mọi form-modal (≤150) nhưng DƯỚI menu của AppSelect (160, teleported
-     ra body) và confirm (200) — đặt cao hơn thì các select trong dialog chìm xuống
-     dưới chính overlay này. */
-  z-index: 155;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.spw-card {
-  width: 620px;
-  max-width: 94vw;
-  max-height: 86vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-.spw-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--border);
-}
-.spw-headtx {
-  flex: 1;
-  min-width: 0;
-}
-.spw-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--foreground);
-}
-.spw-sub {
-  margin-top: 2px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.spw-x {
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-}
-.spw-x:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.spw-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.spw-sec {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted-foreground);
-}
-.spw-secrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.spw-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 10px;
-}
-.spw-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.spw-fl {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-.spw-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-foreground);
-  border-radius: var(--r-xs); /* rounded-sm */
-  padding: 4px 10px;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  font-family: var(--sans);
-}
-.spw-add:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.spw-add:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.spw-briefrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.spw-briefhint {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  min-width: 0;
-}
-/* Chip thu gọn "Cấu hình chung" — pill một dòng, bấm mở lưới select bên dưới. */
-.spw-chip {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  border: 1px solid var(--border);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  padding: 4px 10px;
-  border-radius: var(--r-pill);
-  font-family: var(--sans);
-}
-.spw-chip:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.spw-chip-sum {
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.spw-chipgrid {
-  padding: 10px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-}
-.spw-child {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-}
-.spw-crow {
-  display: flex;
-  gap: 6px;
-}
-.spw-in {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 10px;
-  background: var(--background);
-  border: 1px solid var(--input);
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.spw-in:focus-visible {
-  border-color: var(--input);
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.spw-role {
-  flex: 0 0 34%;
-}
-.spw-cx {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-}
-.spw-cx:hover {
-  color: var(--destructive);
-  background: rgb(from var(--destructive) r g b / 0.1);
-}
-.spw-cx:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-/* Nút sparkle phải sau .spw-cx:hover — cùng specificity, cái sau thắng —
-   để hover ra accent thay vì danger (trash mới là danger). */
-.spw-genbtn:hover {
-  color: var(--primary);
-  background: var(--accent-wash);
-}
-.spw-crow2 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-/* Hàng picker agent: label cố định trái, select chiếm phần còn lại. */
-.spw-agentrow {
-  gap: 8px;
-}
-.spw-agentrow .spw-fl {
-  flex: 0 0 auto;
-}
-.spw-ta {
-  width: 100%;
-  resize: vertical;
-  min-height: 40px;
-  padding: 7px 10px;
-  background: var(--background);
-  border: 1px solid var(--input);
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.spw-ta:focus-visible {
-  border-color: var(--input);
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.spw-ovr {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  padding: 2px 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  font-family: var(--sans);
-}
-.spw-ovr:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.spw-ovr:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.spw-ovr-chev {
-  transition: transform 0.15s;
-}
-.spw-ovr-chev.open {
-  transform: rotate(180deg);
-}
-.spw-ovrgrid {
-  padding-top: 4px;
-  border-top: 1px dashed var(--border);
-}
-.spw-foot {
-  border-top: 1px solid var(--border);
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.spw-rm {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  color: var(--foreground);
-  cursor: pointer;
-}
-.spw-note {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-.spw-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.spw-actions .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.spw-err {
-  font-size: var(--fs-xs);
-  color: var(--destructive);
-}
-</style>

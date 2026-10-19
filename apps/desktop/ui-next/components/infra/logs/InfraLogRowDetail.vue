@@ -1,28 +1,39 @@
 <template>
-  <div class="lrd">
+  <div class="flex min-h-0 flex-col gap-2.5">
     <!-- Thông điệp đứng RIÊNG và đứng TRƯỚC: nó là thứ người ta mở hàng này để
          đọc. Các trường còn lại là ngữ cảnh, không phải nội dung. -->
-    <section v-if="message" class="lrd-sec">
-      <div class="lrd-lbl">{{ t('infra.logs.row.message') }}</div>
-      <pre class="lrd-msg">{{ message }}</pre>
+    <section v-if="message" class="flex min-h-0 flex-col gap-1">
+      <div class="text-xs text-dim">{{ t('infra.logs.row.message') }}</div>
+      <!-- mono-ok: dòng log nguyên bản -->
+      <pre
+        class="m-0 max-h-[34vh] overflow-auto rounded-md border bg-muted px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-foreground"
+        >{{ message }}</pre
+      >
       <!-- Log JSON thì in ra dạng thụt lề: một dòng 900 ký tự không đọc được,
            mà đó lại đúng là dạng log của phần lớn service hiện đại. -->
-      <pre v-if="prettyJson" class="lrd-msg lrd-json">{{ prettyJson }}</pre>
+      <pre
+        v-if="prettyJson"
+        class="m-0 max-h-[30vh] overflow-auto rounded-md border bg-muted px-2.5 py-2 font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground"
+        >{{ prettyJson }}</pre
+      >
     </section>
 
-    <section class="lrd-sec">
-      <div class="lrd-lbl">{{ t('infra.logs.row.fields') }}</div>
-      <dl class="lrd-dl">
+    <section class="flex min-h-0 flex-col gap-1">
+      <div class="text-xs text-dim">{{ t('infra.logs.row.fields') }}</div>
+      <!-- mono-ok: tên trường + giá trị thô của một bản ghi Insights -->
+      <dl
+        class="m-0 grid max-h-[22vh] grid-cols-[minmax(7.5rem,max-content)_1fr] gap-x-3 gap-y-1 overflow-auto font-mono text-xs leading-(--lh-sm)"
+      >
         <template v-for="[key, value] in fields" :key="key">
-          <dt>{{ key }}</dt>
-          <dd>{{ value }}</dd>
+          <dt class="text-dim">{{ key }}</dt>
+          <dd class="m-0 break-words text-foreground">{{ value }}</dd>
         </template>
       </dl>
     </section>
 
-    <div class="lrd-acts">
+    <div class="flex flex-wrap items-center gap-1.5">
       <Button type="button" variant="outline" size="sm" @click="emit('copy', detailText)">
-        <Icon name="copy" class="lrd-ic" />
+        <Icon name="copy" />
         {{ copied ? t('infra.logs.results.copied') : t('infra.logs.row.copyJson') }}
       </Button>
       <Button
@@ -32,11 +43,11 @@
         size="sm"
         @click="emit('copy', message)"
       >
-        <Icon name="copy" class="lrd-ic" />
+        <Icon name="copy" />
         {{ t('infra.logs.row.copyMessage') }}
       </Button>
       <Button type="button" variant="outline" size="sm" @click="emit('send-to-chat', detailText)">
-        <Icon name="message" class="lrd-ic" />
+        <Icon name="message" />
         {{ t('infra.logs.results.sendToChat') }}
       </Button>
       <!-- Chỉ hiện khi dòng này THẬT SỰ mang một id lần theo được. -->
@@ -48,7 +59,7 @@
         size="sm"
         @click="emit('trace', traceId)"
       >
-        <Icon name="branch" class="lrd-ic" />
+        <Icon name="branch" />
         {{ t('infra.logs.results.trace') }}
       </Button>
       <slot name="actions" />
@@ -122,86 +133,3 @@ const detailText = computed(() => {
   }
 })
 </script>
-
-<style scoped>
-.lrd {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-}
-
-.lrd-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-height: 0;
-}
-
-.lrd-lbl {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.lrd-msg {
-  margin: 0;
-  max-height: 34vh;
-  overflow: auto;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  /* mono-ok: dòng log nguyên bản */
-  font-family: var(--code);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.lrd-json {
-  max-height: 30vh;
-  color: var(--textMuted);
-}
-
-.lrd-dl {
-  display: grid;
-  grid-template-columns: minmax(120px, max-content) 1fr;
-  gap: 4px 12px;
-  margin: 0;
-  max-height: 22vh;
-  overflow: auto;
-}
-
-.lrd-dl dt {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  /* mono-ok: tên trường của Insights */
-  font-family: var(--code);
-}
-
-.lrd-dl dd {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  /* mono-ok: giá trị thô của một bản ghi log */
-  font-family: var(--code);
-  word-break: break-word;
-}
-
-.lrd-acts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.lrd-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-</style>

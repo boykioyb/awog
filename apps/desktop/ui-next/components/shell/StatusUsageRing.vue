@@ -1,57 +1,70 @@
 <template>
-  <div
+  <!-- Card usage = HoverCard (portal ra <body>, tự định vị — thanh status bar
+       `overflow: hidden` không cắt được nữa). Hiện khi hover donut/card HOẶC khi
+       đã ghim bằng click (usagePopoverOpenId — singleton app-wide, một card mở). -->
+  <HoverCard
     v-if="!hidden"
-    ref="wrapEl"
-    class="donut-wrap"
-    :title="account.display"
-    @click="toggleOpen"
-    @pointerenter="hovered = true"
-    @pointerleave="hovered = false"
+    :open="cardVisible"
+    :open-delay="0"
+    :close-delay="HOVER_CLOSE_DELAY"
+    @update:open="(v: boolean) => (hovered = v)"
   >
-    <svg class="donut" viewBox="0 0 36 36" aria-hidden="true">
-      <circle class="donut-bg" cx="18" cy="18" r="15.9155" />
-      <circle
-        class="donut-fg"
-        cx="18"
-        cy="18"
-        r="15.9155"
-        :style="{ stroke: ringColor, strokeDasharray: `${ringPct} 100` }"
-        transform="rotate(-90 18 18)"
-      />
-    </svg>
-    <span class="donut-pct tnum" :style="{ color: ringColor }">{{ ringPct }}%</span>
-
-    <!-- Card usage: TELEPORT ra <body> — `.wbsbar`/`.statusbar` đều có
-         `overflow: hidden` nên popover `position:absolute` mở lên trên bị
-         cắt mất phần nằm ngoài thanh (đo: a11y thấy node nhưng không vẽ).
-         Vị trí đo từ donut bằng usePopoverAnchor (prefer above). -->
-    <Teleport to="body">
-      <div v-if="isOpen" class="donut-backdrop" @click="closePop" />
-      <div
-        v-if="cardVisible"
-        ref="popEl"
-        class="donut-pop"
-        :style="popStyle"
-        :class="{ pin: isOpen }"
-        @pointerenter="hovered = true"
-        @pointerleave="hovered = false"
+    <HoverCardTrigger as-child>
+      <StatusChip
+        ref="trigger"
+        class="px-1"
+        :active="isOpen"
+        :title="account.display"
+        @click="toggleOpen"
       >
-        <div class="donut-pop-hd">{{ account.label }} · {{ account.provider }}</div>
-        <div v-if="loading && !rows.length" class="donut-pop-hint">
-          {{ t('statusbar.usage.loading') }}
-        </div>
-        <div v-else-if="!rows.length" class="donut-pop-hint">
-          {{ t('statusbar.usage.none') }}
-        </div>
-        <div v-for="r in rows" :key="r.type" class="donut-row">
-          <span class="donut-rlbl">{{ r.label }}</span>
-          <span class="donut-rbar"><i :style="{ width: `${r.pct}%`, background: r.color }" /></span>
-          <span class="donut-rpct tnum" :style="{ color: r.color }">{{ r.pct }}%</span>
-          <span class="donut-rreset tnum">{{ r.reset }}</span>
-        </div>
+        <svg class="size-4.5 shrink-0" viewBox="0 0 36 36" aria-hidden="true">
+          <circle class="fill-none stroke-muted" stroke-width="4" cx="18" cy="18" r="15.9155" />
+          <circle
+            class="fill-none transition-[stroke-dasharray] duration-300 motion-reduce:transition-none"
+            :class="ringStroke"
+            stroke-width="4"
+            stroke-linecap="round"
+            cx="18"
+            cy="18"
+            r="15.9155"
+            :style="{ strokeDasharray: `${ringPct} 100` }"
+            transform="rotate(-90 18 18)"
+          />
+        </svg>
+        <span class="tabular-nums" :class="ringText">{{ ringPct }}%</span>
+      </StatusChip>
+    </HoverCardTrigger>
+    <!-- `no-drag`: card neo ở thanh đáy nhưng cửa sổ thấp thì phần trên có thể lọt
+         vào vùng kéo của header; app-region resolve ở tầng WINDOW nên thiếu no-drag
+         là OS nuốt tương tác. -->
+    <HoverCardContent
+      side="top"
+      align="start"
+      :side-offset="8"
+      class="flex max-h-105 w-60 flex-col gap-2 overflow-y-auto p-3 [-webkit-app-region:no-drag]"
+      @pointer-down-outside="onPointerDownOutside"
+    >
+      <div class="truncate text-sm font-semibold text-foreground">
+        {{ account.label }} · {{ account.provider }}
       </div>
-    </Teleport>
-  </div>
+      <div v-if="loading && !rows.length" class="text-sm text-faint">
+        {{ t('statusbar.usage.loading') }}
+      </div>
+      <div v-else-if="!rows.length" class="text-sm text-faint">
+        {{ t('statusbar.usage.none') }}
+      </div>
+      <div v-for="r in rows" :key="r.type" class="flex items-center gap-2">
+        <span class="w-21 shrink-0 truncate text-sm text-muted-foreground">{{ r.label }}</span>
+        <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+          <i class="block h-full rounded-full" :class="r.bar" :style="{ width: `${r.pct}%` }" />
+        </span>
+        <span class="tabular-nums w-7.5 shrink-0 text-right text-sm" :class="r.text">
+          {{ r.pct }}%
+        </span>
+        <span class="tabular-nums w-5.5 shrink-0 text-right text-xs text-faint">{{ r.reset }}</span>
+      </div>
+    </HoverCardContent>
+  </HoverCard>
 </template>
 
 <script setup lang="ts">
@@ -60,36 +73,26 @@
 // hover tooltip expands to every reported limit (weekly / opus / sonnet…). Mirrors
 // ActivityRateLimit's data path (useAccountUsage → account.usage) and its severity
 // palette. Self-hides once settled with no usage surface (API-key accounts).
-//
-// NOTE: classes are prefixed `donut-`, not `ring-` — a bare `.ring` class collides
-// with Tailwind's `ring` utility (a blue box-shadow), which framed each donut.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
+import type { PointerDownOutsideEvent } from 'reka-ui'
 import type { AccountOption } from '~/composables/useAccounts'
 import { useAccountUsage } from '~/composables/useAccountUsage'
 import { useEscToClose } from '~/composables/useEscToClose'
 import { usagePopoverOpenId } from '~/composables/useUsagePopover'
-import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 
 const props = defineProps<{ account: AccountOption }>()
 const { t } = useI18n()
 
-const wrapEl = ref<HTMLElement | null>(null)
-const popEl = ref<HTMLElement | null>(null)
+// Trễ đóng khi rời donut — đủ để rê chuột qua khe 8px sang card mà card không tắt.
+const HOVER_CLOSE_DELAY = 150
+
+const trigger = useTemplateRef<{ $el: HTMLElement }>('trigger')
 const hovered = ref(false)
 
 // Card hiện khi pinned bằng click (usagePopoverOpenId — singleton app-wide, chỉ
-// một card mở) HOẶC đang hover donut/card. Card teleport ra body + đo vị trí
-// từ donut (thanh status bar overflow:hidden clip mọi popover mở lên trên).
+// một card mở) HOẶC đang hover donut/card.
 const isOpen = computed(() => usagePopoverOpenId.value === props.account.id)
 const cardVisible = computed(() => isOpen.value || hovered.value)
-const { style: popStyle } = usePopoverAnchor(wrapEl, popEl, cardVisible, {
-  prefer: 'above',
-  align: 'left',
-  gap: 8,
-  width: 240,
-  minHeight: 0,
-  maxHeight: 420,
-})
 
 // Click pins the card; mở thì refresh để số trong card luôn tươi.
 function toggleOpen() {
@@ -101,6 +104,14 @@ function closePop() {
   usagePopoverOpenId.value = null
 }
 
+// Bấm ra ngoài card thì bỏ ghim (thay cho lớp nền bắt click cũ). Bấm vào chính
+// donut thì để toggleOpen lo — bỏ ghim ở đây rồi click lại ghim là card nháy.
+function onPointerDownOutside(e: PointerDownOutsideEvent) {
+  const target = e.detail.originalEvent.target
+  if (target instanceof Node && trigger.value?.$el.contains(target)) return
+  closePop()
+}
+
 useEscToClose(() => isOpen.value, closePop)
 
 const { entries, loading, error, refresh } = useAccountUsage(() => ({
@@ -108,12 +119,27 @@ const { entries, loading, error, refresh } = useAccountUsage(() => ({
   accountId: props.account.id,
 }))
 
-function rlColor(u: number): string {
-  // Canonical shadcn status vars — the bridge aliases them to AWOG's
-  // --danger/--amber/--accent, so the palette is unchanged.
-  if (u >= 1) return 'var(--destructive)'
-  if (u >= 0.9) return 'var(--warning)'
-  return 'var(--primary)'
+// Bậc nghiêm trọng → class màu ngữ nghĩa (đỏ khi chạm trần, vàng từ 90%).
+type Severity = 'over' | 'near' | 'ok'
+function severity(u: number): Severity {
+  if (u >= 1) return 'over'
+  if (u >= 0.9) return 'near'
+  return 'ok'
+}
+const SEV_TEXT: Record<Severity, string> = {
+  over: 'text-destructive',
+  near: 'text-warning',
+  ok: 'text-primary',
+}
+const SEV_STROKE: Record<Severity, string> = {
+  over: 'stroke-destructive',
+  near: 'stroke-warning',
+  ok: 'stroke-primary',
+}
+const SEV_BG: Record<Severity, string> = {
+  over: 'bg-destructive',
+  near: 'bg-warning',
+  ok: 'bg-primary',
 }
 function formatResetsIn(ms?: number): string {
   if (!ms) return ''
@@ -137,7 +163,9 @@ const fiveHour = computed(
 const ringPct = computed(() =>
   Math.round(Math.min(1, Math.max(0, fiveHour.value?.utilization ?? 0)) * 100),
 )
-const ringColor = computed(() => rlColor(fiveHour.value?.utilization ?? 0))
+const ringSeverity = computed(() => severity(fiveHour.value?.utilization ?? 0))
+const ringStroke = computed(() => SEV_STROKE[ringSeverity.value])
+const ringText = computed(() => SEV_TEXT[ringSeverity.value])
 
 const rows = computed(() =>
   entries.value.map((e) => {
@@ -146,7 +174,8 @@ const rows = computed(() =>
       type: e.rateLimitType,
       label: t(`activity.rateLimit.type.${e.rateLimitType}`),
       pct: Math.round(u * 100),
-      color: rlColor(e.utilization),
+      text: SEV_TEXT[severity(e.utilization)],
+      bar: SEV_BG[severity(e.utilization)],
       reset: formatResetsIn(e.resetsAt),
     }
   }),
@@ -167,126 +196,3 @@ function onFocus() {
   void refresh()
 }
 </script>
-
-<style scoped>
-.donut-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 4px;
-  border-radius: var(--r-xs);
-  cursor: default;
-}
-.donut-wrap:hover {
-  background: var(--accent-wash);
-}
-.donut {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
-.donut-bg {
-  fill: none;
-  stroke: var(--bgActive);
-  stroke-width: 4;
-}
-.donut-fg {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.3s ease;
-}
-.donut-pct {
-  font-size: 12px;
-  line-height: 12px;
-}
-
-/* Card teleports to <body> and is positioned `fixed` by usePopoverAnchor's
-   inline style — the bar's overflow:hidden would clip any absolute child.
-   Visibility is the template's v-if (hover OR click-pin), not CSS. */
-.donut-pop {
-  position: fixed;
-  z-index: 95;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 11px 12px;
-  background: var(--popover);
-  /* --input (the stronger hairline) not --border: matches the .smenu popover
-     border the rest of the app uses — AWOG keeps elevated surfaces on the
-     stronger hairline, and the bridge canonical name for it is --input. */
-  border: 1px solid var(--input);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  overflow-y: auto;
-  /* app-region resolve ở tầng WINDOW: `.top` là vùng drag — card neo ở thanh
-     đáy nên phần trên có thể lọt strip drag 52px nếu cửa sổ thấp; thiếu
-     no-drag thì OS nuốt tương tác (trap app-shell.css:2418). */
-  -webkit-app-region: no-drag;
-}
-.donut-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 94;
-  -webkit-app-region: no-drag;
-}
-.donut-pop-hd {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.donut-pop-hint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.donut-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.donut-rlbl {
-  flex: 0 0 84px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.donut-rbar {
-  flex: 1 1 auto;
-  height: 5px;
-  border-radius: var(--r-pill);
-  background: var(--muted);
-  overflow: hidden;
-}
-.donut-rbar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-}
-.donut-rpct {
-  flex: 0 0 30px;
-  text-align: right;
-  font-size: 12px;
-  line-height: 18px;
-}
-.donut-rreset {
-  flex: 0 0 22px;
-  text-align: right;
-  font-size: 11px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-@media (prefers-reduced-motion: reduce) {
-  .donut-fg {
-    transition: none;
-  }
-}
-</style>

@@ -1,30 +1,42 @@
 <template>
   <!-- Teleport to body: a top-level floating stack that escapes any page stacking
-       context. Bottom-right, above the page/panels but below full modals (z 95). -->
+       context. Bottom-right, above the page/panels but below full modals (z 95).
+       Cố ý KHÔNG nằm trong OVERLAYS của useEmbeddedBrowser (chip ngồi thường trực). -->
   <Teleport to="body">
-    <div v-if="entries.length" class="mdock" :aria-label="t('minimize.title')">
+    <div
+      v-if="entries.length"
+      class="pointer-events-none fixed right-4 bottom-11.5 z-95 flex max-w-[min(20rem,calc(100vw-2rem))] flex-col items-end gap-2"
+      :aria-label="t('minimize.title')"
+    >
+      <!-- Chip cả khối là một vùng bấm (khôi phục) và chứa nút dismiss lồng bên trong. -->
+      <!-- raw-ok: Button shadcn không lồng được nút dismiss bên trong -->
       <button
         v-for="e in entries"
         :key="e.id"
-        class="mdchip"
+        type="button"
+        class="pointer-events-auto flex w-full cursor-pointer items-center gap-2 rounded-lg border bg-popover py-2 pr-2 pl-3 text-left text-popover-foreground shadow-md transition hover:-translate-y-px hover:border-input"
         :title="t('minimize.restore')"
         @click="restore(e)"
       >
-        <span v-if="tone(e)" class="mddot" :class="tone(e)" />
-        <Icon :name="e.icon" class="mdicon" />
-        <span class="mdtext">
-          <span class="mdtitle">{{ titleOf(e) }}</span>
-          <span v-if="sub(e)" class="mdsub">{{ sub(e) }}</span>
+        <span
+          v-if="tone(e)"
+          class="size-2 flex-none rounded-full"
+          :class="TONE_CLASS[tone(e) || 'idle']"
+        />
+        <Icon :name="e.icon" class="size-4 flex-none text-muted-foreground" />
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate text-sm font-semibold">{{ titleOf(e) }}</span>
+          <span v-if="sub(e)" class="truncate text-sm text-muted-foreground">{{ sub(e) }}</span>
         </span>
         <span
-          class="mdx"
+          class="grid size-6 flex-none place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           :title="t('minimize.dismiss')"
           role="button"
           tabindex="0"
           @click.stop="dismiss(e)"
           @keydown.enter.stop="dismiss(e)"
         >
-          <Icon name="x" class="mdxi" />
+          <Icon name="x" class="size-3.5" />
         </span>
       </button>
     </div>
@@ -59,6 +71,15 @@ const sessionOf = (id: number) => sessions.sessions.find((s) => s.id === id)
 const taskOf = (id: string) => tasks.taskById(id)
 
 type Tone = 'idle' | 'running' | 'attention' | 'done' | 'error'
+
+// Chấm trạng thái: đang chạy / cần chú ý thì nhấp nháy nhẹ.
+const TONE_CLASS: Record<Tone, string> = {
+  idle: 'bg-muted-foreground',
+  running: 'bg-primary animate-pulse motion-reduce:animate-none',
+  attention: 'bg-warning animate-pulse motion-reduce:animate-none',
+  done: 'bg-success',
+  error: 'bg-destructive',
+}
 
 function sessionTone(st: SessionStatus | undefined): Tone {
   if (st === 'streaming') return 'running'
@@ -131,116 +152,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.mdock {
-  position: fixed;
-  right: 16px;
-  bottom: 46px;
-  z-index: 95;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  max-width: min(320px, calc(100vw - 32px));
-  pointer-events: none;
-}
-.mdchip {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 8px 8px 8px 11px;
-  border-radius: var(--radius); /* rounded-lg */
-  background: var(--popover);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-  color: var(--popover-foreground);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    transform 0.12s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-.mdchip:hover {
-  transform: translateY(-1px);
-  border-color: var(--input);
-  box-shadow: var(--shadow-md);
-}
-.mddot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--muted-foreground);
-}
-.mddot.running {
-  background: var(--primary);
-  animation: mdpulse 1.4s ease-in-out infinite;
-}
-.mddot.attention {
-  background: var(--warning);
-  animation: mdpulse 1.4s ease-in-out infinite;
-}
-.mddot.done {
-  background: var(--success);
-}
-.mddot.error {
-  background: var(--destructive);
-}
-@keyframes mdpulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-.mdicon {
-  flex: 0 0 auto;
-  width: var(--icon-md);
-  height: var(--icon-md);
-  color: var(--muted-foreground);
-}
-.mdtext {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  line-height: 18px;
-}
-.mdtitle {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mdsub {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mdx {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--muted-foreground);
-}
-.mdx:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.mdxi {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-</style>

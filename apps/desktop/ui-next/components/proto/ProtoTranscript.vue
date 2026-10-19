@@ -1,6 +1,6 @@
 <template>
   <ScrollArea class="min-h-0 flex-1">
-    <div class="mx-auto flex w-full max-w-[860px] flex-col gap-5 px-5 py-4">
+    <div class="mx-auto flex w-full max-w-215 flex-col gap-5 px-5 py-4">
       <div
         v-for="m in messages"
         :key="m.id"
@@ -44,7 +44,7 @@
               'flex min-w-0 flex-col gap-1.5',
               bubble &&
                 m.role === 'agent' &&
-                'rounded-xl border border-border bg-card p-3.5 shadow-sm',
+                'rounded-xl border border-border bg-card p-3.5 shadow-xs',
               bubble &&
                 m.role === 'user' &&
                 'max-w-[75%] rounded-2xl rounded-tr-md bg-accent px-3.5 py-2 text-accent-foreground',
@@ -72,11 +72,12 @@
             <!-- Attachment chips in the bubble — click opens the shared
                  PreviewModal (same flow as SessionAttachmentChip) -->
             <div v-if="m.attachments?.length" class="flex flex-wrap gap-1.5">
-              <button
+              <Button
                 v-for="(a, ai) in m.attachments"
                 :key="ai"
+                variant="ghost"
                 :class="[
-                  'flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors',
+                  'h-auto gap-1.5 rounded-lg border px-2 py-1 text-xs font-normal [&_svg]:size-3.5',
                   bubble && m.role === 'user'
                     ? 'border-accent-foreground/20 bg-accent-foreground/10 text-accent-foreground hover:bg-accent-foreground/20'
                     : 'border-border bg-muted/50 text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -93,7 +94,7 @@
                 <component :is="attIcon(a.kind)" v-else class="size-3.5" />
                 <span class="max-w-40 truncate">{{ a.name }}</span>
                 <span v-if="a.size" class="opacity-60 tabular-nums">{{ a.size }}</span>
-              </button>
+              </Button>
             </div>
 
             <!-- TodoWrite checklist block -->
@@ -117,7 +118,7 @@
             <!-- Tool call card -->
             <div
               v-if="m.tool"
-              class="overflow-hidden rounded-lg border border-border bg-muted/50 shadow-sm"
+              class="overflow-hidden rounded-lg border border-border bg-muted/50 shadow-xs"
             >
               <div class="flex items-center gap-2 border-b border-border px-3 py-1.5">
                 <component
@@ -248,9 +249,9 @@
        (mirrors the selection-quote + SelectionTranslatePopover surfaces) -->
   <Teleport to="body">
     <template v-if="sel">
-      <div class="fixed inset-0 z-[70]" @mousedown="sel = null" />
+      <div class="fixed inset-0 z-70" @mousedown="sel = null" />
       <div
-        class="fixed z-[71] flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+        class="fixed z-71 flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg"
         :style="{ left: sel.x + 'px', top: sel.y + 'px', transform: 'translate(-50%, -100%)' }"
         @mousedown.stop
       >
@@ -284,9 +285,9 @@
     <!-- Translate result card — mirrors SelectionTranslatePopover: lang pills,
          source → result, copy. -->
     <template v-if="trans">
-      <div class="fixed inset-0 z-[72]" @mousedown="trans = null" />
+      <div class="fixed inset-0 z-72" @mousedown="trans = null" />
       <div
-        class="fixed z-[73] flex max-h-[44vh] w-80 flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
+        class="fixed z-73 flex max-h-[44vh] w-80 flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
         :style="{ left: trans.x + 'px', top: trans.y + 'px', transform: 'translate(-50%, 8px)' }"
         @mousedown.stop
       >
@@ -294,19 +295,20 @@
           <Languages class="size-3.5 text-muted-foreground" />
           <span class="text-xs font-medium">Translate</span>
           <div class="ml-auto flex gap-1">
-            <button
+            <Button
               v-for="l in transLangs"
               :key="l"
+              variant="outline"
               :class="[
-                'rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase transition-colors',
+                'h-auto rounded-sm px-1.5 py-0.5 font-mono text-xs uppercase shadow-none',
                 transLang === l
                   ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border text-muted-foreground hover:text-foreground',
+                  : 'text-muted-foreground hover:text-foreground',
               ]"
               @click="transLang = l"
             >
               {{ l }}
-            </button>
+            </Button>
           </div>
           <Button
             variant="ghost"

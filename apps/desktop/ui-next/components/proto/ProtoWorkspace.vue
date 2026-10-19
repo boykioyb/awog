@@ -348,7 +348,7 @@
         </div>
         <div class="flex flex-1 items-center justify-center bg-muted/30 p-6">
           <div
-            class="flex w-full max-w-56 flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center shadow-sm"
+            class="flex w-full max-w-56 flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center shadow-xs"
           >
             <Globe class="size-6 text-muted-foreground" />
             <div>

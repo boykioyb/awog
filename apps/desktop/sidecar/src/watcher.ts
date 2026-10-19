@@ -17,18 +17,21 @@
 //   wiki.fs-changed       — wiki page added/removed/modified (ADR 0073)
 //   memory.fs-changed     — memory fact added/removed/modified (ADR 0073)
 //   infra.fs-changed      — ~/.aws/{config,credentials} changed (ADR 0088, task 0.16)
+//   board.changed         — ~/.awog/boards/<projectId>.json written from OUTSIDE the sidecar
+//                           (payload { projectId } — same event boards/store.ts emits)
 //
 // Each event payload: { tier?: string, path?: string, type: 'add'|'change'|'unlink' }
 // UI subscribes once and re-hydrates the matching store on event arrival.
 
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import { emit } from './transport/stdio.js'
 import { log } from './util/logger.js'
 import { awogHome, claudeHome, projectClaudeDir } from './util/path.js'
 import { watchTree, type TreeWatcher } from './fs/watch-tree.js'
 import { listProjects } from './projects/store.js'
+import { isOwnBoardWrite } from './boards/store.js'
 // The wiki index is cached per turn (wiki/inject.ts). Unlike the flat config
 // kinds, a wiki is EXPECTED to change outside the app — the user edits a page in
 // their own editor, or a `git pull` brings new pages — so the watcher, not just
@@ -57,6 +60,7 @@ type WatchKind =
   | 'ssh-identities'
   | 'vpn-profiles'
   | 'infra'
+  | 'boards'
 
 interface DirSpec {
   kind: WatchKind
@@ -82,6 +86,9 @@ function userDirs(): DirSpec[] {
     { kind: 'ssh-hosts', dir: join(awogHome(), 'ssh-hosts') },
     { kind: 'ssh-identities', dir: join(awogHome(), 'ssh-identities') },
     { kind: 'vpn-profiles', dir: join(awogHome(), 'vpn-profiles') },
+    // Board ghi từ NGOÀI sidecar (script của lịch `command`) — phát `board.changed`
+    // để UI tự nạp lại; ghi của chính sidecar bị lọc ở notify (isOwnBoardWrite).
+    { kind: 'boards', dir: join(awogHome(), 'boards'), depth: 0 },
     ...awsDirs(),
   ]
 }
@@ -143,7 +150,7 @@ class AwogWatcher {
 
   private missing: DirSpec[] = []
 
-  private debouncedEmit = new Map<WatchKind, NodeJS.Timeout>()
+  private debouncedEmit = new Map<string, NodeJS.Timeout>()
 
   private trackedProjectPaths = new Set<string>()
 
@@ -238,6 +245,7 @@ class AwogWatcher {
   private notify(spec: DirSpec, payload: { dir: string; path: string; type: 'add' | 'change' | 'unlink' }): void {
     if (spec.kind === 'wiki') invalidateWikiCache()
     if (spec.kind === 'memory') invalidateMemoryCache()
+    if (spec.kind === 'boards') return this.notifyBoard(payload.path)
     // Coalesce multiple file events into a single UI re-hydrate. We don't
     // need per-file granularity in the event — the UI re-runs the full
     // hydrate RPC which is cheap.
@@ -247,6 +255,22 @@ class AwogWatcher {
       setTimeout(() => {
         emit(`${spec.kind}.fs-changed`, payload)
         this.debouncedEmit.delete(spec.kind)
+      }, DEBOUNCE_MS),
+    )
+  }
+
+  // Board không có event `*.fs-changed`: UI đã nghe `board.changed { projectId }` từ
+  // boards/store.ts, nên phát đúng event đó, debounce theo TỪNG project.
+  private notifyBoard(path: string): void {
+    if (!path.endsWith('.json')) return
+    const projectId = basename(path, '.json')
+    const key = `boards:${projectId}`
+    clearTimeout(this.debouncedEmit.get(key))
+    this.debouncedEmit.set(
+      key,
+      setTimeout(() => {
+        this.debouncedEmit.delete(key)
+        if (!isOwnBoardWrite(projectId)) emit('board.changed', { projectId })
       }, DEBOUNCE_MS),
     )
   }
@@ -317,6 +341,9 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   // hạ chữ) sẽ nhận nhầm một `~/.aws/Config` khác trên filesystem phân biệt hoa
   // thường, nên nhánh này so nguyên văn với allowlist.
   if (kind === 'infra') return awsWatchedFiles().includes(resolve(path))
+  // boards: `<projectId>.json` — không phải ghi nguyên tử `.tmp.<pid>` hay `.corrupt-<ts>`.
+  // So trên `path` gốc (không hạ chữ) để khớp notifyBoard — `X.JSON` không phải file board.
+  if (kind === 'boards') return path.endsWith('.json') && !path.includes('.tmp.')
   return false
 }
 

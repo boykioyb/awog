@@ -29,10 +29,18 @@ import type { BoardItem, BoardItemStatus, Session, SessionSummary } from '../typ
 // phải tên việc, nên issue lấy dòng đầu của prompt thay vào chờ auto-title.
 const PLACEHOLDER_TITLE = 'New session'
 
-// Trạng thái "chưa chạy" — phiên làm issue bắt đầu một lượt thì kéo về
-// in_progress. blocked/in_review/done/cancelled đứng yên: đó là quyết định có chủ
-// đích của người hoặc agent, một câu hỏi thêm trong phiên không lật được nó.
-const RESUME_FROM: ReadonlySet<BoardItemStatus> = new Set(['backlog', 'todo', 'pending', 'changes'])
+// Trạng thái "chưa chạy" — phiên làm issue bắt đầu một lượt (do NGƯỜI DÙNG gửi) thì
+// kéo về in_progress. in_review cũng vậy: người dùng còn trao đổi tiếp trong phiên
+// nghĩa là việc chưa xong, để nguyên "chờ review" thì board nói sai (người dùng yêu
+// cầu 2026-10-19). blocked/done/cancelled đứng yên: đó là quyết định có chủ đích của
+// người hoặc agent, một câu hỏi thêm trong phiên không lật được nó.
+const RESUME_FROM: ReadonlySet<BoardItemStatus> = new Set([
+  'backlog',
+  'todo',
+  'pending',
+  'changes',
+  'in_review',
+])
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 

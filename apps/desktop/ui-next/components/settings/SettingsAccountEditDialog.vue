@@ -14,51 +14,53 @@
         @submit="onSaveCustom"
         @cancel="onCancel"
       />
-      <div v-if="error" class="aederror">{{ error }}</div>
+      <Alert
+        v-if="error"
+        variant="destructive"
+        class="mt-2 border-destructive/50 bg-destructive/10 px-3 py-2"
+      >
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
     </template>
 
     <!-- Built-in key + OAuth/subscription: label, (key for built-in), curate models -->
-    <form v-else class="aed" @submit.prevent="onSave">
-      <label class="aedfield">
-        <span class="fd">{{ t('settingsModels.form.label') }}</span>
+    <form v-else class="flex flex-col gap-3.5" @submit.prevent="onSave">
+      <label class="flex flex-col gap-1.5">
+        <span class="text-sm text-dim">{{ t('settingsModels.form.label') }}</span>
         <Input v-model="label" :placeholder="t('settingsModels.form.label')" class="flex-1" />
       </label>
 
       <!-- Built-in API-key only: rotate the key (OAuth tokens are managed). -->
-      <label v-if="kind === 'builtin-key'" class="aedfield">
-        <span class="fd">{{ t('settingsModels.edit.keyLabel') }}</span>
-        <div class="keyrow">
-          <Input
-            v-model="apiKey"
-            :type="reveal ? 'text' : 'password'"
-            :placeholder="t('settingsModels.edit.keyReplacePlaceholder')"
-            class="mono flex-1"
-          />
-          <span
-            class="keyeye"
-            :title="reveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
-            @click="reveal = !reveal"
-          >
-            👁
-          </span>
-        </div>
+      <div v-if="kind === 'builtin-key'" class="flex flex-col gap-1.5">
+        <span class="text-sm text-dim">{{ t('settingsModels.edit.keyLabel') }}</span>
+        <SettingsKeyRow
+          v-model="apiKey"
+          :placeholder="t('settingsModels.edit.keyReplacePlaceholder')"
+          mono
+        />
         <!-- The stored key never leaves the sidecar (security invariant #1). -->
-        <p class="fd aednote">
+        <p class="m-0 text-sm text-dim">
           {{
             account?.fingerprint
               ? t('settingsModels.edit.keySavedReplace')
               : t('settingsModels.edit.keyBlankKeep')
           }}
         </p>
-      </label>
+      </div>
 
       <!-- Curate models — built-in key + subscription. Empty = all available. -->
-      <div v-if="showModels" class="aedfield">
-        <span class="fd">{{ t('settingsModels.edit.modelsLabel') }}</span>
+      <div v-if="showModels" class="flex flex-col gap-1.5">
+        <span class="text-sm text-dim">{{ t('settingsModels.edit.modelsLabel') }}</span>
         <ModelListEditor v-model="modelsList" :suggestions="catalogIds" />
       </div>
 
-      <div v-if="error" class="aederror">{{ error }}</div>
+      <Alert
+        v-if="error"
+        variant="destructive"
+        class="mt-2 border-destructive/50 bg-destructive/10 px-3 py-2"
+      >
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
     </form>
 
     <template v-if="kind !== 'custom'" #footer>
@@ -85,8 +87,6 @@ import CustomProviderForm, {
 import ModelListEditor from '~/components/settings/ModelListEditor.vue'
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount, type ProviderName } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 // Edit dialog (kind = oauth | builtin-key | custom). Since models belong to the
 // PROVIDER now (curate in Settings → "Available models"), built-in accounts no
@@ -136,7 +136,6 @@ const EMPTY_CUSTOM: CustomProviderInput = {
 
 const label = ref('')
 const apiKey = ref('')
-const reveal = ref(false)
 const modelsList = ref<string[]>([])
 const customDraft = ref<CustomProviderInput>({ ...EMPTY_CUSTOM })
 const busy = ref(false)
@@ -152,7 +151,6 @@ const seed = () => {
   if (!a) return
   error.value = ''
   busy.value = false
-  reveal.value = false
   label.value = a.label
   apiKey.value = ''
   if (kind.value === 'custom') {
@@ -228,31 +226,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.aed {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.aedfield {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.aedfield > .keyinp {
-  width: 100%;
-}
-.aednote {
-  margin: 0;
-}
-.aederror {
-  margin-top: 8px;
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-  font-size: 1em;
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-</style>

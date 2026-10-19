@@ -1,34 +1,46 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on lem-ovl" @click.self="onScrim">
-      <div class="lem" :style="{ width: widthPx }" role="dialog" aria-modal="true">
-        <div class="lem-hd">
-          <span class="lem-title">{{ title }}</span>
-          <span v-if="$slots['header-extra']" class="lem-hx"><slot name="header-extra" /></span>
-          <span style="flex: 1" />
-          <Button variant="ghost" size="iconSm" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" class="size-3.5" />
-          </Button>
-        </div>
-        <div class="lem-body">
-          <slot />
-        </div>
-        <div v-if="$slots.footer" class="lem-foot">
-          <slot name="footer" />
-        </div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <!-- Bề rộng theo prop `width` (px), chặn 94vw; nút X là DialogClose có sẵn của
+         DialogContent nên header chừa pr-12. -->
+    <DialogContent
+      class="flex max-h-[86vh] max-w-[94vw] flex-col gap-0 overflow-hidden border-input bg-card p-0 sm:rounded-2xl"
+      :style="{ width: widthPx }"
+      @pointer-down-outside="onPointerOutside"
+      @focus-outside.prevent
+      @escape-key-down="onEscape"
+    >
+      <DialogHeader class="flex-none flex-row items-center gap-2.5 border-b px-4.5 py-3.5 pr-12">
+        <DialogTitle class="text-lg font-semibold">{{ title }}</DialogTitle>
+        <span v-if="$slots['header-extra']" class="flex items-center gap-1.5">
+          <slot name="header-extra" />
+        </span>
+      </DialogHeader>
+      <div class="min-h-0 overflow-y-auto p-4.5">
+        <slot />
       </div>
-    </div>
-  </Teleport>
+      <div
+        v-if="$slots.footer"
+        class="flex flex-none items-center justify-end gap-2 border-t px-4.5 py-3"
+      >
+        <slot name="footer" />
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
-import Button from '~/components/ui/button/Button.vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
 
-// Generic library modal shell — the BaseModal/EditorShell idiom for ui-next,
-// rendered in prototype CSS to match SettingsModelDialog (`.ovl` scrim + a
-// centered card with a titled header, a body slot, and an optional footer slot
-// for action buttons). Used by every library feature's editor / body-edit
-// dialog. Escape + scrim close (unless `lockScrim` is set for in-flight flows).
+// Generic library modal shell — the BaseModal/EditorShell idiom for ui-next, dựng
+// trên Dialog shadcn: header có tiêu đề, slot body, slot footer tuỳ chọn cho nút
+// hành động. Dùng cho mọi editor / body-edit dialog của thư viện. Escape + bấm
+// scrim đóng (trừ khi `lockScrim` bật cho luồng đang chạy).
+//
+// focus-outside bị chặn: modal cũ chỉ đóng khi bấm đúng scrim, không đóng khi focus
+// nhảy sang một bề mặt teleport khác (toast, popover tự viết…).
 
 const props = withDefaults(
   defineProps<{
@@ -43,69 +55,13 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ close: [] }>()
-const { t } = useI18n()
 
 const widthPx = `${props.width}px`
 
-const onScrim = () => {
-  if (!props.lockScrim) emit('close')
+const onPointerOutside = (e: Event) => {
+  if (props.lockScrim) e.preventDefault()
 }
-useEscToClose(
-  () => props.open && !props.lockScrim,
-  () => emit('close'),
-  {
-    preventDefault: false,
-  },
-)
+const onEscape = (e: KeyboardEvent) => {
+  if (props.lockScrim) e.preventDefault()
+}
 </script>
-
-<style scoped>
-/* Center the card (the shared .ovl aligns to top for the command palette). */
-.lem-ovl {
-  align-items: center;
-  padding-top: 0;
-}
-.lem {
-  max-width: 94vw;
-  max-height: 86vh;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-panel);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-.lem-hd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.lem-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.lem-hx {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.lem-body {
-  overflow-y: auto;
-  padding: 18px;
-}
-.lem-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-</style>

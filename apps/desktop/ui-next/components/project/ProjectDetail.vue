@@ -1,68 +1,68 @@
 <template>
-  <div class="detail" style="position: relative">
-    <div class="dh">
+  <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+    <!-- Header cao cố định: hairline bằng inset shadow để không ăn 1px chiều cao. -->
+    <div
+      class="flex h-12.5 flex-none items-center gap-2.5 px-5.5 shadow-[inset_0_-1px_0_var(--border)]"
+    >
       <span
-        class="rx"
-        style="
-          width: 26px;
-          height: 26px;
-          border-radius: var(--r-xs);
-          background: var(--accentDim);
-          color: var(--accent);
-          margin-right: 8px;
-        "
+        class="mr-2 grid size-6.5 flex-none place-items-center rounded-sm bg-selected text-primary"
       >
-        <Icon name="projects" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="projects" class="size-3.5" />
       </span>
-      <div class="dt">{{ project.name }}</div>
-      <span style="flex: 1" />
+      <div class="flex min-w-0 items-center text-lg font-semibold">{{ project.name }}</div>
+      <span class="flex-1" />
       <!-- Management actions are hidden in compact (quick-view) mode — the modal is
            for peeking at info + issues/PRs, not editing. -->
       <template v-if="!compact">
         <Button
-          style="width: 28px; height: 28px"
-          :title="t('projects.detail.edit')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
+          class="text-dim"
+          :title="t('projects.detail.edit')"
+          :aria-label="t('projects.detail.edit')"
           @click="emit('edit')"
         >
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="edit" class="size-3.5" />
         </Button>
         <Button
-          style="width: 28px; height: 28px"
-          :title="t('projectsInit.action')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
+          class="text-dim"
+          :title="t('projectsInit.action')"
+          :aria-label="t('projectsInit.action')"
           @click="initDocsOpen = true"
         >
-          <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="sparkles" class="size-3.5" />
         </Button>
         <Button
-          style="width: 28px; height: 28px"
-          :title="t('projects.detail.saveAsTemplate')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
+          class="text-dim"
+          :title="t('projects.detail.saveAsTemplate')"
+          :aria-label="t('projects.detail.saveAsTemplate')"
           @click="emit('save-template')"
         >
-          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="save" class="size-3.5" />
         </Button>
         <Button
-          style="width: 28px; height: 28px"
-          :title="t('projects.detail.installTemplate')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
+          class="text-dim"
+          :title="t('projects.detail.installTemplate')"
+          :aria-label="t('projects.detail.installTemplate')"
           @click="emit('install-template')"
         >
-          <Icon name="templates" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="templates" class="size-3.5" />
         </Button>
         <Button
-          style="width: 28px; height: 28px"
-          :title="t('projects.detail.openWorkspace')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
+          class="text-dim"
+          :title="t('projects.detail.openWorkspace')"
+          :aria-label="t('projects.detail.openWorkspace')"
           @click="emit('open-workspace')"
         >
-          <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="layers" class="size-3.5" />
         </Button>
         <Button
           :title="t('projects.detail.openCode')"
@@ -76,24 +76,22 @@
       </template>
     </div>
 
-    <div class="ptabs">
-      <span class="ptab" :class="{ on: tab === 'overview' }" @click="setTab('overview')">
-        {{ t('projects.tab.overview') }}
-      </span>
-      <template v-if="hasGh">
-        <span class="ptab" :class="{ on: tab === 'issues' }" @click="setTab('issues')">
-          {{ t('projects.tab.issues') }}
-        </span>
-        <span class="ptab" :class="{ on: tab === 'prs' }" @click="setTab('prs')">
-          {{ t('projects.tab.prs') }}
-        </span>
-      </template>
-      <span v-else class="fd" style="padding: 8px 12px">
+    <div class="flex flex-none items-center gap-0.5 overflow-x-auto border-b px-2.5 py-1.5">
+      <Tabs :model-value="tab" @update:model-value="(v) => setTab(v as Tab)">
+        <TabsList class="h-auto gap-0.5 bg-transparent p-0">
+          <TabsTrigger value="overview" :class="TAB">{{ t('projects.tab.overview') }}</TabsTrigger>
+          <template v-if="hasGh">
+            <TabsTrigger value="issues" :class="TAB">{{ t('projects.tab.issues') }}</TabsTrigger>
+            <TabsTrigger value="prs" :class="TAB">{{ t('projects.tab.prs') }}</TabsTrigger>
+          </template>
+        </TabsList>
+      </Tabs>
+      <span v-if="!hasGh" class="px-3 py-2 text-sm text-dim">
         {{ t('projects.tab.notGithub') }}
       </span>
     </div>
 
-    <div v-if="tab === 'overview'" class="projmain">
+    <div v-if="tab === 'overview'" class="relative flex min-h-0 flex-1 overflow-hidden">
       <ProjectOverview
         :project="project"
         :view="view"
@@ -156,6 +154,9 @@ import { prefetchGhList } from '~/composables/useProjectGh'
 import type { ProjectDeepLink } from '~/composables/useProjectModal'
 import type { Project } from '~/types'
 import Button from '~/components/ui/button/Button.vue'
+import Tabs from '~/components/ui/tabs/Tabs.vue'
+import TabsList from '~/components/ui/tabs/TabsList.vue'
+import TabsTrigger from '~/components/ui/tabs/TabsTrigger.vue'
 
 // `compact` (quick-view modal): hide management chrome (header actions + Overview's
 // destructive / config-import controls) so the panel is view-only.
@@ -251,6 +252,10 @@ watch(tab, (t) => {
 function setTab(next: Tab) {
   tab.value = next
 }
+
+// Tab đang chọn = nền accent-tint, không nền xám (nuxt-vue.md).
+const TAB =
+  'rounded-sm border border-transparent px-3 py-1.5 font-medium text-dim shadow-none hover:text-foreground data-[state=active]:border-selected-border data-[state=active]:bg-selected data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none'
 
 // Reset to overview when the selected project changes (or its remote drops the
 // GitHub tabs out from under the current selection).

@@ -1,43 +1,74 @@
 <template>
-  <div class="alp">
-    <div class="alp-label">{{ t('infra.import.sso.src.pickerLabel') }}</div>
-    <div class="alp-list">
-      <button
+  <div class="flex flex-col gap-2">
+    <div class="text-xs font-semibold text-dim">{{ t('infra.import.sso.src.pickerLabel') }}</div>
+    <div class="flex flex-col gap-1.5">
+      <!-- Hàng đang chọn = accent-tint + thanh accent bên trái (KHÔNG nền xám) — quy ước
+           chọn hàng dùng chung của repo (.claude/rules/nuxt-vue.md). -->
+      <Button
         v-for="(src, i) in sources"
         :key="i"
         type="button"
-        class="alp-row"
-        :class="{ on: selectedKey === String(i) }"
+        variant="outline"
+        class="h-auto w-full justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left font-normal whitespace-normal text-foreground shadow-none"
+        :class="{
+          'border-selected-border bg-selected shadow-[inset_2px_0_0_var(--color-primary)]':
+            selectedKey === String(i),
+        }"
         :disabled="loggingIn"
         @click="emit('select', String(i))"
       >
-        <Icon :name="originIcon(src.origin)" class="alp-icn" />
-        <div class="alp-main">
-          <span class="alp-url mono">{{ shortUrl(src.startUrl) }}</span>
-          <div class="alp-meta">
-            <span class="tag">{{ originLabel(src.origin) }}</span>
-            <span v-if="src.profileCount > 0" class="tag">
+        <Icon :name="originIcon(src.origin)" class="size-3.5 flex-none text-dim" />
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+          <!-- mono-ok: start URL — người dùng có thể copy để dán lại chỗ khác -->
+          <span class="truncate font-mono text-sm text-foreground">
+            {{ shortUrl(src.startUrl) }}
+          </span>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline" class="rounded-sm font-normal text-muted-foreground">
+              {{ originLabel(src.origin) }}
+            </Badge>
+            <Badge
+              v-if="src.profileCount > 0"
+              variant="outline"
+              class="rounded-sm font-normal text-muted-foreground"
+            >
               {{ t('infra.import.sso.src.profileCount', { n: src.profileCount }) }}
-            </span>
-            <span v-if="src.hasLiveToken" class="tag alp-live">
+            </Badge>
+            <Badge
+              v-if="src.hasLiveToken"
+              variant="outline"
+              class="rounded-sm border-selected-border bg-selected font-normal text-primary"
+            >
               {{ t('infra.import.sso.src.liveToken') }}
-            </span>
+            </Badge>
           </div>
         </div>
-        <Icon v-if="selectedKey === String(i)" name="check" class="alp-tick" />
-      </button>
+        <Icon
+          v-if="selectedKey === String(i)"
+          name="check"
+          class="size-3.5 flex-none text-primary"
+        />
+      </Button>
 
-      <button
+      <Button
         type="button"
-        class="alp-row alp-other"
-        :class="{ on: selectedKey === otherKey }"
+        variant="outline"
+        class="h-auto w-full justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left font-normal text-foreground shadow-none"
+        :class="{
+          'border-selected-border bg-selected shadow-[inset_2px_0_0_var(--color-primary)]':
+            selectedKey === otherKey,
+        }"
         :disabled="loggingIn"
         @click="emit('select', otherKey)"
       >
-        <Icon name="edit" class="alp-icn" />
-        <span class="alp-other-lbl">{{ t('infra.import.sso.src.other') }}</span>
-        <Icon v-if="selectedKey === otherKey" name="check" class="alp-tick" />
-      </button>
+        <Icon name="edit" class="size-3.5 flex-none text-dim" />
+        <span class="flex-1 text-sm text-foreground">{{ t('infra.import.sso.src.other') }}</span>
+        <Icon
+          v-if="selectedKey === otherKey"
+          name="check"
+          class="size-3.5 flex-none text-primary"
+        />
+      </Button>
     </div>
   </div>
 </template>
@@ -84,98 +115,3 @@ function shortUrl(url: string): string {
   }
 }
 </script>
-
-<style scoped>
-.alp {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.alp-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-}
-.alp-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.alp-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: var(--text);
-}
-.alp-row:hover:not(:disabled) {
-  background: var(--bgHover);
-}
-.alp-row:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-/* Selection state = accent-tint (KHÔNG nền xám --bgActive), + thanh accent
-   2px bên trái — quy ước chọn hàng dùng chung của repo (.claude/rules/nuxt-vue.md). */
-.alp-row.on {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  box-shadow: inset 2px 0 0 0 var(--accent);
-}
-.alp-icn {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-}
-.alp-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.alp-url {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.alp-url.mono {
-  /* mono-ok: start URL — người dùng có thể copy để dán lại chỗ khác */
-  font-family: var(--code);
-}
-.alp-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.alp-live {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.alp-tick {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--accent);
-}
-.alp-other-lbl {
-  flex: 1;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-</style>

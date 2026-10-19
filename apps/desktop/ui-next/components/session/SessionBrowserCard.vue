@@ -1,36 +1,55 @@
 <template>
-  <div class="bcard" :class="{ run: running }">
+  <div
+    class="my-1 flex w-full max-w-105 flex-col overflow-hidden rounded-xl border bg-card text-foreground"
+  >
     <!-- Ảnh trang. Không có ảnh (đang tải / chụp lỗi / session cũ) thì chừa khung
-         với glyph globe — thẻ không đổi chiều cao khi ảnh về muộn. -->
-    <button type="button" class="bthumb" :title="t('sessions.browserCard.open')" @click="openPage">
-      <img v-if="thumb" :src="thumb" :alt="t('sessions.browserCard.alt', { title: titleText })" />
-      <span v-else class="bph">
-        <Icon name="globe" style="width: var(--icon-xl); height: var(--icon-xl)" />
+         với glyph globe — thẻ không đổi chiều cao khi ảnh về muộn. Khung tỉ lệ cố định:
+         ảnh về muộn không làm transcript nhảy; ảnh chụp là phần ĐẦU trang nên căn top. -->
+    <Button
+      variant="ghost"
+      class="relative block aspect-16/10 h-auto w-full overflow-hidden rounded-none bg-muted p-0 hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"
+      :title="t('sessions.browserCard.open')"
+      @click="openPage"
+    >
+      <img
+        v-if="thumb"
+        :src="thumb"
+        :alt="t('sessions.browserCard.alt', { title: titleText })"
+        class="block size-full object-cover object-top"
+      />
+      <span v-else class="flex size-full items-center justify-center text-muted-foreground">
+        <Icon name="globe" class="size-6" />
       </span>
-      <span v-if="running" class="bspin" />
-    </button>
+      <span
+        v-if="running"
+        class="absolute top-2 right-2 size-3.5 animate-spin rounded-full border-2 border-transparent border-t-primary border-r-primary"
+      />
+    </Button>
+    <Separator />
 
-    <div class="bfoot">
-      <div class="bmeta">
-        <div class="btitle" :title="titleText">{{ titleText }}</div>
-        <div class="bsub">
-          <span class="bhost">{{ host }}</span>
-          <span class="bdot">·</span>
-          <span class="bcap">{{ t('sessions.browserCard.caption') }}</span>
+    <div class="flex items-center gap-2 px-2.5 py-2">
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm font-medium" :title="titleText">{{ titleText }}</div>
+        <div class="flex min-w-0 gap-1 text-xs whitespace-nowrap text-muted-foreground">
+          <span class="min-w-0 truncate">{{ host }}</span>
+          <span>·</span>
+          <span class="shrink truncate">{{ t('sessions.browserCard.caption') }}</span>
         </div>
       </div>
-      <button type="button" class="bopen" @click="openPage">
+      <Button variant="outline" size="xs" class="shrink-0 rounded-lg px-3" @click="openPage">
         {{ t('sessions.browserCard.open') }}
-      </button>
-      <button
-        type="button"
-        class="bmore"
-        :class="{ on: menuPos !== null }"
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-muted-foreground hover:text-foreground"
+        :class="menuPos !== null && 'bg-accent text-foreground'"
         :title="t('sessions.browserCard.more')"
+        :aria-label="t('sessions.browserCard.more')"
         @click.stop="openMenu"
       >
-        <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="dots" class="size-3.5" />
+      </Button>
     </div>
 
     <!-- Teleport ra body: menu `fixed` không được bị overflow/transform của transcript
@@ -142,142 +161,3 @@ async function onMenuSelect(id: string): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.bcard {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 420px;
-  margin: 4px 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--card);
-  color: var(--foreground);
-}
-/* Khung ảnh tỉ lệ cố định: ảnh về muộn không làm transcript nhảy. Ảnh chụp là phần
-   ĐẦU trang nên căn top, cắt đáy. */
-.bthumb {
-  position: relative;
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  padding: 0;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--muted);
-  overflow: hidden;
-  cursor: pointer;
-}
-.bthumb img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top;
-}
-.bph {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted-foreground);
-}
-.bspin {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 14px;
-  height: 14px;
-  border: 2px solid transparent;
-  border-top-color: var(--primary);
-  border-right-color: var(--primary);
-  border-radius: 50%;
-  animation: bspin 0.8s linear infinite;
-}
-@keyframes bspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.bfoot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-}
-.bmeta {
-  min-width: 0;
-  flex: 1;
-}
-.btitle {
-  overflow: hidden;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bsub {
-  display: flex;
-  min-width: 0;
-  gap: 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-}
-.bhost {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.bcap {
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.bopen {
-  flex: 0 0 auto;
-  padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--foreground);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.bopen:hover {
-  background: var(--accent-wash);
-}
-.bmore {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.bmore:hover,
-.bmore.on {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.bopen:focus-visible,
-.bmore:focus-visible,
-.bthumb:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
-</style>

@@ -1,41 +1,57 @@
 <template>
-  <div v-if="!file" class="empty">
-    <span class="ei"><Icon name="git" style="width: 22px; height: 22px" /></span>
-    <div class="et">{{ t('git.diff.empty') }}</div>
+  <div
+    v-if="!file"
+    class="flex flex-1 flex-col items-center justify-center gap-3.5 p-10 text-center text-dim"
+  >
+    <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+      <Icon name="git" class="size-5.5" />
+    </span>
+    <div class="text-lg text-muted-foreground">{{ t('git.diff.empty') }}</div>
   </div>
   <template v-else>
-    <div class="dh">
-      <span class="dt mono" style="font-size: var(--fs-sm)">
-        <span class="dtname" :title="file ?? ''">{{ baseName }}</span>
+    <!-- `dh` / `dscroll`: workbench/stage/DocDiff.vue nhắm `[&>.dh]` / `[&>.dscroll]`
+         trên fragment này — giữ hai class làm hook. Header cao cố định, hairline
+         bằng inset shadow. -->
+    <!-- hook-ok: `.dh` — DocDiff.vue `[&>.dh]:flex-none` -->
+    <div class="dh" :class="HEAD">
+      <!-- mono-ok: tên file -->
+      <span class="flex min-w-0 items-center font-mono text-sm font-semibold">
+        <span class="truncate" :title="file ?? ''">{{ baseName }}</span>
       </span>
-      <span v-if="additions > 0" class="rounded-sm px-1 font-mono text-xs leading-4 text-success">
+      <span v-if="additions > 0" class="flex-none rounded-sm px-1 font-mono text-xs text-success">
         +{{ additions }}
       </span>
       <span
         v-if="deletions > 0"
-        class="rounded-sm px-1 font-mono text-xs leading-4 text-destructive"
+        class="flex-none rounded-sm px-1 font-mono text-xs text-destructive"
       >
         −{{ deletions }}
       </span>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <!-- Nút refresh tuỳ chọn — DocDiff emit 'refresh' khi bấm; những caller
-           khác (GitManager/GitHistory) không truyền listener thì ẩn. -->
-      <button
+           khác (GitManager/GitHistory) không truyền listener thì ẩn. Màu chữ đậm hơn
+           nút toggle để đọc rõ là button. -->
+      <Button
         v-if="hasRefresh"
-        class="gtoggle grefresh"
+        variant="outline"
+        size="xs"
+        :class="[TOGGLE, 'border-input text-foreground']"
         :title="t('git.diff.refresh')"
+        :aria-label="t('git.diff.refresh')"
         @click="emit('refresh')"
       >
-        <RefreshCw :size="12" />
-      </button>
-      <button
+        <RefreshCw class="size-3" />
+      </Button>
+      <Button
         v-if="!isImage"
-        class="gtoggle"
+        variant="outline"
+        size="xs"
+        :class="TOGGLE"
         :title="t('git.diff.toggleMode')"
         @click="emit('toggle-diff-mode')"
       >
         {{ diffMode === 'split' ? t('git.diff.split') : t('git.diff.unified') }}
-      </button>
+      </Button>
       <Button v-if="!readonly" variant="outline" size="sm" class="shrink-0" @click="onPrimary">
         <Icon :name="staged ? 'rewind' : 'check'" class="size-3.5" />
         {{ staged ? t('git.diff.unstageFile') : t('git.diff.stageFile') }}
@@ -44,27 +60,37 @@
 
     <!-- Image preview: an image row has a binary git diff (no hunks); show the
          on-disk bytes as an <img> instead of empty diff text. -->
-    <div v-if="isImage" class="dscroll dimgscroll">
-      <div v-if="imageLoading" class="empty">
-        <div class="et">{{ t('git.diff.imageLoading') }}</div>
+    <!-- hook-ok: `.dscroll` — DocDiff.vue `[&>.dscroll]:flex-1` -->
+    <div v-if="isImage" class="dscroll flex flex-1 items-center justify-center overflow-auto p-5">
+      <div v-if="imageLoading" class="text-lg text-muted-foreground">
+        {{ t('git.diff.imageLoading') }}
       </div>
-      <img v-else-if="imageSrc" :src="imageSrc" :alt="baseName" class="dimg" />
-      <div v-else class="empty">
-        <div class="et">{{ t('git.diff.imageUnavailable') }}</div>
+      <img
+        v-else-if="imageSrc"
+        :src="imageSrc"
+        :alt="baseName"
+        class="max-h-full max-w-full rounded-sm object-contain"
+      />
+      <div v-else class="text-lg text-muted-foreground">
+        {{ t('git.diff.imageUnavailable') }}
       </div>
     </div>
 
-    <div v-else class="dscroll">
-      <div class="codeview">
-        <div v-if="diffMode === 'split'" class="cvsplit">
-          <div class="cvspane">
+    <!-- Diff tràn viền: không padding, không khung card. Dòng diff tự wrap nên không
+         cuộn ngang. -->
+    <!-- hook-ok: `.dscroll` — DocDiff.vue `[&>.dscroll]:flex-1` -->
+    <div v-else class="dscroll flex-1 overflow-y-auto p-0">
+      <!-- mono-ok: nội dung diff -->
+      <div class="font-mono text-sm">
+        <div v-if="diffMode === 'split'" class="flex divide-x overflow-x-hidden">
+          <div class="min-w-0 flex-1">
             <GitDiffLine v-for="(l, i) in splitLeft" :key="`l${i}`" :line="l" />
           </div>
-          <div class="cvspane">
+          <div class="min-w-0 flex-1">
             <GitDiffLine v-for="(l, i) in splitRight" :key="`r${i}`" :line="l" />
           </div>
         </div>
-        <div v-else class="cvdiff">
+        <div v-else class="overflow-x-hidden">
           <GitDiffLine
             v-for="(l, i) in unified"
             :key="i"
@@ -89,6 +115,13 @@ import { RefreshCw } from 'lucide-vue-next'
 import Button from '~/components/ui/button/Button.vue'
 import type { DiffLine, DiffMode, DiffRow } from './git-types'
 import { baseNameOf } from './git-types'
+
+// Header cao cố định 50px, hairline bằng inset shadow (không ăn 1px chiều cao).
+const HEAD =
+  'flex h-12.5 flex-none items-center gap-2.5 px-5.5 shadow-[inset_0_-1px_0_var(--color-border)]'
+// Nút nhỏ của header diff (refresh / unified↔split): viền trung tính, chữ nhỏ.
+const TOGGLE =
+  'h-auto flex-none gap-1 rounded-sm px-2 py-0.5 font-normal text-muted-foreground hover:border-input hover:text-foreground'
 
 // One plain token carrying the whole line (no syntax highlighting).
 const plain = (s: string): DiffRow['tokens'] => [{ text: s, cls: '' as const }]
@@ -187,59 +220,3 @@ const splitRight = computed<DiffRow[]>(() => {
   return out
 })
 </script>
-
-<style scoped>
-/* A long filename must truncate with an ellipsis, not paint over the header
-   actions (diff-mode toggle + Stage/Unstage). .dt is display:flex (from the
-   global .dh .dt), so the ellipsis lives on the inner text element. */
-.dtname {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-/* Header actions keep their size; the filename yields the space instead of them
-   getting squeezed or overlapped. */
-.gtoggle {
-  flex: 0 0 auto;
-}
-
-/* Full-bleed diff: drop the scroll-area padding and the .codeview card chrome
-   (border / radius / margin / surface) so the diff fills the pane edge-to-edge.
-   Scoped → other .codeview / .dscroll usages (commit detail, editor) keep theirs. */
-.dscroll {
-  padding: 0;
-}
-.codeview {
-  border: none;
-  border-radius: 0;
-  margin: 0;
-  background: transparent;
-}
-/* Nút refresh — override màu từ `.gtoggle` muted lên `--text` để đọc rõ là
-   button (mặc định t3 hơi nhạt). */
-.grefresh {
-  color: var(--text);
-  border-color: var(--input);
-}
-.grefresh:hover {
-  color: var(--t1);
-  background: var(--hover);
-}
-
-/* Image preview — center the bitmap in the scroll area, with breathing room and a
-   checkerboard-free neutral surface so transparent PNGs read against the theme. */
-.dimgscroll {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  overflow: auto;
-}
-.dimg {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: var(--r-xs);
-}
-</style>

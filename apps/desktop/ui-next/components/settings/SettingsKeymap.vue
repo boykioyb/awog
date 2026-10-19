@@ -6,40 +6,54 @@
     />
 
     <template v-for="g in KEYMAP_GROUPS" :key="g">
-      <div class="km-group">{{ t(`settingsKeymap.group.${g}`) }}</div>
+      <div class="mt-4 mb-1 text-sm text-dim first:mt-1">
+        {{ t(`settingsKeymap.group.${g}`) }}
+      </div>
       <SettingsField v-for="a in actionsOf(g)" :key="a.id" :name="t(a.labelKey)">
-        <div class="km-ctrl">
-          <div class="km-row">
+        <div class="flex flex-col items-end gap-1.5">
+          <div class="flex items-center gap-2">
             <template v-if="recording === a.id">
-              <span class="km-cap on">{{ t('settings.keymap.recording') }}</span>
+              <Kbd
+                class="h-6.5 min-w-10 animate-pulse border border-dashed border-primary bg-card px-2 text-sm text-primary"
+              >
+                {{ t('settings.keymap.recording') }}
+              </Kbd>
               <Button variant="outline" size="sm" @click="cancelRecord">
                 {{ t('common.cancel') }}
               </Button>
             </template>
             <template v-else>
-              <kbd class="km-cap">{{ formatCombo(bindings[a.id]) }}</kbd>
+              <Kbd class="h-6.5 min-w-10 border bg-card px-2 text-sm text-foreground">
+                {{ formatCombo(bindings[a.id]) }}
+              </Kbd>
               <Button variant="outline" size="sm" @click="startRecord(a.id)">
                 <Icon name="edit" />
                 {{ t('settings.keymap.rebind') }}
               </Button>
               <Button
                 v-if="!isDefault(a.id)"
-                style="width: 28px; height: 28px"
                 :title="t('settings.keymap.reset')"
+                :aria-label="t('settings.keymap.reset')"
                 variant="outline"
-                size="iconMd"
+                size="iconSm"
                 @click="resetBinding(a.id)"
               >
                 <Icon name="refresh" />
               </Button>
             </template>
           </div>
-          <div v-if="recording === a.id && error" class="km-err">{{ error }}</div>
+          <div
+            v-if="recording === a.id && error"
+            class="max-w-80 text-right text-sm text-destructive"
+          >
+            {{ error }}
+          </div>
         </div>
       </SettingsField>
     </template>
 
-    <div class="km-foot">
+    <Separator class="mt-3.5" />
+    <div class="flex justify-end pt-3">
       <Button variant="outline" size="sm" @click="resetAll">
         <Icon name="refresh" />
         {{ t('settings.keymap.resetAll') }}
@@ -56,7 +70,6 @@
 // persist via useKeymap into the settings store (~/.awog/settings.json, issue
 // #43); the live global handler reacts immediately.
 import { onBeforeUnmount, ref, watch } from 'vue'
-import Button from '~/components/ui/button/Button.vue'
 import {
   KEYMAP_ACTIONS,
   KEYMAP_GROUPS,
@@ -133,69 +146,3 @@ watch(recording, (val) => {
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 </script>
-
-<style scoped>
-.km-group {
-  margin: 16px 0 4px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.km-group:first-child {
-  margin-top: 4px;
-}
-.km-ctrl {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-}
-.km-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.km-cap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: var(--bgEl);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: 12px;
-}
-.km-cap.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  border-style: dashed;
-  animation: km-pulse 1.1s ease-in-out infinite;
-}
-@keyframes km-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
-}
-.km-err {
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: right;
-  max-width: 320px;
-}
-.km-foot {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-</style>

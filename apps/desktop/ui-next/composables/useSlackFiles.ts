@@ -18,14 +18,15 @@ import { describeSlackError, isSlackOpenBlocked } from '~/utils/slack-errors'
 // Xem trước dùng PreviewModal chung: video/audio stream qua `slackMediaFileUrl` (gốc cố
 // định ở main), loại còn lại mở như "file trong thư mục" với gốc = thư mục chứa file.
 //
-// HTML / Markdown từ Slack xem ở dạng MÃ NGUỒN (`kind: 'text'`), không render: file do
-// người ngoài gửi, render HTML là chạy markup lạ trong app (iframe vẫn tải ảnh/CSS
-// remote ⇒ lộ IP + "đã mở" cho người gửi), Markdown thì tải ảnh remote y như vậy.
+// HTML từ Slack xem ở dạng MÃ NGUỒN (`kind: 'text'`), không render: file do người ngoài
+// gửi, render HTML là chạy markup lạ trong app (iframe vẫn tải ảnh/CSS remote ⇒ lộ IP +
+// "đã mở" cho người gửi). Markdown THÌ được xem trước: useMarkdown đã bỏ HTML thô, còn ảnh
+// từ link ngoài bị PreviewModal chặn cho file `readOnlyFile` (blockRemoteImages).
 
 const RE_OFFICE_PREVIEWABLE = /\.(docx|docm|dotx|xlsx|xlsm|xltx)$/i
-// Kiểu xem trước có render nội dung (markup, ảnh remote) ⇒ hạ về xem mã nguồn.
-// `notebook` cũng vậy: output của cell có thể là HTML/ảnh do người gửi nhúng.
-const RENDERED_KINDS: ReadonlySet<PreviewRef['kind']> = new Set(['html', 'markdown', 'notebook'])
+// Kiểu xem trước chạy markup của người gửi ⇒ hạ về xem mã nguồn. `notebook` cũng vậy:
+// output của cell có thể là HTML/ảnh do người gửi nhúng.
+const RENDERED_KINDS: ReadonlySet<PreviewRef['kind']> = new Set(['html', 'notebook'])
 const SAFE_EXTERNAL_URL = /^https?:\/\//i
 
 /** File có xem được trong PreviewModal không (loại khác chỉ tải về / mở bằng app). */

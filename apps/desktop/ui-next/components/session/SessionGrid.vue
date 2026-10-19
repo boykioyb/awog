@@ -1,74 +1,114 @@
 <template>
-  <div class="sgrid">
+  <div class="flex min-h-0 flex-auto flex-col gap-2 px-2.5 pt-2 pb-2.5">
     <!-- Thanh điều khiển: bật/tắt từng ô + thêm một phiên BẤT KỲ bằng id. Chip đầu
          tiên là chính phiên cha (mặc định tắt), rồi tới các phiên con; phiên thêm tay
-         nằm sau cùng, có dấu ✕ để bỏ hẳn. -->
-    <div class="sgbar">
-      <span class="sglbl">{{ t('sessions.grid.panes') }}</span>
+         nằm sau cùng, có dấu ✕ để bỏ hẳn.
+         Chip bật/tắt ô: pill nền muted; chip SÁNG là tint primary (cùng quy ước "on"
+         của các nút trạng thái mở), không phải nền đặc. -->
+    <div class="flex shrink-0 flex-wrap items-center gap-1.5">
+      <span class="text-xs text-muted-foreground">{{ t('sessions.grid.panes') }}</span>
       <!-- Ô của CHÍNH phiên cha: mặc định tắt (lưới mở ra là để nhìn các con), bật lại
            bằng chip này. -->
-      <button
-        class="sgchip"
-        :class="{ on: parentChip.shown }"
+      <Button
+        variant="outline"
+        size="xs"
+        class="h-auto max-w-45 gap-1 overflow-hidden rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground shadow-none"
+        :class="
+          parentChip.shown &&
+          'border-primary/40 bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary'
+        "
         :title="parentChip.title"
         @click="toggle(parentChip.engineId)"
       >
-        <span class="sgcdot" :style="{ background: parentChip.color }" />
+        <!-- Màu chấm là dữ liệu trạng thái phiên, không phải màu theme. -->
+        <span class="size-1.5 shrink-0 rounded-full" :style="{ background: parentChip.color }" />
         {{ parentChip.label }}
-      </button>
-      <span v-if="childChips.length" class="sgsep" />
-      <button
+      </Button>
+      <Separator v-if="childChips.length" orientation="vertical" class="h-3.5" />
+      <Button
         v-for="c in childChips"
         :key="c.id"
-        class="sgchip"
-        :class="{ on: c.shown }"
+        variant="outline"
+        size="xs"
+        class="h-auto max-w-45 gap-1 overflow-hidden rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground shadow-none"
+        :class="
+          c.shown &&
+          'border-primary/40 bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary'
+        "
         :title="c.title"
         @click="toggle(c.engineId)"
       >
-        <span class="sgcdot" :style="{ background: c.color }" />
+        <span class="size-1.5 shrink-0 rounded-full" :style="{ background: c.color }" />
         {{ c.label }}
-      </button>
+      </Button>
 
-      <span v-if="extraChips.length" class="sgsep" />
-      <span v-for="c in extraChips" :key="c.id" class="sgchip on is-extra" :title="c.title">
-        <span class="sgcdot" :style="{ background: c.color }" />
+      <Separator v-if="extraChips.length" orientation="vertical" class="h-3.5" />
+      <Badge
+        v-for="c in extraChips"
+        :key="c.id"
+        variant="outline"
+        class="max-w-45 gap-1 overflow-hidden border-primary/40 bg-primary/10 px-2 py-0.5 font-normal whitespace-nowrap text-primary"
+        :title="c.title"
+      >
+        <span class="size-1.5 shrink-0 rounded-full" :style="{ background: c.color }" />
         {{ c.label }}
-        <span class="sgcx" :title="t('sessions.grid.remove')" @click.stop="drop(c.engineId)">
+        <span
+          class="cursor-pointer opacity-70 hover:opacity-100"
+          :title="t('sessions.grid.remove')"
+          @click.stop="drop(c.engineId)"
+        >
           ✕
         </span>
-      </span>
+      </Badge>
 
-      <span style="flex: 1" />
+      <span class="flex-1" />
 
       <!-- Thêm phiên: gõ TÊN hoặc id. Dán id thì thêm thẳng; gõ tên thì hiện danh sách
-           khớp để chọn — người dùng nhớ tên phiên chứ không nhớ `260915-agent-3f2a`. -->
-      <div class="sgaddwrap">
+           khớp để chọn — người dùng nhớ tên phiên chứ không nhớ `260915-agent-3f2a`.
+           Ô nhập gọn (ôm theo hàng chip): nền muted, không viền, ring khi focus. -->
+      <div class="relative shrink-0">
         <Input
           v-model="query"
           :placeholder="t('sessions.grid.searchPlaceholder')"
-          class="sgadd"
+          class="h-auto w-47.5 border-transparent bg-muted px-2 py-0.5 text-xs shadow-none"
           @keydown.enter.prevent="addFirstMatch"
           @keydown.esc.prevent="query = ''"
         />
-        <div v-if="matches.length" class="sgmenu">
-          <div v-for="m in matches" :key="m.id" class="sgmi" @click="addSession(m.engineId)">
-            <span class="sgcdot" :style="{ background: m.color }" />
-            <span class="sgmt">{{ m.title }}</span>
-            <span v-if="m.role" class="sgmr">{{ m.role }}</span>
+        <div
+          v-if="matches.length || query.trim()"
+          class="absolute top-[118%] right-0 z-60 max-h-65 min-w-60 overflow-y-auto rounded-md border bg-popover p-1 shadow-lg"
+        >
+          <template v-if="matches.length">
+            <div
+              v-for="m in matches"
+              :key="m.id"
+              class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-foreground hover:bg-accent"
+              @click="addSession(m.engineId)"
+            >
+              <span class="size-1.5 shrink-0 rounded-full" :style="{ background: m.color }" />
+              <span class="min-w-0 flex-auto truncate">{{ m.title }}</span>
+              <span v-if="m.role" class="shrink-0 text-xs text-primary">{{ m.role }}</span>
+            </div>
+          </template>
+          <div v-else class="rounded-sm px-2 py-1.5 text-sm text-muted-foreground">
+            {{ t('sessions.grid.noMatch') }}
           </div>
-        </div>
-        <div v-else-if="query.trim()" class="sgmenu">
-          <div class="sgmi is-empty">{{ t('sessions.grid.noMatch') }}</div>
         </div>
       </div>
     </div>
 
-    <div v-if="panes.length" class="sgpanes">
+    <!-- `@container/sgpanes` + `@max-[900px]/sgpanes:` dịch đúng nguyên văn container
+         query cũ (khai ngay trên chính lưới). Lưu ý: container query chỉ khớp TỔ TIÊN,
+         nên biến thể này hiện không bao giờ bắn — giữ nguyên hành vi, đã ghi báo cáo. -->
+    <div
+      v-if="panes.length"
+      class="@container/sgpanes grid min-h-0 flex-auto grid-cols-2 gap-2 overflow-y-auto @max-[900px]/sgpanes:grid-cols-1"
+    >
+      <!-- Ô CUỐI khi tổng số ô là LẺ chiếm trọn hàng: 3 ô ⇒ 6/6 rồi 12, 1 ô ⇒ 12. -->
       <SessionGridPane
         v-for="(p, i) in panes"
         :key="p.id"
-        class="sgpane"
-        :class="{ wide: lastIsWide && i === panes.length - 1 }"
+        :class="lastIsWide && i === panes.length - 1 && 'col-span-full'"
         :session="p"
         :primary="p.id === session.id"
         @hide="hide(p)"
@@ -77,7 +117,9 @@
     </div>
     <!-- Tắt hết ô là một trạng thái hợp lệ (ô cha cũng ẩn được), nhưng một khung trống
          không nói được vì sao nó trống. -->
-    <div v-else class="sgempty">{{ t('sessions.grid.empty') }}</div>
+    <div v-else class="flex flex-auto items-center justify-center text-muted-foreground">
+      {{ t('sessions.grid.empty') }}
+    </div>
   </div>
 </template>
 
@@ -204,7 +246,7 @@ const panes = computed<Session[]>(() => {
 // Bố cục: lưới luôn HAI cột, và ô CUỐI của một số ô lẻ chiếm trọn hàng (2 ô ⇒ 6/6;
 // 3 ô ⇒ 6/6 rồi 12; 1 ô ⇒ 12). Ba ô một hàng thì mỗi transcript hẹp tới mức không đọc
 // được trên màn hình laptop, nên số cột không tăng theo bề rộng — chỉ GIẢM về một cột
-// khi khung hẹp (container query dưới `.sgpanes`).
+// khi khung hẹp (container query `sgpanes` trên lưới ô).
 const lastIsWide = computed(() => panes.value.length % 2 === 1)
 
 type Chip = {
@@ -290,193 +332,3 @@ function openFull(id: number) {
   store.setActive(id)
 }
 </script>
-
-<style scoped>
-.sgrid {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 10px 10px;
-}
-.sgbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sglbl {
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-/* Pane-toggle chips: rounded-full muted surface; a LIT chip is a primary tint
-   (same "on" idiom as .stab-btn.on / the open-state list buttons), not a fill. */
-.sgchip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sgchip:hover {
-  background: var(--accent-wash);
-}
-.sgchip.on {
-  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  color: var(--primary);
-}
-.sgchip.is-extra {
-  cursor: default;
-}
-.sgcdot {
-  width: 6px; /* design-token-ok: chấm tròn — con số px CHÍNH LÀ hình dạng */
-  height: 6px; /* design-token-ok: chấm tròn */
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.sgcx {
-  cursor: pointer;
-  opacity: 0.7;
-}
-.sgcx:hover {
-  opacity: 1;
-}
-.sgsep {
-  width: 1px;
-  height: 14px;
-  background: var(--border);
-}
-/* Add-session field — the proto search idiom (muted surface, borderless, ring on
-   focus) as a hand-rolled input: it is compact (hugs the chip row), so no <Input>. */
-.sgadd {
-  width: 190px;
-  padding: 3px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: var(--muted);
-  color: var(--foreground);
-  font-family: var(--sans);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  outline: none;
-}
-.sgadd::placeholder {
-  color: var(--muted-foreground);
-}
-.sgadd:focus-visible {
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.sgaddb {
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.sgaddb:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
-  color: var(--primary);
-}
-.sgaddb:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.sgaddwrap {
-  position: relative;
-  flex: 0 0 auto;
-}
-.sgmenu {
-  position: absolute;
-  top: 118%;
-  right: 0;
-  z-index: 60;
-  min-width: 240px;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 4px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-lg);
-}
-.sgmi {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 8px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sgmi:hover {
-  background: var(--accent-wash);
-}
-.sgmi.is-empty {
-  color: var(--muted-foreground);
-  cursor: default;
-}
-.sgmi.is-empty:hover {
-  background: transparent;
-}
-.sgmt {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sgmr {
-  flex: 0 0 auto;
-  color: var(--primary);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.sgpanes {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  overflow-y: auto;
-  /* Container query chứ không phải @media: cột chat co lại khi mở workspace panel
-     trong khi cửa sổ vẫn rộng nguyên — đo cửa sổ thì bỏ sót đúng cái trường hợp đó. */
-  container-type: inline-size;
-  container-name: sgpanes;
-}
-/* Ô CUỐI khi tổng số ô là LẺ chiếm trọn hàng: 3 ô ⇒ 6/6 rồi 12, 1 ô ⇒ 12. */
-.sgpane.wide {
-  grid-column: 1 / -1;
-}
-/* Một ô hẹp hơn chừng này thì transcript không còn đọc được — dồn về một cột. */
-@container sgpanes (max-width: 900px) {
-  .sgpanes {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.sgempty {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted-foreground);
-}
-</style>

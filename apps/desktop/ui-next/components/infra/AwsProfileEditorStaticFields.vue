@@ -1,24 +1,25 @@
 <template>
-  <div class="ape-secret">
-    <div class="ape-secret-head">
-      <Icon
-        name="shield"
-        style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-      />
-      <span class="ape-secret-title">{{ t('infra.editor.static.title') }}</span>
+  <!-- mono-ok (các ô font-mono dưới đây): access key / secret / session token là giá
+       trị copy-paste thẳng vào ~/.aws/credentials hoặc terminal (export AWS_*). -->
+  <div class="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/10 p-3">
+    <div class="flex items-center gap-2">
+      <Icon name="shield" class="size-3.5 text-primary" />
+      <span class="text-sm font-semibold text-foreground">
+        {{ t('infra.editor.static.title') }}
+      </span>
     </div>
-    <p class="ape-secret-hint">{{ t('infra.editor.static.hint') }}</p>
+    <p class="-mt-1 text-xs text-dim">{{ t('infra.editor.static.hint') }}</p>
     <!-- Đã nạp khoá thật từ ~/.aws/credentials vào form (2026-09-14): nói thẳng ra
          để người dùng không tưởng 3 ô đang rỗng là "khoá đã mất". -->
-    <p v-if="secretsLoaded" class="ape-secret-hint">{{ t('infra.editor.static.loaded') }}</p>
+    <p v-if="secretsLoaded" class="-mt-1 text-xs text-dim">{{ t('infra.editor.static.loaded') }}</p>
 
-    <div class="ape-field">
-      <label class="ape-label">
+    <div class="flex flex-col gap-1.5">
+      <Label class="gap-1 text-xs font-semibold text-foreground">
         <!-- Dấu `*` CHỈ ở lượt tạo mới: sửa profile có sẵn thì ô trống là "giữ
              nguyên khoá trên đĩa" (S2a) nên không bắt buộc. -->
         {{ t('infra.editor.static.accessKeyId') }}
-        <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
-      </label>
+        <span v-if="!isExisting" class="font-semibold text-destructive" aria-hidden="true">*</span>
+      </Label>
       <Input
         v-model.trim="model.accessKeyId"
         spellcheck="false"
@@ -28,19 +29,19 @@
             ? t('infra.editor.static.accessKeyIdPhKeep')
             : t('infra.editor.static.accessKeyIdPh')
         "
-        class="mono"
+        class="font-mono"
       />
-      <div v-if="accessKeyFormatWarn" class="ape-warn">
+      <div v-if="accessKeyFormatWarn" class="text-xs text-warning">
         {{ t('infra.editor.static.accessKeyFormatWarn') }}
       </div>
     </div>
 
-    <div class="ape-field">
-      <label class="ape-label">
+    <div class="flex flex-col gap-1.5">
+      <Label class="gap-1 text-xs font-semibold text-foreground">
         {{ t('infra.editor.static.secretAccessKey') }}
-        <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
-      </label>
-      <div class="ape-secret-row">
+        <span v-if="!isExisting" class="font-semibold text-destructive" aria-hidden="true">*</span>
+      </Label>
+      <div class="flex items-center gap-1.5">
         <Input
           v-model.trim="model.secretAccessKey"
           :type="showSecret ? 'text' : 'password'"
@@ -49,7 +50,7 @@
           :placeholder="
             isExisting ? t('infra.editor.static.secretPhKeep') : t('infra.editor.static.secretPh')
           "
-          class="mono"
+          class="min-w-0 flex-1 font-mono"
         />
         <Button
           type="button"
@@ -58,20 +59,17 @@
           size="iconMd"
           @click="showSecret = !showSecret"
         >
-          <Icon
-            :name="showSecret ? 'eye-off' : 'eye'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="showSecret ? 'eye-off' : 'eye'" class="size-3.5" />
         </Button>
       </div>
     </div>
 
-    <div class="ape-field">
-      <label class="ape-label">
+    <div class="flex flex-col gap-1.5">
+      <Label class="gap-1 text-xs font-semibold text-foreground">
         {{ t('infra.editor.static.sessionToken') }}
-        <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
-      </label>
-      <div class="ape-secret-row">
+        <span class="font-normal text-dim">{{ t('infra.editor.optional') }}</span>
+      </Label>
+      <div class="flex items-center gap-1.5">
         <Input
           v-model.trim="model.sessionToken"
           :type="showToken ? 'text' : 'password'"
@@ -82,7 +80,7 @@
               ? t('infra.editor.static.sessionTokenPhKeep')
               : t('infra.editor.static.sessionTokenPh')
           "
-          class="mono"
+          class="min-w-0 flex-1 font-mono"
         />
         <Button
           type="button"
@@ -91,24 +89,23 @@
           size="iconMd"
           @click="showToken = !showToken"
         >
-          <Icon
-            :name="showToken ? 'eye-off' : 'eye'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="showToken ? 'eye-off' : 'eye'" class="size-3.5" />
         </Button>
       </div>
     </div>
   </div>
 
-  <div class="ape-row">
+  <div class="grid grid-cols-2 gap-3.5">
     <AwsRegionField
       v-model="model.region"
       :hint="regionHint"
       :hint-tone="regionHintTone"
       :required="regionRequired"
     />
-    <div class="ape-field">
-      <label class="ape-label">{{ t('infra.editor.output') }}</label>
+    <div class="flex flex-col gap-1.5">
+      <Label class="gap-1 text-xs font-semibold text-foreground">
+        {{ t('infra.editor.output') }}
+      </Label>
       <AppSelect v-model="model.output" :options="outputOptions" width="100%" />
     </div>
   </div>
@@ -188,91 +185,3 @@ const outputOptions = computed<AppSelectOption[]>(() => [
   { value: 'table', label: 'table' },
 ])
 </script>
-
-<style scoped>
-.ape-secret {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-}
-.ape-secret-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.ape-secret-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.ape-secret-hint {
-  margin: -4px 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ape-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ape-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.ape-optional {
-  font-weight: 400;
-  color: var(--textDim);
-}
-/* Dấu `*` bắt buộc — cùng vocabulary với `.sse-req` (SshEditor). */
-.ape-req {
-  color: var(--danger);
-  font-weight: 700;
-}
-.ape-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ape-input.mono {
-  /* mono-ok: access key / secret / session token là giá trị copy-paste thẳng
-     vào ~/.aws/credentials hoặc terminal (export AWS_*). */
-  font-family: var(--code);
-}
-.ape-input:focus {
-  border-color: var(--accent);
-}
-.ape-secret-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.ape-secret-row .ape-input {
-  flex: 1;
-  min-width: 0;
-}
-.ape-warn {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-}
-.ape-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-</style>

@@ -1,13 +1,16 @@
 <template>
-  <div class="detail">
-    <div class="empty">
-      <span class="ei"><Icon name="external" style="width: 22px; height: 22px" /></span>
-      <div class="et">
+  <!-- hook-ok: `.detail` — app-shell.css `[data-page='sessions'] .md > .detail` chừa chỗ dock terminal -->
+  <div class="detail" :class="ROOT_CLASS">
+    <div class="flex flex-1 flex-col items-center justify-center gap-3 text-center text-dim">
+      <span class="grid size-12 place-items-center rounded-xl border bg-muted text-dim">
+        <Icon name="external" class="size-5" />
+      </span>
+      <div class="text-lg text-muted-foreground">
         {{ t('sessions.window.handedOff.title') }}
         <br />
-        <span class="ho-title">{{ session.title }}</span>
+        <span class="font-medium text-foreground">{{ session.title }}</span>
       </div>
-      <div class="ho-actions">
+      <div class="flex items-center gap-2">
         <Button @click="focusWindow">
           <Icon name="external" />
           {{ t('sessions.window.handedOff.focus') }}
@@ -36,19 +39,7 @@ const store = useSessionsStore()
 // session), so "Focus" is the same call as "Open in its own window".
 const focusWindow = () => void store.openInWindow(props.session.id)
 const bringBack = () => void store.closeWindowFor(props.session.id)
-</script>
 
-<style scoped>
-/* `.detail`/`.empty`/`.ei`/`.et` stay on the shared global chrome — theme-cute.css
-   restyles that empty-state block family for the whole app, so this file only owns
-   the title weight and the action row. */
-.ho-title {
-  color: var(--foreground);
-  font-weight: 500;
-}
-.ho-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-</style>
+// Cột chi tiết: lấp phần còn lại, nền content (thay skin `.detail` cũ — tên class giữ làm hook).
+const ROOT_CLASS = 'flex min-w-0 flex-1 flex-col overflow-hidden bg-background'
+</script>

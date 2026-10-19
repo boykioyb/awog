@@ -22,36 +22,28 @@
     <!-- Thanh nổi khi bôi đen text trong feed — cùng bộ ba của màn session:
          Quote (chèn `> excerpt` vào composer), Translate (popover dịch chung),
          Copy MD (markdown gốc của đoạn chọn, không phải text đã flatten). -->
-    <div
+    <WorkspaceQuoteBar
       v-if="selBar"
-      class="btsel"
-      :style="{ '--sel-x': `${selBar.x}px`, '--sel-y': `${selBar.y}px` }"
-      @mousedown.prevent
-    >
-      <button class="btselbtn" @click="onQuote">
-        <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('sessions.quote.action') }}
-      </button>
-      <button class="btselbtn" @click="onTranslate">
-        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('translate.action') }}
-      </button>
-      <button class="btselbtn" @click="onCopyMd">
-        <Icon
-          :name="mdCopied ? 'check' : 'copy'"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        {{ mdCopied ? t('common.copied') : t('common.copyMarkdown') }}
-      </button>
-    </div>
+      :x="selBar.x"
+      :y="selBar.y"
+      :copied="mdCopied"
+      @quote="onQuote"
+      @translate="onTranslate"
+      @copy-md="onCopyMd"
+    />
 
     <!-- Trạng thái giao tin của comment user cuối ("đã chuyển / xếp hàng /
          không ai nhận") — phản hồi tức thì khi user nhắn. Roster member đã có
          sẵn trong header của item modal nên không liệt kê lại ở đây. -->
     <div v-if="awaitRow" class="flex shrink-0 border-t border-border px-4 py-1.5">
-      <div class="btawait flex items-center gap-1.5" :data-tone="awaitRow.tone">
+      <!-- Mức info mờ nhẹ (trạng thái giao tin, không phải lỗi); mức warn (không ai
+           nhận / inbox lỗi / phiên đã đóng) nổi amber. -->
+      <div
+        class="flex items-center gap-1.5"
+        :class="awaitRow.tone === 'warn' ? 'text-warning' : 'text-faint'"
+      >
         <component :is="awaitRow.icon" class="size-3 shrink-0" />
-        <span class="truncate text-[11px]">{{ awaitRow.line }}</span>
+        <span class="truncate text-xs">{{ awaitRow.line }}</span>
       </div>
     </div>
 
@@ -74,7 +66,8 @@
         @submit="post"
       />
     </div>
-    <input ref="fileInput" type="file" multiple style="display: none" @change="onPick" />
+    <!-- raw-ok: input file ẩn, chỉ để mở hộp chọn file của hệ điều hành -->
+    <input ref="fileInput" type="file" multiple class="hidden" @change="onPick" />
   </div>
 </template>
 
@@ -102,6 +95,7 @@ import { useBoardAtts } from '~/composables/useBoardAtts'
 import { rawMarkdownForSelection } from '~/utils/selection-markdown'
 import { boardCommentToMessage } from '~/utils/board-comment-message'
 import SessionTranscript from '~/components/session/SessionTranscript.vue'
+import WorkspaceQuoteBar from './WorkspaceQuoteBar.vue'
 import WorkspaceBoardComposer from './WorkspaceBoardComposer.vue'
 
 const props = defineProps<{
@@ -350,59 +344,3 @@ async function post(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-/* Hàng "đã chuyển/chờ phản hồi" — mức info mờ nhẹ (trạng thái giao tin, không
-   phải lỗi); mức warn (không ai nhận / inbox lỗi / phiên đã đóng) nổi amber. */
-.btawait {
-  color: var(--textFaint);
-}
-.btawait[data-tone='warn'] {
-  color: var(--amber);
-}
-
-/* Thanh nổi Quote/Translate/Copy-MD — sao chép `.selactions` của SessionDetail
-   (scoped CSS không tái dùng được). z 80 đủ: thread sống TRONG stacking
-   context của `.wsed-ovl` (160) nên so với nội dung modal nó vẫn nổi trên —
-   fixed chỉ tranh z trong cùng context, không cần vượt 160 của chính overlay. */
-.btsel {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 80;
-  transform: translate(
-    clamp(8px, calc(var(--sel-x, 0px) - 50%), calc(100vw - 100% - 8px)),
-    max(8px, calc(var(--sel-y, 0px) - 100%))
-  );
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  max-width: calc(100vw - 16px);
-  padding: 4px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-}
-.btselbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--popover-foreground);
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.btselbtn:hover {
-  background: var(--accent-wash);
-}
-.btselbtn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-</style>

@@ -1,204 +1,238 @@
 <template>
-  <span ref="anchorEl" class="ntf" :class="`ntf-anchor-${anchor}`">
-    <Button
-      variant="ghost"
-      size="iconSm"
-      class="ntf-btn"
-      :title="t('github.inbox.title')"
-      :aria-expanded="open"
-      @click.stop="toggle"
-    >
-      <Icon name="bell" style="width: var(--icon-md); height: var(--icon-md)" />
-      <span v-if="unreadCount > 0" class="ntf-badge">{{ badge }}</span>
-    </Button>
-    <Teleport to="body">
-      <div
-        v-if="open"
-        ref="panelEl"
-        class="ntf-panel"
-        :style="panelStyle"
-        role="dialog"
-        :aria-label="t('github.inbox.title')"
-        @click.stop
+  <!-- Popover portal ra <body>, neo mép phải của chuông (header của SidebarInset).
+       PopoverContent mang role="dialog" + data-state="open" nên đã nằm trong
+       OVERLAYS của useEmbeddedBrowser.ts — trình duyệt nhúng nhường chỗ khi panel mở. -->
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="relative shrink-0 text-muted-foreground hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+        :title="t('github.inbox.title')"
       >
-        <div class="ntf-head">
-          <span class="ntf-head-title">{{ t('github.inbox.title') }}</span>
-          <button
-            class="ntf-act"
-            type="button"
-            :disabled="loading"
-            :title="t('github.inbox.refresh')"
-            @click="refresh"
-          >
-            <Icon
-              name="refresh"
-              class="ntf-refresh-ic"
-              :class="{ spinning: loading }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-          </button>
-          <button
-            class="ntf-act"
-            type="button"
-            :disabled="!unreadCount"
-            :title="t('github.inbox.markAllRead')"
-            @click="markAll"
-          >
-            <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
-            class="ntf-act"
-            type="button"
-            :title="t('github.inbox.settings')"
-            @click="goSettings"
-          >
-            <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+        <Icon name="bell" class="size-4!" />
+        <CountBadge v-if="unreadCount > 0">{{ badge }}</CountBadge>
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent
+      align="end"
+      :side-offset="6"
+      class="flex w-105 flex-col overflow-hidden p-0"
+      :aria-label="t('github.inbox.title')"
+    >
+      <div class="flex items-center gap-1 py-2 pr-2 pl-3">
+        <span class="min-w-0 flex-1 truncate text-foreground">{{ t('github.inbox.title') }}</span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
+          :disabled="loading"
+          :title="t('github.inbox.refresh')"
+          @click="refresh"
+        >
+          <!-- Reload feedback. `[data-reduced-motion='1'] *` toàn cục đã tắt animation
+               cho người dùng chọn giảm chuyển động. -->
+          <Icon name="refresh" :class="loading && 'animate-spin'" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
+          :disabled="!unreadCount"
+          :title="t('github.inbox.markAllRead')"
+          @click="markAll"
+        >
+          <Icon name="check" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
+          :title="t('github.inbox.settings')"
+          @click="goSettings"
+        >
+          <Icon name="settings" />
+        </Button>
+      </div>
+      <Separator />
 
-        <!-- Watched = repos of the projects opted in at Settings → Git (the only ones
+      <!-- Watched = repos of the projects opted in at Settings → Git (the only ones
            allowed to toast). The filter is only OFFERED when it would change the
            list: two tabs showing the same count taught the user nothing except that
            one of them was pointless. -->
-        <div v-if="visibleTabs.length > 1" class="ntf-tabs">
-          <button
-            v-for="tab in visibleTabs"
-            :key="tab"
-            class="ntf-tab"
-            :class="{ on: filter === tab }"
-            type="button"
-            :title="tabHint(tab)"
-            @click="filter = tab"
-          >
-            {{ tabLabel(tab) }}
-            <span class="ntf-tab-n tnum">{{ tabCount(tab) }}</span>
-          </button>
-        </div>
-
-        <div class="ntf-body">
-          <!-- Tab "PR" là một danh sách KHÁC (theo dõi CI + review của từng PR), nên
-             nó thay cả thân panel chứ không lọc danh sách thông báo. -->
-          <template v-if="filter === 'prs'">
-            <p v-if="prError" class="ntf-note err">{{ prError }}</p>
-            <!-- Rỗng là một KHẲNG ĐỊNH ("không có PR nào để theo dõi") — đừng nói nó
-               cạnh một lỗi, chỗ mà sự thật là "không biết". -->
-            <p v-else-if="!prRows.length" class="ntf-note">{{ t('ghWatch.empty') }}</p>
-            <GitPrWatchRow
-              v-for="row in prRows"
-              :key="row.key"
-              :repo="row.repo"
-              :number="row.number"
-              :title="row.title"
-              :watched="row.watched"
-              :item="row.item"
-              :session-label="row.sessionLabel"
-              :busy="prBusy"
-              @open="openPrExternal(row.url)"
-              @toggle="(watch) => onTogglePrWatch(row, watch)"
-            />
-          </template>
-          <!-- Tab "Triển khai": pipeline hỏng / đang chờ duyệt (useCicdNotify). Như
-             tab PR, đây là một danh sách KHÁC nên nó thay cả thân panel. -->
-          <template v-else-if="filter === 'cicd'">
-            <p v-if="cicdError" class="ntf-note err">{{ cicdError }}</p>
-            <p v-else-if="!cicdEnabled" class="ntf-note">{{ t('infra.cicd.notify.off') }}</p>
-            <p v-else-if="!cicdRuns.length" class="ntf-note">{{ t('infra.cicd.notify.empty') }}</p>
-            <button
-              v-for="run in cicdRuns"
-              :key="`${run.source}|${run.id}`"
-              class="ntf-cicd-row"
-              :class="{ wait: run.status === 'waiting' }"
-              type="button"
-              :title="t('infra.cicd.openOnHost')"
-              @click="openCicdRun(run)"
+      <template v-if="visibleTabs.length > 1">
+        <Tabs
+          :model-value="filter"
+          class="px-2 py-1.5"
+          @update:model-value="(v: string | number) => (filter = v as InboxTab)"
+        >
+          <TabsList class="h-auto">
+            <TabsTrigger
+              v-for="tab in visibleTabs"
+              :key="tab"
+              :value="tab"
+              class="px-2 py-0.5"
+              :title="tabHint(tab)"
             >
-              <span class="ntf-cicd-dot" :class="run.status" />
-              <span class="ntf-cicd-body">
-                <span class="ntf-cicd-title">{{ run.project }} · {{ run.title }}</span>
-                <span class="ntf-cicd-meta">
-                  <span>{{ t(`infra.cicd.status.${run.status}`) }}</span>
-                  <span v-if="run.stepName">
-                    · {{ t('infra.cicd.failedAtStep', { step: run.stepName }) }}
-                  </span>
-                  <span v-if="run.startedAt" class="ntf-cicd-when">
-                    · {{ formatRelativeAgo(run.startedAt, t, now) }}
-                  </span>
+              {{ tabLabel(tab) }}
+              <span class="text-sm text-dim tabular-nums">{{ tabCount(tab) }}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Separator />
+      </template>
+
+      <!-- Không cuộn ngang: hàng tự cắt `…` (TopBarNotifyRow), nên thứ rộng hơn panel
+           là lỗi layout chứ không phải nội dung để kéo xem. -->
+      <div class="max-h-[min(520px,68vh)] overflow-x-hidden overflow-y-auto px-1 pb-1">
+        <!-- Tab "PR" là một danh sách KHÁC (theo dõi CI + review của từng PR), nên
+             nó thay cả thân panel chứ không lọc danh sách thông báo. -->
+        <template v-if="filter === 'prs'">
+          <p v-if="prError" class="px-2 py-2 text-destructive">{{ prError }}</p>
+          <!-- Rỗng là một KHẲNG ĐỊNH ("không có PR nào để theo dõi") — đừng nói nó
+               cạnh một lỗi, chỗ mà sự thật là "không biết". -->
+          <p v-else-if="!prRows.length" class="px-2 py-2 text-dim">{{ t('ghWatch.empty') }}</p>
+          <GitPrWatchRow
+            v-for="row in prRows"
+            :key="row.key"
+            :repo="row.repo"
+            :number="row.number"
+            :title="row.title"
+            :watched="row.watched"
+            :item="row.item"
+            :session-label="row.sessionLabel"
+            :busy="prBusy"
+            @open="openPrExternal(row.url)"
+            @toggle="(watch) => onTogglePrWatch(row, watch)"
+          />
+        </template>
+        <!-- Tab "Triển khai": pipeline hỏng / đang chờ duyệt (useCicdNotify). Như
+             tab PR, đây là một danh sách KHÁC nên nó thay cả thân panel. Chỉ ĐỌC +
+             một cú bấm mở lần chạy ở chính nguồn của nó: một lần chạy hỏng tự rời
+             danh sách khi chạy lại thành công, không có nút "đã đọc". -->
+        <template v-else-if="filter === 'cicd'">
+          <p v-if="cicdError" class="px-2 py-2 text-destructive">{{ cicdError }}</p>
+          <p v-else-if="!cicdEnabled" class="px-2 py-2 text-dim">
+            {{ t('infra.cicd.notify.off') }}
+          </p>
+          <p v-else-if="!cicdRuns.length" class="px-2 py-2 text-dim">
+            {{ t('infra.cicd.notify.empty') }}
+          </p>
+          <!-- raw-ok: cả hàng nhiều dòng là một vùng bấm (mở lần chạy ở nguồn) -->
+          <button
+            v-for="run in cicdRuns"
+            :key="`${run.source}|${run.id}`"
+            class="flex w-full cursor-pointer items-start gap-2 rounded-sm px-2 py-2 text-left text-foreground hover:bg-accent"
+            type="button"
+            :title="t('infra.cicd.openOnHost')"
+            @click="openCicdRun(run)"
+          >
+            <span
+              class="mt-1.5 size-1.5 shrink-0 rounded-full"
+              :class="CICD_DOT[run.status] ?? 'bg-dim'"
+            />
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="truncate" :class="run.status === 'waiting' && 'text-warning'">
+                {{ run.project }} · {{ run.title }}
+              </span>
+              <span class="flex min-w-0 gap-1 text-sm text-dim">
+                <span>{{ t(`infra.cicd.status.${run.status}`) }}</span>
+                <span v-if="run.stepName">
+                  · {{ t('infra.cicd.failedAtStep', { step: run.stepName }) }}
+                </span>
+                <span v-if="run.startedAt" class="ml-auto">
+                  · {{ formatRelativeAgo(run.startedAt, t, now) }}
                 </span>
               </span>
-              <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
-            </button>
-          </template>
-          <template v-else>
-            <p v-if="error" class="ntf-note err">{{ error }}</p>
-            <p v-else-if="!enabled" class="ntf-note">{{ t('github.inbox.off') }}</p>
-            <p v-else-if="!watchedProjectCount" class="ntf-note">
-              {{ t('github.inbox.noWatched') }}
-            </p>
-
-            <!-- The empty state is a CLAIM ("your inbox is clear") — never make it next
-             to an error, where the truth is "we don't know". -->
-            <p v-if="loading && !visible.length" class="ntf-note">
-              {{ t('github.inbox.loading') }}
-            </p>
-            <p v-else-if="!visible.length && !error" class="ntf-note">
-              {{ filter === 'watched' ? t('github.inbox.emptyWatched') : t('github.inbox.empty') }}
-            </p>
-            <!-- Grouped by repo: one inbox is usually 3 repos deep, so printing the
-             owner/repo on every row spent the widest column on the least
-             informative text. The header carries it once and sticks while its rows
-             scroll; a group whose project isn't watched reads dimmer (it never
-             would have interrupted you). -->
-            <div v-for="g in groups" :key="g.repo" class="ntf-grp">
-              <!-- The whole header is the collapse toggle (bigger target than a lone
-               chevron). A collapsed group keeps its unread dot + count visible, so
-               folding a noisy repo away never hides that it has something new. -->
-              <button
-                class="ntf-grp-head"
-                type="button"
-                :aria-expanded="!isCollapsed(g.repo)"
-                :title="isCollapsed(g.repo) ? t('github.inbox.expand') : t('github.inbox.collapse')"
-                @click="toggleGroup(g.repo)"
-              >
-                <Icon
-                  name="chev-right"
-                  class="ntf-grp-chev"
-                  :class="{ open: !isCollapsed(g.repo) }"
-                />
-                <span class="ntf-grp-name" :title="g.repo">{{ g.name }}</span>
-                <span v-if="g.owner" class="ntf-grp-owner">{{ g.owner }}</span>
-                <!-- Names the reason this group is dimmed, instead of leaving the user to
-                 infer it from an opacity value. -->
-                <span v-if="!g.watched" class="ntf-grp-tag">
-                  {{ t('github.inbox.notWatched') }}
-                </span>
-                <span v-if="g.unread" class="ntf-grp-dot" />
-                <span class="ntf-grp-n tnum">{{ g.items.length }}</span>
-              </button>
-              <template v-if="!isCollapsed(g.repo)">
-                <TopBarNotifyRow
-                  v-for="n in g.items"
-                  :key="n.id"
-                  :item="n"
-                  :author="authorOf(n)"
-                  @open="onOpen"
-                  @external="onExternal"
-                  @read="onRead"
-                />
-              </template>
-            </div>
-          </template>
-        </div>
-
-        <div class="ntf-foot">
-          <span class="ntf-foot-when">{{ checkedLabel }}</span>
-          <button class="ntf-foot-link" type="button" @click="openOnGithub">
-            {{ t('github.inbox.openOnGithub') }}
+            </span>
+            <Icon name="external" class="size-3 shrink-0" />
           </button>
-        </div>
+        </template>
+        <template v-else>
+          <p v-if="error" class="px-2 py-2 text-destructive">{{ error }}</p>
+          <p v-else-if="!enabled" class="px-2 py-2 text-dim">{{ t('github.inbox.off') }}</p>
+          <p v-else-if="!watchedProjectCount" class="px-2 py-2 text-dim">
+            {{ t('github.inbox.noWatched') }}
+          </p>
+
+          <!-- The empty state is a CLAIM ("your inbox is clear") — never make it next
+               to an error, where the truth is "we don't know". -->
+          <p v-if="loading && !visible.length" class="px-2 py-2 text-dim">
+            {{ t('github.inbox.loading') }}
+          </p>
+          <p v-else-if="!visible.length && !error" class="px-2 py-2 text-dim">
+            {{ filter === 'watched' ? t('github.inbox.emptyWatched') : t('github.inbox.empty') }}
+          </p>
+          <!-- Grouped by repo: one inbox is usually 3 repos deep, so printing the
+               owner/repo on every row spent the widest column on the least
+               informative text. The header carries it once and sticks while its rows
+               scroll. Không làm mờ nhóm không theo dõi: khi chưa chọn project nào thì
+               MỌI nhóm đều "không theo dõi" — chip chữ nói ra điều đó thay vì opacity. -->
+          <div v-for="g in groups" :key="g.repo" class="[&+&]:mt-0.5">
+            <!-- The whole header is the collapse toggle (bigger target than a lone
+                 chevron). A collapsed group keeps its unread dot + count visible, so
+                 folding a noisy repo away never hides that it has something new.
+                 Nền đặc (bg-popover): các hàng cuộn bên DƯỚI header dính. -->
+            <Button
+              variant="ghost"
+              size="xs"
+              class="group/grp sticky top-0 z-1 h-auto w-full justify-start gap-1.5 bg-popover pt-2 pr-2 pb-1 pl-1 text-sm font-normal hover:bg-popover"
+              :aria-expanded="!isCollapsed(g.repo)"
+              :title="isCollapsed(g.repo) ? t('github.inbox.expand') : t('github.inbox.collapse')"
+              @click="toggleGroup(g.repo)"
+            >
+              <Icon
+                name="chev-right"
+                class="size-3! text-dim transition-transform group-hover/grp:text-foreground motion-reduce:transition-none"
+                :class="!isCollapsed(g.repo) && 'rotate-90'"
+              />
+              <span
+                class="min-w-0 shrink truncate text-muted-foreground group-hover/grp:text-foreground"
+                :title="g.repo"
+              >
+                {{ g.name }}
+              </span>
+              <span v-if="g.owner" class="min-w-0 shrink truncate text-dim">{{ g.owner }}</span>
+              <!-- Names the reason this group is dimmed, instead of leaving the user to
+                   infer it from an opacity value. -->
+              <Badge v-if="!g.watched" variant="outline" class="shrink-0 font-normal text-dim">
+                {{ t('github.inbox.notWatched') }}
+              </Badge>
+              <!-- Cùng chấm accent của hàng: nhóm đã gập vẫn báo "có cái chưa đọc". -->
+              <span class="ml-auto flex shrink-0 items-center gap-1.5">
+                <span v-if="g.unread" class="size-1.5 rounded-full bg-primary" />
+                <span class="text-dim tabular-nums">{{ g.items.length }}</span>
+              </span>
+            </Button>
+            <template v-if="!isCollapsed(g.repo)">
+              <TopBarNotifyRow
+                v-for="n in g.items"
+                :key="n.id"
+                :item="n"
+                :author="authorOf(n)"
+                @open="onOpen"
+                @external="onExternal"
+                @read="onRead"
+              />
+            </template>
+          </div>
+        </template>
       </div>
-      <div v-if="open" class="ntf-backdrop" @click="close" />
-    </Teleport>
-  </span>
+
+      <Separator />
+      <div class="flex items-center gap-2 px-3 py-2 text-sm text-dim">
+        <span class="min-w-0 flex-1 truncate">{{ checkedLabel }}</span>
+        <Button
+          variant="link"
+          size="xs"
+          class="h-auto shrink-0 px-0 font-normal"
+          @click="openOnGithub"
+        >
+          {{ t('github.inbox.openOnGithub') }}
+        </Button>
+      </div>
+    </PopoverContent>
+  </Popover>
 </template>
 
 <script setup lang="ts">
@@ -229,7 +263,7 @@ import { useSessionsStore } from '~/stores/sessions'
 import { useSettingsStore } from '~/stores/settings'
 import { formatRelativeAgo } from '~/utils/relative-time'
 
-// Top-bar bell: the GitHub notification inbox (docs/features/github-notifications.md).
+// Header bell: the GitHub notification inbox (docs/features/github-notifications.md).
 // The list itself is the app-lifetime singleton in useGhInbox — the poller keeps it
 // current, so opening the panel costs nothing. This component owns only the popover
 // and routes each row through the poller's own open path.
@@ -238,9 +272,12 @@ import { formatRelativeAgo } from '~/utils/relative-time'
 // / chờ duyệt (useCicdNotify). Cả hai là danh sách KHÁC, không phải một bộ lọc của
 // hộp thư — chúng thay cả thân panel.
 type InboxTab = 'all' | 'watched' | 'prs' | 'cicd'
-// Vị trí đặt nút: 'right-top' = AppTopBar (panel xổ xuống, neo mép phải),
-// 'left-bottom' = NavRail footer (panel bật lên, neo mép trái).
-const { anchor = 'right-top' } = defineProps<{ anchor?: 'right-top' | 'left-bottom' }>()
+
+// Chấm trạng thái của hàng "Triển khai": đỏ = hỏng, vàng = chờ duyệt, còn lại mờ.
+const CICD_DOT: Partial<Record<CicdRun['status'], string>> = {
+  failed: 'bg-destructive',
+  waiting: 'bg-warning',
+}
 
 const { t } = useI18n()
 const now = useNow()
@@ -446,39 +483,18 @@ function openCicdRun(run: CicdRun): void {
 }
 
 // Opening pulls a fresh list: the panel is a deliberate "what do I have right now?"
-// question, and the poll interval can be up to 10 minutes wide.
-function toggle(): void {
-  open.value = !open.value
-  if (open.value) {
-    void refreshGhInbox()
-    // Đọc từ đĩa, không gọi GitHub (gh.prWatchList) — mở panel không được phép
-    // biến thành một request mạng nữa.
-    void refreshPrWatch()
-  }
-}
+// question, and the poll interval can be up to 10 minutes wide. Esc / bấm ra ngoài
+// do Popover tự lo.
+watch(open, (isOpen) => {
+  if (!isOpen) return
+  void refreshGhInbox()
+  // Đọc từ đĩa, không gọi GitHub (gh.prWatchList) — mở panel không được phép
+  // biến thành một request mạng nữa.
+  void refreshPrWatch()
+})
 function close(): void {
   open.value = false
 }
-useEscToClose(open, close)
-
-// ─── Panel position ────────────────────────────────────────────────────────
-// Teleport body → `position: fixed`, cần toạ độ tính từ getBoundingClientRect
-// của nút bell. `panelEl` chỉ ref tới wrapper `.ntf` (vẫn trong cây DOM) —
-// tính trước khi `open` lật để lần mở đầu không nháy.
-const anchorEl = ref<HTMLElement | null>(null)
-const panelEl = ref<HTMLElement | null>(null)
-const panelStyle = computed(() => {
-  if (!anchorEl.value) return {}
-  const r = anchorEl.value.getBoundingClientRect()
-  const GAP = 6
-  const W = 420
-  if (anchor === 'left-bottom') {
-    return { left: `${r.left}px`, bottom: `${window.innerHeight - r.top + GAP}px`, width: `${W}px` }
-  }
-  // right-top: neo phải của panel với mép phải của nút, tràn trái tự do
-  const left = Math.max(12, Math.min(r.right - W, window.innerWidth - W - 12))
-  return { left: `${left}px`, top: `${r.bottom + GAP}px`, width: `${W}px` }
-})
 
 const refresh = (): void => void refreshGhInbox()
 
@@ -517,343 +533,3 @@ function openOnGithub(): void {
   void useLinkOpen().openLink('https://github.com/notifications')
 }
 </script>
-
-<style scoped>
-.ntf {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-}
-/* Matches the top bar's .kbd height/round so bell + search read as one row.
-   Geometry/hover/focus come from the ghost iconSm Button; scoped keeps the badge
-   anchor, the transparent border the .on state paints in, and the live/open
-   states. */
-.ntf-btn {
-  position: relative;
-  border: 1px solid transparent;
-  color: var(--textDim);
-}
-.ntf-btn:hover {
-  color: var(--foreground);
-}
-.ntf-btn.live {
-  color: var(--foreground);
-}
-.ntf-btn.on {
-  color: var(--primary);
-  border-color: var(--input);
-  background: var(--accent-wash);
-}
-/* Huy hiệu đếm đè góc icon 16px: chữ 12px trong viên 16px chiếm gần trọn icon và
-   đè lên chuông. 10px trong viên 14px (hộp dòng chẵn) — px cố định vì huy hiệu
-   không scale theo Appearance (icon bên dưới cũng không). */
-.ntf-badge {
-  position: absolute;
-  top: -2px;
-  right: -3px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: var(--r-pill);
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 14px;
-  text-align: center;
-}
-
-/* Teleport body → `position: fixed`, toạ độ do panelStyle tính từ nút bell
-   (`bottom` cho anchor left-bottom — bật LÊN từ rail; `top` cho right-top —
-   xổ XUỐNG từ topbar). */
-.ntf-panel {
-  position: fixed;
-  z-index: 96;
-  max-width: calc(100vw - 24px);
-  display: flex;
-  flex-direction: column;
-  background: var(--popover);
-  /* --input = the stronger hairline the app puts on elevated popovers (.smenu);
-     canonical name for the same value the panel always used. */
-  border: 1px solid var(--input);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-}
-.ntf-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 95;
-}
-.ntf-head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 9px 8px 9px 11px;
-  border-bottom: 1px solid var(--border);
-}
-.ntf-head-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-act {
-  flex: 0 0 auto;
-  padding: 4px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.ntf-act:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.ntf-act:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-/* Reload feedback. Global `[data-reduced-motion='1'] *` already neutralises this
-   for users who asked for less motion, so no separate guard here. */
-.ntf-refresh-ic.spinning {
-  animation: ntf-spin 0.8s linear infinite;
-}
-@keyframes ntf-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.ntf-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.ntf-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  font: inherit;
-}
-.ntf-tab:hover {
-  color: var(--foreground);
-}
-.ntf-tab.on {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-.ntf-tab-n {
-  font-size: 12px;
-  line-height: 12px;
-  color: var(--textDim);
-}
-.ntf-tab.on .ntf-tab-n {
-  color: var(--primary);
-}
-.ntf-body {
-  max-height: min(520px, 68vh);
-  overflow-y: auto;
-  /* Hard stop on sideways scroll: rows ellipsize (TopBarNotifyRow), so anything
-     wider than the panel is a layout bug, not content the user should pan to. */
-  overflow-x: hidden;
-  padding: 0 5px 5px;
-}
-/* Repo group. The header sticks to the top of the scroll box so you always know
-   which repo the rows under the cursor belong to. */
-.ntf-grp + .ntf-grp {
-  margin-top: 2px;
-}
-/* No opacity dim on a non-watched group: with no project opted in EVERY group is
-   "not watched", so the dim landed on the whole list and just made text hard to
-   read. The `không theo dõi` chip states it in words instead — an opacity value is
-   not something the user can decode anyway. */
-.ntf-grp-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-width: 0;
-  /* Opaque: rows scroll UNDER this. */
-  background: var(--popover);
-  border: 0;
-  padding: 7px 8px 5px 4px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  text-align: left;
-  cursor: pointer;
-}
-.ntf-grp-head:hover .ntf-grp-name,
-.ntf-grp-head:hover .ntf-grp-chev {
-  color: var(--foreground);
-}
-.ntf-grp-head:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-  border-radius: var(--r-xs);
-}
-.ntf-grp-chev {
-  flex: 0 0 auto;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--textDim);
-  transition: transform 0.14s ease;
-}
-.ntf-grp-chev.open {
-  transform: rotate(90deg);
-}
-/* Same accent dot the rows use — a folded group still says "something in here is
-   unread" without spelling out a second number. */
-.ntf-grp-dot {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  margin-left: auto;
-  border-radius: 50%;
-  background: var(--primary);
-}
-.ntf-grp-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-grp-owner {
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-grp-tag {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-}
-.ntf-grp-n {
-  flex: 0 0 auto;
-  /* Pushes itself right when nothing precedes it; when the unread dot is there the
-     dot takes the auto margin instead, so the pair stays glued together. */
-  margin-left: auto;
-  color: var(--textDim);
-}
-.ntf-grp-dot + .ntf-grp-n {
-  margin-left: 0;
-}
-/* Hàng "Triển khai": chỉ ĐỌC + một cú bấm mở lần chạy ở chính nguồn của nó. Không
-   có nút "đã đọc" vì đây không phải hộp thư — một lần chạy hỏng tự rời danh sách
-   khi nó được chạy lại thành công, chứ không phải khi người ta bấm cho nó im. */
-.ntf-cicd-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  width: 100%;
-  padding: 8px 7px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--foreground);
-  text-align: left;
-  cursor: pointer;
-}
-.ntf-cicd-row:hover {
-  background: var(--accent-wash);
-}
-.ntf-cicd-dot {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--textDim);
-}
-.ntf-cicd-dot.failed {
-  background: var(--destructive);
-}
-.ntf-cicd-dot.waiting {
-  background: var(--warning);
-}
-.ntf-cicd-row.wait .ntf-cicd-title {
-  color: var(--warning);
-}
-.ntf-cicd-body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.ntf-cicd-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-cicd-meta {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-}
-.ntf-cicd-when {
-  margin-left: auto;
-}
-.ntf-note {
-  margin: 0;
-  padding: 8px 7px;
-  color: var(--textDim);
-}
-.ntf-note.err {
-  color: var(--destructive);
-}
-.ntf-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 11px;
-  border-top: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-}
-.ntf-foot-when {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ntf-foot-link {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--primary);
-  cursor: pointer;
-  font: inherit;
-}
-.ntf-foot-link:hover {
-  text-decoration: underline;
-}
-</style>

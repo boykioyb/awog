@@ -1,11 +1,15 @@
 <template>
-  <div class="cap-root">
-    <div v-if="!cap.available.value" class="cap-empty cap-center">
+  <div class="flex h-screen flex-col overflow-hidden bg-background text-sm text-foreground">
+    <div v-if="!cap.available.value" class="m-auto p-6 text-center text-muted-foreground">
       {{ t('capture.unavailable') }}
     </div>
 
     <template v-else>
-      <div class="cap-views">
+      <!-- Thanh view cao cố định: hairline bằng inset shadow (không border-b) để tab
+           căn giữa không lệch nửa pixel. -->
+      <div
+        class="flex h-9 shrink-0 items-center gap-0.5 px-2 shadow-[inset_0_-1px_0_var(--border)]"
+      >
         <Tabs v-model="cap.view.value">
           <TabsList class="h-9 justify-start gap-0.5 rounded-none bg-transparent p-0">
             <TabsTrigger
@@ -15,26 +19,30 @@
               class="h-9 gap-1.5 rounded-none border-b-2 border-transparent px-3 text-xs text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
             >
               {{ t(`capture.view.${v}`) }}
-              <Badge v-if="badge(v) > 0" variant="secondary" class="tnum px-1.5 py-0">
+              <Badge v-if="badge(v) > 0" variant="secondary" class="px-1.5 py-0 tabular-nums">
                 {{ badge(v) }}
               </Badge>
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <span class="cap-grow" />
-        <span class="cap-privacy" :title="t('capture.privacyHint')">
-          <Icon name="lock" class="cap-ic" />
+        <span class="flex-auto" />
+        <span
+          class="inline-flex items-center gap-1.5 text-muted-foreground"
+          :title="t('capture.privacyHint')"
+        >
+          <Icon name="lock" class="size-3 shrink-0" />
           {{ t('capture.privacy') }}
         </span>
       </div>
 
       <template v-if="cap.view.value === 'requests'">
         <CaptureToolbar />
-        <div ref="splitEl" class="cap-split">
-          <CaptureTable class="cap-main" />
+        <div ref="splitEl" class="flex min-h-0 flex-auto">
+          <CaptureTable class="min-w-0 flex-auto" />
           <template v-if="cap.selectedId.value">
+            <!-- Grip kéo đổi bề rộng pane chi tiết (bàn phím: ←/→). -->
             <div
-              class="cap-resizer"
+              class="w-1 shrink-0 cursor-col-resize bg-border outline-0 hover:bg-selected-border focus-visible:bg-selected-border"
               role="separator"
               aria-orientation="vertical"
               tabindex="0"
@@ -139,24 +147,10 @@ function startResize(ev: PointerEvent): void {
 </script>
 
 <style>
-/* Style dùng chung cho cây component `components/capture/*` — prefix `cap-` để không rò ra nơi
-   khác. Cố ý KHÔNG scoped: bố cục/bảng/vùng đọc body dùng chung giữa nhiều component con. Nút,
-   input, tab, badge dùng bộ shadcn (`components/ui/*`); `.cap-on` chỉ thêm accent-tint cho toggle. */
-.cap-root {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  overflow: hidden;
-}
-.cap-root *,
-.cap-root *::before,
-.cap-root *::after {
-  box-sizing: border-box;
-}
+/* style-ok: stylesheet DÙNG CHUNG của cây `components/capture/*` (bảng grid, kv, pre, note,
+   trạng thái `.cap-on`/`st-*`…) — các component con đọc class `cap-*` ở đây. Bản thân trang
+   này đã chuyển hết sang Tailwind và không còn dùng rule nào trong block; block sẽ được dỡ
+   khi các component capture chuyển sang shadcn. Cố ý KHÔNG scoped (rule áp lên DOM con). */
 .cap-code {
   /* mono-ok: header, URL, cookie, body, JWT — nội dung người dùng copy-paste */
   font-family: var(--code);
@@ -185,9 +179,6 @@ function startResize(ev: PointerEvent): void {
   height: var(--icon-xs);
   flex: none;
 }
-.cap-center {
-  margin: auto;
-}
 .cap-empty {
   padding: 24px;
   text-align: center;
@@ -205,22 +196,7 @@ function startResize(ev: PointerEvent): void {
   overflow-wrap: anywhere;
 }
 
-/* ── thanh view + hàng bố cục dùng chung ── */
-.cap-views {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 8px;
-  height: 36px;
-  flex: none;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.cap-privacy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--textDim);
-}
+/* ── hàng bố cục dùng chung ── */
 .cap-row,
 .cap-bar {
   display: flex;
@@ -232,37 +208,29 @@ function startResize(ev: PointerEvent): void {
   padding: 6px 8px;
 }
 /* Trạng thái bật của Button outline (toggle, chip lọc, chế độ xem): accent-tint theo quy tắc
-   selection của dự án — KHÔNG nền xám. Specificity 0,2,0+ để thắng hover của Button. */
-.cap-root .cap-on,
-.cap-root .cap-on:hover {
+   selection của dự án — KHÔNG nền xám. Block này không nằm trong cascade layer nên thắng
+   `hover:bg-accent` (layer utilities) của Button mà không cần tăng specificity. */
+.cap-on,
+.cap-on:hover {
   background: var(--accentDim);
   border-color: var(--accentBorder);
   color: var(--text);
 }
-.cap-root .cap-on.st-2xx {
+.cap-on.st-2xx {
   color: var(--green);
 }
-.cap-root .cap-on.st-3xx {
+.cap-on.st-3xx {
   color: var(--blue);
 }
-.cap-root .cap-on.st-4xx {
+.cap-on.st-4xx {
   color: var(--amber);
 }
-.cap-root .cap-on.st-5xx,
-.cap-root .cap-on.st-failed {
+.cap-on.st-5xx,
+.cap-on.st-failed {
   color: var(--danger);
 }
 
 /* ── bảng request ── */
-.cap-split {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-.cap-main {
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .cap-table {
   position: relative;
   overflow: auto;
@@ -357,17 +325,6 @@ function startResize(ev: PointerEvent): void {
 }
 
 /* ── pane chi tiết ── */
-.cap-resizer {
-  flex: none;
-  width: 5px;
-  cursor: col-resize;
-  background: var(--border);
-  outline: 0;
-}
-.cap-resizer:hover,
-.cap-resizer:focus-visible {
-  background: var(--accentBorder);
-}
 .cap-detail {
   display: flex;
   flex-direction: column;

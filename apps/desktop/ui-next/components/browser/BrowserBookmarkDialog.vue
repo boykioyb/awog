@@ -1,71 +1,65 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on" @click.self="emit('close')" @keydown.esc="emit('close')">
-      <div
-        class="flex w-[min(420px,92vw)] flex-col gap-3 rounded-xl border border-border bg-popover p-4"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div class="flex items-center gap-2">
-          <Icon name="bookmark" style="width: var(--icon-md); height: var(--icon-md)" />
-          <span class="flex-1 text-base text-foreground">
-            {{ bookmarkId ? t('browser.bookmarks.editTitle') : t('browser.bookmarks.addTitle') }}
-          </span>
-          <button
-            type="button"
-            class="bmd-x"
-            :title="t('common.close')"
-            :aria-label="t('common.close')"
-            @click="emit('close')"
-          >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="max-w-105 gap-3 p-4">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2 pr-6 font-normal">
+          <Icon name="bookmark" class="size-4" />
+          {{ bookmarkId ? t('browser.bookmarks.editTitle') : t('browser.bookmarks.addTitle') }}
+        </DialogTitle>
+      </DialogHeader>
 
-        <label class="bmd-field">
-          <span class="bmd-label">{{ t('browser.bookmarks.name') }}</span>
-          <Input v-model="titleDraft" type="text" @keydown.enter.prevent="save" />
-        </label>
-        <label class="bmd-field">
-          <span class="bmd-label">URL</span>
-          <Input v-model="urlDraft" type="text" spellcheck="false" @keydown.enter.prevent="save" />
-        </label>
-
-        <div class="bmd-field">
-          <span class="bmd-label">{{ t('browser.bookmarks.folder') }}</span>
-          <AppSelect v-model="folderDraft" :options="folderOptions" width="100%" />
-          <Input
-            v-if="folderDraft === NEW_FOLDER"
-            v-model="newFolderName"
-            type="text"
-            :placeholder="t('browser.bookmarks.newFolderPlaceholder')"
-            @keydown.enter.prevent="save"
-          />
-        </div>
-
-        <div v-if="error" class="text-sm text-destructive">{{ error }}</div>
-
-        <div class="flex items-center gap-2">
-          <Button v-if="bookmarkId" variant="ghost" size="sm" :disabled="busy" @click="removeIt">
-            {{ t('browser.bookmarks.remove') }}
-          </Button>
-          <span class="flex-1" />
-          <Button variant="outline" size="sm" @click="emit('close')">
-            {{ t('common.cancel') }}
-          </Button>
-          <Button variant="default" size="sm" :disabled="!canSave || busy" @click="save">
-            {{ t('common.save') }}
-          </Button>
-        </div>
+      <div class="flex flex-col gap-1">
+        <Label for="bmd-title" class="text-xs font-normal text-muted-foreground">
+          {{ t('browser.bookmarks.name') }}
+        </Label>
+        <Input id="bmd-title" v-model="titleDraft" type="text" @keydown.enter.prevent="save" />
       </div>
-    </div>
-  </Teleport>
+      <div class="flex flex-col gap-1">
+        <Label for="bmd-url" class="text-xs font-normal text-muted-foreground">URL</Label>
+        <Input
+          id="bmd-url"
+          v-model="urlDraft"
+          type="text"
+          spellcheck="false"
+          @keydown.enter.prevent="save"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <span class="text-xs text-muted-foreground">{{ t('browser.bookmarks.folder') }}</span>
+        <AppSelect v-model="folderDraft" :options="folderOptions" width="100%" />
+        <Input
+          v-if="folderDraft === NEW_FOLDER"
+          v-model="newFolderName"
+          type="text"
+          :placeholder="t('browser.bookmarks.newFolderPlaceholder')"
+          @keydown.enter.prevent="save"
+        />
+      </div>
+
+      <div v-if="error" class="text-sm text-destructive">{{ error }}</div>
+
+      <div class="flex items-center gap-2">
+        <Button v-if="bookmarkId" variant="ghost" size="sm" :disabled="busy" @click="removeIt">
+          {{ t('browser.bookmarks.remove') }}
+        </Button>
+        <span class="flex-1" />
+        <Button variant="outline" size="sm" @click="emit('close')">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button variant="default" size="sm" :disabled="!canSave || busy" @click="save">
+          {{ t('common.save') }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
-// Hộp thoại thêm / sửa MỘT bookmark (☆ trong ô URL và "Sửa" ở thanh bookmark). Là modal
-// `.ovl.on` chứ không phải popover neo: view native của trang vẽ đè lên mọi DOM, mà
-// `.ovl.on` nằm trong danh sách OVERLAYS của useEmbeddedBrowser nên trang tự nhường chỗ.
+// Hộp thoại thêm / sửa MỘT bookmark (☆ trong ô URL và "Sửa" ở thanh bookmark). Là Dialog
+// chứ không phải popover neo: view native của trang vẽ đè lên mọi DOM, mà
+// `[role="dialog"][data-state="open"]` nằm trong OVERLAYS của useEmbeddedBrowser nên
+// trang tự nhường chỗ.
 import { useBookmarks } from '~/composables/useBookmarks'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import Button from '~/components/ui/button/Button.vue'
@@ -161,31 +155,3 @@ const removeIt = async (): Promise<void> => {
   }
 }
 </script>
-
-<style scoped>
-.bmd-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.bmd-label {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.bmd-x {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.bmd-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-</style>

@@ -1,46 +1,62 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on sfmod-ovl" @click.self="emit('cancel')">
-      <div class="sfmod-card" role="dialog" aria-modal="true">
-        <div class="sfmod-head">
-          <Icon name="shield" class="sfmod-icn" />
-          <span class="sfmod-title">{{ t('ssh.sftp.chmod.title') }}</span>
-        </div>
-        <div class="sfmod-sub">{{ subtitle }}</div>
+  <!-- z-200: band hộp thoại trên cùng — mở từ SFTP browser có thể đang nằm trong modal. -->
+  <Dialog :open="open" @update:open="(v: boolean) => !v && emit('cancel')">
+    <DialogContent class="z-200 flex max-w-[92vw] flex-col gap-3.5 rounded-xl p-4.5 sm:max-w-85">
+      <DialogHeader class="flex-row items-center gap-2">
+        <Icon name="shield" class="size-4 shrink-0 text-primary" />
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          {{ t('ssh.sftp.chmod.title') }}
+        </DialogTitle>
+      </DialogHeader>
+      <DialogDescription class="text-sm break-all text-muted-foreground">
+        {{ subtitle }}
+      </DialogDescription>
 
-        <table class="sfmod-grid">
-          <thead>
-            <tr>
-              <th />
-              <th>{{ t('ssh.sftp.chmod.read') }}</th>
-              <th>{{ t('ssh.sftp.chmod.write') }}</th>
-              <th>{{ t('ssh.sftp.chmod.exec') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="grp in GROUPS" :key="grp.key">
-              <td class="sfmod-rowlabel">{{ t(`ssh.sftp.chmod.${grp.key}`) }}</td>
-              <td v-for="bit in grp.bits" :key="bit">
-                <input type="checkbox" :checked="!!(mode & bit)" @change="toggle(bit)" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <Table>
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead />
+            <TableHead class="h-auto p-1 text-center text-xs font-medium text-muted-foreground">
+              {{ t('ssh.sftp.chmod.read') }}
+            </TableHead>
+            <TableHead class="h-auto p-1 text-center text-xs font-medium text-muted-foreground">
+              {{ t('ssh.sftp.chmod.write') }}
+            </TableHead>
+            <TableHead class="h-auto p-1 text-center text-xs font-medium text-muted-foreground">
+              {{ t('ssh.sftp.chmod.exec') }}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="grp in GROUPS" :key="grp.key" class="border-0 hover:bg-transparent">
+            <TableCell class="px-1 py-1.5 text-left text-sm text-foreground">
+              {{ t(`ssh.sftp.chmod.${grp.key}`) }}
+            </TableCell>
+            <TableCell v-for="bit in grp.bits" :key="bit" class="px-1 py-1.5 text-center">
+              <Checkbox :model-value="!!(mode & bit)" @update:model-value="toggle(bit)" />
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
 
-        <label class="sfmod-octal">
-          <span>{{ t('ssh.sftp.chmod.octal') }}</span>
-          <Input v-model="octal" maxlength="3" inputmode="numeric" class="sfmod-octal-in mono" />
-        </label>
+      <label class="flex items-center gap-2.5 text-sm text-muted-foreground">
+        <span>{{ t('ssh.sftp.chmod.octal') }}</span>
+        <Input
+          v-model="octal"
+          maxlength="3"
+          inputmode="numeric"
+          class="h-ctrl-xs w-18 text-center font-mono"
+        />
+      </label>
 
-        <div class="sfmod-foot">
-          <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
-          <Button variant="default" @click="emit('confirm', mode)">
-            {{ t('ssh.sftp.chmod.apply') }}
-          </Button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+      <DialogFooter class="gap-2">
+        <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+        <Button variant="default" @click="emit('confirm', mode)">
+          {{ t('ssh.sftp.chmod.apply') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -90,99 +106,3 @@ const subtitle = computed(() =>
     : t('ssh.sftp.chmod.many', { count: props.targets.length }),
 )
 </script>
-
-<style scoped>
-.sfmod-ovl {
-  align-items: center;
-  padding-top: 0;
-  z-index: 200;
-}
-.sfmod-card {
-  width: 340px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.sfmod-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.sfmod-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  color: var(--accent);
-}
-.sfmod-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.sfmod-sub {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.sfmod-grid {
-  border-collapse: collapse;
-  width: 100%;
-}
-.sfmod-grid th {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--textDim);
-  padding: 4px;
-  text-align: center;
-}
-.sfmod-grid td {
-  padding: 6px 4px;
-  text-align: center;
-}
-.sfmod-rowlabel {
-  text-align: left !important;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.sfmod-grid input {
-  accent-color: var(--accent);
-  cursor: pointer;
-  width: 15px;
-  height: 15px;
-}
-.sfmod-octal {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sfmod-octal-in {
-  width: 70px;
-  padding: 5px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  color: var(--text);
-  text-align: center;
-  outline: none;
-}
-.sfmod-octal-in:focus {
-  border-color: var(--accent);
-}
-.sfmod-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

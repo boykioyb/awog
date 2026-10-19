@@ -1,43 +1,38 @@
 <template>
-  <div class="oba">
-    <p class="ob-lead">{{ t('onboarding.account.desc') }}</p>
+  <div class="flex flex-col gap-4">
+    <p class="text-muted-foreground">{{ t('onboarding.account.desc') }}</p>
 
-    <div v-if="connected.length" class="oba-chips">
-      <span v-for="p in connected" :key="p" class="chip oba-ok">
+    <div v-if="connected.length" class="flex flex-wrap gap-2">
+      <Badge
+        v-for="p in connected"
+        :key="p"
+        variant="outline"
+        class="border-selected-border text-primary"
+      >
         <Icon name="check" />
         {{ t('onboarding.account.connected', { provider: PROVIDER_LABEL[p] }) }}
-      </span>
+      </Badge>
     </div>
 
     <template v-if="available">
-      <div class="oba-form">
-        <label class="oba-label">{{ t('onboarding.account.provider') }}</label>
-        <!-- Segmented control (not AppSelect): its teleported menu sits at z-130,
-             below this z-250 overlay, so the dropdown would open hidden. -->
-        <div class="seg oba-seg">
-          <span
-            v-for="o in providerOptions"
-            :key="o.value"
-            :class="{ on: provider === o.value }"
-            @click="provider = o.value"
-          >
-            {{ o.label }}
-          </span>
-        </div>
+      <div class="flex flex-col gap-2">
+        <label class="mt-1 text-sm text-faint">{{ t('onboarding.account.provider') }}</label>
+        <SettingsSeg v-model="providerValue" :options="providerOptions" class="self-start" />
 
-        <label class="oba-label">{{ t('onboarding.account.key') }}</label>
+        <label class="mt-1 text-sm text-faint">{{ t('onboarding.account.key') }}</label>
+        <!-- mono-ok: API key -->
         <Input
           v-model="apiKey"
           type="password"
           :placeholder="t('onboarding.account.keyPlaceholder')"
           autocomplete="off"
-          class="mono flex-1"
+          class="flex-1 font-mono"
           @keydown.enter.prevent="connect"
         />
 
         <Button
           :disabled="!apiKey.trim() || busy"
-          class="oba-connect"
+          class="mt-2.5 self-start"
           variant="default"
           @click="connect"
         >
@@ -45,11 +40,11 @@
         </Button>
       </div>
 
-      <p v-if="error" class="oba-err">{{ t('onboarding.account.error') }}</p>
-      <p class="oba-hint">{{ t('onboarding.account.oauthNote') }}</p>
+      <p v-if="error" class="text-destructive">{{ t('onboarding.account.error') }}</p>
+      <p class="text-dim">{{ t('onboarding.account.oauthNote') }}</p>
     </template>
 
-    <p v-else class="oba-hint">{{ t('onboarding.account.browserOnly') }}</p>
+    <p v-else class="text-dim">{{ t('onboarding.account.browserOnly') }}</p>
   </div>
 </template>
 
@@ -57,8 +52,6 @@
 import { computed, ref } from 'vue'
 import { useSettingsStore, type ProviderName } from '~/stores/settings'
 import { useSidecar } from '~/composables/useSidecar'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 // Account step — self-contained API-key quick-connect (avoids nesting the Settings
 // modal, which would sit below this overlay). OAuth/Codex stay in Settings; this
@@ -79,6 +72,13 @@ const providerOptions: { value: ProviderName; label: string }[] = (
 ).map((value) => ({ value, label: PROVIDER_LABEL[value] }))
 
 const provider = ref<ProviderName>('anthropic')
+// SettingsSeg giữ model kiểu string — cầu nối sang union ProviderName.
+const providerValue = computed<string>({
+  get: () => provider.value,
+  set: (value) => {
+    provider.value = value as ProviderName
+  },
+})
 const apiKey = ref('')
 const busy = ref(false)
 const error = ref(false)
@@ -105,49 +105,3 @@ const connect = async () => {
   }
 }
 </script>
-
-<style scoped>
-.oba {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.ob-lead {
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.oba-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.oba-ok {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.oba-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.oba-label {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  margin-top: 4px;
-}
-.oba-seg {
-  align-self: flex-start;
-}
-.oba-connect {
-  margin-top: 10px;
-  align-self: flex-start;
-}
-.oba-err {
-  color: var(--danger);
-}
-.oba-hint {
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-</style>

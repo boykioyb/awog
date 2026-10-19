@@ -3,19 +3,17 @@
        không tranh giành bounds, chỉ nói rõ đang ở đâu + nút lấy về. `where`
        phân biệt hai trường hợp suy ra được từ cờ chủ sở hữu: popout/cửa sổ khác
        (`shownElsewhere`) hay dock kia trong cùng cửa sổ (`!isOwner`). -->
-  <div class="belse">
-    <Icon
-      :name="where === 'window' ? 'external' : 'panel'"
-      class="belse-icn"
-      style="width: var(--icon-lg); height: var(--icon-lg)"
-    />
-    <div class="belse-title">
+  <div
+    class="mx-auto flex max-h-full max-w-80 flex-col items-center justify-center gap-1.5 overflow-y-auto p-6 text-center"
+  >
+    <Icon :name="where === 'window' ? 'external' : 'panel'" class="mb-0.5 size-5 text-faint" />
+    <div class="text-base text-foreground">
       {{ t(where === 'window' ? 'browser.elsewhere.window' : 'browser.elsewhere.dock') }}
     </div>
-    <div class="belse-hint">{{ t('browser.elsewhere.hint') }}</div>
-    <button type="button" class="belse-btn" @click="emit('takeover')">
+    <div class="text-sm text-muted-foreground">{{ t('browser.elsewhere.hint') }}</div>
+    <Button variant="outline" size="sm" class="mt-2" @click="emit('takeover')">
       {{ t('sessions.workspace.browser.takeOver') }}
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -30,52 +28,3 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-.belse {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 24px;
-  max-width: 320px;
-  margin: 0 auto;
-  text-align: center;
-  max-height: 100%;
-  overflow-y: auto;
-}
-.belse-icn {
-  color: var(--textFaint);
-  margin-bottom: 2px;
-}
-.belse-title {
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.belse-hint {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.belse-btn {
-  margin-top: 8px;
-  padding: 4px 12px;
-  border-radius: var(--r-btn);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.belse-btn:hover {
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-.belse-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-</style>

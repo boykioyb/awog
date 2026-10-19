@@ -5,34 +5,45 @@
     :width="420"
     @close="emit('close')"
   >
-    <div v-if="pairing" class="pair">
-      <p class="pair-hint">{{ t('settings.devices.scanHint') }}</p>
+    <div v-if="pairing" class="flex flex-col items-center gap-3.5">
+      <p class="m-0 text-center text-base text-muted-foreground">
+        {{ t('settings.devices.scanHint') }}
+      </p>
 
-      <div class="pair-qr">
+      <div
+        class="flex size-60 items-center justify-center overflow-hidden rounded-lg border bg-muted"
+      >
         <img
           v-if="qrDataUrl && !expired"
           :src="qrDataUrl"
           :alt="t('settings.devices.pair.title')"
+          class="block size-full"
         />
-        <div v-else class="pair-qr-expired">
-          <Icon name="clock" style="width: 22px; height: 22px" />
+        <div v-else class="flex flex-col items-center gap-2 text-base text-dim">
+          <Icon name="clock" class="size-5.5" />
           <span>{{ t('settings.devices.pair.expired') }}</span>
         </div>
       </div>
 
       <!-- Countdown vs regenerate: swap the live timer for a re-pair CTA once the
            code expires (the QR/text can no longer complete a pairing). -->
-      <div v-if="!expired" class="pair-countdown">
+      <div v-if="!expired" class="text-sm text-dim tabular-nums">
         {{ t('settings.devices.expiresIn', { time: countdownLabel }) }}
       </div>
-      <Button v-else class="pair-regen" variant="default" size="sm" @click="emit('regenerate')">
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Button v-else class="self-center" variant="default" size="sm" @click="emit('regenerate')">
+        <Icon name="refresh" class="size-3.5" />
         {{ t('settings.devices.regenerate') }}
       </Button>
 
-      <div class="pair-fallback">
-        <span class="pair-fallback-label">{{ t('settings.devices.codeFallback') }}</span>
-        <code class="pair-code">{{ pairing.code }}</code>
+      <Separator />
+      <div class="flex w-full items-center justify-center gap-2">
+        <span class="text-sm text-dim">{{ t('settings.devices.codeFallback') }}</span>
+        <!-- mono-ok: mã ghép nối — gõ từng ký tự trên điện thoại -->
+        <code
+          class="rounded-md border bg-background px-2.5 py-1 font-mono text-lg tracking-widest text-foreground"
+        >
+          {{ pairing.code }}
+        </code>
       </div>
     </div>
   </LibraryEntityModal>
@@ -48,7 +59,6 @@ import QRCode from 'qrcode'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { AwogPairingInfo } from '~/types/awog-bridge'
-import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   pairing: AwogPairingInfo | null
@@ -113,79 +123,3 @@ watch(
 
 onBeforeUnmount(stopTicker)
 </script>
-
-<style scoped>
-.pair {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-}
-.pair-hint {
-  margin: 0;
-  text-align: center;
-  color: var(--textMuted);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.pair-qr {
-  width: 240px;
-  height: 240px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-btn);
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--bgSubtle);
-}
-.pair-qr img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.pair-qr-expired {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: var(--textDim);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.pair-countdown {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.pair-regen {
-  align-self: center;
-}
-.pair-fallback {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
-  width: 100%;
-  justify-content: center;
-}
-.pair-fallback-label {
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-}
-.pair-code {
-  /* mono-ok: pairing code — typed character by character on the phone */
-  font-family: var(--code);
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  letter-spacing: 0.12em;
-  color: var(--text);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 4px 10px;
-}
-</style>

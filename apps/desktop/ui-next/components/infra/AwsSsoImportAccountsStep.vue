@@ -1,9 +1,16 @@
 <template>
-  <div class="asa">
-    <div class="asa-toolbar">
-      <div class="asa-search">
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <Input v-model="filterText" unstyled :placeholder="t('infra.import.sso.accounts.search')" />
+  <div class="flex min-h-0 flex-col gap-2.5">
+    <div class="flex items-center gap-2">
+      <div class="relative min-w-0 flex-1">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-dim"
+        />
+        <Input
+          v-model="filterText"
+          class="h-ctrl-sm pl-8"
+          :placeholder="t('infra.import.sso.accounts.search')"
+        />
       </div>
       <Button
         type="button"
@@ -20,38 +27,51 @@
       </Button>
     </div>
 
-    <div v-if="warnings.length" class="asa-warnbox">
+    <div
+      v-if="warnings.length"
+      class="flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+    >
       <div v-for="(w, i) in warnings" :key="i">{{ w }}</div>
     </div>
 
-    <div v-if="loading" class="asa-state">{{ t('infra.import.sso.accounts.loading') }}</div>
-    <div v-else-if="!filteredAccounts.length" class="asa-state">
+    <div v-if="loading" class="px-1 py-6 text-center text-sm text-muted-foreground">
+      {{ t('infra.import.sso.accounts.loading') }}
+    </div>
+    <div
+      v-else-if="!filteredAccounts.length"
+      class="px-1 py-6 text-center text-sm text-muted-foreground"
+    >
       {{ t('infra.import.sso.accounts.empty') }}
     </div>
 
-    <div v-else class="asa-list">
-      <div v-for="acc in filteredAccounts" :key="acc.accountId" class="asa-group">
-        <label class="asa-group-head">
-          <input
-            type="checkbox"
-            :checked="accountAllSelected(acc)"
+    <!-- mono-ok (account id / role dưới đây): định danh dùng thẳng ở ~/.aws/config. -->
+    <div v-else class="flex max-h-[46vh] flex-col overflow-y-auto rounded-lg border">
+      <div v-for="acc in filteredAccounts" :key="acc.accountId" class="border-t first:border-t-0">
+        <label class="flex cursor-pointer items-center gap-2 bg-muted px-3 py-2">
+          <Checkbox
+            :model-value="accountAllSelected(acc)"
             :disabled="!acc.roles.length"
-            @change="emit('toggle-account', acc.accountId, roleKeys(acc))"
+            @update:model-value="emit('toggle-account', acc.accountId, roleKeys(acc))"
           />
-          <span class="asa-acc-name">{{ acc.accountName }}</span>
-          <span class="asa-acc-id mono">{{ acc.accountId }}</span>
-          <span v-if="acc.emailAddress" class="asa-acc-email">{{ acc.emailAddress }}</span>
+          <span class="text-sm font-semibold text-foreground">{{ acc.accountName }}</span>
+          <span class="font-mono text-xs text-dim">{{ acc.accountId }}</span>
+          <span v-if="acc.emailAddress" class="ml-auto text-xs text-faint">
+            {{ acc.emailAddress }}
+          </span>
         </label>
 
-        <label v-for="role in acc.roles" :key="role" class="asa-row">
-          <input
-            type="checkbox"
-            :checked="selected.has(key(acc.accountId, role))"
-            @change="emit('toggle', acc.accountId, role)"
+        <label
+          v-for="role in acc.roles"
+          :key="role"
+          class="flex cursor-pointer items-center gap-2 py-1.5 pr-3 pl-8.5 hover:bg-accent"
+        >
+          <Checkbox
+            :model-value="selected.has(key(acc.accountId, role))"
+            @update:model-value="emit('toggle', acc.accountId, role)"
           />
-          <span class="asa-role mono">{{ role }}</span>
+          <span class="font-mono text-sm text-foreground">{{ role }}</span>
         </label>
-        <div v-if="!acc.roles.length" class="asa-noroles">
+        <div v-if="!acc.roles.length" class="pt-1.5 pr-3 pb-2.5 pl-8.5 text-xs text-faint">
           {{ t('infra.import.sso.accounts.noRoles') }}
         </div>
       </div>
@@ -115,114 +135,3 @@ const allVisibleSelected = computed(
   () => visibleKeys.value.length > 0 && visibleKeys.value.every((k) => props.selected.has(k)),
 )
 </script>
-
-<style scoped>
-.asa {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-}
-.asa-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.asa-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  color: var(--textDim);
-}
-.asa-search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.asa-warnbox {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.asa-state {
-  padding: 24px 4px;
-  text-align: center;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.asa-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 46vh;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.asa-group + .asa-group {
-  border-top: 1px solid var(--border);
-}
-.asa-group-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 12px;
-  background: var(--bgHover);
-  cursor: pointer;
-}
-.asa-acc-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.asa-acc-id {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.asa-acc-email {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.asa-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 12px 7px 34px;
-  cursor: pointer;
-}
-.asa-row:hover {
-  background: var(--bgHover);
-}
-.asa-role {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.asa-noroles {
-  padding: 6px 12px 10px 34px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-</style>

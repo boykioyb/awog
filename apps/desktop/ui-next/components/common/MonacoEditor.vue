@@ -1,12 +1,15 @@
 <template>
-  <div ref="hostRef" class="mehost">
+  <div ref="hostRef" class="relative size-full bg-card">
     <!-- Bundle failed to fetch (a Vite dev re-optimize race is the usual cause).
          Surface it with a retry instead of an unhandled mount error + a host that
          stays blank forever. Only ever rendered when Monaco was NOT created, so it
          never sits next to the editor's own DOM. -->
-    <div v-if="loadError" class="meerror">
+    <div
+      v-if="loadError"
+      class="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-card p-4 text-center text-dim"
+    >
       <p>{{ t('common.preview.monacoLoadFailed') }}</p>
-      <button type="button" class="meretry" @click="retry">{{ t('common.retry') }}</button>
+      <Button variant="outline" size="sm" @click="retry">{{ t('common.retry') }}</Button>
     </div>
   </div>
 </template>
@@ -49,6 +52,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+// theme-ok: chọn theme dark/light cho Monaco
 const { isDark } = useTheme()
 const { current, hydrate, loadThemeData } = useMonacoTheme()
 
@@ -335,39 +339,3 @@ onBeforeUnmount(() => {
   editor.value = null
 })
 </script>
-
-<style scoped>
-.mehost {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: var(--bgEl);
-}
-
-.meerror {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  text-align: center;
-  background: var(--bgEl);
-  color: var(--textDim);
-}
-
-.meretry {
-  padding: 5px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.meretry:hover {
-  background: var(--bgHover);
-}
-</style>

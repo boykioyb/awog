@@ -1,210 +1,227 @@
 <template>
-  <div class="dscroll">
-    <div class="pstats">
-      <div class="pstat">
-        <div class="pv">{{ effRepos.length }}</div>
-        <div class="pl2">{{ t('projects.overview.repos') }}</div>
-      </div>
-      <div class="pstat">
-        <div class="pv">{{ view.agents.length }}</div>
-        <div class="pl2">{{ t('projects.overview.agents') }}</div>
-      </div>
-      <div class="pstat">
-        <div class="pv">{{ view.ses.length }}</div>
-        <div class="pl2">{{ t('projects.overview.sessions') }}</div>
-      </div>
-      <div class="pstat">
-        <div class="pv">{{ view.tasks.length }}</div>
-        <div class="pl2">{{ t('projects.overview.tasksCard') }}</div>
+  <div class="flex-1 overflow-y-auto p-4.5">
+    <div class="mb-4 flex flex-wrap gap-2.5">
+      <div v-for="st in stats" :key="st.label" :class="STAT">
+        <div class="text-2xl font-semibold tracking-tight">{{ st.value }}</div>
+        <div class="mt-1.5 text-xs font-semibold text-dim">{{ st.label }}</div>
       </div>
     </div>
 
-    <div class="pcard">
-      <div class="pcardh">
-        <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span>{{ t('projects.overview.reposCard', { n: effRepos.length }) }}</span>
-        <span v-if="totalDirty" class="gchip m" style="margin-left: auto">{{ totalDirty }} M</span>
-        <span
+    <Card :class="CARD">
+      <div :class="CARD_H">
+        <Icon name="git" class="size-3.5 flex-none" />
+        <span class="text-muted-foreground">
+          {{ t('projects.overview.reposCard', { n: effRepos.length }) }}
+        </span>
+        <Badge v-if="totalDirty" variant="outline" :class="['ml-auto', CHIP_MOD]">
+          {{ totalDirty }} M
+        </Badge>
+        <Badge
           v-if="totalAhead"
-          class="gchip a"
-          :style="totalDirty ? undefined : { marginLeft: 'auto' }"
+          variant="outline"
+          :class="[CHIP_AHEAD, { 'ml-auto': !totalDirty }]"
         >
           ↑{{ totalAhead }}
-        </span>
+        </Badge>
       </div>
-      <template v-if="effRepos.length">
-        <div v-for="r in effRepos" :key="r.n" class="prepo">
-          <span class="prepo-ic">
-            <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div v-if="effRepos.length" class="divide-y">
+        <div v-for="r in effRepos" :key="r.n" class="flex items-center gap-3 py-2">
+          <span class="grid size-7 flex-none place-items-center rounded-md bg-muted text-dim">
+            <Icon name="git" class="size-3.5" />
           </span>
-          <div style="min-width: 0">
-            <div class="prepo-n">{{ r.n }}</div>
-            <div v-if="r.br" class="prepo-br">
-              <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <div class="min-w-0">
+            <div class="text-base font-semibold">{{ r.n }}</div>
+            <!-- mono-ok: tên nhánh git -->
+            <div v-if="r.br" class="flex items-center gap-1 font-mono text-xs text-dim">
+              <Icon name="branch" class="size-3" />
               {{ r.br }}
             </div>
           </div>
-          <div style="margin-left: auto; display: flex; gap: 6px">
-            <span v-if="r.dirty" class="gchip m">{{ r.dirty }} M</span>
-            <span v-if="r.ahead" class="gchip a">↑{{ r.ahead }}</span>
+          <div class="ml-auto flex gap-1.5">
+            <Badge v-if="r.dirty" variant="outline" :class="CHIP_MOD">{{ r.dirty }} M</Badge>
+            <Badge v-if="r.ahead" variant="outline" :class="CHIP_AHEAD">↑{{ r.ahead }}</Badge>
           </div>
         </div>
-      </template>
-      <div v-else class="fd">{{ t('projects.overview.noRepo') }}</div>
-    </div>
-
-    <div class="pcard">
-      <div class="pcardh">
-        <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span>{{ t('projects.overview.agentsCard', { n: view.agents.length }) }}</span>
       </div>
-      <div class="pagents">
-        <span v-for="a in view.agents" :key="a" class="pagent">
-          <span class="pav" :style="{ color: agBadge(a)[0], background: avatarBg(agBadge(a)[0]) }">
+      <div v-else class="text-sm text-dim">{{ t('projects.overview.noRepo') }}</div>
+    </Card>
+
+    <Card :class="CARD">
+      <div :class="CARD_H">
+        <Icon name="agents" class="size-3.5 flex-none" />
+        <span class="text-muted-foreground">
+          {{ t('projects.overview.agentsCard', { n: view.agents.length }) }}
+        </span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span
+          v-for="a in view.agents"
+          :key="a"
+          class="inline-flex items-center gap-2 rounded-md border py-0.5 pr-2.5 pl-1 text-sm text-foreground"
+        >
+          <!-- Màu avatar là dữ liệu (bảng màu agent ở ./data), không phải token theme. -->
+          <span
+            class="grid size-5 flex-none place-items-center rounded-full text-xs font-semibold"
+            :style="{ color: agBadge(a)[0], background: avatarBg(agBadge(a)[0]) }"
+          >
             {{ agBadge(a)[1] }}
           </span>
           {{ a }}
         </span>
-        <span v-if="!view.agents.length" class="fd">{{ t('projects.overview.noAgent') }}</span>
+        <span v-if="!view.agents.length" class="text-sm text-dim">
+          {{ t('projects.overview.noAgent') }}
+        </span>
       </div>
-    </div>
+    </Card>
 
-    <div class="pcols2">
-      <div class="pcard">
-        <div class="pcardh">
-          <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span>{{ t('projects.overview.sessionsCard') }}</span>
+    <div class="grid grid-cols-1 gap-3 min-[880px]:grid-cols-2">
+      <Card :class="CARD">
+        <div :class="CARD_H">
+          <Icon name="sessions" class="size-3.5 flex-none" />
+          <span class="text-muted-foreground">{{ t('projects.overview.sessionsCard') }}</span>
         </div>
-        <div
-          v-for="s in view.ses"
-          :key="s.id"
-          class="rs rs-link"
-          style="padding: 7px 0; border-top: 1px solid var(--border); cursor: pointer"
-          :title="t('projects.overview.openSession')"
-          @click="openSession(s.id)"
-        >
-          <span class="si" style="background: var(--textFaint)" />
-          <span class="st1">{{ s.t }}</span>
-          <span class="sw">{{ s.w }}</span>
-        </div>
-        <div v-if="!view.ses.length" class="fd">{{ t('projects.overview.noSession') }}</div>
-      </div>
-      <div class="pcard">
-        <div class="pcardh">
-          <Icon name="tasks" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span>{{ t('projects.overview.tasksCard') }}</span>
-        </div>
-        <div
-          v-for="task in view.tasks"
-          :key="task.t"
-          class="rs"
-          style="padding: 7px 0; border-top: 1px solid var(--border)"
-        >
-          <Icon name="tasks" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="st1">{{ task.t }}</span>
-          <span class="tag acc">{{ task.s }}</span>
-        </div>
-        <div v-if="!view.tasks.length" class="fd">{{ t('projects.overview.noTask') }}</div>
-      </div>
-    </div>
-
-    <div class="pcard">
-      <div class="pcardh">
-        <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span>{{ t('projects.overview.configCard') }}</span>
-      </div>
-      <div v-if="project.description" class="kvrow" style="align-items: flex-start">
-        <span class="kvk">{{ t('projects.overview.description') }}</span>
-        <span class="kvv">{{ project.description }}</span>
-      </div>
-      <div class="kvrow">
-        <span class="kvk">{{ t('projects.overview.path') }}</span>
-        <span class="kvv mono">{{ project.path }}</span>
-      </div>
-      <div v-if="project.language" class="kvrow">
-        <span class="kvk">{{ t('projects.overview.language') }}</span>
-        <span class="kvv">{{ project.language }}</span>
-      </div>
-      <div class="kvrow">
-        <span class="kvk">{{ t('projects.overview.remote') }}</span>
-        <a
-          v-if="view.gh"
-          class="kvv link"
-          :href="`https://github.com/${view.gh}`"
-          target="_blank"
-          rel="noopener"
-        >
-          <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          github.com/{{ view.gh }}
-        </a>
-        <span v-else-if="project.gitRemote" class="kvv mono">{{ project.gitRemote }}</span>
-        <span v-else class="kvv" style="color: var(--textDim)">
-          {{ t('projects.overview.noRemote') }}
-        </span>
-      </div>
-      <div class="kvrow">
-        <span class="kvk">{{ t('projects.overview.llm') }}</span>
-        <span class="kvv">
-          <Button v-if="!compact" variant="outline" size="sm" @click="emit('open-llm')">
-            <Icon name="brain" />
-            {{ llmLabel }}
-          </Button>
-          <span v-else style="display: inline-flex; align-items: center; gap: 6px">
-            <Icon name="brain" style="width: var(--icon-xs); height: var(--icon-xs)" />
-            {{ llmLabel }}
-          </span>
-        </span>
-      </div>
-      <!-- GitHub account this project authenticates as — the single source used by
-           git push/fetch/pull AND the Issues/PR tabs (inherits Settings → Git).
-           Editable even in the compact quick-view: it's a safe (non-destructive)
-           setting and the Git page's account shortcut lands here. -->
-      <div class="kvrow">
-        <span class="kvk">{{ t('projects.overview.githubAccount') }}</span>
-        <span class="kvv">
-          <AppSelect
-            :model-value="ghAccountValue"
-            :options="ghAccountOptions"
-            width="200px"
-            @update:model-value="onGhAccount"
-          />
-        </span>
-      </div>
-      <!-- Hồ sơ trình duyệt nhúng của project (ADR 0101): login + bookmark riêng. Phiên
-           có thể ghi đè trong menu ⋮ của trình duyệt; trống = theo mặc định của app. -->
-      <div class="kvrow">
-        <span class="kvk">{{ t('projects.overview.browserProfile') }}</span>
-        <span class="kvv">
-          <AppSelect
-            :model-value="browserProfileValue"
-            :options="browserProfileOptions"
-            width="200px"
-            @update:model-value="onBrowserProfile"
-          />
-        </span>
-      </div>
-      <div class="kvrow" style="align-items: flex-start">
-        <span class="kvk">.awog/</span>
-        <span class="kvv awtiers">
-          <span
-            v-for="d in TIERS"
-            :key="d"
-            class="chip"
-            style="padding: 2px 8px; font-size: var(--fs-xs)"
+        <div class="divide-y">
+          <div
+            v-for="s in view.ses"
+            :key="s.id"
+            class="group/rs flex cursor-pointer items-center gap-3 py-2 transition-colors hover:bg-accent"
+            :title="t('projects.overview.openSession')"
+            @click="openSession(s.id)"
           >
-            {{ d }}/
+            <span class="size-2 flex-none rounded-full bg-faint" />
+            <span class="min-w-0 flex-1 truncate text-sm font-medium group-hover/rs:text-primary">
+              {{ s.t }}
+            </span>
+            <span class="flex-none text-xs whitespace-nowrap text-faint tabular-nums">
+              {{ s.w }}
+            </span>
+          </div>
+        </div>
+        <div v-if="!view.ses.length" class="text-sm text-dim">
+          {{ t('projects.overview.noSession') }}
+        </div>
+      </Card>
+      <Card :class="CARD">
+        <div :class="CARD_H">
+          <Icon name="tasks" class="size-3.5 flex-none" />
+          <span class="text-muted-foreground">{{ t('projects.overview.tasksCard') }}</span>
+        </div>
+        <div class="divide-y">
+          <div v-for="task in view.tasks" :key="task.t" class="flex items-center gap-3 py-2">
+            <Icon name="tasks" class="size-3.5 flex-none" />
+            <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ task.t }}</span>
+            <Badge variant="outline" class="border-primary/40 bg-primary/10 text-primary">
+              {{ task.s }}
+            </Badge>
+          </div>
+        </div>
+        <div v-if="!view.tasks.length" class="text-sm text-dim">
+          {{ t('projects.overview.noTask') }}
+        </div>
+      </Card>
+    </div>
+
+    <Card :class="CARD">
+      <div :class="CARD_H">
+        <Icon name="folder" class="size-3.5 flex-none" />
+        <span class="text-muted-foreground">{{ t('projects.overview.configCard') }}</span>
+      </div>
+      <div class="divide-y text-sm">
+        <div v-if="project.description" :class="[KV_ROW, 'items-start']">
+          <span :class="KV_K">{{ t('projects.overview.description') }}</span>
+          <span :class="KV_V">{{ project.description }}</span>
+        </div>
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('projects.overview.path') }}</span>
+          <!-- mono-ok: đường dẫn project -->
+          <span :class="[KV_V, 'font-mono']">{{ project.path }}</span>
+        </div>
+        <div v-if="project.language" :class="KV_ROW">
+          <span :class="KV_K">{{ t('projects.overview.language') }}</span>
+          <span :class="KV_V">{{ project.language }}</span>
+        </div>
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('projects.overview.remote') }}</span>
+          <a
+            v-if="view.gh"
+            class="inline-flex w-fit items-center gap-1.5 text-info hover:underline"
+            :href="`https://github.com/${view.gh}`"
+            target="_blank"
+            rel="noopener"
+          >
+            <Icon name="git" class="size-3" />
+            github.com/{{ view.gh }}
+          </a>
+          <!-- mono-ok: URL remote git -->
+          <span v-else-if="project.gitRemote" :class="[KV_V, 'font-mono']">
+            {{ project.gitRemote }}
           </span>
-        </span>
+          <span v-else :class="[KV_V, 'text-dim']">
+            {{ t('projects.overview.noRemote') }}
+          </span>
+        </div>
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('projects.overview.llm') }}</span>
+          <span :class="KV_V">
+            <Button v-if="!compact" variant="outline" size="sm" @click="emit('open-llm')">
+              <Icon name="brain" />
+              {{ llmLabel }}
+            </Button>
+            <span v-else class="inline-flex items-center gap-1.5">
+              <Icon name="brain" class="size-3" />
+              {{ llmLabel }}
+            </span>
+          </span>
+        </div>
+        <!-- GitHub account this project authenticates as — the single source used by
+             git push/fetch/pull AND the Issues/PR tabs (inherits Settings → Git).
+             Editable even in the compact quick-view: it's a safe (non-destructive)
+             setting and the Git page's account shortcut lands here. -->
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('projects.overview.githubAccount') }}</span>
+          <span :class="KV_V">
+            <AppSelect
+              :model-value="ghAccountValue"
+              :options="ghAccountOptions"
+              width="200px"
+              @update:model-value="onGhAccount"
+            />
+          </span>
+        </div>
+        <!-- Hồ sơ trình duyệt nhúng của project (ADR 0101): login + bookmark riêng. Phiên
+             có thể ghi đè trong menu ⋮ của trình duyệt; trống = theo mặc định của app. -->
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('projects.overview.browserProfile') }}</span>
+          <span :class="KV_V">
+            <AppSelect
+              :model-value="browserProfileValue"
+              :options="browserProfileOptions"
+              width="200px"
+              @update:model-value="onBrowserProfile"
+            />
+          </span>
+        </div>
+        <div :class="[KV_ROW, 'items-start']">
+          <span :class="KV_K">.awog/</span>
+          <span :class="[KV_V, 'flex flex-wrap gap-1.5']">
+            <Badge v-for="d in TIERS" :key="d" variant="outline" class="text-muted-foreground">
+              {{ d }}/
+            </Badge>
+          </span>
+        </div>
       </div>
       <!-- Config-import assistant (ADR 0035): `.claude`/`.agents` are import sources,
            not live tiers — offer to copy them into `.awog`. Hidden in compact mode. -->
-      <div v-if="(importable.length || justImported) && !compact" class="cfgimport">
-        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto" />
+      <div
+        v-if="(importable.length || justImported) && !compact"
+        class="mt-2 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+      >
+        <Icon name="alert" class="size-3.5 flex-none" />
         <span v-if="importable.length">
           {{ t('projects.import.banner', { n: importable.length }) }}
         </span>
         <span v-else>{{ t('projects.import.done', { n: justImported }) }}</span>
-        <span style="flex: 1" />
+        <span class="flex-1" />
         <Button
           v-if="importable.length"
           :disabled="importing"
@@ -219,10 +236,10 @@
           }}
         </Button>
       </div>
-    </div>
+    </Card>
 
-    <div v-if="!compact" style="display: flex; justify-content: flex-end; margin-top: 6px">
-      <Button style="color: var(--danger)" variant="outline" size="sm" @click="emit('delete')">
+    <div v-if="!compact" class="mt-1.5 flex justify-end">
+      <Button variant="danger" size="sm" @click="emit('delete')">
         <Icon name="trash" />
         {{ t('projects.overview.removeProject') }}
       </Button>
@@ -247,7 +264,9 @@ import { useGhAccounts } from '~/composables/useGhAccounts'
 import { useBrowserProfiles } from '~/composables/useBrowserProfiles'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { Project } from '~/types'
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
+import Card from '~/components/ui/card/Card.vue'
 
 // `compact` (quick-view modal): hide destructive / management controls (remove
 // project, config-import banner, LLM-defaults button → static label) so the panel
@@ -295,6 +314,24 @@ function openSession(id: number) {
 }
 
 const TIERS = ['agents', 'skills', 'rules', 'workflows', 'commands', 'hooks'] as const
+
+// Dải số liệu đầu trang (repo / agent / phiên / task).
+const stats = computed(() => [
+  { label: t('projects.overview.repos'), value: effRepos.value.length },
+  { label: t('projects.overview.agents'), value: props.view.agents.length },
+  { label: t('projects.overview.sessions'), value: props.view.ses.length },
+  { label: t('projects.overview.tasksCard'), value: props.view.tasks.length },
+])
+
+// Class dùng lặp trong template — gom một chỗ để các card/hàng giống hệt nhau.
+const STAT = 'min-w-21 flex-1 rounded-xl border bg-card px-3 py-3 shadow-sm'
+const CARD = 'mb-3 gap-0 rounded-xl px-4 py-3'
+const CARD_H = 'mb-1.5 flex items-center gap-2 text-xs font-semibold text-dim'
+const CHIP_MOD = 'border-diff-mod/35 text-diff-mod tabular-nums'
+const CHIP_AHEAD = 'border-selected-border text-primary tabular-nums'
+const KV_ROW = 'flex gap-3.5 py-2'
+const KV_K = 'w-26 flex-none whitespace-nowrap text-muted-foreground'
+const KV_V = 'min-w-0 flex-1 break-words text-foreground'
 
 const totalDirty = computed(() => effRepos.value.reduce((a, r) => a + (r.dirty ?? 0), 0))
 const totalAhead = computed(() => effRepos.value.reduce((a, r) => a + (r.ahead ?? 0), 0))
@@ -400,24 +437,3 @@ async function onBrowserProfile(v: string) {
   }
 }
 </script>
-
-<style scoped>
-.rs-link:hover .st1 {
-  color: var(--accent);
-}
-/* Config-import banner row: amber heads-up + an Import action, full width under
-   the .awog/ tier chips. */
-.cfgimport {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 11px;
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-}
-</style>

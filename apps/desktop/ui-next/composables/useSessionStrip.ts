@@ -256,6 +256,21 @@ export function useSessionStrip() {
     if (ok) sessions.remove(s.id)
   }
 
+  // Xoá vĩnh viễn MỌI phiên đã đóng đang hiện (lọc theo ô tìm nếu có chữ — xoá đúng
+  // cái người dùng đang nhìn, số lượng ghi rõ trong hộp xác nhận).
+  async function removeAllArchived() {
+    const targets = filteredArchived.value.slice()
+    if (!targets.length) return
+    const ok = await confirm({
+      title: t('wb.strip.deleteAllArchivedTitle', { n: targets.length }),
+      description: t('wb.strip.deleteAllArchivedDesc'),
+      confirmLabel: t('wb.strip.deleteAllArchivedConfirm', { n: targets.length }),
+      kind: 'danger',
+    })
+    if (!ok) return
+    for (const s of targets) sessions.remove(s.id)
+  }
+
   // Đóng popover khi bấm ra ngoài (nút ▾ + thân popover mang data-wb-mgr →
   // không đếm là ngoài; mousedown của nút chạm document trước khi click
   // toggles).
@@ -291,6 +306,7 @@ export function useSessionStrip() {
     clearAll,
     restore,
     removeForever,
+    removeAllArchived,
     STATUS_COLOR,
     isRunStatus,
     t,

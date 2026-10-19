@@ -1,66 +1,90 @@
 <template>
-  <div class="tacts" :class="{ col: collapsed }">
+  <!-- Section phẳng (không nền xám) — hairline + thụt lề đọc cả lượt chạy thành một khối. -->
+  <div>
     <!-- Group header (proto ProtoStepGroup parity): chevron + count pill +
          "Steps completed" + failed/running counts + one-line live preview of
          what the turn is doing. Click toggles the activity body. -->
-    <button type="button" class="tacth" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
+    <!-- raw-ok: header nhóm cả dòng là một vùng bấm, cùng dáng hàng step -->
+    <button
+      type="button"
+      class="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground select-none transition-colors hover:bg-accent motion-reduce:transition-none"
+      :aria-expanded="!collapsed"
+      @click="collapsed = !collapsed"
+    >
       <Icon
         name="chev"
-        class="tchev"
-        :class="{ off: collapsed }"
-        style="width: var(--icon-sm); height: var(--icon-sm)"
+        class="size-3.5 flex-none text-muted-foreground/60 transition-transform motion-reduce:transition-none"
+        :class="[collapsed ? '-rotate-90' : '']"
       />
-      <span class="tbadge">{{ entries.length }}</span>
-      <span class="tlbl">{{ t('sessions.turn.stepsCompleted') }}</span>
-      <span v-if="failedCount > 0" class="tfail">
+      <!-- Ô đếm (proto: cao 16, rộng tối thiểu 18, viền bo), số thẳng cột. -->
+      <span
+        class="inline-flex h-4 min-w-4.5 flex-none items-center justify-center rounded-sm border px-1 text-xs text-muted-foreground tabular-nums"
+      >
+        {{ entries.length }}
+      </span>
+      <!-- Nhãn + bộ đếm giữ bề rộng tự nhiên, không co/xuống dòng. Chỉ preview (flex-auto,
+           min-w-0) được cắt "…", để một preview dài liền mạch (lệnh shell một dòng)
+           không ép "N bước" thành cột chữ. -->
+      <span class="flex-none whitespace-nowrap">{{ t('sessions.turn.stepsCompleted') }}</span>
+      <span v-if="failedCount > 0" class="flex-none whitespace-nowrap text-destructive">
         {{ t('sessions.turn.errorCount', { count: failedCount }) }}
       </span>
-      <span v-if="runningCount > 0" class="trun">
-        <span class="trunspin" />
+      <!-- Đếm đang chạy — chữ primary + vòng cung mảnh (không xoay glyph).
+           px-ok: nét vòng 1.5px là hình vẽ. -->
+      <span
+        v-if="runningCount > 0"
+        class="inline-flex flex-none items-center gap-1 whitespace-nowrap text-primary"
+      >
+        <span
+          class="size-3 flex-none animate-spin rounded-full border-[1.5px] border-transparent border-t-primary motion-reduce:animate-none"
+        />
         {{ t('sessions.bg.summary.running', { n: runningCount }) }}
       </span>
-      <span v-if="!isFallbackPreview" class="tprev">{{ preview }}</span>
+      <!-- Preview đang chạy — một dòng, cắt "…", nửa độ đậm (preview mờ dần của craft). -->
+      <span v-if="!isFallbackPreview" class="min-w-0 flex-auto truncate text-muted-foreground/60">
+        {{ preview }}
+      </span>
     </button>
     <Collapse :open="!collapsed">
-      <!-- Body: tree indent — a left hairline rail groups the run as one unit. -->
-      <div class="tbody">
+      <!-- Body: tree indent — a left hairline rail groups the run as one unit. Lề trái
+           ~11px để rail thẳng dưới chevron của header (craft TurnCard tree indent). -->
+      <div class="mt-0.5 ml-2.75 flex flex-col gap-0.5 border-l pl-3">
         <template v-for="e in entries" :key="e.key">
           <SessionStepItem v-if="e.kind === 'step'" :block="e.step" :msg-eid="msgEid" />
           <!-- Extended-thinking: collapsible reasoning, italic muted body —
-               each block toggles independently by its stable key. -->
-          <div
-            v-else-if="e.kind === 'thinking'"
-            class="tkblk"
-            :class="{ col: !thinkOpen.has(e.key) }"
-          >
+               each block toggles independently by its stable key. Header là một hàng
+               trơn như step; RAIL chỉ thuộc về thân đã mở, thụt dưới cột icon. -->
+          <div v-else-if="e.kind === 'thinking'">
+            <!-- raw-ok: header thinking cả dòng là một vùng bấm, cùng dáng hàng step -->
             <button
               type="button"
-              class="tkh"
+              class="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground select-none transition-colors hover:bg-accent motion-reduce:transition-none italic"
               :aria-expanded="thinkOpen.has(e.key)"
               @click="toggleThink(e.key)"
             >
               <Icon
                 name="chev"
-                class="tkchev"
-                :class="{ off: !thinkOpen.has(e.key) }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
+                class="size-3 flex-none text-muted-foreground/50 transition-transform motion-reduce:transition-none"
+                :class="[thinkOpen.has(e.key) ? '' : '-rotate-90']"
               />
-              <Icon
-                name="brain"
-                class="thinkic"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
+              <Icon name="brain" class="size-3.5 flex-none text-muted-foreground" />
               {{ t('sessions.thinking') }}
             </button>
-            <div v-if="thinkOpen.has(e.key)" class="tkb">{{ e.text }}</div>
+            <div
+              v-if="thinkOpen.has(e.key)"
+              class="mt-0.5 mb-1 ml-6 border-l-2 pl-2.5 text-xs leading-(--lh-prose) whitespace-pre-wrap text-muted-foreground italic"
+            >
+              {{ e.text }}
+            </div>
           </div>
           <!-- Intermediate commentary (text the model wrote before a tool). Dimmed so it
                reads as an activity, not the final answer. `streaming` is threaded through
                so the stream-end flush fires here too: without it these blocks keep
                props.streaming=false, the flush watch never runs, and a run whose renderSrc
                was pinned mid-stream stays truncated until the app restarts (same defect the
-               response block's flush fixes). -->
-          <div v-else class="tinter">
+               response block's flush fixes). Cùng lề với hàng step (proto `px-1.5 py-1`)
+               để chữ thẳng hàng với tên tool phía trên/dưới. -->
+          <div v-else class="px-1.5 py-1 opacity-75">
             <SessionTextBlock :text="e.text" :streaming="streaming" />
           </div>
         </template>
@@ -111,7 +135,7 @@ const isFallbackPreview = computed(() =>
   props.preview.startsWith(t('sessions.turn.stepsCompleted')),
 )
 
-// Collapsed-by-default: header click toggles the body (.tacts.col hides .tbody).
+// Collapsed-by-default: header click toggles the body (Collapse đóng thân).
 const collapsed = ref(true)
 
 // Follow the transcript-wide collapse-all / expand-all broadcast (manual clicks
@@ -132,182 +156,3 @@ function toggleThink(key: string) {
   else thinkOpen.add(key)
 }
 </script>
-
-<style scoped>
-/* Flat section (no grey fill) — the hairline + indent read the run as one unit,
-   consistent with the flat activity list. */
-.tacts {
-  background: transparent;
-}
-/* Header is a real <button> (proto parity): same hover-wash row shape as the
-   step rows, so the whole group reads as one control. */
-.tacth {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  text-align: left;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.12s ease;
-}
-.tacth:hover {
-  background: var(--accent-wash);
-}
-.tchev {
-  flex: 0 0 auto;
-  color: rgb(from var(--muted-foreground) r g b / 60%);
-  transition: transform 0.15s ease;
-}
-.tchev.off {
-  transform: rotate(-90deg);
-}
-/* Count pill — proto `h-4 min-w-[18px] rounded border font-mono text-[11px]`. */
-.tbadge {
-  flex: 0 0 auto;
-  min-width: 18px;
-  padding: 0 4px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  font-family: var(--code); /* mono-ok: numeric counter */
-  font-size: 11px;
-  line-height: 12px;
-  color: var(--muted-foreground);
-}
-/* Label + counters keep natural width — never shrink/wrap. `.tprev` (flex:1,
-   min-width:0) is the only piece allowed to ellipsize, so a long unbreakable
-   preview (a one-line shell command) can't squeeze "N bước" into a word column. */
-.tlbl {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-.tfail {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  color: var(--destructive);
-}
-/* Live running count — primary text + a thin arc ring (never an animated glyph). */
-.trun {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--primary);
-}
-.trunspin {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  border: 1.5px solid transparent;
-  border-top-color: var(--primary);
-  animation: trun-rot 0.8s linear infinite;
-}
-@keyframes trun-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* Live preview text — one line, ellipsised, half-strength (craft's fading
-   preview). */
-.tprev {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  text-align: left;
-  color: rgb(from var(--muted-foreground) r g b / 60%);
-}
-.tbody {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 2px;
-  /* Indent the activity rows so they read as nested under the "N · preview" header
-     (craft TurnCard tree indent). A hairline rail on the left groups the run as one
-     unit; the ~11px left margin lines the rail up under the header chevron. */
-  margin-left: 11px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
-}
-/* Extended-thinking block — proto idiom: the header is a plain row like a step
-   (chevron + glyph + italic label); the RAIL belongs to the expanded body only,
-   indented under the icon column (proto `ml-6 border-l-2 pl-2.5`). Scoped `.tk*`
-   replaces the shared global .think/.thh/.thb so siblings keep their styles. */
-.tkh {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-style: italic;
-  text-align: left;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.12s ease;
-}
-.tkh:hover {
-  background: var(--accent-wash);
-}
-.tkchev {
-  flex: 0 0 auto;
-  color: rgb(from var(--muted-foreground) r g b / 50%);
-  transition: transform 0.15s ease;
-}
-.tkchev.off {
-  transform: rotate(-90deg);
-}
-.thinkic {
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-}
-.tkb {
-  margin: 2px 0 4px 24px;
-  border-left: 2px solid var(--border);
-  padding-left: 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  font-style: italic;
-  color: var(--muted-foreground);
-  white-space: pre-wrap;
-}
-/* Intermediate commentary: dimmed so it reads as activity noise, not the answer.
-   Same inset as a step row (proto `px-1.5 py-1`) so the text lines up with the
-   tool names above/below it. */
-.tinter {
-  opacity: 0.75;
-  padding: 4px 6px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tacth,
-  .tchev,
-  .tkh,
-  .tkchev {
-    transition: none;
-  }
-  .trunspin {
-    animation: none;
-  }
-}
-</style>

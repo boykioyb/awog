@@ -1,50 +1,81 @@
 <template>
-  <div v-if="open" class="ovl on amovl" @click.self="emit('close')">
-    <div class="amcard">
-      <div class="amhead">
-        <Icon name="clip" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span class="amtitle">
+  <!-- Card mang `role="dialog"` + `data-state="open"` để khớp selector
+       `[role="dialog"][data-state="open"]` trong OVERLAYS (composables/useEmbeddedBrowser.ts)
+       — trình duyệt nhúng nhường chỗ khi modal mở. -->
+  <div
+    v-if="open"
+    class="fixed inset-0 z-100 flex cursor-default items-center justify-center bg-black/55 p-12 [-webkit-app-region:no-drag]"
+    @click.self="emit('close')"
+  >
+    <Card
+      role="dialog"
+      aria-modal="true"
+      data-state="open"
+      class="flex max-h-[80vh] w-full max-w-170 flex-col gap-0 overflow-hidden rounded-lg py-0 shadow-lg"
+    >
+      <div class="flex items-center gap-2 px-3.5 py-2.5 text-foreground">
+        <Icon name="clip" class="size-3.5" />
+        <span class="flex-1 font-semibold">
           {{ t('sessions.attachment.allTitle', { n: attachments.length }) }}
         </span>
-        <span style="flex: 1" />
-        <button class="amxbtn" :title="t('common.close')" @click="emit('close')">
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
+          :title="t('common.close')"
+          :aria-label="t('common.close')"
+          @click="emit('close')"
+        >
+          <Icon name="x" class="size-3.5" />
+        </Button>
       </div>
+      <Separator />
 
-      <div class="amgrid">
+      <div
+        class="grid min-h-0 grid-cols-[repeat(auto-fill,minmax(17.5rem,1fr))] gap-2 overflow-auto p-3.5"
+      >
         <div
           v-for="(a, i) in attachments"
           :key="i"
-          class="amitem"
+          class="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border bg-muted px-2 py-1.5 hover:border-ring"
           :title="t('sessions.attachment.preview')"
           @click="emit('preview', i)"
         >
-          <span class="amthumb">
-            <img v-if="a.img && a.src" :src="a.src" class="amimg" :alt="a.name" />
-            <span v-else-if="a.img" class="thumb" />
-            <Icon v-else name="rules" style="width: var(--icon-md); height: var(--icon-md)" />
+          <span
+            class="grid size-7.5 shrink-0 place-items-center overflow-hidden rounded-sm text-muted-foreground"
+          >
+            <img v-if="a.img && a.src" :src="a.src" class="size-full object-cover" :alt="a.name" />
+            <span v-else-if="a.img" class="size-5 rounded-sm bg-linear-135 from-info to-lavender" />
+            <Icon v-else name="rules" class="size-4" />
           </span>
-          <span class="aminfo">
-            <span class="amname">{{ a.name }}</span>
-            <span v-if="fmtSize(a.size)" class="ammeta">{{ fmtSize(a.size) }}</span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <!-- mono: tên file đính kèm -->
+            <span class="truncate font-mono text-foreground">{{ a.name }}</span>
+            <span v-if="fmtSize(a.size)" class="text-sm text-muted-foreground tabular-nums">
+              {{ fmtSize(a.size) }}
+            </span>
           </span>
-          <button
-            class="amrm"
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             :title="t('sessions.attachment.remove')"
+            :aria-label="t('sessions.attachment.remove')"
             @click.stop="emit('remove', i)"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="x" class="size-3.5" />
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   </div>
 </template>
 
 <script setup lang="ts">
 // Overflow modal: lists ALL pending attachments when the composer has too many to
-// show inline. Each row → click previews, × removes. Reuses the prototype .ovl scrim.
+// show inline. Each row → click previews, × removes. Scrim tự dựng (không phải Dialog reka): preview ảnh mở CHỒNG lên modal này qua
+// PreviewModal (overlay thường) — Dialog modal của reka khoá pointer-events của body
+// nên preview sẽ không bấm được.
 import type { SessionAttachment } from '~/composables/useSessionsData'
 import { formatBytes } from '~/utils/format-bytes'
 
@@ -61,123 +92,3 @@ function onKey(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-.amovl {
-  align-items: center;
-  padding: 48px;
-  cursor: default;
-}
-.amcard {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 680px;
-  max-height: 80vh;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-.amhead {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--foreground);
-}
-.amtitle {
-  font-weight: 600;
-}
-.amxbtn {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.amxbtn:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.amgrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 8px;
-  padding: 14px;
-  overflow: auto;
-  min-height: 0;
-}
-.amitem {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-  cursor: pointer;
-  min-width: 0;
-}
-.amitem:hover {
-  border-color: var(--ring);
-}
-.amthumb {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  border-radius: var(--r-xs); /* rounded-sm */
-  overflow: hidden;
-  color: var(--muted-foreground);
-}
-.amimg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-xs);
-  background: linear-gradient(135deg, var(--info), var(--violet));
-}
-.aminfo {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-}
-.amname {
-  /* mono-ok: attachment file name */
-  font-family: var(--code);
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ammeta {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.amrm {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.amrm:hover {
-  background: rgb(from var(--destructive) r g b / 0.1);
-  color: var(--destructive);
-}
-</style>

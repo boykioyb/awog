@@ -5,34 +5,36 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="tse">
-      <div class="tse-field">
-        <label class="tse-label">{{ t('terminalSnippet.name') }}</label>
-        <Input v-model="name" :placeholder="t('terminalSnippet.namePh')" />
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1.5">
+        <Label for="tse-name" class="text-xs">{{ t('terminalSnippet.name') }}</Label>
+        <Input id="tse-name" v-model="name" :placeholder="t('terminalSnippet.namePh')" />
       </div>
 
-      <div class="tse-field">
-        <label class="tse-label">{{ t('terminalSnippet.command') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label for="tse-command" class="text-xs">{{ t('terminalSnippet.command') }}</Label>
+        <!-- mono-ok: lệnh shell, người dùng copy-paste vào terminal -->
+        <Textarea
+          id="tse-command"
           v-model="command"
-          class="tse-input tse-ta mono"
+          class="min-h-24 resize-y font-mono"
           rows="5"
           :placeholder="t('terminalSnippet.commandPh')"
           spellcheck="false"
           autocomplete="off"
         />
-        <div class="tse-hint">{{ t('terminalSnippet.commandHint') }}</div>
+        <div class="text-xs text-dim">{{ t('terminalSnippet.commandHint') }}</div>
       </div>
 
-      <div class="tse-field">
-        <label class="tse-label">{{ t('terminalSnippet.tier') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs">{{ t('terminalSnippet.tier') }}</Label>
         <AppSelect v-model="tier" :options="tierOptions" width="100%" />
-        <div class="tse-hint">{{ t('terminalSnippet.tierHint') }}</div>
+        <div class="text-xs text-dim">{{ t('terminalSnippet.tierHint') }}</div>
       </div>
     </div>
 
     <template #footer>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!canSave" @click="onSave">
         {{ t('terminalSnippet.save') }}
@@ -110,54 +112,3 @@ const onSave = (): void => {
   emit('save', name.value.trim(), command.value, project)
 }
 </script>
-
-<style scoped>
-.tse {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.tse-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tse-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--foreground);
-}
-/* shadcn input idiom: transparent field on the card surface, the stronger --input
-   hairline does the framing, and focus is a --ring (accent-border) outline, not a
-   colour swap of the border itself. */
-.tse-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--input);
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.tse-input.mono {
-  font-family: var(--code);
-}
-.tse-input:focus {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.tse-ta {
-  resize: vertical;
-  min-height: 6rem;
-  line-height: var(--lh-md);
-}
-.tse-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

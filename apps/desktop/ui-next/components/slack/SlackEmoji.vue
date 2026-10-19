@@ -4,11 +4,11 @@
     :src="url"
     :alt="`:${name}:`"
     :title="`:${name}:`"
-    class="slk-emoji-img"
+    class="inline-block size-[1.3em] object-contain align-[-0.3em]"
     draggable="false"
   />
-  <span v-else-if="char" class="slk-emoji" :title="`:${name}:`">{{ char }}</span>
-  <span v-else class="slk-emoji-unknown">:{{ name }}:</span>
+  <span v-else-if="char" class="text-[1.15em]" :title="`:${name}:`">{{ char }}</span>
+  <span v-else class="rounded-sm bg-accent px-1 text-[0.9em] text-dim">:{{ name }}:</span>
 </template>
 
 <script setup lang="ts">
@@ -29,23 +29,3 @@ const props = withDefaults(
 const url = computed(() => props.customUrl?.(splitSkin(props.name).base) ?? null)
 const char = computed(() => (url.value ? null : standardEmoji(props.name, props.skin)))
 </script>
-
-<style scoped>
-.slk-emoji {
-  font-size: 1.15em;
-}
-.slk-emoji-img {
-  display: inline-block;
-  width: 1.3em;
-  height: 1.3em;
-  object-fit: contain;
-  vertical-align: -0.3em;
-}
-.slk-emoji-unknown {
-  padding: 0 4px;
-  border-radius: var(--r-xs);
-  background: var(--bgHover);
-  color: var(--textDim);
-  font-size: 0.9em;
-}
-</style>

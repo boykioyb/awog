@@ -41,7 +41,7 @@
         @step="step"
       />
       <div
-        class="flex w-[38%] min-w-[280px] max-w-[520px] flex-none flex-col shadow-[inset_1px_0_0_var(--border)]"
+        class="flex w-[38%] min-w-70 max-w-130 flex-none flex-col shadow-[inset_1px_0_0_var(--border)]"
       >
         <GitLogDetail
           :commit="selectedCommit"

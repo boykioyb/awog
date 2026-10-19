@@ -1,157 +1,166 @@
 <template>
-  <!-- Teleport to body so the modal escapes any panel stacking context. Single
-       instance (AppGlobalHosts), driven by useClaudeImportModal(). -->
-  <Teleport to="body">
-    <div v-if="isOpen" class="ovl on cimpovl" @click.self="close">
-      <div
-        class="cimp"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('sessions.claudeImport.title')"
-      >
-        <div class="cimp-head">
-          <Icon name="download" style="width: var(--icon-md); height: var(--icon-md)" />
-          <div class="cimp-titles">
-            <div class="cimp-title">{{ t('sessions.claudeImport.title') }}</div>
-            <div class="cimp-sub">{{ t('sessions.claudeImport.subtitle') }}</div>
-          </div>
-          <button class="cimp-x" type="button" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
-
-        <div class="cimp-bar">
-          <div class="cimp-search">
-            <Icon
-              name="search"
-              class="cimp-search-ic"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            <input
-              v-model="filter"
-              class="cimp-input"
-              type="search"
-              :placeholder="t('sessions.claudeImport.filter')"
-            />
-          </div>
-          <div class="cimp-seg" role="tablist">
-            <button
-              v-for="d in DAY_OPTIONS"
-              :key="d"
-              type="button"
-              role="tab"
-              class="cimp-seg-btn"
-              :class="{ on: days === d }"
-              :aria-selected="days === d"
-              @click="days = d"
-            >
-              {{ t('sessions.claudeImport.days', { n: d }) }}
-            </button>
-          </div>
-        </div>
-
-        <div class="cimp-body">
-          <div v-if="loading" class="cimp-note">{{ t('sessions.claudeImport.loading') }}</div>
-          <div v-else-if="loadError" class="cimp-note err">
-            {{ t('sessions.claudeImport.loadFailed') }} {{ loadError }}
-          </div>
-          <div v-else-if="!items.length" class="cimp-note">
-            {{ t('sessions.claudeImport.empty') }}
-          </div>
-          <div v-else-if="!groups.length" class="cimp-note">
-            {{ t('sessions.claudeImport.noMatch') }}
-          </div>
-          <template v-else>
-            <section v-for="g in groups" :key="g.projectId" class="cimp-group">
-              <label
-                class="cimp-ghead"
-                :title="t('sessions.claudeImport.selectProject', { name: g.name })"
-              >
-                <input
-                  type="checkbox"
-                  class="cimp-check"
-                  :checked="g.state === 'all'"
-                  :indeterminate="g.state === 'some'"
-                  :disabled="g.selectable.length === 0 || importing"
-                  @change="toggleGroup(g)"
-                />
-                <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                <span class="cimp-gname">{{ g.name }}</span>
-                <span class="cimp-gcount">{{ g.items.length }}</span>
-              </label>
-              <label
-                v-for="it in g.items"
-                :key="it.id"
-                class="cimp-row"
-                :class="{ done: !!it.importedSessionId }"
-                :title="it.cwd"
-              >
-                <input
-                  type="checkbox"
-                  class="cimp-check"
-                  :checked="selected.has(it.id)"
-                  :disabled="!!it.importedSessionId || importing"
-                  @change="toggleOne(it.id)"
-                />
-                <span class="cimp-main">
-                  <span class="cimp-rtitle">{{ it.title }}</span>
-                  <span class="cimp-meta">
-                    <span class="cimp-badge" :class="it.entrypoint === 'cli' ? 'cli' : 'desk'">
-                      {{
-                        it.entrypoint === 'cli'
-                          ? t('sessions.claudeImport.srcCli')
-                          : t('sessions.claudeImport.srcDesktop')
-                      }}
-                    </span>
-                    <span v-if="it.gitBranch" class="cimp-branch">
-                      <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
-                      <span class="cimp-branch-n">{{ it.gitBranch }}</span>
-                    </span>
-                  </span>
-                </span>
-                <span class="cimp-side">
-                  <span v-if="it.importedSessionId" class="cimp-done">
-                    {{ t('sessions.claudeImport.imported') }}
-                  </span>
-                  <span class="cimp-turns">
-                    {{ t('sessions.claudeImport.turns', { n: it.userTurns }) }}
-                  </span>
-                  <span class="cimp-when">{{ formatRelativeAgo(it.lastAt, t, now) }}</span>
-                </span>
-              </label>
-            </section>
-          </template>
-        </div>
-
-        <div class="cimp-foot">
-          <span class="cimp-skip">
-            <span v-if="skipped.noProject">
-              {{ t('sessions.claudeImport.skippedNoProject', { n: skipped.noProject }) }}
-            </span>
-            <span v-if="skipped.unreadable">
-              {{ t('sessions.claudeImport.skippedUnreadable', { n: skipped.unreadable }) }}
-            </span>
-          </span>
-          <span class="cimp-count">
-            {{ t('sessions.claudeImport.selected', { n: selected.size }) }}
-          </span>
-          <button class="cimp-btn" type="button" @click="close">{{ t('common.cancel') }}</button>
-          <button
-            class="cimp-btn pri"
-            type="button"
-            :disabled="!selected.size || importing"
-            @click="runImport"
-          >
-            {{
-              importing
-                ? t('sessions.claudeImport.importing')
-                : t('sessions.claudeImport.import', { n: selected.size })
-            }}
-          </button>
-        </div>
+  <!-- Dialog (reka) tự teleport ra body nên modal thoát mọi stacking context của panel.
+       Một instance (AppGlobalHosts), lái bởi useClaudeImportModal().
+       Esc do listener `onKey` của script xử lý (chặn khi đang import) — vì thế chặn
+       đường Esc riêng của reka bằng `@escape-key-down.prevent`. -->
+  <Dialog :open="isOpen" @update:open="(v) => !v && close()">
+    <DialogContent
+      class="flex h-[min(640px,84vh)] w-[94vw] max-w-190 flex-col gap-0 overflow-hidden rounded-2xl bg-card p-0 text-base text-card-foreground sm:max-w-190"
+      @escape-key-down.prevent
+    >
+      <div class="flex shrink-0 items-start gap-2.5 px-4 pt-3.5 pb-3 pr-12">
+        <Icon name="download" class="mt-0.5 size-4" />
+        <DialogHeader class="min-w-0 flex-1 gap-0">
+          <DialogTitle class="text-lg font-semibold">
+            {{ t('sessions.claudeImport.title') }}
+          </DialogTitle>
+          <DialogDescription class="text-sm text-muted-foreground">
+            {{ t('sessions.claudeImport.subtitle') }}
+          </DialogDescription>
+        </DialogHeader>
       </div>
-    </div>
-  </Teleport>
+      <Separator />
+
+      <div class="flex shrink-0 items-center gap-2.5 px-4 py-2.5">
+        <div class="relative min-w-0 flex-1">
+          <Icon
+            name="search"
+            class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            v-model="filter"
+            type="search"
+            class="h-ctrl-sm border-transparent bg-muted pl-8 text-base shadow-none focus-visible:border-ring"
+            :placeholder="t('sessions.claudeImport.filter')"
+          />
+        </div>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          :spacing="1"
+          class="shrink-0"
+          :model-value="days"
+          @update:model-value="(v) => v && (days = Number(v))"
+        >
+          <ToggleGroupItem
+            v-for="d in DAY_OPTIONS"
+            :key="d"
+            :value="d"
+            class="h-auto rounded-sm px-2.5 py-1 text-sm font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground data-[state=on]:border-ring data-[state=on]:bg-accent data-[state=on]:text-primary"
+          >
+            {{ t('sessions.claudeImport.days', { n: d }) }}
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      <Separator />
+
+      <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-1.5 pb-2.5">
+        <div v-if="loading" class="px-3 py-7 text-center text-muted-foreground">
+          {{ t('sessions.claudeImport.loading') }}
+        </div>
+        <div v-else-if="loadError" class="px-3 py-7 text-center text-destructive">
+          {{ t('sessions.claudeImport.loadFailed') }} {{ loadError }}
+        </div>
+        <div v-else-if="!items.length" class="px-3 py-7 text-center text-muted-foreground">
+          {{ t('sessions.claudeImport.empty') }}
+        </div>
+        <div v-else-if="!groups.length" class="px-3 py-7 text-center text-muted-foreground">
+          {{ t('sessions.claudeImport.noMatch') }}
+        </div>
+        <template v-else>
+          <section v-for="g in groups" :key="g.projectId" class="mt-1.5">
+            <label
+              class="sticky top-0 z-1 flex cursor-pointer items-center gap-2 bg-card px-2 py-1.5 text-sm font-semibold text-muted-foreground"
+              :title="t('sessions.claudeImport.selectProject', { name: g.name })"
+            >
+              <AppCheckbox
+                :checked="g.state === 'all'"
+                :indeterminate="g.state === 'some'"
+                :disabled="g.selectable.length === 0 || importing"
+                @update:checked="toggleGroup(g)"
+              />
+              <Icon name="folder" class="size-3.5" />
+              <span class="min-w-0 truncate">{{ g.name }}</span>
+              <span class="font-medium tabular-nums">{{ g.items.length }}</span>
+            </label>
+            <label
+              v-for="it in g.items"
+              :key="it.id"
+              class="flex items-center gap-2.5 rounded-sm py-1.5 pr-2 pl-3"
+              :class="
+                it.importedSessionId
+                  ? 'cursor-default opacity-55'
+                  : 'cursor-pointer hover:bg-accent'
+              "
+              :title="it.cwd"
+            >
+              <AppCheckbox
+                :checked="selected.has(it.id)"
+                :disabled="!!it.importedSessionId || importing"
+                @update:checked="toggleOne(it.id)"
+              />
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="truncate">{{ it.title }}</span>
+                <span class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  <Badge
+                    variant="outline"
+                    class="shrink-0 px-1.5 py-0 font-semibold"
+                    :class="
+                      it.entrypoint === 'cli' ? 'text-muted-foreground' : 'border-ring text-primary'
+                    "
+                  >
+                    {{
+                      it.entrypoint === 'cli'
+                        ? t('sessions.claudeImport.srcCli')
+                        : t('sessions.claudeImport.srcDesktop')
+                    }}
+                  </Badge>
+                  <span v-if="it.gitBranch" class="inline-flex min-w-0 items-center gap-1">
+                    <Icon name="branch" class="size-3" />
+                    <span class="truncate">{{ it.gitBranch }}</span>
+                  </span>
+                </span>
+              </span>
+              <span
+                class="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground tabular-nums"
+              >
+                <span v-if="it.importedSessionId" class="font-semibold text-primary">
+                  {{ t('sessions.claudeImport.imported') }}
+                </span>
+                <span>
+                  {{ t('sessions.claudeImport.turns', { n: it.userTurns }) }}
+                </span>
+                <span class="min-w-14 text-right">{{ formatRelativeAgo(it.lastAt, t, now) }}</span>
+              </span>
+            </label>
+          </section>
+        </template>
+      </div>
+
+      <Separator />
+      <div class="flex shrink-0 items-center gap-2.5 px-4 py-2.5">
+        <span class="flex min-w-0 flex-1 flex-col text-xs text-muted-foreground">
+          <span v-if="skipped.noProject">
+            {{ t('sessions.claudeImport.skippedNoProject', { n: skipped.noProject }) }}
+          </span>
+          <span v-if="skipped.unreadable">
+            {{ t('sessions.claudeImport.skippedUnreadable', { n: skipped.unreadable }) }}
+          </span>
+        </span>
+        <span class="text-sm text-muted-foreground">
+          {{ t('sessions.claudeImport.selected', { n: selected.size }) }}
+        </span>
+        <Button variant="outline" size="sm" @click="close">{{ t('common.cancel') }}</Button>
+        <Button size="sm" :disabled="!selected.size || importing" @click="runImport">
+          {{
+            importing
+              ? t('sessions.claudeImport.importing')
+              : t('sessions.claudeImport.import', { n: selected.size })
+          }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -308,299 +317,3 @@ function onKey(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-.cimpovl {
-  align-items: center;
-  padding: 24px;
-  z-index: 130;
-}
-.cimp {
-  width: min(760px, 94vw);
-  height: min(640px, 84vh);
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.cimp-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 16px 12px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.cimp-titles {
-  flex: 1;
-  min-width: 0;
-}
-.cimp-title {
-  font-weight: 600;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-}
-.cimp-sub {
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cimp-x {
-  background: transparent;
-  border: none;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: var(--r-xs);
-  display: inline-flex;
-}
-.cimp-x:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.cimp-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.cimp-search {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-.cimp-search-ic {
-  position: absolute;
-  top: 50%;
-  left: 10px;
-  transform: translateY(-50%);
-  color: var(--muted-foreground);
-}
-.cimp-input {
-  width: 100%;
-  height: 32px;
-  padding: 0 10px 0 32px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: var(--muted);
-  color: var(--foreground);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  outline: none;
-}
-.cimp-input:focus {
-  border-color: var(--ring);
-}
-.cimp-seg {
-  display: inline-flex;
-  gap: 4px;
-  flex: none;
-}
-.cimp-seg-btn {
-  padding: 5px 10px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  font-weight: 500;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cimp-seg-btn:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.cimp-seg-btn.on {
-  color: var(--primary);
-  border-color: var(--ring);
-  background: var(--accent-wash);
-}
-.cimp-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 6px 8px 10px;
-}
-.cimp-note {
-  padding: 28px 12px;
-  text-align: center;
-  color: var(--muted-foreground);
-}
-.cimp-note.err {
-  color: var(--destructive);
-}
-.cimp-group {
-  margin-top: 6px;
-}
-.cimp-ghead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  color: var(--muted-foreground);
-  font-weight: 600;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  position: sticky;
-  top: 0;
-  background: var(--card);
-  z-index: 1;
-}
-.cimp-gname {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cimp-gcount {
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-}
-.cimp-check {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-.cimp-check:disabled {
-  cursor: not-allowed;
-}
-.cimp-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 8px 7px 12px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-}
-.cimp-row:hover {
-  background: var(--accent-wash);
-}
-.cimp-row.done {
-  opacity: 0.55;
-  cursor: default;
-}
-.cimp-row.done:hover {
-  background: transparent;
-}
-.cimp-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cimp-rtitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cimp-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.cimp-badge {
-  flex: none;
-  padding: 0 6px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  font-weight: 600;
-}
-.cimp-badge.desk {
-  color: var(--primary);
-  border-color: var(--ring);
-}
-.cimp-branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.cimp-branch-n {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cimp-side {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-.cimp-done {
-  color: var(--primary);
-  font-weight: 600;
-}
-.cimp-when {
-  min-width: 56px;
-  text-align: right;
-}
-.cimp-foot {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  box-shadow: inset 0 1px 0 var(--border);
-}
-.cimp-skip {
-  flex: 1;
-  min-width: 0;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  display: flex;
-  flex-direction: column;
-}
-.cimp-count {
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cimp-btn {
-  font-weight: 500;
-  padding: 6px 12px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--foreground);
-  cursor: pointer;
-}
-.cimp-btn:hover {
-  background: var(--accent-wash);
-}
-.cimp-btn.pri {
-  border-color: transparent;
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-.cimp-btn.pri:hover {
-  background: var(--primary);
-  filter: brightness(1.08);
-}
-.cimp-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-</style>

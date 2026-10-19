@@ -1,51 +1,63 @@
 <template>
   <div>
     <SettingsPaneHeader :title="t('settingsInfra.heading')" />
-    <p class="siwhy">{{ t('settingsInfra.intro') }}</p>
+    <p class="mt-0 mb-2.5 text-sm text-dim">{{ t('settingsInfra.intro') }}</p>
 
-    <p v-if="error" class="sierr">{{ errorText }}</p>
+    <p
+      v-if="error"
+      class="mt-0 mb-2.5 rounded-md border border-destructive/40 px-2.5 py-1.5 text-sm text-destructive"
+    >
+      {{ errorText }}
+    </p>
 
     <!-- ── Ma trận ──────────────────────────────────────────────────────────
          Bốn lớp × hai loại tài khoản. Bấm thẳng vào ô để đổi: một bảng mà phải
          mở modal cho từng ô thì không ai đọc được nó như một bảng nữa. -->
-    <div class="sech">{{ t('settingsInfra.matrix.heading') }}</div>
-    <p class="sihint">{{ t('settingsInfra.matrix.hint') }}</p>
+    <SettingsGroupLabel>{{ t('settingsInfra.matrix.heading') }}</SettingsGroupLabel>
+    <p class="mt-0 mb-2 text-sm text-faint">{{ t('settingsInfra.matrix.hint') }}</p>
 
-    <table class="kt simx">
-      <thead>
-        <tr>
-          <th>{{ t('settingsInfra.matrix.col.class') }}</th>
-          <th v-for="kind in INFRA_KINDS" :key="kind">
+    <Table>
+      <TableHeader>
+        <TableRow class="hover:bg-transparent">
+          <TableHead class="text-xs text-dim">{{ t('settingsInfra.matrix.col.class') }}</TableHead>
+          <TableHead v-for="kind in INFRA_KINDS" :key="kind" class="text-xs text-dim">
             {{ t(`settingsInfra.kind.${kind}`) }}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="cls in INFRA_CLASSES" :key="cls">
-          <td>
-            <div class="simx-cls">{{ t(`settingsInfra.class.${cls}`) }}</div>
-            <div class="simx-clsd">{{ t(`settingsInfra.classDesc.${cls}`) }}</div>
-          </td>
-          <td v-for="kind in INFRA_KINDS" :key="kind">
-            <div class="seg simx-seg">
-              <span
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="cls in INFRA_CLASSES" :key="cls" class="hover:bg-transparent">
+          <TableCell>
+            <div class="text-foreground">{{ t(`settingsInfra.class.${cls}`) }}</div>
+            <div class="mt-0.5 text-xs text-faint">{{ t(`settingsInfra.classDesc.${cls}`) }}</div>
+          </TableCell>
+          <TableCell v-for="kind in INFRA_KINDS" :key="kind">
+            <!-- Ba mức trong một segmented; chỉ ô ĐANG CHỌN mới nhuộm theo mức, vì tô cả
+                 ba là biến bảng thành đèn giao thông và mất nghĩa. -->
+            <ToggleGroup
+              type="single"
+              :spacing="1"
+              class="rounded-lg bg-muted p-0.5"
+              :model-value="matrix[cls][kind]"
+              @update:model-value="onCellPick(cls, kind, $event)"
+            >
+              <ToggleGroupItem
                 v-for="mode in INFRA_MODES"
                 :key="mode"
-                :class="{ on: matrix[cls][kind] === mode, [`m-${mode}`]: true }"
-                role="button"
-                :aria-pressed="matrix[cls][kind] === mode"
+                :value="mode"
                 :title="t(`settingsInfra.modeDesc.${mode}`)"
-                @click="onCell(cls, kind, mode)"
+                class="h-(--ctrl-h-xs) px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                :class="MODE_ON_CLASS[mode]"
               >
                 {{ t(`settingsInfra.mode.${mode}`) }}
-              </span>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
 
-    <div class="sirow">
+    <div class="mt-2 mb-3.5 flex flex-wrap items-center gap-2">
       <Button
         type="button"
         :disabled="isDefaultMatrix || saving"
@@ -55,21 +67,24 @@
       >
         {{ t('settingsInfra.matrix.reset') }}
       </Button>
-      <span v-if="isDefaultMatrix" class="sihint">{{ t('settingsInfra.matrix.isDefault') }}</span>
+      <span v-if="isDefaultMatrix" class="text-sm text-faint">
+        {{ t('settingsInfra.matrix.isDefault') }}
+      </span>
     </div>
 
     <!-- ── Tài khoản production ─────────────────────────────────────────────
          Đây là nơi trả lời câu "vì sao chip PRODUCTION lại đỏ trên máy tôi". -->
-    <div class="sech">{{ t('settingsInfra.prod.heading') }}</div>
-    <p class="sihint">{{ t('settingsInfra.prod.hint') }}</p>
+    <SettingsGroupLabel>{{ t('settingsInfra.prod.heading') }}</SettingsGroupLabel>
+    <p class="mt-0 mb-2 text-sm text-faint">{{ t('settingsInfra.prod.hint') }}</p>
 
-    <div class="sirow">
+    <div class="mt-2 mb-3.5 flex flex-wrap items-center gap-2">
       <Input
         v-model="newAccount"
         type="text"
         inputmode="numeric"
         autocomplete="off"
         spellcheck="false"
+        class="min-w-40 flex-1"
         :placeholder="t('settingsInfra.prod.placeholder')"
         @keydown.enter="onAddAccount"
       />
@@ -85,33 +100,43 @@
       </Button>
     </div>
 
-    <p v-if="accounts.length === 0" class="siempty">{{ t('settingsInfra.prod.empty') }}</p>
-    <ul v-else class="silist">
-      <li v-for="id in accounts" :key="id">
-        <span class="siacc">{{ id }}</span>
-        <button
-          class="silink"
+    <p v-if="accounts.length === 0" class="mt-0 mb-3.5 text-sm text-faint">
+      {{ t('settingsInfra.prod.empty') }}
+    </p>
+    <ul v-else class="m-0 mb-3.5 flex list-none flex-col gap-1 p-0">
+      <li
+        v-for="id in accounts"
+        :key="id"
+        class="flex items-center gap-2.5 rounded-md border px-2 py-1"
+      >
+        <!-- mono-ok: account id, copy vào lệnh được -->
+        <span class="min-w-0 flex-1 font-mono text-sm break-all">{{ id }}</span>
+        <Button
           type="button"
+          variant="link"
+          size="xs"
+          class="h-auto p-0 text-xs text-destructive"
           :disabled="saving"
           :title="t('settingsInfra.prod.remove')"
           @click="removeProdAccount(id)"
         >
           {{ t('settingsInfra.prod.remove') }}
-        </button>
+        </Button>
       </li>
     </ul>
 
     <!-- ── Bypass ──────────────────────────────────────────────────────────
          Van xả cho lúc xử lý sự cố. Nó chỉ nâng `ask → auto`, KHÔNG gỡ `block`,
          và câu đó phải đứng ngay cạnh nút chứ không nằm trong tài liệu. -->
-    <div class="sech">{{ t('settingsInfra.bypass.heading') }}</div>
-    <p class="sihint">{{ t('settingsInfra.bypass.hint') }}</p>
+    <SettingsGroupLabel>{{ t('settingsInfra.bypass.heading') }}</SettingsGroupLabel>
+    <p class="mt-0 mb-2 text-sm text-faint">{{ t('settingsInfra.bypass.hint') }}</p>
 
-    <div class="sirow">
+    <div class="mt-2 mb-3.5 flex flex-wrap items-center gap-2">
       <template v-if="bypassActive">
-        <span class="chip warn">
+        <!-- Cửa nới quyền đang chạy phải nhìn thấy được — badge tông cảnh báo. -->
+        <Badge variant="outline" class="border-warning/40 text-warning">
           {{ t('settingsInfra.bypass.left', { time: bypassLeftLabel }) }}
-        </span>
+        </Badge>
         <Button
           type="button"
           :disabled="saving"
@@ -140,22 +165,31 @@
     <!-- ── Binary đã bảo lãnh ──────────────────────────────────────────────
          Chỉ GỠ được ở đây. Thêm thì phải đi qua chỗ lỗi thật sự xảy ra (banner
          ở /infra), nơi người dùng có đường dẫn trong tay. -->
-    <div class="sech">{{ t('settingsInfra.vouched.heading') }}</div>
-    <p class="sihint">{{ t('settingsInfra.vouched.hint') }}</p>
+    <SettingsGroupLabel>{{ t('settingsInfra.vouched.heading') }}</SettingsGroupLabel>
+    <p class="mt-0 mb-2 text-sm text-faint">{{ t('settingsInfra.vouched.hint') }}</p>
 
-    <p v-if="vouched.length === 0" class="siempty">{{ t('settingsInfra.vouched.empty') }}</p>
-    <ul v-else class="silist">
-      <li v-for="p in vouched" :key="p">
-        <span class="sipath">{{ p }}</span>
-        <button
-          class="silink"
+    <p v-if="vouched.length === 0" class="mt-0 mb-3.5 text-sm text-faint">
+      {{ t('settingsInfra.vouched.empty') }}
+    </p>
+    <ul v-else class="m-0 mb-3.5 flex list-none flex-col gap-1 p-0">
+      <li
+        v-for="p in vouched"
+        :key="p"
+        class="flex items-center gap-2.5 rounded-md border px-2 py-1"
+      >
+        <!-- mono-ok: đường dẫn binary, copy vào lệnh được -->
+        <span class="min-w-0 flex-1 font-mono text-sm break-all">{{ p }}</span>
+        <Button
           type="button"
+          variant="link"
+          size="xs"
+          class="h-auto p-0 text-xs text-destructive"
           :disabled="saving"
           :title="t('settingsInfra.vouched.remove')"
           @click="unvouchBinary(p)"
         >
           {{ t('settingsInfra.vouched.remove') }}
-        </button>
+        </Button>
       </li>
     </ul>
   </div>
@@ -174,8 +208,6 @@ import {
 } from '~/composables/useInfraPolicySettings'
 import type { InfraAccountKind } from '~/composables/useConfirm'
 import type { InfraCommandClass, InfraMode } from '~/types'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 
@@ -225,6 +257,19 @@ async function onCell(
   await setCell(cls, kind, mode)
 }
 
+// Màu chữ của mức đang chọn trong ô ma trận (chỉ ô đang bật mới nhuộm).
+const MODE_ON_CLASS: Record<InfraMode, string> = {
+  auto: 'data-[state=on]:text-foreground',
+  ask: 'data-[state=on]:text-warning',
+  block: 'data-[state=on]:text-destructive',
+}
+
+// ToggleGroup single phát rỗng khi bấm lại ô đang bật — ô ma trận luôn phải có mức.
+function onCellPick(cls: InfraCommandClass, kind: InfraAccountKind, value: unknown): void {
+  const mode = INFRA_MODES.find((m) => m === value)
+  if (mode) void onCell(cls, kind, mode)
+}
+
 async function onReset(): Promise<void> {
   if (!window.confirm(t('settingsInfra.matrix.confirmReset'))) return
   await resetMatrix()
@@ -237,136 +282,3 @@ async function onAddAccount(): Promise<void> {
 
 onMounted(() => void load())
 </script>
-
-<style scoped>
-.siwhy,
-.sihint {
-  margin: 0 0 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-
-.sihint {
-  margin: -2px 0 8px;
-  color: var(--textFaint);
-}
-
-.sierr {
-  margin: 0 0 10px;
-  padding: 6px 10px;
-  border: 1px solid var(--dangerBorder);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-
-.simx {
-  width: 100%;
-}
-
-.simx-cls {
-  color: var(--text);
-}
-
-.simx-clsd {
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-/* Ba mức nằm trong một `.seg` để dùng đúng hình bấm của app; chỉ ô ĐANG CHỌN mới
-   nhuộm theo mức, vì tô cả ba là biến bảng thành đèn giao thông và mất nghĩa. */
-.simx-seg {
-  width: max-content;
-}
-
-.simx-seg span.on.m-ask {
-  color: var(--amber);
-}
-
-.simx-seg span.on.m-block {
-  color: var(--danger);
-}
-
-.sirow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 8px 0 14px;
-}
-
-/* `.chip` toàn cục không có biến thể tông — `.warn` chỉ được định nghĩa trong
-   scope của thẻ duyệt. Khai lại ở đây thay vì nâng lên toàn cục: một cửa nới
-   quyền đang chạy phải nhìn thấy được, và đó là chỗ DUY NHẤT màn này cần tông. */
-.sirow .chip.warn {
-  border-color: var(--amberBorder);
-  color: var(--amber);
-}
-
-.siinp {
-  flex: 1 1 220px;
-  min-width: 160px;
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.siempty {
-  margin: 0 0 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-.silist {
-  margin: 0 0 14px;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.silist li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-
-.siacc,
-.sipath {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--code); /* mono-ok: account id + đường dẫn, copy vào lệnh được */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  word-break: break-all;
-}
-
-.silink {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  white-space: nowrap;
-}
-
-.silink:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-</style>

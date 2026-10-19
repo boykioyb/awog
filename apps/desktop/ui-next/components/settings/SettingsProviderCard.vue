@@ -1,24 +1,18 @@
 <template>
-  <div class="pcard">
-    <div class="pcardtop">
-      <span class="rx">
-        <Icon name="agents" :style="iconStyle" />
-      </span>
-      <div class="pcardinfo">
-        <div class="rt">{{ name }}</div>
-        <div class="rd">{{ models }}</div>
-      </div>
-      <span class="chip pcardstatus">
-        <span
-          class="pcarddot"
-          :style="{ background: connected ? 'var(--green)' : 'var(--textFaint)' }"
-        />
-        {{ headerStatus }}
-      </span>
-    </div>
+  <Card class="gap-2.5 p-3.5 shadow-none">
+    <SettingsProviderCardHeader
+      :title="name"
+      :desc="models"
+      :status="headerStatus"
+      :connected="connected"
+    >
+      <template #icon>
+        <Icon name="agents" class="size-4" :style="iconStyle" />
+      </template>
+    </SettingsProviderCardHeader>
 
     <!-- Account list -->
-    <div v-if="accounts.length" class="pcardlist">
+    <div v-if="accounts.length" class="flex flex-col gap-2">
       <SettingsAccountRow
         v-for="acc in accounts"
         :key="acc.id"
@@ -34,36 +28,40 @@
     </div>
 
     <!-- ChatGPT subscription (OpenAI Codex OAuth) -->
-    <Button v-if="codex" type="button" class="pcardcta" variant="default" @click="codexOpen = true">
-      <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <Button v-if="codex" type="button" class="w-full" variant="default" @click="codexOpen = true">
+      <Icon name="agents" class="size-3.5" />
       {{ t('settingsModels.openai.signIn') }}
     </Button>
-    <div v-if="codex && !accounts.length" class="fd pcardhint">
+    <div v-if="codex && !accounts.length" class="text-center text-sm text-dim">
       {{ t('settingsModels.openai.signInHint') }}
     </div>
 
     <!-- Add-key form -->
-    <div v-if="formOpen" class="pcardform">
+    <div v-if="formOpen" class="flex flex-col gap-2">
       <Input
         v-model="keyLabel"
         :placeholder="t('settingsModels.form.labelOptional')"
         class="flex-1"
       />
-      <div class="keyrow">
+      <div class="flex items-center gap-2">
+        <!-- mono-ok: API key -->
         <Input
           v-model="keyValue"
           :type="reveal ? 'text' : 'password'"
           :placeholder="keyPlaceholder"
-          class="mono flex-1"
+          class="flex-1 font-mono"
           @keydown.enter="onAdd"
         />
-        <span
-          class="keyeye"
+        <Button
+          type="button"
+          variant="ghost"
+          size="iconSm"
           :title="reveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
+          :aria-label="reveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
           @click="reveal = !reveal"
         >
-          👁
-        </span>
+          <Icon :name="reveal ? 'eye-off' : 'eye'" />
+        </Button>
         <Button
           type="button"
           :disabled="!keyValue.trim() || busy"
@@ -74,17 +72,23 @@
           {{ t('settingsModels.form.addKey') }}
         </Button>
       </div>
-      <div v-if="error" class="pcarderror">{{ error }}</div>
+      <Alert
+        v-if="error"
+        variant="destructive"
+        class="border-destructive/50 bg-destructive/10 px-2.5 py-1.5"
+      >
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
     </div>
     <Button
       v-else
       type="button"
-      class="pcardadd"
+      class="self-start border-dashed"
       variant="outline"
       size="sm"
       @click="formOpen = true"
     >
-      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Icon name="plus" class="size-3.5" />
       {{ addKeyLabel }}
     </Button>
 
@@ -102,7 +106,7 @@
       @close="editAccount = null"
       @saved="onEditSaved"
     />
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -112,8 +116,6 @@ import SettingsAccountRow, {
 import SettingsAccountEditDialog from '~/components/settings/SettingsAccountEditDialog.vue'
 import SettingsCodexDialog from '~/components/settings/SettingsCodexDialog.vue'
 import { useSettingsStore, type ProviderAccount, type ProviderName } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 // OpenAI / Google provider card: account list + add-API-key form, plus an
 // optional ChatGPT (Codex OAuth) sign-in for OpenAI. Ported from the legacy
@@ -149,11 +151,8 @@ const accounts = computed<ProviderAccount[]>(() => settings.providers[props.prov
 const activeId = computed(() => settings.providers[props.provider].activeAccountId)
 const connected = computed(() => settings.isProviderConnected(props.provider))
 
-const iconStyle = computed(() =>
-  props.iconColor
-    ? { width: '16px', height: '16px', color: props.iconColor }
-    : { width: '16px', height: '16px' },
-)
+// `iconColor` là prop do caller truyền (màu thương hiệu tuỳ chọn) — không phải token theme.
+const iconStyle = computed(() => (props.iconColor ? { color: props.iconColor } : undefined))
 
 const accountWord = (n: number) =>
   n === 1 ? t('settingsModels.status.account') : t('settingsModels.status.accounts')
@@ -234,83 +233,3 @@ const onEditSaved = (account: ProviderAccount) => {
   delete testResults[account.id]
 }
 </script>
-
-<style scoped>
-.pcard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.pcardtop {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.pcardtop .rx {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-sm);
-  display: grid;
-  place-items: center;
-  background: var(--bgActive);
-  color: var(--textMuted);
-  flex: 0 0 auto;
-}
-.pcardinfo {
-  flex: 1;
-  min-width: 0;
-}
-.pcardinfo .rt {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.pcardinfo .rd {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  margin-top: 2px;
-}
-.pcardstatus {
-  flex: 0 0 auto;
-}
-.pcarddot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.pcardlist {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pcardcta {
-  justify-content: center;
-  width: 100%;
-}
-.pcardhint {
-  text-align: center;
-}
-.pcardform {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pcardadd {
-  align-self: flex-start;
-  border-style: dashed;
-}
-.pcarderror {
-  border-radius: var(--r-sm);
-  padding: 6px 10px;
-  font-size: 1em;
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-</style>

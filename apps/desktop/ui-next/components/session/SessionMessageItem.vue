@@ -1,45 +1,77 @@
 <template>
   <!-- system divider — header (avatar + byline) là một hàng riêng, nội dung
        tràn full width ngang mép avatar thay vì thụt vào sau cột avatar. -->
-  <div v-if="message.role === 'system'" :data-mi="msgIndex" class="srow">
-    <div class="mhead">
-      <span class="mavatar"><Wrench class="size-3.5" /></span>
-      <div class="mbyline">
-        <span class="mauthor">{{ t('sessionsSearch.role.system') }}</span>
-        <span class="mtime">{{ fmt(message.at) }}</span>
-        <span v-if="message.via" class="mvia">{{ viaLabel }}</span>
+  <div
+    v-if="message.role === 'system'"
+    :data-mi="msgIndex"
+    class="group/msg relative flex flex-col gap-1.5 self-stretch"
+  >
+    <div class="flex min-w-0 items-center gap-2.5">
+      <span :class="AVATAR"><Wrench class="size-3.5" /></span>
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-medium text-foreground">
+          {{ t('sessionsSearch.role.system') }}
+        </span>
+        <span class="text-xs text-muted-foreground tabular-nums">{{ fmt(message.at) }}</span>
+        <Badge v-if="message.via" variant="outline" :class="VIA">{{ viaLabel }}</Badge>
       </div>
     </div>
-    <div class="sysdiv">
-      <span class="sl" />
-      <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+    <div class="flex items-center justify-center gap-2 self-stretch text-xs text-dim">
+      <Separator class="w-auto flex-1" />
+      <Icon name="refresh" class="size-3 text-faint" />
       <SessionLinkedText :text="systemText" />
-      <span class="sl" />
+      <Separator class="w-auto flex-1" />
     </div>
   </div>
 
-  <!-- user bubble — proto bubble-mode render: no avatar/byline, body right-aligned. -->
-  <div v-else-if="message.role === 'user'" :data-mi="msgIndex" class="urow">
-    <div class="mu">
-      <div v-if="message.quotes && message.quotes.length" class="uquotes">
-        <div v-for="(q, k) in message.quotes" :key="k" class="uq">
-          <span class="fwn">{{ CIRCLED[k] }}</span>
+  <!-- user bubble — proto bubble-mode render: no avatar/byline, body right-aligned.
+       Hàng user cap 75% cột (proto `max-w-[75%]`). `data-role="user"` là móc để
+       SessionTranscript tìm các câu hỏi của user (nhảy giữa câu hỏi). -->
+  <div
+    v-else-if="message.role === 'user'"
+    :data-mi="msgIndex"
+    data-role="user"
+    class="group/msg relative flex max-w-3/4 flex-col items-end gap-1.25 self-end"
+  >
+    <!-- Bubble tự co theo nội dung (không cap % theo `.urow` — hàng co về con rộng nhất,
+         nên tin ngắn bị cap theo bề rộng dòng giờ). Bẻ token dài liền mạch (path,
+         URL) để xuống dòng trong bubble; `min-w-0` cho bubble flex co được.
+         Idiom shadcn: nền wash trung tính, chữ accent-foreground, không viền; bo
+         `rounded-2xl` với góc trên-phải nhỏ làm đuôi (proto `rounded-tr-md`).
+         hook-ok: `.mu` được useSessionFind.ts đọc (querySelector) để tô kết quả tìm -->
+    <div class="mu" :class="BUBBLE">
+      <div v-if="message.quotes && message.quotes.length" class="mb-1.75 flex flex-col gap-1.5">
+        <!-- Quote trích từ reply, đầu bubble: wash con mix theo màu chữ để đọc được
+             ở cả hai theme. -->
+        <div
+          v-for="(q, k) in message.quotes"
+          :key="k"
+          class="flex gap-2 rounded-sm border-l-2 border-primary bg-accent-foreground/5 px-2.25 py-1.5 text-left text-sm"
+        >
+          <span class="flex-none text-primary">{{ CIRCLED[k] }}</span>
           <div>
-            <div class="uqx">{{ q.excerpt }}</div>
-            <div v-if="q.note" class="uqn">{{ q.note }}</div>
+            <div class="line-clamp-4 text-muted-foreground">{{ q.excerpt }}</div>
+            <div v-if="q.note" class="mt-0.75 text-foreground">{{ q.note }}</div>
           </div>
         </div>
       </div>
       <!-- Slash command: show the compact invocation, not the expanded body
            (full body sent to the model lives in message.text, shown on hover).
            Chip chỉ chứa `/name`; args là văn xuôi ở dòng dưới, render như text thường
-           của bubble để đọc lại được đầy đủ (R-C1/R-C4). -->
+           của bubble để đọc lại được đầy đủ (R-C1/R-C4). Chip giữ tint primary: nó là
+           "lệnh đã nhận", không phải văn xuôi. -->
       <template v-if="message.command">
-        <span class="ucmd" :title="message.text">
-          <Icon name="commands" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <span class="ucmd-name">/{{ message.command.name }}</span>
+        <!-- mono-ok: tên lệnh là chuỗi người dùng gõ/copy vào CLI -->
+        <span
+          class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.25 py-0.75 font-mono text-primary"
+          :title="message.text"
+        >
+          <Icon name="commands" class="size-3 flex-none" />
+          <!-- Tên không bẻ dòng, dài hơn bubble thì cắt `…` (R-C2/R-C3). -->
+          <span class="min-w-0 truncate font-semibold">/{{ message.command.name }}</span>
         </span>
-        <div v-if="message.command.args" class="ucmd-args">
+        <!-- Args kế thừa cỡ/leading/màu + wrap của bubble — cố ý giống text thường (R-C4). -->
+        <div v-if="message.command.args" class="mt-1.5">
           <SessionLinkedText :text="message.command.args" />
         </div>
       </template>
@@ -53,7 +85,7 @@
       <template v-else>
         <SessionLinkedText :text="message.text" />
       </template>
-      <div v-if="message.att && message.att.length" class="uatt">
+      <div v-if="message.att && message.att.length" class="mt-2 flex flex-wrap gap-1.5">
         <SessionAttachmentChip
           v-for="(a, k) in message.att"
           :key="k"
@@ -67,15 +99,17 @@
          `readonly` (board thread render comment dưới dạng message) giấu cụm
          action — resend/rewind/fork/edit của nó nhắm vào transcript của phiên
          thật qua scope, trên message giả lập sẽ thao tác nhầm phiên. -->
-    <div class="mmeta mmetarow">
-      <span class="mmetatxt">{{ fmt(message.at) }} · {{ tokLabel }} tok</span>
+    <div :class="META_ROW" class="flex-row-reverse">
+      <span class="min-w-0">{{ fmt(message.at) }} · {{ tokLabel }} tok</span>
       <!-- Tin nhập từ CLI (Open in CLI → syncCli) mang cờ `via` — chip mờ nhỏ,
            metadata chứ không phải nhãn lớn. -->
-      <span v-if="message.via" class="mvia">{{ viaLabel }}</span>
+      <Badge v-if="message.via" variant="outline" :class="VIA">{{ viaLabel }}</Badge>
       <!-- Readonly (board thread) vẫn hiện cụm action — chỉ là subset an toàn
            (copy / fullscreen): các computed lọc hành động ghi-phiên ra rồi. -->
       <SessionMsgActions
         v-if="userPrimary.length"
+        :class="ACTIONS_HOVER"
+        class="flex-row-reverse"
         :primary="userPrimary"
         :overflow="userOverflow"
       />
@@ -84,23 +118,28 @@
 
   <!-- assistant — header (avatar + byline) là một hàng riêng, phần thân
        (anchors → body card → meta/actions) tràn full width ngang mép avatar. -->
-  <div v-else :data-mi="msgIndex" class="maw">
-    <div class="mhead">
-      <span class="mavatar agent"><Bot class="size-3.5" /></span>
-      <div class="mbyline">
-        <span class="mauthor">{{ turnAuthor }}</span>
-        <span class="mtime">{{ fmt(message.at) }}</span>
+  <div
+    v-else
+    :data-mi="msgIndex"
+    class="group/msg relative flex max-w-full flex-col gap-1.5 self-stretch"
+  >
+    <div class="flex min-w-0 items-center gap-2.5">
+      <span :class="AVATAR" class="border-transparent bg-primary text-primary-foreground">
+        <Bot class="size-3.5" />
+      </span>
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-medium text-foreground">{{ turnAuthor }}</span>
+        <span class="text-xs text-muted-foreground tabular-nums">{{ fmt(message.at) }}</span>
       </div>
     </div>
-    <div class="mcol">
-      <div v-if="anchors.length" class="fwanchors">
+    <div class="flex min-w-0 flex-col gap-1.5">
+      <div v-if="anchors.length" class="mb-1.25 flex gap-1">
         <span
           v-for="a in anchors"
           :key="a.label"
-          class="fwanchor"
+          class="grid size-4.5 cursor-pointer place-items-center rounded-full border border-selected-border text-xs text-primary tabular-nums"
           role="button"
           :title="t('sessions.transcript.anchor.tooltip')"
-          style="cursor: pointer"
           @click="void scrollToMessage(msgIndex)"
         >
           {{ a.label }}
@@ -108,8 +147,15 @@
       </div>
       <!-- The whole assistant turn sits in ONE elevated bubble (craft-style card): the
            collapsed activity section ("N steps") + the final response together, so they
-           read as one unit. The response caps its own height + scrolls inside the card. -->
-      <div class="abody" :class="{ bubble: showBubble }">
+           read as one unit. The response caps its own height + scrolls inside the card.
+           Luôn là cột flex (giữ gap giữa block); biến thể bubble (Settings → Sessions ·
+           Assistant bubble) bọc nó trong card `rounded-xl border bg-card shadow-sm`. -->
+      <div
+        class="flex flex-col gap-2"
+        :class="{
+          'overflow-hidden rounded-xl border bg-card px-3.5 py-2.75 shadow-sm': showBubble,
+        }"
+      >
         <template v-for="(g, gi) in grouped" :key="g.key">
           <!-- Collapsible activity section (tools + thinking + intermediate commentary),
                craft TurnCard body. -->
@@ -136,14 +182,23 @@
           <SessionBrowserCard v-else-if="g.type === 'browser'" :block="g.step" />
           <!-- Turn error (stopReason 'error') — surface the provider message + a one-click
                retry (re-run this turn) instead of a silent empty bubble. -->
-          <div v-else-if="g.type === 'error'" class="merr">
-            <Icon name="alert" class="merr-ic" />
-            <div class="merr-main">
-              <div class="merr-msg">{{ g.text }}</div>
-              <button class="merr-retry" :title="t('sessions.message.retry')" @click="regen">
-                <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <div
+            v-else-if="g.type === 'error'"
+            class="my-1 flex items-start gap-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2.5"
+          >
+            <Icon name="alert" class="mt-px size-4 flex-none text-destructive" />
+            <div class="flex min-w-0 flex-col items-start gap-2">
+              <div class="leading-(--lh-md) wrap-anywhere text-foreground">{{ g.text }}</div>
+              <Button
+                variant="outline"
+                size="xs"
+                class="gap-1.5 border-destructive/40 text-sm font-normal text-destructive shadow-none hover:bg-destructive/10 hover:text-destructive [&_svg]:size-3"
+                :title="t('sessions.message.retry')"
+                @click="regen"
+              >
+                <Icon name="refresh" />
                 {{ t('sessions.message.retry') }}
-              </button>
+              </Button>
             </div>
           </div>
           <!-- Model-initiated surfaces (#24/#26/#27/#34). They ride in as blocks like a
@@ -171,59 +226,76 @@
           />
           <!-- Câu hỏi đang mở trong ngăn kéo phía trên ô soạn: ở đây chỉ còn MỘT dòng
                (bấm ⇒ bung ngăn kéo) thay vì thẻ đầy đủ thứ hai cho cùng câu hỏi. Đóng
-               ngăn kéo (X) thì thẻ đầy đủ quay về đây để trả lời tại chỗ. -->
-          <button
+               ngăn kéo (X) thì thẻ đầy đủ quay về đây để trả lời tại chỗ. Cùng tông
+               cảnh báo của thẻ câu hỏi. -->
+          <Button
             v-else-if="questionInDrawer(g.gate)"
             type="button"
-            class="qstub"
+            variant="outline"
+            class="my-1 h-auto w-full min-w-0 justify-start gap-2 border-warning/35 bg-warning/8 px-2.5 py-1.5 text-left text-sm font-normal text-warning shadow-none hover:bg-warning/14 hover:text-warning [&_svg]:size-3.5"
             @click="openQuestion(g.gate)"
           >
-            <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="qstub-lbl">{{ t('sessions.message.questionInDrawer') }}</span>
-            <span class="qstub-sum">{{ questionSummary(g.gate) }}</span>
-          </button>
+            <Icon name="alert" />
+            <span class="flex-none font-semibold">
+              {{ t('sessions.message.questionInDrawer') }}
+            </span>
+            <span class="min-w-0 truncate text-dim">{{ questionSummary(g.gate) }}</span>
+          </Button>
           <SessionGateCard v-else :block="g.gate" />
         </template>
         <!-- Chưa có block nào mà turn đang stream → ba chấm typing trong bubble
              (cả turn thật lúc chờ token đầu lẫn ghost "đang soạn" của channel). -->
         <div
           v-if="streaming && grouped.length === 0"
-          class="mtyping"
+          class="inline-flex w-fit items-center gap-1.25 px-px py-0.5"
           role="status"
           :aria-label="t('sessions.transcript.typing')"
         >
-          <span />
-          <span />
-          <span />
+          <span class="mtype-dot size-1.5 rounded-full bg-muted-foreground" />
+          <span
+            class="mtype-dot size-1.5 rounded-full bg-muted-foreground [animation-delay:150ms]"
+          />
+          <span
+            class="mtype-dot size-1.5 rounded-full bg-muted-foreground [animation-delay:300ms]"
+          />
         </div>
       </div>
       <!-- Meta + actions row UNDER the body (proto parity — no longer a footer bar
            inside the card): HIDDEN while actively generating (the
            SessionProcessingIndicator below the turn is the cue then). Parked on a
            gate → static "Waiting…"; done → `time · tok · elapsed` + hover actions. -->
-      <div v-if="!streamingActive" class="mmeta mmetarow">
-        <span class="mmetatxt">
+      <div v-if="!streamingActive" :class="META_ROW">
+        <span class="min-w-0">
           <!-- Park trên MỘT CÂU HỎI thì lượt không "đang chạy" theo nghĩa người dùng
                phải ngồi chờ — nó chờ NGƯỜI. Nên: chữ tĩnh (không shimmer, không chấm
                nhấp nháy) + nút mở lại popup, thay cho "Đang chờ…" của gate quyền. -->
           <template v-if="streaming && parkedOnQuestion">
-            <span class="qwait">{{ t('sessions.message.awaitingAnswer') }}</span>
-            <button class="qwaitbtn" @click="reopenQuestion">
+            <span class="text-muted-foreground">{{ t('sessions.message.awaitingAnswer') }}</span>
+            <Button
+              variant="outline"
+              size="xs"
+              class="ml-2 h-auto rounded-sm border-primary/35 px-2 py-px text-xs font-normal text-primary shadow-none hover:bg-primary/10 hover:text-primary"
+              @click="reopenQuestion"
+            >
               {{ t('sessions.message.answerNow') }}
-            </button>
+            </Button>
           </template>
           <template v-else-if="streaming">
-            <span class="strdot" />
-            <span class="strshimmer">{{ t('sessions.message.waiting') }}</span>
+            <!-- Chấm byline — chỉ hiện khi lượt park trên gate (cạnh "Đang chờ…"). -->
+            <span
+              class="mr-1.25 inline-block size-2 rounded-full bg-primary align-middle opacity-50"
+            />
+            <span>{{ t('sessions.message.waiting') }}</span>
           </template>
           <template v-else>
             {{ fmt(message.at) }} · {{ tokLabel }} tok
             <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
           </template>
         </span>
-        <span v-if="message.via" class="mvia">{{ viaLabel }}</span>
+        <Badge v-if="message.via" variant="outline" :class="VIA">{{ viaLabel }}</Badge>
         <SessionMsgActions
           v-if="showBottomActions && (asstPrimary.length || asstOverflow.length)"
+          :class="ACTIONS_HOVER"
           :primary="asstPrimary"
           :overflow="asstOverflow"
         />
@@ -286,6 +358,25 @@ const props = withDefaults(
   { readonly: false },
 )
 const { t } = useI18n()
+
+// ── Class dùng chung giữa ba nhánh role ──
+// Avatar 24px (proto `size-6 rounded-md border`); mặc định muted (system), agent đè
+// thành ô primary ở template.
+const AVATAR =
+  'flex size-6 flex-none items-center justify-center rounded-md border bg-muted text-muted-foreground'
+// Chip "via <cli>" — tin được sessions.syncCli nhập từ một agent CLI ngoài ("Open in
+// CLI"), đánh dấu nó không đi qua composer của AWOG. Viên nhỏ + mờ (faint, phụ so với
+// byline), không phải nhãn hành động.
+const VIA = 'flex-none py-px font-normal whitespace-nowrap text-faint'
+// Hàng meta `time · tok · elapsed` + chip via + cụm action, sát mép cột nội dung.
+const META_ROW = 'flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums'
+// Cụm action chỉ hiện khi rê/tab vào message (proto `group/msg:hover` / focus-within).
+const ACTIONS_HOVER =
+  'opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100'
+// Bubble user — utility đầy đủ để không còn dựa vào `.mu` của skin cũ (class đó chỉ
+// còn là móc cho useSessionFind).
+const BUBBLE =
+  'min-w-0 max-w-full self-end rounded-2xl rounded-tr-sm border border-transparent bg-accent px-3 py-2 text-base wrap-anywhere text-accent-foreground shadow-sm'
 const settings = useSettingsStore()
 const store = useSessionsStore()
 // Phiên mà message này thuộc về. Ở chế độ đơn = phiên đang mở; ở chế độ LƯỚI = phiên của
@@ -1029,255 +1120,10 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
 </script>
 
 <style scoped>
-/* Slash-command invocation chip in the user bubble — compact `/name` pill in place
-   of the expanded body (which is still sent to the model); args render below it. Giữ primary-tint:
-   nó là "lệnh đã nhận", không phải văn xuôi — đọc trên nền wash vẫn nổi. */
-.ucmd {
-  /* mono-ok: tên lệnh là chuỗi người dùng gõ/copy vào CLI */
-  font-family: var(--code);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 9px;
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
-  color: var(--primary);
-}
-.ucmd > svg {
-  flex: none;
-}
-/* Tên không bao giờ bẻ dòng (kể cả ở `-`/`:`), tên dài hơn bubble thì cắt `…` ở cuối
-   (R-C2/R-C3). `min-width: 0` là bắt buộc: item flex mặc định `min-width: auto` không
-   chịu co nên không bao giờ ra `…`. */
-.ucmd-name {
-  font-weight: 650;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-/* Args kế thừa font hệ thống, cỡ/leading/màu và `overflow-wrap: anywhere` từ `.mu` —
-   cố ý không khai gì để giống hệt text thường của bubble (R-C4). */
-.ucmd-args {
-  margin-top: 6px;
-}
-
-/* Quote được trích từ reply, in đầu bubble user. Global `.uq` tô nền bằng alpha
-   trắng (dark-only); trên bubble wash thì wash con phải mix theo chữ mới đọc được
-   cả hai theme. */
-.uq {
-  background: color-mix(in srgb, var(--accent-foreground) 5%, transparent);
-  border-left: 2px solid var(--primary);
-}
-.uqx {
-  color: var(--muted-foreground);
-}
-
-/* Message actions live in a footer row (byline + actions) for both the assistant
-   turn card and the user bubble — no floating hover pill. */
-.maw,
-.urow,
-.srow {
-  position: relative;
-}
-/* Header riêng một hàng (avatar + byline), thân tin tràn full width ngang mép
-   avatar — không còn cột avatar cố định bên trái nên body và composer thẳng mép
-   nhau theo cột `.msgcol`. `.maw` global là cột flex (skin cũ) — scoped này giữ
-   cột nhưng gom rhythm về 6px (gap-1.5 proto). */
-.maw,
-.srow {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* Hàng header: avatar chip + byline ngang nhau, canh giữa. */
-.mhead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-/* Avatar chip 24px — proto `size-6 rounded-md border` (rounded-md = 8px →
-   --r-sm). Mặc định muted (user/system); agent = ô primary. */
-.mavatar {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--muted);
-  color: var(--muted-foreground);
-}
-.mavatar.agent {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-color: transparent;
-}
-/* Thân tin dưới header — full width (align-self: stretch của flex column). */
-.mcol {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* Byline `author · time` — author fs-md/500 foreground, time xs muted tabular. */
-.mbyline {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.mauthor {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 500;
-  color: var(--foreground);
-}
-.mtime {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-/* Divider bên trong `.mcol` — global `.sysdiv` đệm `margin:4px 0` cho hàng đứng
-   riêng; trong cột gap-6px đã đủ nhịp. */
-.srow .sysdiv {
-  margin: 0;
-}
-/* User row — proto bubble mode: cap 75% của cột (global `.urow` là 80%), và
-   footer đảo chiều (`flex-row-reverse` của proto) để meta nằm sát mép bubble,
-   cụm icon dãn ra trái với ⋯ ngoài cùng. */
-.urow {
-  max-width: 75%;
-}
-.urow .mmetarow,
-.urow .hoveract {
-  flex-direction: row-reverse;
-}
-/* Bubble width: the prototype caps .mu at max-width:74%, but that % resolves against
-   .urow — which shrinks to its widest child. For a short message the meta line
-   ("04:02 PM · 3 tok") is wider than the text, so the bubble got capped to 74% of the
-   TIMESTAMP width and even "review lại" wrapped. Let the bubble size to its own
-   content instead; long messages are still capped by .urow's max-width:75% of the
-   column (proto `max-w-[75%]`).
-
-   User bubble — shadcn idiom: nền wash trung tính `bg-accent` (→ --accent-wash =
-   --bgHover), chữ accent-foreground, bỏ hairline viền (wash tự đủ khối). Radius
-   theo proto `rounded-2xl rounded-tr-md` (bo tròn, góc trên-phải nhỏ làm tail). */
-.mu {
-  max-width: 100%;
-  /* Break long unbreakable tokens (file:// paths, URLs, underscored filenames) so they
-     wrap inside the bubble instead of spilling past its right edge. overflow-wrap is
-     inherited, so this covers the plain-text + link segments SessionLinkedText renders
-     directly into .mu. min-width:0 lets the flex bubble actually shrink to wrap. */
-  min-width: 0;
-  overflow-wrap: anywhere;
-  background: var(--accent-wash);
-  border-color: transparent;
-  color: var(--accent-foreground);
-  border-radius: 1rem;
-  /* Proto `rounded-tr-md`: góc trên-phải nhỏ (6px = --r-xs) làm tail. */
-  border-top-right-radius: var(--r-xs);
-}
-/* The action set sits inline on the meta row (assistant + user), right after the
-   `time · tok · elapsed` text — no floating pill, no far-edge margin (proto:
-   icons sit next to the meta). HOVER-GATED theo proto (`group/msg:hover` /
-   focus-within → opacity 1): `.urow:hover`/`.maw:hover` đã lo phần hover trong
-   prototype.css global. */
-.hoveract.bottom {
-  position: static;
-  top: auto;
-  right: auto;
-  padding: 0;
-  background: none;
-  border: none;
-  box-shadow: none;
-  align-items: center;
-  gap: 2px;
-}
-/* Keyboard parity với hover: tab vào một nút ghost thì cụm phải hiện. :deep vì
-   .hoveract là root của SessionMsgActions con. */
-.urow:focus-within :deep(.hoveract),
-.maw:focus-within :deep(.hoveract) {
-  opacity: 1;
-}
-/* Meta row: `time · tok · elapsed` + via chip + inline action set, ngang nhau
-   theo proto (`gap-0.5` + `mr-1` trên meta ≈ 6px giữa hai cụm). */
-.mmetarow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Byline `{time} · {tok} tok · {elapsed}` — xs + muted-foreground + tabular-nums
-   (global .mmeta đã có fs/lh/tabular; chỉ nâng mức mờ lên muted-foreground theo
-   spec, textFaint quá yếu cho metadata chính). */
-.mmeta {
-  color: var(--muted-foreground);
-  /* Meta sát mép cột nội dung (proto không đệm footer) — global `.mmeta` đệm
-     `1px 4px 0` cho hàng byline cũ; `.mcol` gap đã lo khoảng dọc. */
-  padding: 0;
-}
-.mmetatxt {
-  min-width: 0;
-}
-/* Chip "via <cli>" trên hàng meta — tin được sessions.syncCli nhập từ một agent
-   CLI ngoài ("Open in CLI"), đánh dấu nó không đi qua composer của AWOG. Viên
-   thuốc nhỏ + mờ (faint = subordinate so với byline muted), không phải nhãn hành động. */
-.mvia {
-  flex: 0 0 auto;
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-/* Assistant reply body. Always a flex column (keeps the per-block gap); the
-   `bubble` variant (Settings → Sessions · Assistant bubble) wraps it in a card. */
-.abody {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-/* Unified turn card (Settings → Sessions · Assistant bubble): wraps the collapsed
-   activity section + the final response in ONE card — `rounded-xl border-border
-   bg-card shadow-sm` của proto (đuôi chỉ có ở user bubble). */
-.abody.bubble {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  padding: 11px 14px;
-  box-shadow: var(--shadow-sm);
-  /* Clip the full-bleed footer bar to the card's rounded corners. */
-  overflow: hidden;
-}
-/* Ba chấm typing trong bubble rỗng — "đang soạn" kiểu chat quen thuộc: hiện
-   khi turn stream mà chưa có block nào (chờ token đầu, ghost kênh ê-kíp). */
-.mtyping {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 1px;
-  width: fit-content;
-}
-.mtyping span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--muted-foreground);
+/* style-ok: keyframe nảy của ba chấm "đang soạn" — không có trong tw-animate-css
+   (animate-bounce nảy 25% chiều cao, không mờ dần). */
+.mtype-dot {
   animation: mtype-bounce 1.2s ease-in-out infinite;
-}
-.mtyping span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.mtyping span:nth-child(3) {
-  animation-delay: 0.3s;
 }
 @keyframes mtype-bounce {
   0%,
@@ -1290,118 +1136,5 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
     transform: translateY(-3px);
     opacity: 1;
   }
-}
-/* Byline dot — shown only when a turn is parked on a gate (next to "Waiting…"). */
-.strdot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-pill);
-  background: var(--primary);
-  margin-right: 5px;
-  vertical-align: middle;
-  opacity: 0.5;
-}
-
-/* Park trên câu hỏi: trạng thái ĐỨNG YÊN, không phải trạng thái bận — chữ tĩnh,
-   không chấm nhấp nháy, không shimmer. Nút bên cạnh mở lại popup đã đóng —
-   ghost nhỏ tô primary. */
-.qwait {
-  color: var(--muted-foreground);
-}
-.qwaitbtn {
-  margin-left: 8px;
-  padding: 1px 8px;
-  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--primary);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.qwaitbtn:hover {
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-}
-/* Dòng thay cho thẻ câu hỏi khi ngăn kéo đang giữ nó — một hàng, cùng tông cảnh báo
-   của thẻ câu hỏi; bấm ⇒ bung ngăn kéo. */
-.qstub {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0;
-  padding: 6px 10px;
-  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--warning) 8%, transparent);
-  color: var(--warning);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.qstub:hover {
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-}
-.qstub-lbl {
-  flex: none;
-  font-weight: 600;
-}
-.qstub-sum {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--textDim);
-}
-
-/* Turn-error alert: destructive-tinted box with the provider message + a retry
-   button. --destructive = --danger; hai biến --dangerDim/--dangerBorder không tồn
-   tại trong bridge nên mix trực tiếp từ --destructive. */
-.merr {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin: 4px 0;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--destructive) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
-}
-.merr-ic {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: var(--destructive);
-}
-.merr-main {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  min-width: 0;
-}
-.merr-msg {
-  color: var(--foreground);
-  line-height: var(--lh-md);
-  overflow-wrap: anywhere;
-}
-.merr-retry {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--r-xs);
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
-  color: var(--destructive);
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.merr-retry:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
 }
 </style>

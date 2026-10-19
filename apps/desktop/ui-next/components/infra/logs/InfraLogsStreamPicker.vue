@@ -1,56 +1,71 @@
 <template>
-  <div class="lsp">
-    <div class="lsp-head">
-      <span class="lsp-title">{{ t('infra.logs.streams.title') }}</span>
-      <span class="lsp-count">{{ t('infra.logs.streams.count', { n: streams.length }) }}</span>
-      <span class="lsp-gap" />
-      <span class="lsp-hint">{{ t('infra.logs.streams.pickHint') }}</span>
+  <div class="flex min-h-0 flex-auto flex-col gap-2">
+    <div class="flex items-baseline gap-2">
+      <span class="text-sm font-semibold">{{ t('infra.logs.streams.title') }}</span>
+      <span class="text-xs text-dim tabular-nums">
+        {{ t('infra.logs.streams.count', { n: streams.length }) }}
+      </span>
+      <span class="flex-auto" />
+      <span class="text-xs text-dim">{{ t('infra.logs.streams.pickHint') }}</span>
     </div>
 
-    <div v-if="error" class="lsp-error">{{ error }}</div>
+    <Alert v-if="error" variant="destructive" class="border-destructive px-2 py-1.5">
+      <AlertDescription>{{ error }}</AlertDescription>
+    </Alert>
 
-    <div v-else class="lsp-list tblcard" role="listbox" aria-label="log streams">
+    <!-- Danh sách lấp đầy panel và tự cuộn. Nó nằm trong cột chính đã là một Card nên
+         không tự mang khung (card trong card). -->
+    <div
+      v-else
+      class="flex min-h-0 flex-auto flex-col overflow-y-auto"
+      role="listbox"
+      aria-label="log streams"
+    >
       <!-- "Tất cả stream" là MỘT DÒNG của chính danh sách, không phải một chế độ
            riêng: người muốn xem gộp vẫn chỉ mất đúng một cú bấm như mọi dòng khác,
            và không phải học thêm một khái niệm nào. -->
+      <!-- raw-ok: hàng list cả dòng là một vùng bấm (role=option), không phải nút -->
       <button
-        class="lsp-row all"
+        class="flex w-full cursor-pointer items-center gap-2 border-b px-3 py-2 text-left text-foreground transition-colors last:border-b-0 hover:bg-accent"
         type="button"
         role="option"
         :aria-selected="false"
         @click="emit('select', '')"
       >
-        <Icon name="layers" class="lsp-row-ic" />
-        <span class="lsp-row-main">
-          <span class="lsp-row-name plain">{{ t('infra.logs.streams.all') }}</span>
-          <span class="lsp-row-sub">{{ t('infra.logs.streams.allHint') }}</span>
+        <Icon name="layers" class="size-3.5 shrink-0 text-primary" />
+        <span class="flex min-w-0 flex-auto flex-col gap-0.5">
+          <!-- Dòng "Tất cả stream" là CÂU CHỮ, không phải định danh — nên không mono. -->
+          <span class="truncate text-sm font-semibold">{{ t('infra.logs.streams.all') }}</span>
+          <span class="text-xs text-dim">{{ t('infra.logs.streams.allHint') }}</span>
         </span>
-        <Icon name="chev-right" class="lsp-row-go" />
+        <Icon name="chev-right" class="size-3.5 shrink-0 text-faint" />
       </button>
 
-      <p v-if="loading && streams.length === 0" class="lsp-empty">
+      <p v-if="loading && streams.length === 0" class="px-3 py-3.5 text-sm text-dim">
         {{ t('infra.logs.streams.loading') }}
       </p>
-      <p v-else-if="streams.length === 0" class="lsp-empty">
+      <p v-else-if="streams.length === 0" class="px-3 py-3.5 text-sm text-dim">
         {{ t('infra.logs.streams.empty') }}
       </p>
 
+      <!-- raw-ok: hàng list cả dòng là một vùng bấm (role=option), không phải nút -->
       <button
         v-for="s in streams"
         :key="s.name"
-        class="lsp-row"
+        class="flex w-full cursor-pointer items-center gap-2 border-b px-3 py-2 text-left text-foreground transition-colors last:border-b-0 hover:bg-accent"
         type="button"
         role="option"
         :aria-selected="false"
         :title="s.name"
         @click="emit('select', s.name)"
       >
-        <Icon name="file" class="lsp-row-ic" />
-        <span class="lsp-row-main">
-          <span class="lsp-row-name">{{ s.name }}</span>
-          <span class="lsp-row-sub">{{ subtitleOf(s) }}</span>
+        <Icon name="file" class="size-3.5 shrink-0 text-dim" />
+        <span class="flex min-w-0 flex-auto flex-col gap-0.5">
+          <!-- mono-ok: tên log stream là định danh tài nguyên, người dùng copy sang CLI -->
+          <span class="truncate font-mono text-sm">{{ s.name }}</span>
+          <span class="text-xs text-dim">{{ subtitleOf(s) }}</span>
         </span>
-        <Icon name="chev-right" class="lsp-row-go" />
+        <Icon name="chev-right" class="size-3.5 shrink-0 text-faint" />
       </button>
     </div>
   </div>
@@ -112,138 +127,3 @@ function agoOf(ms: number): string {
   return t('infra.logs.streams.agoDay', { n: Math.round(hour / 24) })
 }
 </script>
-
-<style scoped>
-.lsp {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.lsp-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.lsp-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-
-.lsp-count,
-.lsp-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lsp-count {
-  font-variant-numeric: tabular-nums;
-}
-
-.lsp-gap {
-  flex: 1 1 auto;
-}
-
-.lsp-error {
-  padding: 6px 8px;
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* Danh sách lấp đầy panel và tự cuộn — `.tblcard` là da card dùng chung của khu
-   `/infra` (app-shell.css), ở đây chỉ còn bố cục. */
-.lsp-list {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.lsp-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 8px 11px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-
-.lsp-row:last-child {
-  border-bottom: 0;
-}
-
-.lsp-row:hover {
-  background: var(--bgHover);
-}
-
-.lsp-row-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-
-.lsp-row.all .lsp-row-ic {
-  color: var(--accent);
-}
-
-.lsp-row-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.lsp-row-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  /* mono-ok: tên log stream là định danh tài nguyên, người dùng copy sang CLI */
-  font-family: var(--code);
-}
-
-/* Dòng "Tất cả stream" là CÂU CHỮ, không phải định danh — nên không mono. */
-.lsp-row-name.plain {
-  font-family: inherit;
-  font-weight: 600;
-}
-
-.lsp-row-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lsp-row-go {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textFaint);
-}
-
-.lsp-empty {
-  margin: 0;
-  padding: 14px 11px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

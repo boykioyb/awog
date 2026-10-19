@@ -30,12 +30,13 @@
       :name="t('settings.git.template.name')"
       :desc="t('settings.git.template.desc')"
     >
+      <!-- mono-ok: mẫu commit message có token -->
       <Input
         v-model="autoCommitMessageTemplate"
         :placeholder="t('settings.git.template.placeholder')"
-        class="mono flex-1"
+        class="flex-1 font-mono"
       />
-      <div class="fd" style="margin-top: 2px">{{ t('settings.git.template.tokens') }}</div>
+      <div class="mt-0.5 text-sm text-dim">{{ t('settings.git.template.tokens') }}</div>
     </SettingsField>
 
     <!-- The PR detail's "Start review" button (Projects → Pull Requests → a PR)
@@ -45,14 +46,14 @@
       :name="t('settings.git.prReview.name')"
       :desc="t('settings.git.prReview.desc')"
     >
-      <textarea
+      <!-- mono-ok: prompt có token thay thế -->
+      <Textarea
         v-model="prReviewPrompt"
-        class="keyinp mono"
         rows="3"
-        style="resize: vertical; min-height: 4.5rem"
+        class="min-h-18 resize-y font-mono"
         :placeholder="t('settings.git.prReview.placeholder')"
       />
-      <div class="fd" style="margin-top: 2px">{{ t('settings.git.prReview.tokens') }}</div>
+      <div class="mt-0.5 text-sm text-dim">{{ t('settings.git.prReview.tokens') }}</div>
     </SettingsField>
 
     <SettingsPrReviewLlm />
@@ -110,28 +111,33 @@
       :name="t('settings.git.ghNotifyProjects.name')"
       :desc="t('settings.git.ghNotifyProjects.desc')"
     >
-      <div v-if="!projectRows.length" class="fd">
+      <div v-if="!projectRows.length" class="text-sm text-dim">
         {{ t('settings.git.ghNotifyProjects.none') }}
       </div>
-      <div v-else class="ghnp">
-        <label v-for="p in projectRows" :key="p.id" class="ghnp-row">
-          <input
-            type="checkbox"
-            :checked="ghNotifyProjectIds.includes(p.id)"
-            @change="toggleNotifyProject(p.id)"
+      <!-- Danh sách cuộn khi nhiều project để pane giữ nhịp. -->
+      <div v-else class="flex max-h-55 flex-col gap-0.5 overflow-y-auto rounded-md border p-1.5">
+        <label
+          v-for="p in projectRows"
+          :key="p.id"
+          class="flex cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1 hover:bg-accent"
+        >
+          <Checkbox
+            :model-value="ghNotifyProjectIds.includes(p.id)"
+            @update:model-value="toggleNotifyProject(p.id)"
           />
-          <span class="ghnp-name">{{ p.name }}</span>
-          <span v-if="p.slug" class="ghnp-slug mono">{{ p.slug }}</span>
+          <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
+          <!-- mono-ok: owner/repo -->
+          <span v-if="p.slug" class="font-mono text-sm text-dim">{{ p.slug }}</span>
         </label>
       </div>
-      <div v-if="ghNotifyEnabled && !ghNotifyProjectIds.length" class="fd" style="margin-top: 6px">
+      <div v-if="ghNotifyEnabled && !ghNotifyProjectIds.length" class="mt-1.5 text-sm text-dim">
         {{ t('settings.git.ghNotifyProjects.empty') }}
       </div>
 
       <!-- Diagnostic: polling fails silently by design, so this is the only way
            to see gh auth / project-mapping problems. Channel + toast placement
            live in Settings → Notifications. -->
-      <div class="ghnp-check">
+      <div class="mt-2 flex flex-wrap items-center gap-2.5">
         <Button
           type="button"
           :disabled="checking"
@@ -139,14 +145,14 @@
           size="sm"
           @click="onCheckNotifications"
         >
-          <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="scan" class="size-3.5" />
           {{
             checking
               ? t('settings.git.ghNotifyCheck.running')
               : t('settings.git.ghNotifyCheck.action')
           }}
         </Button>
-        <span v-if="checkText" class="fd">{{ checkText }}</span>
+        <span v-if="checkText" class="text-sm text-dim">{{ checkText }}</span>
       </div>
     </SettingsField>
 
@@ -155,13 +161,9 @@
       :name="t('settings.git.commitRule.name')"
       :desc="t('settings.git.commitRule.desc')"
     >
-      <textarea
-        v-model="commitMessageRule"
-        class="keyinp mono"
-        rows="12"
-        style="resize: vertical; min-height: 16rem"
-      />
-      <div style="margin-top: 6px; display: flex; justify-content: flex-end">
+      <!-- mono-ok: luật commit message dạng văn bản thô -->
+      <Textarea v-model="commitMessageRule" rows="12" class="min-h-64 resize-y font-mono" />
+      <div class="mt-1.5 flex justify-end">
         <Button type="button" variant="outline" size="sm" @click="resetCommitRule">
           {{ t('settings.git.commitRule.reset') }}
         </Button>
@@ -181,8 +183,6 @@ import { checkGhNotifications, type GhNotifyCheck } from '~/composables/useGhNot
 import type { GhAccount } from '~/composables/useProjectGh'
 import { useProjectsStore } from '~/stores/projects'
 import type { AutoCommitScope, DirtyTaskPolicy } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -334,50 +334,3 @@ function toggleNotifyProject(id: string): void {
     : [...current, id]
 }
 </script>
-
-<style scoped>
-/* Connection check row under the project list. */
-.ghnp-check {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-/* Per-project opt-in list. Scrolls once it outgrows the field so the panel keeps
-   its rhythm with many projects. */
-.ghnp {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 220px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 6px;
-}
-.ghnp-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-}
-.ghnp-row:hover {
-  background: var(--bgHover);
-}
-.ghnp-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ghnp-slug {
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-}
-</style>

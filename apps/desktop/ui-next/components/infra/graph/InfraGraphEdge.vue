@@ -4,7 +4,14 @@
        được trông giống cạnh đoán. -->
   <BaseEdge :id="id" :path="path" :marker-end="markerEnd" :style="edgeStyle" />
   <EdgeLabelRenderer>
-    <div class="ige" :class="{ inf: inferred }" :style="labelStyle">{{ text }}</div>
+    <!-- Nhãn của cạnh suy luận mang đúng cảnh báo như nét đứt: đọc ra là biết độ tin. -->
+    <div
+      class="rounded-full border bg-card px-1.5 py-px text-xs whitespace-nowrap"
+      :class="inferred ? 'border-dashed border-warning text-warning' : 'text-dim'"
+      :style="labelStyle"
+    >
+      {{ text }}
+    </div>
   </EdgeLabelRenderer>
 </template>
 
@@ -80,23 +87,3 @@ const labelStyle = computed<CSSProperties>(() => ({
   pointerEvents: 'none',
 }))
 </script>
-
-<style scoped>
-.ige {
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: var(--bgPanel);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-
-/* Nhãn của cạnh suy luận mang đúng cảnh báo như nét đứt: đọc ra là biết độ tin. */
-.ige.inf {
-  color: var(--amber);
-  border-color: var(--amber);
-  border-style: dashed;
-}
-</style>

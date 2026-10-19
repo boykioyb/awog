@@ -1,95 +1,128 @@
 <template>
-  <div class="sshx-fw">
-    <div class="sshx-fw-top">
-      <span class="sshx-fw-title">{{ t('ssh.nav.forwarding') }}</span>
-      <span class="sshx-fw-count">{{ forwards.length }}</span>
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div class="flex shrink-0 items-center gap-2.5 px-4 py-3.5">
+      <span class="text-lg font-semibold text-foreground">{{ t('ssh.nav.forwarding') }}</span>
+      <Badge variant="secondary">{{ forwards.length }}</Badge>
       <Button
         :disabled="!hasLiveConn"
         :title="hasLiveConn ? t('ssh.fwd.add') : t('ssh.fwd.noConnection')"
-        class="sshx-fw-add"
+        class="ml-auto shrink-0 disabled:pointer-events-auto disabled:cursor-not-allowed"
         variant="default"
         size="sm"
         @click="openAdd"
       >
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="plus" />
         {{ t('ssh.fwd.add') }}
       </Button>
-      <button
-        class="sshx-fw-refresh"
+      <Button
+        variant="outline"
+        size="iconMd"
+        class="shrink-0 text-muted-foreground"
         :title="t('ssh.sftp.refresh')"
         :aria-label="t('ssh.sftp.refresh')"
         @click="refresh"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="refresh" />
+      </Button>
     </div>
+    <Separator />
 
     <!-- Add-tunnel form (opens on the Add button): pick a live connection + the
          forward shape. Local/dynamic bind 127.0.0.1 (enforced sidecar-side). -->
-    <div v-if="adding" class="sshx-fw-form">
-      <div class="sshx-fw-frow">
-        <AppSelect v-model="draft.connId" :options="connOptions" class="sshx-fw-conn" />
-        <AppSelect v-model="draft.type" :options="typeOptions" class="sshx-fw-typesel" />
-        <Input
-          v-model.number="draft.bindPort"
-          type="number"
-          min="0"
-          max="65535"
-          :placeholder="t('ssh.fwd.bindPort')"
-        />
-        <template v-if="draft.type !== 'dynamic'">
-          <span class="sshx-fw-arrow mono">{{ draft.type === 'local' ? '→' : '←' }}</span>
-          <Input v-model="draft.destHost" type="text" :placeholder="t('ssh.fwd.destHost')" />
-          <Input
-            v-model.number="draft.destPort"
-            type="number"
-            min="1"
-            max="65535"
-            :placeholder="t('ssh.fwd.destPort')"
-            class="sshx-fw-input-sm"
+    <template v-if="adding">
+      <div class="flex shrink-0 flex-col gap-2.5 px-4 py-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <AppSelect
+            v-model="draft.connId"
+            :options="connOptions"
+            class="min-w-0 flex-1 basis-37.5"
           />
-        </template>
+          <AppSelect v-model="draft.type" :options="typeOptions" class="shrink-0" />
+          <Input
+            v-model.number="draft.bindPort"
+            class="min-w-0 flex-1 basis-22"
+            type="number"
+            min="0"
+            max="65535"
+            :placeholder="t('ssh.fwd.bindPort')"
+          />
+          <template v-if="draft.type !== 'dynamic'">
+            <span class="shrink-0 font-mono text-muted-foreground">
+              {{ draft.type === 'local' ? '→' : '←' }}
+            </span>
+            <Input
+              v-model="draft.destHost"
+              type="text"
+              class="min-w-0 flex-1 basis-22"
+              :placeholder="t('ssh.fwd.destHost')"
+            />
+            <Input
+              v-model.number="draft.destPort"
+              type="number"
+              min="1"
+              max="65535"
+              :placeholder="t('ssh.fwd.destPort')"
+              class="w-21 shrink-0"
+            />
+          </template>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="min-w-0 flex-1 text-sm text-muted-foreground">
+            {{ t('ssh.fwd.bindHint') }}
+          </span>
+          <Button variant="outline" size="sm" @click="adding = false">
+            {{ t('common.cancel') }}
+          </Button>
+          <Button :disabled="!canAdd || starting" variant="default" size="sm" @click="add">
+            {{ t('ssh.fwd.add') }}
+          </Button>
+        </div>
       </div>
-      <div class="sshx-fw-fact">
-        <span class="sshx-fw-hint">{{ t('ssh.fwd.bindHint') }}</span>
-        <Button variant="outline" size="sm" @click="adding = false">
-          {{ t('common.cancel') }}
-        </Button>
-        <Button :disabled="!canAdd || starting" variant="default" size="sm" @click="add">
-          {{ t('ssh.fwd.add') }}
-        </Button>
-      </div>
-    </div>
+      <Separator />
+    </template>
 
-    <div class="sshx-fw-scroll">
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <SshEmptyState
         v-if="!forwards.length"
         icon="forward"
         :title="hasLiveConn ? t('ssh.fwd.empty') : t('ssh.fwd.noConnectionTitle')"
         :body="hasLiveConn ? t('ssh.fwd.emptyBody') : t('ssh.fwd.noConnection')"
       />
-      <div v-else class="sshx-fw-list">
-        <div v-for="f in forwards" :key="f.forwardId" class="sshx-fw-row">
-          <span class="sshx-fw-type">{{ t('ssh.forward.' + f.forward.type) }}</span>
-          <span class="mono sshx-fw-body">{{ forwardLabel(f) }}</span>
-          <span v-if="hostName(f)" class="sshx-fw-host">{{ hostName(f) }}</span>
-          <span
-            class="sshx-fw-status"
-            :style="{ color: f.status === 'error' ? 'var(--danger)' : 'var(--green)' }"
+      <div v-else class="flex flex-col gap-2 px-3 py-2">
+        <Card
+          v-for="f in forwards"
+          :key="f.forwardId"
+          class="flex-row items-center gap-2.5 rounded-lg px-3 py-3 shadow-none"
+        >
+          <Badge variant="secondary" class="shrink-0">
+            {{ t('ssh.forward.' + f.forward.type) }}
+          </Badge>
+          <span class="min-w-0 flex-1 font-mono text-sm break-all text-foreground">
+            {{ forwardLabel(f) }}
+          </span>
+          <span v-if="hostName(f)" class="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+            {{ hostName(f) }}
+          </span>
+          <Badge
+            variant="outline"
+            class="shrink-0 border-current tabular-nums"
+            :class="f.status === 'error' ? 'text-destructive' : 'text-success'"
             :title="f.error || undefined"
           >
-            <span class="sshx-fw-dot" />
+            <span class="size-2 shrink-0 rounded-full bg-current" />
             {{ t('ssh.fwd.status.' + f.status) }}
-          </span>
-          <button
-            class="sshx-fw-stop"
+          </Badge>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             :title="t('ssh.fwd.stop')"
             :aria-label="t('ssh.fwd.stop')"
             @click="stop(f.forwardId)"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+            <Icon name="x" />
+          </Button>
+        </Card>
       </div>
     </div>
   </div>
@@ -255,212 +288,3 @@ onBeforeUnmount(() => {
   unlisten = null
 })
 </script>
-
-<style scoped>
-.sshx-fw {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.sshx-fw-top {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-}
-.sshx-fw-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.sshx-fw-count {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.sshx-fw-add {
-  margin-left: auto;
-  flex: 0 0 auto;
-}
-.sshx-fw-refresh {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
-}
-/* ── Add-tunnel form ─────────────────────────────────────────────────────── */
-.sshx-fw-form {
-  flex: 0 0 auto;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.sshx-fw-frow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sshx-fw-conn {
-  flex: 1 1 150px;
-  min-width: 0;
-}
-.sshx-fw-typesel {
-  width: 116px;
-  flex: 0 0 auto;
-}
-.sshx-fw-input {
-  height: 32px;
-  min-width: 0;
-  flex: 1 1 90px;
-  padding: 0 9px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.sshx-fw-input:focus {
-  border-color: var(--accent);
-}
-.sshx-fw-input-sm {
-  flex: 0 0 84px;
-}
-.sshx-fw-arrow {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.sshx-fw-fact {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sshx-fw-hint {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.sshx-fw-refresh:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-.sshx-fw-refresh:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.sshx-fw-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-.sshx-fw-list {
-  padding: 8px 12px;
-}
-.sshx-fw-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.sshx-fw-row + .sshx-fw-row {
-  margin-top: 8px;
-}
-.sshx-fw-type {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-  flex: 0 0 auto;
-}
-.sshx-fw-body {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  word-break: break-all;
-}
-.sshx-fw-host {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.sshx-fw-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 12px;
-  padding: 3px 8px;
-  border: 1px solid currentColor;
-  border-radius: var(--r-sm);
-  background: transparent;
-  flex: 0 0 auto;
-}
-.sshx-fw-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: 0 0 auto;
-}
-.sshx-fw-stop {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshx-fw-stop:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.sshx-fw-stop:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-</style>

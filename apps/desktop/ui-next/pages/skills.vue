@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="skills">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="skills">
     <LibraryView
       :items="skills"
       :item-key="skillKey"
@@ -15,13 +15,20 @@
       @imported="onImported"
     >
       <template #row="{ item: s }">
-        <div class="lrow">
-          <span class="ttl">{{ s.name }}</span>
-          <span class="tag" :class="{ acc: s.source === 'project' }" style="padding: 1px 6px">
+        <div class="flex items-center gap-2">
+          <span class="min-w-0 flex-1 truncate text-base font-medium">{{ s.name }}</span>
+          <Badge
+            variant="outline"
+            :class="
+              s.source === 'project'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'text-muted-foreground'
+            "
+          >
             {{ t('skills.tier.' + s.source) }}
-          </span>
+          </Badge>
         </div>
-        <div class="sub">{{ s.description }}</div>
+        <div class="mt-1 truncate text-sm text-muted-foreground">{{ s.description }}</div>
       </template>
 
       <template #detail="{ item: s }">

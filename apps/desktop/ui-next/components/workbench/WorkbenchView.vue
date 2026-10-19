@@ -3,39 +3,39 @@
        Left edge: explorer panel (collapsible; view switcher = segmented strip
        ở đầu panel). Center: stage with session strip + doc tabs + surface,
        and the bottom dock. Status bar lives at app level (AppStatusBar). -->
-  <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[var(--bg)]" data-page="workbench">
+  <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background" data-page="workbench">
     <!-- explorer panel — collapsible, resizable. Khi đóng thì co thành một
          rail icon mảnh để mở lại (giống Activity Bar của VS Code khi kéo panel
          về 0). -->
     <aside
       v-show="!wb.sideClosed"
-      class="relative min-w-0 flex-none border-r border-[var(--border)] bg-[var(--bgPanel)]"
+      class="relative min-w-0 flex-none border-r border-border bg-sidebar"
       :style="{ width: sideW + 'px' }"
     >
       <WorkbenchExplorer />
       <!-- Grip kéo tay CỐ Ý thay ResizablePanelGroup: panel phải đóng/mở theo
            sideClosed + clamp min/max trong startSideDrag — ép sang primitive
            phức tạp hơn lợi ích. -->
+      <!-- raw-ok: grip kéo resize -->
       <div
-        class="absolute -right-[3px] top-0 z-[5] h-full w-1.5 cursor-col-resize"
+        class="absolute -right-0.75 top-0 z-5 h-full w-1.5 cursor-col-resize"
         @mousedown.prevent="startSideDrag"
       />
     </aside>
     <div
       v-show="wb.sideClosed"
-      class="flex w-[30px] flex-none flex-col items-center gap-1 border-r border-[var(--border)] bg-[var(--bgPanel)] pt-2"
+      class="flex w-(--sidebar-width-icon) flex-none flex-col items-center gap-1 border-r border-border bg-sidebar pt-2"
     >
       <Button
         v-for="v in miniViews"
         :key="v.id"
         variant="ghost"
-        size="iconSm"
-        class="size-[22px] rounded-[var(--r-xs)] p-0 text-[var(--textDim)]"
+        :class="VIEW_BTN"
         :title="v.title"
         @click="wb.setView(v.id)"
       >
         <!-- eslint-disable-next-line vue/no-v-html -- icon SVG constant -->
-        <span class="mini-ico" v-html="v.icon" />
+        <span class="flex" v-html="v.icon" />
       </Button>
     </div>
 
@@ -56,7 +56,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useWorkbenchStore } from '~/stores/workbench'
 import SessionSwitcher from '~/components/workbench/stage/SessionSwitcher.vue'
-import { EXPLORER_VIEWS } from '~/components/workbench/explorer-views'
+import { EXPLORER_VIEWS, VIEW_BTN } from '~/components/workbench/explorer-views'
 
 const wb = useWorkbenchStore()
 
@@ -102,15 +102,3 @@ function onKey(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
-
-<style scoped>
-/* Icon nằm trong v-html ⇒ Tailwind không chạm tới SVG — ép cỡ qua :deep().
-   Lớp `.mini-ico` giữ tên ngắn gọn vì nó chỉ là anchor cho selector. */
-.mini-ico {
-  display: flex;
-}
-.mini-ico :deep(svg) {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-</style>

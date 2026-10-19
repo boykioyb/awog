@@ -1,14 +1,18 @@
 <template>
-  <div class="dh">
-    <div class="td-titlecol">
-      <div class="dt">{{ task.title }}</div>
-      <div class="dsub">{{ task.id }} · {{ formattedTime }}</div>
+  <div class="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+    <div class="min-w-0">
+      <div class="truncate text-lg font-semibold">{{ task.title }}</div>
+      <div class="truncate text-sm text-muted-foreground">{{ task.id }} · {{ formattedTime }}</div>
     </div>
-    <span style="flex: 1" />
-    <span class="tag td-status" :class="statusTagClass">
-      <Icon :name="statusIcon" class="td-statusi" :class="{ spin: task.status === 'running' }" />
+    <span class="flex-1" />
+    <Badge variant="outline" class="gap-1.5 rounded-sm" :class="statusTagClass">
+      <Icon
+        :name="statusIcon"
+        class="size-3"
+        :class="{ 'animate-pulse': task.status === 'running' }"
+      />
       {{ t(`tasks.statusLabel.${task.status}`) }}
-    </span>
+    </Badge>
     <Button
       v-if="task.status === 'running'"
       :title="t('tasks.action.pause')"
@@ -65,44 +69,49 @@
     </Button>
   </div>
 
-  <div class="dscroll">
-    <div class="td-meta">
-      <span v-if="task.workflowSnapshot" class="td-meta-item">
-        <Icon name="workflows" class="td-meta-icn" />
+  <div class="flex-1 overflow-y-auto p-5">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      <span v-if="task.workflowSnapshot" class="inline-flex items-center gap-1.5">
+        <Icon name="workflows" class="size-3" />
         {{ task.workflowSnapshot.name }}
       </span>
-      <span class="td-meta-dot">·</span>
+      <span class="text-faint">·</span>
       <TaskSourceBadge v-if="task.source" :source="task.source" />
     </div>
-    <p v-if="task.description" class="td-desc">{{ task.description }}</p>
+    <p v-if="task.description" class="mb-1.5 text-sm text-muted-foreground">
+      {{ task.description }}
+    </p>
 
-    <div v-if="discussions.length" class="td-discuss">
-      <div class="td-discuss-head">
-        <Icon name="sessions" class="td-meta-icn" />
+    <div v-if="discussions.length" class="mt-3 flex flex-col gap-1">
+      <div class="mb-0.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Icon name="sessions" class="size-3" />
         {{ t('tasks.discussions', { n: discussions.length }) }}
       </div>
-      <button
+      <Button
         v-for="d in discussions"
         :key="d.id"
-        class="td-discuss-row"
+        variant="outline"
+        class="h-auto justify-start bg-muted px-2 py-1.5 font-normal hover:border-selected-border"
         :disabled="!d.engineId"
         @click="d.engineId && openSession(d.engineId)"
       >
-        <Icon name="sessions" class="td-discuss-icn" />
-        <span class="td-discuss-title">{{ d.title }}</span>
-        <Icon name="chev" class="td-discuss-chev" />
-      </button>
+        <Icon name="sessions" class="shrink-0 text-dim" />
+        <span class="min-w-0 flex-1 truncate text-left font-medium text-foreground">
+          {{ d.title }}
+        </span>
+        <Icon name="chev" class="shrink-0 text-faint" />
+      </Button>
     </div>
 
-    <div class="th td-pipehead">
-      <Icon name="workflows" />
-      <span class="tt">
+    <div class="mt-5 mb-3 flex items-center gap-2">
+      <Icon name="workflows" class="size-4 text-dim" />
+      <span class="text-sm text-dim">
         {{ t('tasks.pipeline', { done: progress.doneNodes, total: progress.totalNodes }) }}
       </span>
-      <span class="ct">{{ progress.pct }}%</span>
+      <span class="ml-auto text-xs tabular-nums text-faint">{{ progress.pct }}%</span>
     </div>
 
-    <div class="td-phases">
+    <div class="flex flex-col gap-2">
       <TaskPhaseCard
         v-for="entry in orderedPhases"
         :key="entry.nodeId"
@@ -122,8 +131,7 @@
 
 <script setup lang="ts">
 // Task detail — header (title/id/time/status + pause/resume/stop/delete) plus the
-// pipeline of phase cards. Port of the old UI TaskDetail in prototype CSS. The
-// detail is rendered inside LibraryView's #detail slot.
+// pipeline of phase cards. The detail is rendered inside LibraryView's #detail slot.
 import { computed, onMounted } from 'vue'
 import Icon from '~/components/Icon.vue'
 import TaskPhaseCard from '~/components/task/TaskPhaseCard.vue'
@@ -243,14 +251,14 @@ const STATUS_ICON: Record<Task['status'], string> = {
 const statusIcon = computed(() => STATUS_ICON[props.task.status])
 
 const statusTagClass = computed(() => {
-  if (props.task.status === 'running') return 'acc'
+  if (props.task.status === 'running') return 'border-primary/40 bg-primary/10 text-primary'
   if (
     props.task.status === 'waiting_approval' ||
     props.task.status === 'waiting_connection' ||
     props.task.status === 'paused'
   )
-    return 'warn'
-  return ''
+    return 'border-warning/40 text-warning'
+  return 'text-muted-foreground'
 })
 
 const formattedTime = computed(() => {
@@ -259,124 +267,3 @@ const formattedTime = computed(() => {
   return new Date(ms).toLocaleString()
 })
 </script>
-
-<style scoped>
-.td-titlecol {
-  min-width: 0;
-}
-.td-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.td-statusi {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-.td-statusi.spin {
-  animation: td-pulse 1.4s ease-in-out infinite;
-}
-@keyframes td-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-.td-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  margin-bottom: 12px;
-}
-.td-meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.td-meta-icn {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-.td-meta-dot {
-  color: var(--textFaint);
-}
-.td-desc {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-  margin-bottom: 6px;
-}
-.td-discuss {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.td-discuss-head {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  margin-bottom: 2px;
-}
-.td-discuss-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.td-discuss-row:hover:not(:disabled) {
-  border-color: var(--accentBorder);
-  background: var(--bgHover);
-}
-.td-discuss-row:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-.td-discuss-icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.td-discuss-title {
-  font-weight: 500;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-}
-.td-discuss-chev {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textFaint);
-}
-.td-pipehead {
-  margin-top: 20px;
-}
-.td-phases {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-</style>

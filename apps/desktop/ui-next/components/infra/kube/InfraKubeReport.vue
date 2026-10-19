@@ -29,10 +29,9 @@
        giống một cụm khoẻ.
 
        MỖI CÂU LÀ MỘT CARD (sửa 2026-09-17, lần 2). Bản trước chỉ có nhãn in đậm rồi
-       nội dung trôi thẳng trên nền trang: ở theme sáng `--bg` (#fafbfc) gần như
-       trùng `--bgPanel` (#ffffff) nên bốn khối đọc ra thành một dải chữ liền — đúng
-       lỗi đã bị bác ở màn Chi phí và màn Logs. Nay mỗi khối bọc `.icard` (da card
-       dùng chung, khai một lần ở `assets/css/app-shell.css`) với một hàng tiêu đề
+       nội dung trôi thẳng trên nền trang: ở theme sáng nền trang gần như
+       trùng nền panel (trắng) nên bốn khối đọc ra thành một dải chữ liền — đúng
+       lỗi đã bị bác ở màn Chi phí và màn Logs. Nay mỗi khối là một `Card` với một hàng tiêu đề
        có gạch chân, và các khối con BÊN TRONG card không còn khung riêng nữa —
        chúng ngăn nhau bằng một hairline. Card-trong-card ở theme sáng là hai đường
        viền lồng nhau quanh cùng một nền trắng, đọc thành lỗi vẽ chứ không ra tầng.
@@ -40,25 +39,40 @@
        Vì sao KHÔNG có màn "monitor" riêng: một màn chỉ để tự nạp lại theo nhịp là
        đúng thứ luật "không auto-refresh" cấm. Ở đây có nút BẬT theo dõi (người dùng
        bấm, có trần thời gian, tắt khi rời mục) — vòng lặp do người dùng bật và nhìn
-       thấy thì không phải nạp sau lưng ai. -->
-  <div class="ikscroll ikrep">
-    <div class="ikrep-head">
+       thấy thì không phải nạp sau lưng ai.
+
+       TỔNG THỂ BÁO CÁO LÀ MỘT HÀNG BIẾT XUỐNG DÒNG (sửa 2026-09-17, lần 4). Một cột
+       dọc thì trên màn rộng mọi card đều kéo hết 2000px cho vài con số. Nay hai card
+       "hẹp" (`HALF`) đứng cạnh nhau, các card cần bề ngang (`FULL`) ăn trọn hàng.
+       FLEX chứ không `grid` + `auto-fit`: một card `1 / -1` chiếm hết mọi track nên
+       `auto-fit` hết đường gộp cột, và hai card hẹp bị ghim ở đúng `minmax` với một
+       khoảng trắng lớn bên phải. Flex basis thì tự giãn đều và tự xuống dòng. -->
+  <div
+    class="flex min-h-0 flex-auto flex-wrap content-start items-start gap-3 overflow-x-hidden overflow-y-auto px-3.5 pt-3 pb-4"
+  >
+    <div :class="[FULL, 'flex flex-wrap items-center gap-2.5']">
       <span
-        class="ikrep-lamp"
-        :class="`lamp-${lamp}`"
+        class="size-2.5 shrink-0 rounded-full"
+        :class="LAMP_BG[lamp]"
         role="img"
         :aria-label="lampText"
         :title="lampText"
       />
-      <div class="ikrep-hwrap">
-        <h3 class="ikrep-title">{{ t('infra.kube.report.title') }}</h3>
-        <p class="ikrep-sub">{{ t('infra.kube.report.sub') }}</p>
+      <div class="min-w-0 flex-[1_1_12.5rem]">
+        <h3 class="text-base font-semibold text-foreground">{{ t('infra.kube.report.title') }}</h3>
+        <p class="mt-0.5 text-xs text-muted-foreground">{{ t('infra.kube.report.sub') }}</p>
       </div>
       <!-- Phạm vi phải hiện Ở ĐÂY. Thanh chọn cluster nằm ngoài khung cuộn, nên khi
            người dùng cuộn xuống (hoặc chép báo cáo ra ngoài) thì không còn gì nói
            những con số này thuộc cụm/namespace nào. -->
-      <code class="ikrep-scope" :title="whereLabel">{{ whereLabel }}</code>
-      <span v-if="whenLabel" class="ihint">
+      <!-- mono-ok: `context/namespace` là thứ dán vào kubectl -->
+      <code
+        class="max-w-55 truncate rounded-full border px-2 py-0.5 font-mono text-xs text-muted-foreground"
+        :title="whereLabel"
+      >
+        {{ whereLabel }}
+      </code>
+      <span v-if="whenLabel" class="text-xs text-faint">
         {{ t('infra.kube.report.stale', { when: whenLabel }) }}
       </span>
       <Button
@@ -66,65 +80,101 @@
         :disabled="busy"
         :aria-busy="busy"
         :title="t('infra.kube.report.refreshAll')"
+        :aria-label="t('infra.kube.report.refreshAll')"
         variant="outline"
+        size="iconMd"
         @click="refresh()"
       >
-        <Icon
-          name="refresh"
-          :class="{ ikspin: busy }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
+        <Icon name="refresh" :class="{ 'motion-safe:animate-spin': busy }" />
       </Button>
     </div>
 
-    <p v-if="!hasAny" class="ihint">{{ t('infra.kube.report.noData') }}</p>
+    <p v-if="!hasAny" :class="[FULL, 'text-xs text-faint']">{{ t('infra.kube.report.noData') }}</p>
 
     <template v-else>
       <!-- Điểm + kết luận + việc nên xem trước, trong MỘT card. Bản cũ để điểm ở
            góc trái và câu kết luận trôi sang giữa hàng, nên hai thứ vốn là một câu
            đọc ra thành hai mẩu rời (xem ảnh chụp trong báo lỗi 2026-09-17). -->
-      <section class="icard ikrep-hero" :class="`h-${lamp}`">
-        <div class="ikrep-score">
-          <span class="ikrep-score-n">{{ score ?? '—' }}</span>
-          <span class="ikrep-score-u">/100</span>
+      <!-- Màu viền đổi theo đèn: card "có chuyện" phải khác card "ổn" ngay ở đường
+           viền, trước khi người đọc kịp đọc con số. -->
+      <Card
+        :class="[
+          FULL,
+          'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1.5 p-3.5',
+          lamp === 'warn' && 'border-warning/40',
+          lamp === 'bad' && 'border-destructive/40',
+        ]"
+      >
+        <div class="flex items-baseline gap-0.5">
+          <span class="text-2xl font-semibold tabular-nums" :class="SCORE_TEXT[lamp]">
+            {{ score ?? '—' }}
+          </span>
+          <span class="text-sm text-faint">/100</span>
         </div>
-        <div class="ikrep-heroinfo">
+        <div class="flex min-w-0 flex-col gap-1">
           <!-- CÂU CỦA HERO LÀ "CÓ AI ĐANG KHÔNG DÙNG ĐƯỢC KHÔNG", không phải phán
                quyết chung chung (`lampText`, vẫn còn ở tooltip của đèn). Người trực
                mở màn này để hỏi đúng câu đó; "Có gì đó đáng xem" bắt họ đọc tiếp ba
                khối nữa mới biết có phải chuyện của mình không. -->
-          <p class="ikrep-verdict" :class="{ bad: statusLine.bad }">{{ statusLine.text }}</p>
+          <!-- Màu câu này đi theo `statusLine.bad` (có người dùng đang bị ảnh hưởng hay
+               không), KHÔNG theo đèn: đèn bật `warn` cho cả những thứ chưa chạm tới ai,
+               và một câu "Không có gì đang ảnh hưởng người dùng" tô amber tự phủ nhận
+               chính nó. -->
+          <p
+            class="text-base font-medium"
+            :class="statusLine.bad ? 'text-destructive' : 'text-foreground'"
+          >
+            {{ statusLine.text }}
+          </p>
           <!-- Dải điểm: 100 và 68 khác nhau ở con số, nhưng người đọc nhận ra khác
                biệt ở ĐỘ DÀI trước khi đọc số. -->
-          <div class="ikrep-meter" :aria-hidden="true">
-            <span class="ikrep-meterfill" :style="{ width: `${score ?? 0}%` }" />
-          </div>
-          <span class="ihint">
+          <Progress
+            :model-value="score ?? 0"
+            aria-hidden="true"
+            class="h-1.5 bg-muted"
+            :class="METER_FILL[lamp]"
+          />
+          <span class="text-xs text-faint">
             {{ t('infra.kube.report.score') }} · {{ t('infra.kube.report.scoreNote') }}
           </span>
         </div>
         <!-- Hàng chip: TÊN của vài việc nặng nhất, ngay trong hero. Con số "3 thứ
              đang ảnh hưởng người dùng" không nói được cái gì, và hai card bên dưới
              thì phải cuộn mới tới. -->
-        <div v-if="heroChips.length" class="ikrep-chips">
-          <span v-for="chip in heroChips" :key="chip.key" class="ikrep-chip" :class="chip.rate">
-            <b>{{ chip.label }}</b>
-            <code :title="chip.object">{{ chip.object }}</code>
-          </span>
+        <div v-if="heroChips.length" class="col-span-full flex flex-wrap gap-1.5 border-t pt-2.5">
+          <Badge
+            v-for="chip in heroChips"
+            :key="chip.key"
+            variant="outline"
+            class="max-w-full items-baseline gap-1.5"
+            :class="
+              chip.rate === 'warn'
+                ? 'border-warning/40 bg-warning/10 text-warning'
+                : 'border-destructive/40 bg-destructive/10 text-destructive'
+            "
+          >
+            <b class="font-semibold">{{ chip.label }}</b>
+            <!-- mono-ok: tên object là thứ dán vào kubectl -->
+            <code class="truncate font-mono font-normal text-muted-foreground" :title="chip.object">
+              {{ chip.object }}
+            </code>
+          </Badge>
         </div>
-      </section>
+      </Card>
 
       <!-- ── Đang ảnh hưởng người dùng ─────────────────────────────────────── -->
-      <section v-if="impacts.length" class="icard ikrep-sec">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.impact') }}</span>
-          <span class="ihint">
+      <Card v-if="impacts.length" :class="[FULL, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.impact') }}
+          </span>
+          <span class="text-xs text-faint">
             {{ t('infra.kube.report.impactCount', { n: impacts.length }) }}
           </span>
         </div>
-        <div class="ikrep-secb">
+        <div :class="SEC_BODY">
           <KubeRepImpacts
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :items="impacts"
             @open-logs="openPodLogs"
             @open-describe="openPodDescribe"
@@ -132,66 +182,77 @@
             @copy-cmd="copyCommand"
           />
         </div>
-      </section>
+      </Card>
 
       <!-- ── Khối lượng chạy ───────────────────────────────────────────────── -->
-      <section class="icard ikrep-sec ikrep-half">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.workload') }}</span>
-          <span v-if="pods.judged" class="ihint">
+      <Card :class="[HALF, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.workload') }}
+          </span>
+          <span v-if="pods.judged" class="text-xs text-faint">
             {{
               t('infra.kube.report.readyPct', { n: Math.round((pods.ready / pods.judged) * 100) })
             }}
           </span>
         </div>
-        <div class="ikrep-secb">
-          <KubeRepTiles class="ikrep-wide" :tiles="workloadTiles" />
+        <div :class="SEC_BODY">
+          <KubeRepTiles class="min-w-0 basis-full" :tiles="workloadTiles" />
 
           <!-- Danh sách Deployment: ô số phía trên nói "5/6 đủ bản sao", khối này
                nói CÁI NÀO, ảnh nào đang chạy, và cái nào đang kẹt giữa hai bản. -->
-          <div v-if="deployRows.length" class="ikrep-block ikrep-wide">
-            <span class="ikrep-block-t">
+          <div v-if="deployRows.length" :class="[BLOCK, 'basis-full']">
+            <span class="text-xs text-muted-foreground">
               {{ t('infra.kube.deploys.tab', { n: deploys.total }) }}
             </span>
             <KubeRepDeploys :rows="deployRows" />
           </div>
 
-          <div v-if="pods.statuses.length" class="ikrep-block">
-            <span class="ikrep-block-t">{{ t('infra.kube.report.statuses') }}</span>
+          <div v-if="pods.statuses.length" :class="BLOCK">
+            <span class="text-xs text-muted-foreground">{{ t('infra.kube.report.statuses') }}</span>
             <KubeRepDonut :statuses="pods.statuses" :label="t('infra.kube.report.statuses')" />
           </div>
 
-          <div v-if="pods.top.length" class="ikrep-block">
-            <span class="ikrep-block-t">{{ t('infra.kube.report.topRestarts') }}</span>
-            <ul class="ikrep-list ikrep-restarts">
+          <div v-if="pods.top.length" :class="BLOCK">
+            <span class="text-xs text-muted-foreground">
+              {{ t('infra.kube.report.topRestarts') }}
+            </span>
+            <!-- Tên pod và số lần khởi động lại là hai mẩu khác loại: dính liền nhau thì
+                 "api-7d9c-def7" đọc ra như một cái tên. -->
+            <ul class="list-disc pl-4.5 text-sm text-foreground">
               <li v-for="row in pods.top" :key="row.name">
-                <code>{{ row.name }}</code>
-                <span class="ikrep-rn">{{ row.n }}</span>
-                <!-- `(2m ago)` của kubectl: 3 lần restart hôm qua và 3 lần trong 2
+                <span class="inline-flex flex-wrap items-baseline gap-2">
+                  <!-- mono-ok: tên pod là thứ dán vào kubectl -->
+                  <code class="font-mono">{{ row.name }}</code>
+                  <span class="tabular-nums">{{ row.n }}</span>
+                  <!-- `(2m ago)` của kubectl: 3 lần restart hôm qua và 3 lần trong 2
                      phút vừa rồi là hai tình huống khác nhau hẳn. -->
-                <span v-if="row.ago" class="ikrep-rago">
-                  {{ t('infra.kube.report.lastRestart', { ago: row.ago }) }}
+                  <span v-if="row.ago" class="text-xs text-warning">
+                    {{ t('infra.kube.report.lastRestart', { ago: row.ago }) }}
+                  </span>
                 </span>
               </li>
             </ul>
           </div>
         </div>
-      </section>
+      </Card>
 
       <!-- ── Nên xem ───────────────────────────────────────────────────────── -->
-      <section v-if="findings.length" class="icard ikrep-sec ikrep-half">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.findings') }}</span>
-          <span class="ihint">{{ findings.length }}</span>
+      <Card v-if="findings.length" :class="[HALF, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.findings') }}
+          </span>
+          <span class="text-xs text-faint">{{ findings.length }}</span>
         </div>
-        <div class="ikrep-secb">
+        <div :class="SEC_BODY">
           <!-- CÙNG hình dạng hàng với card "Đang ảnh hưởng người dùng" (sửa
                2026-09-17): chip phân loại + câu + nút mở đúng pod khi dòng nói về
                một pod. Trước đó đây là danh sách chữ trần — đọc xong vẫn phải tự gõ
                lại tên pod vào terminal, đúng việc mà cả màn này sinh ra để khỏi phải
                làm. -->
           <KubeRepImpacts
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :items="findings"
             @open-logs="openPodLogs"
             @open-describe="openPodDescribe"
@@ -199,22 +260,28 @@
             @copy-cmd="copyCommand"
           />
         </div>
-      </section>
+      </Card>
 
       <!-- ── Cụm: node · CPU/RAM · cảnh báo ────────────────────────────────── -->
-      <section class="icard ikrep-sec">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.cluster') }}</span>
-          <span v-if="nodesStat.total" class="ihint">
+      <Card :class="[FULL, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.cluster') }}
+          </span>
+          <span v-if="nodesStat.total" class="text-xs text-faint">
             {{ t('infra.kube.report.m.nodes') }} {{ nodesStat.ready }}/{{ nodesStat.total }}
           </span>
         </div>
-        <div class="ikrep-secb">
-          <KubeRepTiles v-if="clusterTiles.length" class="ikrep-wide" :tiles="clusterTiles" />
+        <div :class="SEC_BODY">
+          <KubeRepTiles
+            v-if="clusterTiles.length"
+            class="min-w-0 basis-full"
+            :tiles="clusterTiles"
+          />
 
           <KubeRepNodes
             v-if="hasNodes || gapOf('nodes')"
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :nodes="nodesStat.all"
             :versions="nodesStat.versions"
             :capacity="capacityByNode"
@@ -223,7 +290,7 @@
 
           <KubeRepUsage
             v-if="hasUsage || gapOf('top')"
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :nodes="nodeUse"
             :pods-on="nodePods"
             :capacity="capacityByNode"
@@ -236,7 +303,7 @@
           />
 
           <KubeRepEvents
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :groups="freshGroups"
             :more="freshMore"
             :lines="eventStat.lines"
@@ -246,22 +313,24 @@
             :gap="gapOf('events')"
           />
         </div>
-      </section>
+      </Card>
 
       <!-- ── Sắp hỏng ──────────────────────────────────────────────────────
            Tách khỏi card "Đang ảnh hưởng người dùng" có chủ đích: hạn mức còn 12%
            và một Service không có endpoint nào là hai mức khẩn cấp khác nhau, và
            trộn chúng là bắt người trực tự phân loại lại đúng lúc họ ít bình tĩnh
            nhất (xem docblock `ReportItemKind` trong composable). -->
-      <section class="icard ikrep-sec ikrep-half">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.risk') }}</span>
-          <span v-if="risks.length" class="ihint">{{ risks.length }}</span>
+      <Card :class="[HALF, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.risk') }}
+          </span>
+          <span v-if="risks.length" class="text-xs text-faint">{{ risks.length }}</span>
         </div>
-        <div class="ikrep-secb">
-          <KubeRepRisks class="ikrep-wide" :items="risks" />
+        <div :class="SEC_BODY">
+          <KubeRepRisks class="min-w-0 basis-full" :items="risks" />
         </div>
-      </section>
+      </Card>
 
       <!-- ── Vừa có gì đổi ─────────────────────────────────────────────────
            "Bản mới ra cách đây bao lâu" là câu hỏi ĐẦU TIÊN khi một dịch vụ vừa
@@ -269,82 +338,96 @@
            nói tuổi pod (restart cũng làm nó trẻ lại), `get deploy` nói tuổi
            Deployment (không đổi khi deploy bản mới). ReplicaSet trẻ nhất mới là
            bản vừa tung ra. -->
-      <section class="icard ikrep-sec ikrep-half">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.changed') }}</span>
-          <span v-if="rollout" class="ihint">{{ rollout.name }}</span>
+      <Card :class="[HALF, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.changed') }}
+          </span>
+          <span v-if="rollout" class="text-xs text-faint">{{ rollout.name }}</span>
         </div>
-        <div class="ikrep-secb">
-          <p v-if="gapOf('replicasets')" class="ikrep-wide ikrep-changed">
+        <div :class="SEC_BODY">
+          <p
+            v-if="gapOf('replicasets')"
+            class="flex min-w-0 basis-full flex-col gap-0.5 text-sm text-foreground"
+          >
             {{ t('infra.kube.report.gap.replicasets') }}
-            <span class="ihint">{{ gapOf('replicasets') }}</span>
+            <span class="text-xs text-faint">{{ gapOf('replicasets') }}</span>
           </p>
-          <p v-else-if="rolloutAgo" class="ikrep-wide ikrep-changed">
+          <p
+            v-else-if="rolloutAgo"
+            class="flex min-w-0 basis-full flex-col gap-0.5 text-sm text-foreground"
+          >
             {{ t('infra.kube.report.lastRollout', { ago: rolloutAgo }) }}
           </p>
-          <p v-else class="ikrep-wide ihint">{{ t('infra.kube.report.noRollout') }}</p>
+          <p v-else class="min-w-0 basis-full text-xs text-faint">
+            {{ t('infra.kube.report.noRollout') }}
+          </p>
         </div>
-      </section>
+      </Card>
 
       <!-- ── Ứng dụng: tự co giãn + workload không phải Deployment ─────────── -->
-      <section class="icard ikrep-sec ikrep-half">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.apps') }}</span>
-          <span v-if="otherWorkloads.bad.length" class="ihint">
+      <Card :class="[HALF, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.apps') }}
+          </span>
+          <span v-if="otherWorkloads.bad.length" class="text-xs text-faint">
             {{ t('infra.kube.report.badN', { n: otherWorkloads.bad.length }) }}
           </span>
         </div>
-        <div class="ikrep-secb">
-          <KubeRepHpa class="ikrep-wide" :list="hpa.list" :gap="gapOf('hpa')" />
+        <div :class="SEC_BODY">
+          <KubeRepHpa class="min-w-0 basis-full" :list="hpa.list" :gap="gapOf('hpa')" />
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.sts')"
             :items="stsChips"
             :empty="t('infra.kube.report.stsNone')"
             :gap="gapOf('statefulsets')"
           />
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.ds')"
             :items="dsChips"
             :empty="t('infra.kube.report.dsNone')"
             :gap="gapOf('daemonsets')"
           />
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.jobs')"
             :items="jobChips"
             :empty="t('infra.kube.report.jobsNone')"
             :gap="gapOf('jobs')"
           />
         </div>
-      </section>
+      </Card>
 
       <!-- ── Lưu trữ + mạng ───────────────────────────────────────────────── -->
-      <section class="icard ikrep-sec ikrep-half">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.storageNet') }}</span>
-          <span v-if="storage.total" class="ihint">
+      <Card :class="[HALF, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.storageNet') }}
+          </span>
+          <span v-if="storage.total" class="text-xs text-faint">
             {{ t('infra.kube.report.pvcSum', { n: storage.total, size: storage.label }) }}
           </span>
         </div>
-        <div class="ikrep-secb">
+        <div :class="SEC_BODY">
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.pvc')"
             :items="pvcChips"
             :empty="t('infra.kube.report.pvcNone')"
             :gap="gapOf('pvc')"
           />
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.svc')"
             :items="svcChips"
             :empty="t('infra.kube.report.svcNone')"
             :gap="gapOf('services')"
           />
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.ing')"
             :items="ingChips"
             :empty="t('infra.kube.report.ingNone')"
@@ -354,60 +437,53 @@
                mà không có pod nào đứng sau thì mọi request vào nó nhận 503, và bảng
                endpoints là chỗ duy nhất trong các lệnh `get` nói ra điều đó. -->
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.endpoints')"
             :items="endpointChips"
             :empty="t('infra.kube.report.endpointsNone')"
             :gap="gapOf('endpoints')"
           />
           <KubeRepQuota
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.quota')"
             :list="quota"
             :empty="t('infra.kube.report.quotaNone')"
             :gap="gapOf('resourcequota')"
           />
           <KubeRepChips
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.pdb')"
             :items="pdbChips"
             :empty="t('infra.kube.report.pdbNone')"
             :gap="gapOf('pdb')"
           />
         </div>
-      </section>
+      </Card>
 
       <!-- ── Theo dõi + xu hướng ───────────────────────────────────────────── -->
-      <section class="icard ikrep-sec">
-        <div class="ikrep-sech">
-          <span class="ikrep-sect">{{ t('infra.kube.report.watchSec') }}</span>
-          <span v-if="trend && trend.n > 1" class="ihint">
+      <Card :class="[FULL, SEC]">
+        <div :class="SEC_HEAD">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.kube.report.watchSec') }}
+          </span>
+          <span v-if="trend && trend.n > 1" class="text-xs text-faint">
             {{ t('infra.kube.report.series', { n: trend.n, from: fromLabel }) }}
           </span>
         </div>
-        <div class="ikrep-secb">
-          <div class="ikrep-block ikrep-watch ikrep-wide">
-            <Button
-              type="button"
-              :class="{ pri: !watching }"
-              :aria-pressed="watching"
-              variant="outline"
-              @click="toggleWatch()"
-            >
-              <Icon
-                :name="watching ? 'stop' : 'play'"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
+        <div :class="SEC_BODY">
+          <div class="flex min-w-0 basis-full flex-wrap items-center gap-2">
+            <Button type="button" :aria-pressed="watching" variant="outline" @click="toggleWatch()">
+              <Icon :name="watching ? 'stop' : 'play'" />
               {{
                 watching
                   ? t('infra.kube.report.monitorStop')
                   : t('infra.kube.report.monitor', { sec: WATCH_SECONDS })
               }}
             </Button>
-            <span v-if="watching" class="ihint" role="status">
+            <span v-if="watching" class="text-xs text-faint" role="status">
               {{ t('infra.kube.report.monitorOn', { when: lastLabel || '—' }) }}
             </span>
-            <span v-else class="ihint">
+            <span v-else class="text-xs text-faint">
               {{ t('infra.kube.report.monitorCap', { min: WATCH_MINUTES }) }}
             </span>
           </div>
@@ -421,7 +497,7 @@
                một trục thì đường nào cũng sai. -->
           <MetricChart
             v-if="trendWindow"
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.chartHealth')"
             kind="line"
             unit="Percent"
@@ -434,7 +510,7 @@
           />
           <MetricChart
             v-if="trendWindow"
-            class="ikrep-wide"
+            class="min-w-0 basis-full"
             :title="t('infra.kube.report.chartPods')"
             kind="area"
             unit="Count"
@@ -446,15 +522,15 @@
             :threshold="null"
           />
         </div>
-      </section>
+      </Card>
 
-      <div class="ikrep-acts">
+      <div :class="[FULL, 'flex flex-wrap gap-2']">
         <Button type="button" variant="outline" @click="copyReport()">
-          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="copy" />
           {{ t('infra.kube.report.copy') }}
         </Button>
         <Button type="button" variant="outline" @click="askAboutReport()">
-          <Icon name="message" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="message" />
           {{ t('infra.kube.report.ask') }}
         </Button>
       </div>
@@ -480,7 +556,7 @@ import {
   usageRate,
   useInfraKubeReport,
 } from '~/composables/useInfraKubeReport'
-import type { ChipItem, KubeRepTile } from '~/composables/useInfraKubeReport'
+import type { ChipItem, KubeRate, KubeRepTile } from '~/composables/useInfraKubeReport'
 import type { ChartSeriesView, IncidentBand } from '~/composables/useInfraMetrics'
 import type { WorkloadStat } from '~/utils/kube-report'
 import type { InfraKubeController } from '~/composables/useInfraKube'
@@ -491,6 +567,47 @@ const props = defineProps<{ kube: InfraKubeController }>()
 const kube = props.kube
 const { t } = useI18n()
 const toast = useToast()
+
+// ── Bố cục ────────────────────────────────────────────────────────────────────
+/** Con của hàng báo cáo: mặc định chiếm trọn một hàng. */
+const FULL = 'min-w-0 flex-[1_1_100%]'
+/** Hai card chịu được nửa hàng. Basis 340px, không phải bề rộng: hai cái cạnh nhau
+ *  cần ≥ 700px mới đứng chung hàng, dưới mức đó chúng tự tách. */
+const HALF = 'min-w-0 flex-[1_1_21.25rem]'
+/** Card của một câu trong báo cáo: một hàng tiêu đề có gạch chân + một thân. */
+const SEC = 'gap-0 py-0'
+/** Hàng tiêu đề KHÔNG phải thanh cao cố định nên `border-b` ở đây là đúng chỗ. */
+const SEC_HEAD = 'flex flex-wrap items-baseline justify-between gap-2.5 border-b px-3.5 py-2'
+/** THÂN CARD CŨNG LÀ MỘT HÀNG BIẾT XUỐNG DÒNG: xếp dọc thì "Theo trạng thái" và
+ *  "Khởi động lại nhiều nhất" mỗi khối ăn trọn bề ngang cho vài chữ. Các khối ngăn
+ *  nhau bằng hairline ở CẠNH TRÊN (trừ khối đầu), không bằng khung riêng: card
+ *  trong card ở theme sáng là hai đường viền lồng nhau quanh cùng một nền trắng. */
+const SEC_BODY =
+  'flex min-w-0 flex-wrap content-start items-start gap-x-7 gap-y-3 px-3.5 py-3 *:not-first:border-t *:not-first:pt-3'
+/** Khối hẹp trong thân card (trạng thái pod · restart nhiều nhất). */
+const BLOCK = 'flex min-w-0 flex-[1_1_18.75rem] flex-col gap-1.5'
+
+// ── Màu theo đèn ──────────────────────────────────────────────────────────────
+const LAMP_BG: Record<KubeRate, string> = {
+  ok: 'bg-success',
+  warn: 'bg-warning',
+  bad: 'bg-destructive',
+  unknown: 'bg-faint',
+}
+const SCORE_TEXT: Record<KubeRate, string> = {
+  ok: 'text-foreground',
+  warn: 'text-warning',
+  bad: 'text-destructive',
+  unknown: 'text-foreground',
+}
+/** Dải điểm: 100 và 68 khác nhau ở con số, nhưng người đọc nhận ra khác biệt ở ĐỘ
+ *  DÀI trước khi đọc số. Màu thanh đi theo đèn. */
+const METER_FILL: Record<KubeRate, string> = {
+  ok: '*:data-[slot=progress-indicator]:bg-success',
+  warn: '*:data-[slot=progress-indicator]:bg-warning',
+  bad: '*:data-[slot=progress-indicator]:bg-destructive',
+  unknown: '*:data-[slot=progress-indicator]:bg-success',
+}
 
 const {
   whereLabel,
@@ -907,317 +1024,3 @@ const clusterTiles = computed<KubeRepTile[]>(() => {
   return out
 })
 </script>
-
-<style scoped>
-/* TỔNG THỂ BÁO CÁO LÀ MỘT HÀNG BIẾT XUỐNG DÒNG (sửa 2026-09-17, lần 4). Một cột
-   dọc thì trên màn rộng mọi card đều kéo hết 2000px cho vài con số, và người đọc
-   phải cuộn qua bốn màn hình để xem một cụm 13 pod. Nay hai card "hẹp" (khối lượng
-   chạy · nên xem) đứng cạnh nhau, ba card cần bề ngang (điểm · cụm · theo dõi) ăn
-   trọn hàng của mình.
-
-   FLEX CHỨ KHÔNG PHẢI `grid` + `auto-fit`: `repeat(auto-fit, minmax(…, 1fr))` chỉ
-   co được số cột khi có track TRỐNG, mà một card `grid-column: 1 / -1` chiếm hết
-   mọi track ⇒ không track nào trống ⇒ không track nào bị gộp, và trên panel 2000px
-   hai card hẹp bị ghim đúng `minmax` (340px) với 1300px bỏ trắng bên phải. Flex
-   `flex: 1 1 340px` thì hai card đó tự giãn đều cho hết hàng ở mọi bề rộng, và tự
-   xuống dòng khi panel hẹp — không breakpoint, không media query. */
-.ikrep {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  align-content: flex-start;
-  gap: 12px;
-  padding: 12px 14px 16px;
-}
-/* Mặc định: chiếm trọn một hàng. */
-.ikrep > * {
-  flex: 1 1 100%;
-  min-width: 0;
-}
-/* Trừ hai card chịu được nửa hàng. `340px` là basis, không phải bề rộng: hai cái
-   cạnh nhau cần ≥ 700px mới đứng chung hàng, dưới mức đó chúng tự tách. */
-.ikrep > .ikrep-half {
-  flex: 1 1 340px;
-}
-.ikrep-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.ikrep-hwrap {
-  min-width: 0;
-  flex: 1 1 200px;
-}
-.ikrep-title {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--fs-md);
-  font-weight: 600;
-  line-height: var(--lh-md);
-}
-.ikrep-sub {
-  margin: 2px 0 0;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrep-scope {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  color: var(--textMuted);
-  font-family: var(--code); /* mono-ok: `context/namespace` là thứ dán vào kubectl */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrep-lamp {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: var(--r-full);
-  background: var(--textFaint);
-}
-.ikrep-lamp.lamp-ok {
-  background: var(--green);
-}
-.ikrep-lamp.lamp-warn {
-  background: var(--amber);
-}
-.ikrep-lamp.lamp-bad {
-  background: var(--danger);
-}
-
-/* ── Card điểm ──────────────────────────────────────────────────────────────
-   Da card (viền · bo · nền · bóng) đến từ `.icard`; ở đây chỉ còn bố cục + đệm.
-   Riêng màu viền thì đổi theo đèn: card "có chuyện" phải khác card "ổn" ngay ở
-   đường viền, trước khi người đọc kịp đọc con số. */
-.ikrep-hero {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 6px 16px;
-  padding: 14px;
-}
-.ikrep-hero.h-warn {
-  border-color: var(--amberBorder);
-}
-.ikrep-hero.h-bad {
-  border-color: var(--dangerBorder);
-}
-.ikrep-score {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-.ikrep-score-n {
-  color: var(--text);
-  font-size: var(--fs-2xl);
-  font-weight: 700;
-  line-height: var(--lh-2xl);
-  font-variant-numeric: tabular-nums;
-}
-.h-warn .ikrep-score-n {
-  color: var(--amber);
-}
-.h-bad .ikrep-score-n {
-  color: var(--danger);
-}
-.ikrep-score-u {
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ikrep-heroinfo {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.ikrep-verdict {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--fs-md);
-  font-weight: 500;
-  line-height: var(--lh-md);
-}
-/* Màu của câu này đi theo `statusLine.bad` (có người dùng đang bị ảnh hưởng hay
-   không), KHÔNG theo đèn: đèn bật `warn` cho cả những thứ chưa chạm tới ai, và một
-   câu "Không có gì đang ảnh hưởng người dùng" tô amber tự phủ nhận chính nó. */
-.ikrep-verdict.bad {
-  color: var(--danger);
-}
-.ikrep-meter {
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--r-full);
-  background: var(--bgActive);
-}
-.ikrep-meterfill {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-full);
-  background: var(--green);
-}
-.h-warn .ikrep-meterfill {
-  background: var(--amber);
-}
-.h-bad .ikrep-meterfill {
-  background: var(--danger);
-}
-/* Hàng chip của hero — cùng chỗ mà dòng "nên xem trước" từng đứng: nó nói được
-   nhiều hơn trong cùng một dòng, và danh sách đầy đủ ở ngay card dưới. */
-.ikrep-chips {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.ikrep-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 8px;
-  border: 1px solid var(--dangerBorder);
-  border-radius: var(--r-pill);
-  background: var(--dangerDim);
-  color: var(--danger);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrep-chip.warn {
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
-  color: var(--amber);
-}
-.ikrep-chip code {
-  color: var(--textMuted);
-  font-family: var(--code); /* mono-ok: tên object là thứ dán vào kubectl */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Card "Vừa có gì đổi": một câu, không phải một danh sách. */
-.ikrep-changed {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* ── Card của một câu trong báo cáo ─────────────────────────────────────────
-   Một hàng tiêu đề có gạch chân + một thân. Tiêu đề KHÔNG phải thanh cao cố
-   định nên `border-bottom` ở đây là đúng chỗ (luật hairline-inset chỉ dành cho
-   thanh cao cố định căn giữa theo trục dọc). */
-.ikrep-sec {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.ikrep-sech {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.ikrep-sect {
-  color: var(--text);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  line-height: var(--lh-sm);
-}
-/* THÂN CARD CŨNG LÀ MỘT HÀNG BIẾT XUỐNG DÒNG. Xếp dọc thì "Theo trạng thái" và
-   "Khởi động lại nhiều nhất" mỗi khối ăn trọn bề ngang cho vài chữ, và người đọc
-   phải cuộn để so hai thứ vốn nên nhìn cùng lúc.
-
-   Vì sao không `grid` + `auto-fit`: xem ghi chú ở `.ikrep` — khối `.ikrep-wide`
-   (hàng ô số, dải node, danh sách cảnh báo, biểu đồ) chiếm hết track nên `auto-fit`
-   hết đường gộp cột, và hai khối hẹp bị ghim ở đúng `minmax` giữa một card rộng. */
-.ikrep-secb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  align-content: flex-start;
-  gap: 12px 28px;
-  padding: 12px 14px;
-  min-width: 0;
-}
-.ikrep-secb > * {
-  flex: 1 1 300px;
-  min-width: 0;
-}
-/* Khối cần cả bề ngang: ép dải bar vào nửa cột thì nó ngắn tới mức hết đọc được. */
-.ikrep-wide {
-  flex: 1 1 100%;
-}
-/* Ngăn nhau bằng hairline, không bằng khung riêng: hai đường viền lồng nhau quanh
-   cùng một nền trắng (theme sáng có `--bgEl` == `--bgPanel`) đọc ra thành lỗi vẽ
-   chứ không ra tầng. Gạch đặt ở CẠNH TRÊN của mọi khối trừ khối đầu, nên hai khối
-   đứng cùng một hàng có chung một đường kẻ thay vì mỗi cái một kiểu. */
-.ikrep-secb > *:not(:first-child) {
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.ikrep-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.ikrep-block-t {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrep-list {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ikrep-findings li {
-  margin-bottom: 2px;
-}
-/* Tên pod và số lần khởi động lại là hai mẩu khác loại: dính liền nhau thì
-   "api-7d9c-def7" đọc ra như một cái tên. */
-.ikrep-restarts li {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ikrep-rn {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.ikrep-rago {
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrep-watch {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ikrep-acts {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-</style>

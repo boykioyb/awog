@@ -1,60 +1,79 @@
 <template>
-  <!-- Context menu neo TRÊN chip status-bar (`.smenu` global skin). Một mục
-       `header` hiển thị nhãn mục nhỏ (`.ph` của proto); `separator` → gạch.
-       `filterPlaceholder` ⇒ ô lọc dính ở đầu menu (danh sách dài: đổi project). -->
+  <!-- Context menu neo TRÊN chip status-bar (vị trí do useWorkbenchMenu tính — không
+       dùng DropdownMenu của reka vì neo theo toạ độ, mở phía trên). Một mục `header`
+       hiển thị nhãn mục nhỏ; `separator` → gạch. `filterPlaceholder` ⇒ ô lọc dính ở
+       đầu menu (danh sách dài: đổi project). Class item bám DropdownMenuItem của shadcn.
+       Teleport sang body. Hai điều Tailwind phải khai tường minh:
+       - `[-webkit-app-region:no-drag]`: app-region ở tầng WINDOW (`.top` là vùng drag),
+         fixed overlay bên trên không tự trừ mình ra — thiếu no-drag thì phần
+         menu/backdrop lọt vào strip đầu cửa sổ bị OS nuốt click.
+       - z-index: menu (140) phải trên backdrop của chính nó (139), nếu không lăn chuột
+         rơi vào backdrop nên menu dài không cuộn được. -->
   <Teleport to="body">
     <template v-if="menu">
-      <div class="wbm-backdrop fixed inset-0" data-nodrag @mousedown.prevent="closeMenu" />
       <div
-        class="smenu wbm fixed min-w-[200px]"
-        :class="{ 'wbm-compact': menu.compact }"
+        class="wbm-backdrop fixed inset-0 z-139 [-webkit-app-region:no-drag]"
+        data-nodrag
+        @mousedown.prevent="closeMenu"
+      />
+      <!-- `.wbm` nằm trong OVERLAYS (useEmbeddedBrowser.ts) để trình duyệt nhúng nhường chỗ. -->
+      <div
+        class="wbm fixed z-140 max-h-[calc(100vh-24px)] min-w-50 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md [-webkit-app-region:no-drag]"
         :style="menuStyle"
         role="menu"
         data-nodrag
       >
-        <div v-if="menu.filterPlaceholder" class="wbm-filter">
-          <Icon name="search" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <input
+        <div
+          v-if="menu.filterPlaceholder"
+          class="sticky -top-1 z-1 -mx-1 -mt-1 mb-1 flex items-center gap-1.5 border-b bg-popover px-2.5 py-0.5 text-faint"
+        >
+          <Icon class="size-3" name="search" />
+          <Input
             ref="filterEl"
             v-model="query"
+            unstyled
             type="text"
-            class="wbm-filter-in"
+            class="h-ctrl-xs min-w-0 flex-1 text-sm text-foreground"
             :placeholder="menu.filterPlaceholder"
             @keydown.enter.prevent="pickFirst"
           />
         </div>
-        <div v-if="filterActive && !visibleItems.length" class="wbm-empty">Không có kết quả</div>
+        <div v-if="filterActive && !visibleItems.length" class="px-2.5 py-1.5 text-sm text-faint">
+          Không có kết quả
+        </div>
         <template v-for="(it, i) in visibleItems" :key="i">
-          <div v-if="it.separator" class="ctxsep" />
+          <Separator v-if="it.separator" class="-mx-1 my-1 w-auto" />
           <div
             v-else-if="it.header"
-            class="wbm-head px-2.5 pb-1.5 pt-1 text-[var(--fs-xs)] font-[650] leading-[var(--lh-xs)] text-[var(--textFaint)]"
+            class="px-2.5 text-xs font-semibold text-faint"
+            :class="menu.compact ? 'pb-0.5 pt-1.5' : 'pb-1.5 pt-1'"
           >
             {{ it.header }}
           </div>
           <div
             v-else
-            class="mi"
-            :class="{ dmi: it.danger, mdisabled: it.disabled, cur: it.active }"
+            class="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+            :class="[
+              menu.compact ? 'py-1' : 'py-1.5',
+              it.danger ? 'text-destructive' : it.active ? 'text-primary' : 'text-muted-foreground',
+              { 'pointer-events-none opacity-55': it.disabled },
+            ]"
             role="menuitem"
             :title="it.hint ? `${it.label} — ${it.hint}` : it.label"
             @click="it.id && pick(it.id)"
           >
-            <Icon
-              v-if="it.icon"
-              :name="it.icon"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+            <Icon v-if="it.icon" :name="it.icon" class="size-3.5" />
             <span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
               {{ it.label }}
             </span>
-            <span v-if="it.hint" class="mhint wbm-hint">{{ it.hint }}</span>
-            <Icon
-              v-if="it.active"
-              name="check"
-              class="ck"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+            <!-- Hint (đường dẫn) co lại trước nhãn khi menu chạm bề rộng tối đa. -->
+            <span
+              v-if="it.hint"
+              class="tnum ml-auto min-w-0 max-w-[55%] shrink truncate text-xs text-faint"
+            >
+              {{ it.hint }}
+            </span>
+            <Icon v-if="it.active" name="check" class="ml-auto size-3.5 text-primary" />
           </div>
         </template>
       </div>
@@ -74,7 +93,8 @@ useEscToClose(
 )
 
 const query = ref('')
-const filterEl = ref<HTMLInputElement | null>(null)
+// Instance của `Input` (expose focus()) — không phải element thô.
+const filterEl = ref<{ focus: () => void } | null>(null)
 // Mở menu mới ⇒ xoá chữ lọc cũ và đặt con trỏ vào ô lọc (gõ ngay được).
 watch(
   () => menu.value,
@@ -111,82 +131,3 @@ function pickFirst(): void {
   if (first?.id) pick(first.id)
 }
 </script>
-
-<style scoped>
-/* Teleport sang body ⇒ scoped vẫn áp được (Vue giữ data-attribute trên node
-   đã teleport). `.smenu` global cho skin; bên dưới là những thứ Tailwind không
-   diễn đạt được hoặc bị global đè:
-   - `-webkit-app-region`: app-region ở tầng WINDOW (`.top` là vùng drag), và
-     fixed overlay bên trên không tự trừ mình ra — thiếu no-drag thì phần
-     menu/backdrop lọt vào strip 52px đầu cửa sổ bị OS nuốt click (cùng trap
-     ở app-shell.css:2418).
-   - z-index: `.smenu { z-index: 130 }` (prototype.css) ĐÈ class Tailwind
-     `z-[140]` cũ ⇒ menu nằm DƯỚI backdrop của chính nó (139): lăn chuột rơi vào
-     backdrop nên menu dài không cuộn được (đo: wheel ⇒ scrollTop vẫn 0). Khai ở
-     đây với selector đủ mạnh để luôn thắng. */
-[data-nodrag] {
-  -webkit-app-region: no-drag;
-}
-.wbm-backdrop {
-  z-index: 139;
-}
-.smenu.wbm {
-  z-index: 140;
-  overflow-y: auto;
-}
-.wbm-filter {
-  position: sticky;
-  top: -5px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: -5px -5px 4px;
-  padding: 2px 10px;
-  background: var(--bgEl);
-  box-shadow: inset 0 -1px 0 var(--border);
-  color: var(--textFaint);
-}
-.wbm-filter-in {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wbm-empty {
-  padding: 6px 10px;
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-/* Hint (đường dẫn) co lại trước nhãn khi menu chạm bề rộng tối đa. */
-.wbm-hint {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 55%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Menu `compact` (danh sách dài như phong cách trả lời): row 26px thay 34px, header
-   sát hơn — vẫn đủ nhãn + hint. Selector kép để thắng `.smenu .mi` global của
-   prototype.css. */
-.smenu.wbm-compact .mi {
-  padding: 4px 10px;
-}
-.wbm-compact .wbm-head {
-  padding-top: 6px;
-  padding-bottom: 2px;
-}
-/* Disabled nhạt hơn mặc định `.smenu .mi.mdisabled` global (0.45 → 0.55);
-   selector giữ specificity cao hơn global để đè được. */
-.smenu .mi.mdisabled {
-  opacity: 0.55;
-  cursor: default;
-}
-</style>

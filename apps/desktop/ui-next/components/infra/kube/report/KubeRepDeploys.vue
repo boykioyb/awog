@@ -8,13 +8,41 @@
 
        Mọi chuỗi (bản sao, tuổi, câu rollout) do `InfraKubeReport.vue` dựng sẵn —
        component này chỉ vẽ. -->
-  <ul class="ikrd">
-    <li v-for="row in rows" :key="row.key" class="ikrd-i">
-      <code class="ikrd-name" :title="row.name">{{ row.name }}</code>
-      <span class="ikrd-ready" :class="{ bad: row.rolling }">{{ row.ready }}</span>
-      <span v-if="row.rolling" class="ikrd-chip">{{ row.rollout }}</span>
-      <code v-if="row.image" class="ikrd-img" :title="row.image">{{ row.image }}</code>
-      <span v-if="row.age" class="ihint">{{ row.age }}</span>
+  <ul class="flex min-w-0 flex-col">
+    <li
+      v-for="row in rows"
+      :key="row.key"
+      class="flex min-w-0 flex-wrap items-baseline gap-2 py-1.5 first:pt-0 not-first:border-t"
+    >
+      <!-- mono-ok: tên deployment là thứ dán vào kubectl -->
+      <code class="max-w-full truncate font-mono text-xs text-foreground" :title="row.name">
+        {{ row.name }}
+      </code>
+      <!-- Rollout kẹt thì con số bản sao ĐÚNG nhưng nói dối: bỏ màu xanh đi để nó
+           không khẳng định một điều mà chip bên cạnh đang phủ nhận. -->
+      <Badge
+        variant="outline"
+        class="shrink-0 font-normal tabular-nums"
+        :class="row.rolling ? 'text-muted-foreground' : 'text-success'"
+      >
+        {{ row.ready }}
+      </Badge>
+      <Badge
+        v-if="row.rolling"
+        variant="outline"
+        class="shrink-0 border-destructive/40 bg-destructive/10 font-normal text-destructive"
+      >
+        {{ row.rollout }}
+      </Badge>
+      <!-- mono-ok: tag ảnh là thứ dán vào docker/kubectl -->
+      <code
+        v-if="row.image"
+        class="min-w-0 flex-[1_1_10rem] truncate font-mono text-xs text-muted-foreground"
+        :title="row.image"
+      >
+        {{ row.image }}
+      </code>
+      <span v-if="row.age" class="text-xs text-faint">{{ row.age }}</span>
     </li>
   </ul>
 </template>
@@ -37,74 +65,3 @@ defineProps<{
   }[]
 }>()
 </script>
-
-<style scoped>
-.ikrd {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.ikrd-i {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-  padding: 6px 0;
-}
-.ikrd-i:first-child {
-  padding-top: 0;
-}
-.ikrd-i:not(:first-child) {
-  border-top: 1px solid var(--border);
-}
-.ikrd-name {
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: tên deployment là thứ dán vào kubectl */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-.ikrd-ready {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  color: var(--green);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-/* Rollout kẹt thì con số bản sao ĐÚNG nhưng nói dối: bỏ màu xanh đi để nó không
-   khẳng định một điều mà chip bên cạnh đang phủ nhận. */
-.ikrd-ready.bad {
-  color: var(--textMuted);
-}
-.ikrd-chip {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border: 1px solid var(--dangerBorder);
-  border-radius: var(--r-pill);
-  background: var(--dangerDim);
-  color: var(--danger);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrd-img {
-  flex: 1 1 160px;
-  color: var(--textMuted);
-  font-family: var(--code); /* mono-ok: tag ảnh là thứ dán vào docker/kubectl */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-</style>

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="ssh-sf-surface"
+    class="relative flex h-full flex-col overflow-hidden"
     @dragenter.prevent="onDragEnter"
     @dragover.prevent="onDragOver"
     @dragleave.prevent="onDragLeave"
@@ -8,80 +8,106 @@
   >
     <!-- OS drag-drop upload target: dropping files from the file manager uploads
          them into the current directory. -->
-    <div v-if="isDragging" class="ssh-sf-drop">
-      <Icon name="download" style="width: 26px; height: 26px; transform: rotate(180deg)" />
+    <div
+      v-if="isDragging"
+      class="pointer-events-none absolute inset-0 z-6 flex flex-col items-center justify-center gap-2.5 rounded-md border-2 border-dashed border-primary bg-selected text-base font-semibold text-primary"
+    >
+      <Icon name="download" class="size-6 rotate-180" />
       <span>{{ t('ssh.sftp.dropHint') }}</span>
     </div>
 
-    <div class="ssh-sf-head">
-      <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="ssh-sf-head-t">{{ t('ssh.section.sftp') }}</span>
-      <div class="ssh-sf-tools">
-        <button
-          class="ssh-sf-tool"
+    <div class="flex shrink-0 items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+      <Icon name="folder" class="size-3.5" />
+      <span class="min-w-0 font-semibold">{{ t('ssh.section.sftp') }}</span>
+      <div class="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.sftp.newFile')"
           :aria-label="t('ssh.sftp.newFile')"
           @click="newFile"
         >
-          <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ssh-sf-tool"
+          <Icon name="file" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.sftp.mkdir')"
           :aria-label="t('ssh.sftp.mkdir')"
           @click="mkdir"
         >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ssh-sf-tool"
+          <Icon name="plus" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.sftp.upload')"
           :aria-label="t('ssh.sftp.upload')"
           @click="upload"
         >
-          <Icon
-            name="download"
-            style="width: var(--icon-sm); height: var(--icon-sm); transform: rotate(180deg)"
-          />
-        </button>
-        <button
-          class="ssh-sf-tool"
+          <Icon name="download" class="rotate-180" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.sftp.refresh')"
           :aria-label="t('ssh.sftp.refresh')"
           @click="load"
         >
-          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="refresh" />
+        </Button>
         <SftpColumnsMenu :columns="columns" @toggle="toggleColumn" />
-        <button
-          class="ssh-sf-tool"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-muted-foreground"
           :title="t('ssh.panel.close')"
           :aria-label="t('ssh.panel.close')"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
     </div>
+    <Separator />
 
     <!-- Path bar: clickable breadcrumb, or an editable input (pencil / double-click). -->
-    <div class="ssh-sf-path">
+    <div class="flex shrink-0 items-center">
       <template v-if="!editingPath">
-        <div class="ssh-sf-crumbs" @dblclick="startEditPath">
-          <button class="ssh-sf-crumb" :disabled="cwd === '.'" @click="navigate('.')">~</button>
+        <div
+          class="flex min-w-0 flex-1 cursor-text flex-wrap items-center gap-0.5 px-2 py-1 text-sm"
+          @dblclick="startEditPath"
+        >
+          <Button
+            variant="ghost"
+            size="xs"
+            :class="CRUMB"
+            :disabled="cwd === '.'"
+            @click="navigate('.')"
+          >
+            ~
+          </Button>
           <template v-for="(seg, i) in crumbs" :key="i">
-            <span class="ssh-sf-sep">/</span>
-            <button class="ssh-sf-crumb" @click="navigate(seg.path)">{{ seg.name }}</button>
+            <span class="text-muted-foreground">/</span>
+            <Button variant="ghost" size="xs" :class="CRUMB" @click="navigate(seg.path)">
+              {{ seg.name }}
+            </Button>
           </template>
         </div>
-        <button
-          class="ssh-sf-pathedit"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="mr-1 text-muted-foreground"
           :title="t('ssh.sftp.editPath')"
           :aria-label="t('ssh.sftp.editPath')"
           @click="startEditPath"
         >
-          <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
+          <Icon name="edit" />
+        </Button>
       </template>
       <Input
         v-else
@@ -89,101 +115,158 @@
         v-model="pathDraft"
         spellcheck="false"
         :placeholder="t('ssh.sftp.pathPh')"
-        class="mono"
+        class="mx-2 my-1 h-ctrl-xs min-w-0 flex-1 font-mono"
         @keydown.enter="commitPath"
         @keydown.esc="editingPath = false"
         @blur="editingPath = false"
       />
     </div>
+    <Separator />
 
     <!-- Bulk-action bar (shown while ≥1 row is selected). -->
-    <div v-if="hasSelection" class="ssh-sf-bulk">
-      <span class="ssh-sf-bulk-n">
-        {{ t('ssh.sftp.selectedN', { count: selectedEntries.length }) }}
-      </span>
-      <div class="ssh-sf-bulk-acts">
-        <button class="ssh-sf-bulk-btn" @click="openPathPicker('copy', selectedEntries)">
-          {{ t('ssh.sftp.ctx.copyTo') }}
-        </button>
-        <button class="ssh-sf-bulk-btn" @click="openPathPicker('move', selectedEntries)">
-          {{ t('ssh.sftp.ctx.moveTo') }}
-        </button>
-        <button class="ssh-sf-bulk-btn danger" @click="del(selectedEntries)">
-          {{ t('ssh.sftp.delete') }}
-        </button>
-        <button class="ssh-sf-bulk-btn" @click="clearSelection">
-          {{ t('ssh.sftp.clearSelection') }}
-        </button>
+    <template v-if="hasSelection">
+      <div class="flex shrink-0 items-center gap-2.5 bg-selected px-2.5 py-1.5">
+        <span class="text-sm font-semibold text-primary">
+          {{ t('ssh.sftp.selectedN', { count: selectedEntries.length }) }}
+        </span>
+        <div class="ml-auto flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="xs"
+            class="bg-card"
+            @click="openPathPicker('copy', selectedEntries)"
+          >
+            {{ t('ssh.sftp.ctx.copyTo') }}
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            class="bg-card"
+            @click="openPathPicker('move', selectedEntries)"
+          >
+            {{ t('ssh.sftp.ctx.moveTo') }}
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            class="bg-card hover:border-transparent hover:bg-destructive/10 hover:text-destructive"
+            @click="del(selectedEntries)"
+          >
+            {{ t('ssh.sftp.delete') }}
+          </Button>
+          <Button variant="outline" size="xs" class="bg-card" @click="clearSelection">
+            {{ t('ssh.sftp.clearSelection') }}
+          </Button>
+        </div>
       </div>
-    </div>
+      <Separator />
+    </template>
 
-    <div class="ssh-sf-list" @contextmenu.self.prevent>
-      <div v-if="loading" class="ssh-sf-empty">{{ t('ssh.sftp.loading') }}</div>
-      <div v-else-if="error" class="ssh-sf-err mono">{{ error }}</div>
+    <!-- select-none: ⌘/Shift-click dựng selection — không bao giờ thành kéo chữ native. -->
+    <div class="min-h-0 flex-auto overflow-auto select-none" @contextmenu.self.prevent>
+      <div v-if="loading" class="px-3.5 py-3 text-sm text-muted-foreground">
+        {{ t('ssh.sftp.loading') }}
+      </div>
+      <div v-else-if="error" class="px-3.5 py-3 font-mono text-sm break-words text-destructive">
+        {{ error }}
+      </div>
       <template v-else>
         <!-- Column header (sortable name/size/modified). -->
-        <div class="ssh-sf-hrow" :style="{ gridTemplateColumns: gridTemplate }">
-          <button class="ssh-sf-hc name" @click="setSort('name')">
+        <div
+          class="sticky top-0 z-1 grid items-center gap-2 border-b bg-background px-2.5 py-1"
+          :style="{ gridTemplateColumns: gridTemplate }"
+        >
+          <Button
+            variant="ghost"
+            size="xs"
+            :class="[HC_BTN, 'justify-start']"
+            @click="setSort('name')"
+          >
             {{ t('ssh.sftp.col.name') }}
-            <span v-if="sortKey === 'name'" class="ssh-sf-sort">{{ sortAsc ? '▲' : '▼' }}</span>
-          </button>
-          <button v-if="hasCol('size')" class="ssh-sf-hc num" @click="setSort('size')">
+            <span v-if="sortKey === 'name'" :class="SORT_MARK">{{ sortAsc ? '▲' : '▼' }}</span>
+          </Button>
+          <Button
+            v-if="hasCol('size')"
+            variant="ghost"
+            size="xs"
+            :class="[HC_BTN, 'justify-end']"
+            @click="setSort('size')"
+          >
             {{ t('ssh.sftp.col.size') }}
-            <span v-if="sortKey === 'size'" class="ssh-sf-sort">{{ sortAsc ? '▲' : '▼' }}</span>
-          </button>
-          <span v-if="hasCol('perms')" class="ssh-sf-hc">{{ t('ssh.sftp.col.perms') }}</span>
-          <span v-if="hasCol('owner')" class="ssh-sf-hc">{{ t('ssh.sftp.col.owner') }}</span>
-          <span v-if="hasCol('group')" class="ssh-sf-hc">{{ t('ssh.sftp.col.group') }}</span>
-          <button v-if="hasCol('modified')" class="ssh-sf-hc" @click="setSort('modified')">
+            <span v-if="sortKey === 'size'" :class="SORT_MARK">{{ sortAsc ? '▲' : '▼' }}</span>
+          </Button>
+          <span v-if="hasCol('perms')" :class="HC">{{ t('ssh.sftp.col.perms') }}</span>
+          <span v-if="hasCol('owner')" :class="HC">{{ t('ssh.sftp.col.owner') }}</span>
+          <span v-if="hasCol('group')" :class="HC">{{ t('ssh.sftp.col.group') }}</span>
+          <Button
+            v-if="hasCol('modified')"
+            variant="ghost"
+            size="xs"
+            :class="[HC_BTN, 'justify-start']"
+            @click="setSort('modified')"
+          >
             {{ t('ssh.sftp.col.modified') }}
-            <span v-if="sortKey === 'modified'" class="ssh-sf-sort">{{ sortAsc ? '▲' : '▼' }}</span>
-          </button>
-          <span v-if="hasCol('accessed')" class="ssh-sf-hc">{{ t('ssh.sftp.col.accessed') }}</span>
-          <span v-if="hasCol('changed')" class="ssh-sf-hc">{{ t('ssh.sftp.col.changed') }}</span>
+            <span v-if="sortKey === 'modified'" :class="SORT_MARK">{{ sortAsc ? '▲' : '▼' }}</span>
+          </Button>
+          <span v-if="hasCol('accessed')" :class="HC">{{ t('ssh.sftp.col.accessed') }}</span>
+          <span v-if="hasCol('changed')" :class="HC">{{ t('ssh.sftp.col.changed') }}</span>
         </div>
 
-        <button v-if="cwd !== '.'" class="ssh-sf-row up" @click="navigate(parentPath)">
-          <Icon
-            name="chev"
-            class="ssh-sf-up-icn"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-          <span class="ssh-sf-name">..</span>
+        <!-- raw-ok: cả hàng ".." là một vùng bấm (lên thư mục cha), không phải nút. -->
+        <button
+          v-if="cwd !== '.'"
+          type="button"
+          class="flex w-full cursor-pointer items-center gap-2 px-2.5 py-1 text-left text-sm text-foreground hover:bg-accent"
+          :class="ROW_SEP"
+          @click="navigate(parentPath)"
+        >
+          <Icon name="chev" class="size-3.5 shrink-0 rotate-90 text-muted-foreground" />
+          <span class="flex min-w-0 items-center gap-2">..</span>
         </button>
 
-        <div v-if="!sorted.length" class="ssh-sf-empty">{{ t('ssh.sftp.empty') }}</div>
+        <div v-if="!sorted.length" class="px-3.5 py-3 text-sm text-muted-foreground">
+          {{ t('ssh.sftp.empty') }}
+        </div>
         <div
           v-for="(e, i) in sorted"
           :key="e.name"
-          class="ssh-sf-row"
-          :class="{ dir: e.type === 'dir', sel: isSelected(e.name) }"
+          class="grid w-full items-center gap-2 px-2.5 py-1 text-left text-sm text-foreground"
+          :class="[
+            ROW_SEP,
+            e.type === 'dir' ? 'cursor-pointer' : 'cursor-default',
+            isSelected(e.name) ? 'bg-selected' : 'hover:bg-accent',
+          ]"
           :style="{ gridTemplateColumns: gridTemplate }"
           @click="onRowClick(e, i, $event)"
           @contextmenu.prevent="ctx.open($event, e)"
         >
-          <span class="ssh-sf-c ssh-sf-name">
+          <span class="flex min-w-0 items-center gap-2 overflow-hidden">
             <Icon
               :name="iconFor(e)"
-              class="ssh-sf-icn"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
+              class="size-3.5 shrink-0"
+              :class="e.type === 'dir' ? 'text-primary' : 'text-muted-foreground'"
             />
-            <span class="ssh-sf-nametext">{{ e.name }}</span>
+            <span class="min-w-0 truncate">{{ e.name }}</span>
           </span>
-          <span v-if="hasCol('size')" class="ssh-sf-c num mono">
+          <span v-if="hasCol('size')" class="min-w-0 overflow-hidden text-right font-mono">
             {{ e.type === 'dir' ? '' : sizeLabel(e.size) }}
           </span>
-          <span v-if="hasCol('perms')" class="ssh-sf-c mono dim">
+          <span v-if="hasCol('perms')" :class="[CELL_DIM, 'font-mono']">
             {{ permString(e.mode, e.type) }}
           </span>
-          <span v-if="hasCol('owner')" class="ssh-sf-c dim ellip">
+          <span v-if="hasCol('owner')" :class="[CELL_DIM, 'truncate']">
             {{ metaFor(e.name)?.owner ?? e.uid }}
           </span>
-          <span v-if="hasCol('group')" class="ssh-sf-c dim ellip">
+          <span v-if="hasCol('group')" :class="[CELL_DIM, 'truncate']">
             {{ metaFor(e.name)?.group ?? e.gid }}
           </span>
-          <span v-if="hasCol('modified')" class="ssh-sf-c mono dim">{{ fmtDate(e.mtime) }}</span>
-          <span v-if="hasCol('accessed')" class="ssh-sf-c mono dim">{{ fmtDate(e.atime) }}</span>
-          <span v-if="hasCol('changed')" class="ssh-sf-c mono dim">
+          <span v-if="hasCol('modified')" :class="[CELL_DIM, 'font-mono']">
+            {{ fmtDate(e.mtime) }}
+          </span>
+          <span v-if="hasCol('accessed')" :class="[CELL_DIM, 'font-mono']">
+            {{ fmtDate(e.atime) }}
+          </span>
+          <span v-if="hasCol('changed')" :class="[CELL_DIM, 'font-mono']">
             {{ fmtDate(metaFor(e.name)?.ctime ?? 0) }}
           </span>
         </div>
@@ -306,6 +389,16 @@ const gridTemplate = computed(
       .join(' ')}`,
 )
 
+// Class dùng lặp trong bảng SFTP (header/ô/hàng) — gom một chỗ cho template gọn.
+// Hàng chia bằng hairline giữa hai hàng liền kề (`.row + .row`), không viền hàng đầu.
+const ROW_SEP = '[&+&]:border-t'
+const HC = 'text-sm font-semibold text-muted-foreground'
+const HC_BTN = `${HC} h-auto gap-0.5 px-0 hover:bg-transparent hover:text-foreground`
+const SORT_MARK = 'ml-0.5 text-[0.75em] text-primary'
+const CELL_DIM = 'min-w-0 overflow-hidden text-sm text-muted-foreground'
+const CRUMB =
+  'h-auto px-1 py-0 font-mono text-sm font-normal text-primary disabled:text-muted-foreground disabled:opacity-100'
+
 const iconFor = (e: SftpEntry): string =>
   e.type === 'dir' ? 'folder' : e.type === 'symlink' ? 'link' : 'file'
 
@@ -373,309 +466,3 @@ onMounted(() => {
   void browser.loadTools()
 })
 </script>
-
-<style scoped>
-/* Fills its host area flush (the split divider + edge delimit it). */
-.ssh-sf-surface {
-  position: relative;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* OS drag-drop upload overlay — covers the whole panel while files hover. */
-.ssh-sf-drop {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  pointer-events: none;
-  background: var(--accentDim);
-  border: 2px dashed var(--accent);
-  border-radius: var(--r-sm);
-  color: var(--accent);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.ssh-sf-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-}
-.ssh-sf-head-t {
-  font-weight: 600;
-  min-width: 0;
-}
-.ssh-sf-tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-.ssh-sf-tool {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ssh-sf-tool:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-sf-tool:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.ssh-sf-empty {
-  padding: 12px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.ssh-sf-path {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--border);
-}
-.ssh-sf-crumbs {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 4px 8px;
-  flex: 1;
-  min-width: 0;
-  flex-wrap: wrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: text;
-}
-.ssh-sf-pathedit {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  margin-right: 4px;
-}
-.ssh-sf-pathedit:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-sf-pathinput {
-  flex: 1;
-  min-width: 0;
-  margin: 4px 8px;
-  padding: 4px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--accent);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.ssh-sf-crumb {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 1px 3px;
-  border-radius: var(--r-xs);
-  font-family: var(--code);
-}
-.ssh-sf-crumb:disabled {
-  color: var(--textDim);
-  cursor: default;
-}
-.ssh-sf-crumb:not(:disabled):hover {
-  background: var(--bgHover);
-}
-.ssh-sf-sep {
-  color: var(--textDim);
-}
-/* ── bulk bar ── */
-.ssh-sf-bulk {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--accentDim);
-}
-.ssh-sf-bulk-n {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--accent);
-}
-.ssh-sf-bulk-acts {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-.ssh-sf-bulk-btn {
-  height: 24px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgEl);
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.ssh-sf-bulk-btn:hover {
-  border-color: var(--borderStrong);
-}
-.ssh-sf-bulk-btn.danger:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-  border-color: transparent;
-}
-/* ── list / table ── */
-.ssh-sf-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  /* Ctrl/⌘/Shift-click builds a selection — never a native browser text drag. */
-  user-select: none;
-}
-.ssh-sf-hrow {
-  display: grid;
-  align-items: center;
-  gap: 9px;
-  padding: 5px 10px;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-.ssh-sf-hc {
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--textDim);
-  text-align: left;
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: default;
-}
-button.ssh-sf-hc {
-  cursor: pointer;
-}
-button.ssh-sf-hc:hover {
-  color: var(--text);
-}
-.ssh-sf-hc.num {
-  text-align: right;
-}
-.ssh-sf-sort {
-  margin-left: 3px;
-  font-size: 9px;
-  line-height: 14px;
-  color: var(--accent);
-}
-.ssh-sf-row {
-  display: grid;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 5px 10px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: default;
-}
-.ssh-sf-row + .ssh-sf-row {
-  border-top: 1px solid var(--border);
-}
-.ssh-sf-row.dir {
-  cursor: pointer;
-}
-.ssh-sf-row:hover {
-  background: var(--bgHover);
-}
-.ssh-sf-row.sel {
-  background: var(--accentDim);
-}
-.ssh-sf-row.up {
-  display: flex;
-  cursor: pointer;
-}
-.ssh-sf-up-icn {
-  transform: rotate(90deg);
-  color: var(--textDim);
-}
-.ssh-sf-c {
-  min-width: 0;
-  overflow: hidden;
-}
-.ssh-sf-c.num {
-  text-align: right;
-}
-.ssh-sf-c.dim {
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-}
-.ssh-sf-c.ellip {
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ssh-sf-name {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-.ssh-sf-nametext {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ssh-sf-icn {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.ssh-sf-row.dir .ssh-sf-icn {
-  color: var(--accent);
-}
-.ssh-sf-err {
-  padding: 12px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  word-break: break-word;
-}
-</style>

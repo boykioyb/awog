@@ -8,23 +8,28 @@
 
     <!-- Pet gallery. Each card renders the REAL sprite component in its idle loop, so
          what you pick is literally what lands on the desktop. -->
-    <div class="sech">{{ t('settings.pet.gallery.heading') }}</div>
-    <div class="petgrid">
-      <button
+    <SettingsGroupLabel>{{ t('settings.pet.gallery.heading') }}</SettingsGroupLabel>
+    <div class="mt-1 flex flex-wrap gap-2.5">
+      <Button
         v-for="p in PET_SPRITES"
         :key="p"
-        class="petcard"
-        :class="{ on: p === store.pet.sprite }"
+        variant="outline"
+        class="h-auto w-24 flex-col gap-1.5 bg-card px-2 pt-3 pb-2.5 font-normal text-dim hover:border-input hover:bg-card hover:text-foreground"
+        :class="{
+          'border-selected-border bg-selected text-foreground hover:border-selected-border hover:bg-selected':
+            p === store.pet.sprite,
+        }"
         :title="t(`settings.pet.sprite.${p}`)"
+        :aria-pressed="p === store.pet.sprite"
         @click="store.updatePet({ sprite: p })"
       >
         <!-- Unmirrored in the gallery: on the desktop the pet turns to face into the
              screen, but here it is a portrait, not a status. -->
         <PetSprite state="idle" :sprite="p" facing="right" />
-        <span class="petname">{{ t(`settings.pet.sprite.${p}`) }}</span>
-      </button>
+        <span>{{ t(`settings.pet.sprite.${p}`) }}</span>
+      </Button>
     </div>
-    <div class="pethint">{{ t('settings.pet.gallery.hint') }}</div>
+    <div class="mt-2 text-dim">{{ t('settings.pet.gallery.hint') }}</div>
 
     <SettingsField :name="t('settings.pet.scale.name')" :desc="t('settings.pet.scale.desc')">
       <SettingsSeg v-model="scale" :options="scaleOptions" />
@@ -54,16 +59,16 @@
 
     <!-- Line editor. One textarea per bucket, chosen by the segmented control, rather
          than six stacked boxes: the buckets are alternatives, not a checklist. -->
-    <div class="sech">{{ t('settings.pet.lines.heading') }}</div>
+    <SettingsGroupLabel>{{ t('settings.pet.lines.heading') }}</SettingsGroupLabel>
     <SettingsSeg v-model="bucket" :options="bucketOptions" />
-    <textarea
+    <Textarea
       v-model="draft"
-      class="petlines resize-y min-h-[8rem]"
+      class="mt-2 min-h-32 resize-y px-3 py-2.5 text-base"
       spellcheck="false"
       @change="commitLines"
       @blur="commitLines"
     />
-    <div class="petlines-foot">
+    <div class="mt-2 flex items-center justify-between gap-3 text-dim">
       <span>{{ t('settings.pet.lines.desc') }}</span>
       <Button :disabled="!isEdited" variant="outline" @click="resetBucket">
         {{ t('settings.pet.lines.reset') }}
@@ -78,7 +83,6 @@ import { PET_REMINDER_CHOICES, PET_SCALES, PET_SPRITES, useSettingsStore } from 
 import type { PetScale } from '~/stores/settings'
 import { PET_QUIP_BUCKETS, defaultQuipLines } from '~/utils/pet-quips'
 import type { PetQuipBucket } from '~/utils/pet-quips'
-import Button from '~/components/ui/button/Button.vue'
 
 // Desktop pet panel (docs/features/desktop-pet.md). Its own settings section rather
 // than a block inside Appearance: the pet is a surface of its own (a window on the
@@ -162,68 +166,3 @@ const scale = computed<string>({
   set: (value) => store.updatePet({ scale: Number(value) as PetScale }),
 })
 </script>
-
-<style scoped>
-.petlines {
-  width: 100%;
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font: inherit;
-  line-height: var(--lh-md);
-}
-.petlines:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.petlines-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  color: var(--textDim);
-}
-
-.petgrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
-}
-.petcard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 96px;
-  padding: 12px 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-  color: var(--textDim);
-  font: inherit;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    color 0.12s;
-}
-.petcard:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-.petcard.on {
-  border-color: var(--accent);
-  color: var(--text);
-}
-.petname {
-  line-height: 14px;
-}
-.pethint {
-  margin-top: 8px;
-  color: var(--textDim);
-}
-</style>

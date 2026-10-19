@@ -9,10 +9,12 @@
 
        DANH SÁCH KHÔNG TỰ NẠP. Mỗi lượt dò là một loạt lời gọi AWS, nên nó nằm sau
        một cú bấm và nút nói ra lệnh nó sắp chạy. -->
-  <div class="irp">
-    <div class="ilbl">{{ t('infra.monitoring.target.heading') }}</div>
+  <div class="flex min-w-0 flex-col gap-1">
+    <Label class="text-xs font-normal text-muted-foreground">
+      {{ t('infra.monitoring.target.heading') }}
+    </Label>
 
-    <div class="irp-row">
+    <div class="flex min-w-0 items-center gap-1.5">
       <AppSelect
         :model-value="modelValue?.id ?? ''"
         :options="options"
@@ -25,16 +27,18 @@
       <!-- Nút dò danh sách. Lỗi của `describe-*` phần lớn là tạm thời (token hết
            hạn), nên đường thử lại phải luôn có mặt — bản trước giấu nó trong một
            chế độ và biến `ExpiredToken` thành đường cụt. -->
-      <button
-        class="irp-icbtn"
-        type="button"
+      <Button
+        variant="outline"
+        size="iconMd"
+        class="text-dim"
         :disabled="loading || !hasAccount"
         :title="t('infra.monitoring.target.reloadWhy')"
+        :aria-label="t('infra.monitoring.target.reloadWhy')"
         :aria-busy="loading"
         @click="emit('reload')"
       >
-        <Icon name="refresh" class="irp-ic" :class="loading ? 'irp-spin' : ''" />
-      </button>
+        <Icon name="refresh" :class="loading ? 'animate-spin' : ''" />
+      </Button>
     </div>
   </div>
 </template>
@@ -129,58 +133,3 @@ function onPick(id: string): void {
   emit('update:modelValue', null)
 }
 </script>
-
-<style scoped>
-.irp {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.irp-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.irp-icbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-
-.irp-icbtn:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-
-.irp-icbtn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.irp-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.irp-spin {
-  animation: irp-rot 1s linear infinite;
-}
-
-@keyframes irp-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

@@ -1,9 +1,9 @@
 <template>
-  <div class="vpnx">
-    <div class="vpnx-top">
-      <span class="vpnx-title">{{ t('vpn.section.title') }}</span>
-      <span class="vpnx-count">{{ store.profiles.length }}</span>
-      <div class="vpnx-actions">
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div class="flex shrink-0 items-center gap-2.5 px-4 py-3.5">
+      <span class="text-lg font-semibold text-foreground">{{ t('vpn.section.title') }}</span>
+      <Badge variant="secondary">{{ store.profiles.length }}</Badge>
+      <div class="ml-auto flex items-center gap-2">
         <Button
           v-if="canPick"
           :title="t('vpn.import.button')"
@@ -11,24 +11,25 @@
           size="sm"
           @click="openImport"
         >
-          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="download" />
           {{ t('vpn.import.button') }}
         </Button>
         <Button :title="t('vpn.new')" variant="default" size="sm" @click="openNew">
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="plus" />
           {{ t('vpn.new') }}
         </Button>
       </div>
     </div>
+    <Separator />
 
-    <div class="vpnx-scroll">
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <VpnEmptyState
         v-if="!store.profiles.length"
         icon="globe"
         :title="t('vpn.empty.title')"
         :body="t('vpn.empty.body')"
       />
-      <div v-else class="vpnx-list">
+      <div v-else class="flex flex-col gap-2 px-3 py-2">
         <VpnCard
           v-for="p in store.profiles"
           :key="p.id"
@@ -236,51 +237,3 @@ onMounted(() => {
   void store.loadAll()
 })
 </script>
-
-<style scoped>
-.vpnx {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.vpnx-top {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-}
-.vpnx-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.vpnx-count {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.vpnx-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.vpnx-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-.vpnx-list {
-  padding: 8px 12px;
-}
-</style>

@@ -1,18 +1,26 @@
 <template>
-  <nav class="sshx-side" :aria-label="t('ssh.nav.hosts')">
-    <button
+  <nav
+    class="flex w-47 shrink-0 flex-col gap-0.5 overflow-y-auto border-r px-2.5 py-3"
+    :aria-label="t('ssh.nav.hosts')"
+  >
+    <Button
       v-for="item in items"
       :key="item.key"
-      class="sshx-side-item"
-      :class="{ on: store.sshSection === item.key }"
+      variant="ghost"
+      size="sm"
+      class="w-full justify-start gap-2.5 border border-transparent px-2.5 text-sm text-muted-foreground"
+      :class="{
+        'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary':
+          store.sshSection === item.key,
+      }"
       :title="t(item.label)"
       :aria-label="t(item.label)"
       :aria-current="store.sshSection === item.key ? 'page' : undefined"
       @click="store.setSection(item.key)"
     >
-      <Icon :name="item.icon" style="width: var(--icon-md); height: var(--icon-md)" />
-      <span class="sshx-side-label">{{ t(item.label) }}</span>
-    </button>
+      <Icon :name="item.icon" />
+      <span class="min-w-0 flex-1 truncate text-left">{{ t(item.label) }}</span>
+    </Button>
   </nav>
 </template>
 
@@ -36,54 +44,3 @@ const items: { key: SshSection; icon: string; label: string }[] = [
   { key: 'logs', icon: 'act', label: 'ssh.nav.logs' },
 ]
 </script>
-
-<style scoped>
-.sshx-side {
-  flex: 0 0 188px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 10px;
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-}
-.sshx-side-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshx-side-item:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshx-side-item.on {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.sshx-side-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.sshx-side-label {
-  font-weight: 500;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-</style>

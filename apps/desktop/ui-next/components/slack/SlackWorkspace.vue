@@ -1,15 +1,15 @@
 <template>
   <TooltipProvider :delay-duration="300">
-    <div class="slk-ws">
-      <header class="slk-hd">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
+      <header class="flex h-11 flex-none items-center gap-2 border-b pl-4 pr-3">
         <BrandIcon provider="slack" :size="18" />
-        <span class="slk-hdt">{{ t('slack.title') }}</span>
+        <span class="text-lg font-semibold">{{ t('slack.title') }}</span>
         <span class="flex-1" />
         <Button
           v-if="isWindow && hasSlackBridge"
           variant="ghost"
           size="iconMd"
-          :class="{ 'slk-pin-on': pinned }"
+          :class="{ 'bg-selected text-primary': pinned }"
           :aria-pressed="pinned"
           :title="pinned ? t('slack.unpin') : t('slack.pin')"
           @click="togglePin"
@@ -56,10 +56,11 @@
       <div ref="bodyRef" class="flex min-h-0 flex-1">
         <SlackThreadList :style="{ flexBasis: `${list.width.value}px` }" />
         <!-- Tay kéo đổi bề rộng cột danh sách. Kéo chuột, ←/→ khi focus (±16px), bấm đúp
-             về mặc định. -->
+             về mặc định. Vùng bắt 6px đè lên mép (margin âm) để không đội thêm bề rộng; vạch
+             accent mảnh chỉ hiện khi hover / đang kéo / focus bàn phím. -->
         <div
-          class="slk-rsz"
-          :class="{ drag: list.dragging.value }"
+          class="relative z-1 -mx-0.75 flex-none basis-1.5 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:left-0.5 after:w-0.5 after:transition-colors after:content-[''] hover:after:bg-primary focus-visible:after:bg-primary"
+          :class="{ 'after:bg-primary': list.dragging.value }"
           role="separator"
           aria-orientation="vertical"
           :aria-label="t('slack.resizeList')"
@@ -106,59 +107,3 @@ const {
 
 const list = useSlackListResize(useTemplateRef<HTMLElement>('bodyRef'))
 </script>
-
-<style scoped>
-.slk-ws {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  background: var(--bg);
-  color: var(--text);
-}
-.slk-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  flex: none;
-  padding: 0 12px 0 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.slk-hdt {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-}
-/* Tay kéo: vùng bắt 6px đè lên mép (margin âm) để không đội thêm bề rộng; vạch accent
-   mảnh chỉ hiện khi hover / đang kéo / focus bàn phím — mép cột danh sách đã có hairline. */
-.slk-rsz {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 6px;
-  margin: 0 -3px;
-  cursor: col-resize;
-  touch-action: none;
-  outline: none;
-}
-.slk-rsz::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  width: 2px;
-  background: transparent;
-  transition: background 0.12s;
-}
-.slk-rsz:hover::after,
-.slk-rsz.drag::after,
-.slk-rsz:focus-visible::after {
-  background: var(--accent);
-}
-.slk-pin-on {
-  color: var(--accent);
-  background: var(--accentDim);
-}
-</style>

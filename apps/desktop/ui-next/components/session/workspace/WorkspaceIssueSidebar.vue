@@ -4,14 +4,20 @@
        nhãn nhỏ ở trên, giá trị hiện như chữ thường (control "ghost", viền chỉ hiện
        khi hover/focus), section ngăn bằng hairline. `layout="grid"` cho form tạo
        mới (nằm dưới ô mô tả, bề ngang rộng) — cùng field, xếp 3 cột. -->
-  <div class="isb" :class="layout === 'grid' ? 'isb-grid' : 'isb-stack'">
+  <div
+    :class="
+      layout === 'grid'
+        ? 'grid grid-cols-1 gap-x-4 sm:grid-cols-3'
+        : 'flex flex-col [&>section:first-child]:pt-0 [&>section:last-child]:border-b-0'
+    "
+  >
     <!-- Tự nhận diện: link GitHub trong các phiên đã làm issue → sprint / milestone /
          ngày của issue GitHub đó. Chỉ có ở issue ĐÃ có (form tạo mới chưa có phiên). -->
-    <section v-if="canDetect" class="isb-sec">
+    <section v-if="canDetect" class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
       <Button
         variant="ghost"
         size="xs"
-        class="isb-detect"
+        class="-ml-1.5 gap-1 self-start text-muted-foreground [&_svg]:size-3"
         :disabled="detecting"
         :title="t('board.detect.hint')"
         @click="emit('detect')"
@@ -21,33 +27,50 @@
         {{ detecting ? t('board.detect.running') : t('board.detect.run') }}
       </Button>
     </section>
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('sessions.workspace.group.field.assignee') }}</div>
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">
+        {{ t('sessions.workspace.group.field.assignee') }}
+      </div>
       <AppSelect
         v-model="assignee"
-        class="isb-sel"
+        variant="ghost"
+        class="-ml-1.5"
         :options="assigneeOptions"
         :placeholder="t('board.field.none')"
         searchable
-        width="100%"
+        :width="GHOST_WIDTH"
       />
     </section>
 
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('board.field.type') }}</div>
-      <AppSelect v-model="kind" class="isb-sel" :options="kindOptions" width="100%" />
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">{{ t('board.field.type') }}</div>
+      <AppSelect
+        v-model="kind"
+        variant="ghost"
+        class="-ml-1.5"
+        :options="kindOptions"
+        :width="GHOST_WIDTH"
+      />
     </section>
 
-    <section v-if="showStatus" class="isb-sec">
-      <div class="isb-h">{{ t('sessions.workspace.group.field.status') }}</div>
-      <AppSelect v-model="status" class="isb-sel" :options="statusOptions" width="100%" />
+    <section v-if="showStatus" class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">
+        {{ t('sessions.workspace.group.field.status') }}
+      </div>
+      <AppSelect
+        v-model="status"
+        variant="ghost"
+        class="-ml-1.5"
+        :options="statusOptions"
+        :width="GHOST_WIDTH"
+      />
     </section>
 
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('board.field.sprint') }}</div>
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">{{ t('board.field.sprint') }}</div>
       <Input
         v-model="sprint"
-        class="isb-in"
+        :class="GHOST_INPUT"
         :list="`${uid}-sprint`"
         :placeholder="t('board.field.none')"
         maxlength="80"
@@ -57,30 +80,33 @@
       </datalist>
     </section>
 
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('board.field.startDate') }}</div>
-      <Input v-model="startDate" class="isb-in" type="date" :max="dueDate || undefined" />
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">
+        {{ t('board.field.startDate') }}
+      </div>
+      <Input v-model="startDate" :class="GHOST_INPUT" type="date" :max="dueDate || undefined" />
     </section>
 
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('board.field.dueDate') }}</div>
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">{{ t('board.field.dueDate') }}</div>
       <Input
         v-model="dueDate"
-        class="isb-in"
-        :class="{ 'isb-overdue': overdueDays > 0 }"
+        :class="[GHOST_INPUT, { 'text-destructive': overdueDays > 0 }]"
         type="date"
         :min="startDate || undefined"
       />
-      <p v-if="overdueDays > 0" class="isb-hint isb-overdue">
+      <p v-if="overdueDays > 0" class="m-0 text-xs text-destructive">
         {{ t('board.field.overdue', { n: overdueDays }) }}
       </p>
     </section>
 
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('board.field.milestone') }}</div>
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">
+        {{ t('board.field.milestone') }}
+      </div>
       <Input
         v-model="milestone"
-        class="isb-in"
+        :class="GHOST_INPUT"
         :list="`${uid}-milestone`"
         :placeholder="t('board.field.none')"
         maxlength="80"
@@ -90,39 +116,44 @@
       </datalist>
     </section>
 
-    <section class="isb-sec">
-      <div class="isb-h">{{ t('board.field.parent') }}</div>
+    <section class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2">
+      <div class="text-xs font-semibold text-muted-foreground">{{ t('board.field.parent') }}</div>
       <AppSelect
         v-model="parentId"
-        class="isb-sel"
+        variant="ghost"
+        class="-ml-1.5"
         :options="parentOptions"
         searchable
         :empty-label="t('board.parent.none')"
-        width="100%"
+        :width="GHOST_WIDTH"
       />
     </section>
 
-    <section v-for="kindKey in LINK_KINDS" :key="kindKey" class="isb-sec">
-      <div class="isb-h">
+    <section
+      v-for="kindKey in LINK_KINDS"
+      :key="kindKey"
+      class="flex min-w-0 flex-col gap-0.5 border-b border-border py-2"
+    >
+      <div class="text-xs font-semibold text-muted-foreground">
         {{ kindKey === 'issue' ? t('board.field.issueLinks') : t('board.field.prLinks') }}
       </div>
       <div
         v-for="url in linksOf(kindKey)"
         :key="url"
-        class="isb-link group"
+        class="group -ml-1.5 flex min-h-ctrl-xs cursor-pointer items-center gap-1.5 rounded-sm pl-1.5 text-sm text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
         role="link"
         tabindex="0"
         :title="url"
         @click="openLink(url)"
         @keydown.enter.prevent="openLink(url)"
       >
-        <GitPullRequest v-if="kindKey === 'pr'" class="isb-link-ic" />
-        <CircleDot v-else class="isb-link-ic" />
+        <GitPullRequest v-if="kindKey === 'pr'" class="size-3.5 flex-none text-success" />
+        <CircleDot v-else class="size-3.5 flex-none text-success" />
         <span class="min-w-0 flex-1 truncate">{{ linkLabel(url) }}</span>
         <Button
           variant="ghost"
           size="iconSm"
-          class="isb-link-x opacity-0 group-hover:opacity-100"
+          class="opacity-0 group-hover:opacity-100 [&_svg]:size-3"
           :title="t('board.link.remove')"
           :aria-label="t('board.link.remove')"
           @click.stop="removeLink(kindKey, url)"
@@ -132,13 +163,14 @@
       </div>
       <Input
         v-model="linkDraft[kindKey]"
-        class="isb-in"
-        :class="{ 'isb-bad': linkError[kindKey] }"
+        :class="[GHOST_INPUT, { 'border-destructive': linkError[kindKey] }]"
         :placeholder="kindKey === 'issue' ? t('board.link.addIssuePh') : t('board.link.addPrPh')"
         @keydown.enter.prevent="addLink(kindKey)"
         @blur="addLink(kindKey)"
       />
-      <p v-if="linkError[kindKey]" class="isb-hint isb-overdue">{{ t('board.link.invalid') }}</p>
+      <p v-if="linkError[kindKey]" class="m-0 text-xs text-destructive">
+        {{ t('board.link.invalid') }}
+      </p>
     </section>
   </div>
 </template>
@@ -174,6 +206,13 @@ withDefaults(
 )
 
 const emit = defineEmits<{ detect: [] }>()
+
+// Control "ghost" kiểu sidebar GitHub: giá trị đọc như chữ thường, viền/nền chỉ hiện
+// khi hover/focus. Lùi trái 6px (`-ml-1.5`) + nới bề ngang đúng 6px để chữ của giá
+// trị thẳng hàng với nhãn section phía trên.
+const GHOST_WIDTH = 'calc(100% + 0.375rem)'
+const GHOST_INPUT =
+  '-ml-1.5 w-[calc(100%+0.375rem)] border-transparent bg-transparent pl-1.5 shadow-none hover:bg-accent focus-visible:border-input focus-visible:bg-transparent'
 
 const status = defineModel<BoardItemStatus>('status', { required: true })
 const assignee = defineModel<string>('assignee', { required: true })
@@ -248,98 +287,3 @@ function linkLabel(url: string): string {
   }
 }
 </script>
-
-<style scoped>
-.isb-stack {
-  display: flex;
-  flex-direction: column;
-}
-.isb-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 16px;
-}
-/* Section kiểu GitHub: hairline ngăn giữa, không khung quanh từng field. */
-.isb-sec {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 0;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.isb-stack .isb-sec:first-child {
-  padding-top: 0;
-}
-.isb-stack .isb-sec:last-child {
-  box-shadow: none;
-}
-.isb-detect {
-  align-self: flex-start;
-  gap: 4px;
-  margin-left: -6px;
-  color: var(--muted-foreground);
-}
-.isb-h {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--muted-foreground);
-}
-/* Control "ghost": giá trị đọc như chữ thường, viền/nền chỉ hiện khi hover/focus —
-   cách GitHub hiện field trong sidebar. :deep vì trigger nằm trong AppSelect. */
-.isb-sel :deep(.aseltrigger),
-.isb-in {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  padding-left: 6px;
-  margin-left: -6px;
-  width: calc(100% + 6px);
-}
-.isb-sel :deep(.aseltrigger:hover),
-.isb-in:hover {
-  background: var(--accent-wash);
-}
-.isb-in:focus-visible {
-  border-color: var(--input);
-  background: transparent;
-}
-.isb-overdue {
-  color: var(--destructive);
-}
-.isb-bad {
-  border-color: var(--destructive);
-}
-.isb-hint {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.isb-link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  margin-left: -6px;
-  padding: 0 0 0 6px;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--foreground);
-  cursor: pointer;
-}
-.isb-link:hover {
-  background: var(--accent-wash);
-}
-.isb-link:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.isb-link-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--success);
-}
-</style>

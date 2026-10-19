@@ -1,48 +1,41 @@
 <template>
-  <div class="smodels">
+  <div class="flex flex-col gap-3">
     <SettingsPaneHeader
       :title="t('settingsModels.heading')"
       :subtitle="t('settingsModels.intro')"
     />
 
-    <SettingsSeg v-model="activeTab" :options="tabOptions" class="smtabs" />
+    <SettingsSeg v-model="activeTab" :options="tabOptions" class="self-start" />
 
     <!-- ── Accounts tab: credentials per provider + custom endpoints ───────── -->
-    <div v-show="activeTab === 'accounts'" class="smgroup">
+    <div v-show="activeTab === 'accounts'" class="flex flex-col gap-3">
       <!-- ── Anthropic card (OAuth + advanced API key) ─────────────────────── -->
-      <div class="pcard">
-        <div class="pcardtop">
-          <span class="rx">
-            <Icon
-              name="agents"
-              style="width: var(--icon-md); height: var(--icon-md); color: var(--blue)"
-            />
-          </span>
-          <div class="pcardinfo">
-            <div class="rt">{{ t('settingsModels.anthropic.name') }}</div>
-            <div class="rd">{{ t('settingsModels.anthropic.models') }}</div>
-          </div>
-          <span class="chip pcardstatus">
-            <span
-              class="pcarddot"
-              :style="{ background: anthropicConnected ? 'var(--green)' : 'var(--textFaint)' }"
-            />
-            {{ anthropicHeaderStatus }}
-          </span>
-        </div>
+      <Card class="gap-2.5 p-3.5 shadow-none">
+        <SettingsProviderCardHeader
+          :title="t('settingsModels.anthropic.name')"
+          :desc="t('settingsModels.anthropic.models')"
+          :status="anthropicHeaderStatus"
+          :connected="anthropicConnected"
+        >
+          <template #icon>
+            <Icon name="agents" class="size-4 text-info" />
+          </template>
+        </SettingsProviderCardHeader>
 
         <!-- Empty state: prominent CTA -->
         <template v-if="anthropicAccounts.length === 0">
-          <Button type="button" class="pcardcta" variant="default" @click="oauthOpen = true">
-            <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Button type="button" class="w-full" variant="default" @click="oauthOpen = true">
+            <Icon name="agents" class="size-3.5" />
             {{ t('settingsModels.anthropic.signIn') }}
           </Button>
-          <div class="fd pcardhint">{{ t('settingsModels.anthropic.signInHint') }}</div>
+          <div class="text-center text-sm text-dim">
+            {{ t('settingsModels.anthropic.signInHint') }}
+          </div>
         </template>
 
         <!-- Account list -->
         <template v-else>
-          <div class="pcardlist">
+          <div class="flex flex-col gap-2">
             <SettingsAccountRow
               v-for="acc in anthropicAccounts"
               :key="acc.id"
@@ -60,51 +53,64 @@
           </div>
           <Button
             type="button"
-            class="pcardadd"
+            class="self-start border-dashed"
             variant="outline"
             size="sm"
             @click="oauthOpen = true"
           >
-            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="plus" class="size-3.5" />
             {{ t('settingsModels.account.addAnother') }}
           </Button>
         </template>
 
         <!-- Advanced — API key -->
-        <div class="smadvanced">
-          <button class="smadvtoggle" type="button" @click="advancedOpen = !advancedOpen">
-            <Icon
-              name="chev"
-              class="smchev"
-              :class="{ open: advancedOpen }"
-              style="width: var(--icon-xs); height: var(--icon-xs)"
-            />
-            {{ t('settingsModels.anthropic.advancedToggle') }}
-          </button>
-          <div v-if="advancedOpen" class="smadvbody">
-            <div class="fd">{{ t('settingsModels.anthropic.advancedHint') }}</div>
+        <Separator />
+        <Collapsible v-model:open="advancedOpen">
+          <CollapsibleTrigger as-child>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              class="-ml-2 gap-1.5 font-normal text-dim hover:bg-transparent hover:text-foreground"
+            >
+              <Icon
+                name="chev"
+                class="size-3 transition-transform"
+                :class="{ 'rotate-90': advancedOpen }"
+              />
+              {{ t('settingsModels.anthropic.advancedToggle') }}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent class="mt-2.5 flex flex-col gap-2">
+            <div class="text-sm text-dim">{{ t('settingsModels.anthropic.advancedHint') }}</div>
             <Input
               v-model="apiKeyLabel"
               :placeholder="t('settingsModels.form.labelOptional')"
               class="flex-1"
             />
-            <div class="keyrow">
+            <div class="flex items-center gap-2">
+              <!-- mono-ok: API key -->
               <Input
                 v-model="apiKeyValue"
                 :type="apiKeyReveal ? 'text' : 'password'"
                 placeholder="sk-ant-…"
-                class="mono flex-1"
+                class="flex-1 font-mono"
                 @keydown.enter="onAddApiKey"
               />
-              <span
-                class="keyeye"
+              <Button
+                type="button"
+                variant="ghost"
+                size="iconSm"
                 :title="
+                  apiKeyReveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')
+                "
+                :aria-label="
                   apiKeyReveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')
                 "
                 @click="apiKeyReveal = !apiKeyReveal"
               >
-                👁
-              </span>
+                <Icon :name="apiKeyReveal ? 'eye-off' : 'eye'" />
+              </Button>
               <Button
                 type="button"
                 :disabled="!apiKeyValue.trim() || apiKeyBusy"
@@ -115,10 +121,16 @@
                 {{ t('settingsModels.form.addKey') }}
               </Button>
             </div>
-            <div v-if="apiKeyError" class="pcarderror">{{ apiKeyError }}</div>
-          </div>
-        </div>
-      </div>
+            <Alert
+              v-if="apiKeyError"
+              variant="destructive"
+              class="border-destructive/50 bg-destructive/10 px-2.5 py-1.5"
+            >
+              <AlertDescription>{{ apiKeyError }}</AlertDescription>
+            </Alert>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
 
       <!-- ── OpenAI + Google ───────────────────────────────────────────────── -->
       <SettingsProviderCard
@@ -136,18 +148,17 @@
       />
 
       <!-- ── Custom endpoints ──────────────────────────────────────────────── -->
-      <div class="pcard">
-        <div class="pcardtop">
-          <span class="rx">
-            <Icon name="conn" style="width: var(--icon-md); height: var(--icon-md)" />
-          </span>
-          <div class="pcardinfo">
-            <div class="rt">{{ t('settingsModels.custom.name') }}</div>
-            <div class="rd">{{ t('settingsModels.custom.models') }}</div>
-          </div>
-        </div>
+      <Card class="gap-2.5 p-3.5 shadow-none">
+        <SettingsProviderCardHeader
+          :title="t('settingsModels.custom.name')"
+          :desc="t('settingsModels.custom.models')"
+        >
+          <template #icon>
+            <Icon name="conn" class="size-4" />
+          </template>
+        </SettingsProviderCardHeader>
 
-        <div v-if="customAccounts.length" class="pcardlist">
+        <div v-if="customAccounts.length" class="flex flex-col gap-2">
           <SettingsAccountRow
             v-for="acc in customAccounts"
             :key="acc.id"
@@ -163,38 +174,46 @@
           />
         </div>
 
-        <div v-if="customFormOpen" class="smcustomform">
+        <div v-if="customFormOpen" class="flex flex-col gap-2">
           <CustomProviderForm
             v-model="customDraft"
             :submit-label="t('settingsModels.custom.addEndpoint')"
             @submit="onAddCustom"
             @cancel="customFormOpen = false"
           />
-          <div v-if="customError" class="pcarderror">{{ customError }}</div>
+          <Alert
+            v-if="customError"
+            variant="destructive"
+            class="border-destructive/50 bg-destructive/10 px-2.5 py-1.5"
+          >
+            <AlertDescription>{{ customError }}</AlertDescription>
+          </Alert>
         </div>
         <Button
           v-else
           type="button"
-          class="pcardadd"
+          class="self-start border-dashed"
           variant="outline"
           size="sm"
           @click="customFormOpen = true"
         >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="plus" class="size-3.5" />
           {{ t('settingsModels.custom.add') }}
         </Button>
-      </div>
+      </Card>
     </div>
 
     <!-- ── Models tab: AI authoring default + per-provider catalog ─────────── -->
-    <div v-show="activeTab === 'models'" class="smgroup">
-      <div class="smauthor">
-        <div class="smauthorinfo">
-          <div class="smauthort">{{ t('settings.aiAuthoring.title') }}</div>
-          <div class="smauthord">{{ t('settings.aiAuthoring.desc') }}</div>
+    <div v-show="activeTab === 'models'" class="flex flex-col gap-3">
+      <Card class="flex-row items-center gap-3 px-3.5 py-2.5 shadow-none">
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-foreground">
+            {{ t('settings.aiAuthoring.title') }}
+          </div>
+          <div class="mt-0.5 text-xs text-dim">{{ t('settings.aiAuthoring.desc') }}</div>
         </div>
         <AiModelPicker />
-      </div>
+      </Card>
       <SettingsProviderModels />
     </div>
 
@@ -234,8 +253,6 @@ import SettingsProviderModels from '~/components/settings/SettingsProviderModels
 import AiModelPicker from '~/components/common/AiModelPicker.vue'
 import SettingsSeg from '~/components/settings/SettingsSeg.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 const EMPTY_CUSTOM: CustomProviderInput = {
   label: '',
@@ -421,156 +438,3 @@ const onOauthConnected = (account: ProviderAccount) => {
   reauthAccountId.value = null
 }
 </script>
-
-<style scoped>
-.smodels {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-/* Tab strip sits left-aligned under the header, not stretched full width. */
-.smtabs {
-  align-self: flex-start;
-}
-/* Keep the card spacing the parent flex gave the cards before they were grouped. */
-.smgroup {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-/* AI-authoring model row — compact card strip trên đầu tab Models. */
-.smauthor {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.smauthorinfo {
-  flex: 1;
-  min-width: 0;
-}
-.smauthort {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-}
-.smauthord {
-  font-size: 11.5px;
-  color: var(--textDim);
-  margin-top: 2px;
-}
-
-/* Card surface (shared visual with SettingsProviderCard) */
-.pcard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.pcardtop {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.pcardtop .rx {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-sm);
-  display: grid;
-  place-items: center;
-  background: var(--bgActive);
-  color: var(--textMuted);
-  flex: 0 0 auto;
-}
-.pcardinfo {
-  flex: 1;
-  min-width: 0;
-}
-.pcardinfo .rt {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.pcardinfo .rd {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  margin-top: 2px;
-}
-.pcardstatus {
-  flex: 0 0 auto;
-}
-.pcarddot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.pcardlist {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pcardcta {
-  justify-content: center;
-  width: 100%;
-}
-.pcardhint {
-  text-align: center;
-}
-.pcardadd {
-  align-self: flex-start;
-  border-style: dashed;
-}
-.pcarderror {
-  border-radius: var(--r-sm);
-  padding: 6px 10px;
-  font-size: 1em;
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-
-/* Advanced — API key (collapsible) */
-.smadvanced {
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-}
-.smadvtoggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  font-size: 1em;
-  cursor: pointer;
-  padding: 0;
-}
-.smadvtoggle:hover {
-  color: var(--text);
-}
-.smchev {
-  transition: transform 0.15s;
-}
-.smchev.open {
-  transform: rotate(90deg);
-}
-.smadvbody {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-}
-.smcustomform {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-</style>

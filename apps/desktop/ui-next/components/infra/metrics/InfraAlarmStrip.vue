@@ -1,42 +1,59 @@
 <template>
-  <div class="ias icard" :class="`st-${state}`">
-    <div class="ias-sum" :class="`st-${state}`">
-      <Icon :name="ICON[state]" class="ias-sum-ic" />
-      <span class="ias-sum-t">{{ t(`infra.monitoring.state.${state}`) }}</span>
-      <span v-if="state === 'alarm'" class="ias-sum-n">
+  <!-- Da card dùng chung của khu hạ tầng; viền đổi màu theo trạng thái tổng. -->
+  <Card
+    class="flex-row flex-wrap items-center gap-2.5 px-2.5 py-1.5"
+    :class="[STATE_TEXT[state], STATE_BORDER[state]]"
+  >
+    <div class="inline-flex shrink-0 items-center gap-1.5" :class="STATE_TEXT[state]">
+      <Icon :name="ICON[state]" class="size-3.5" />
+      <span class="text-sm font-semibold">{{ t(`infra.monitoring.state.${state}`) }}</span>
+      <span v-if="state === 'alarm'" class="text-xs text-dim">
         {{ t('infra.monitoring.alarm.firing', { n: firingCount }) }}
       </span>
-      <span v-else-if="!loaded" class="ias-sum-n">{{ t('infra.monitoring.notLoaded') }}</span>
-      <span v-if="truncated" class="ias-sum-n">{{ t('infra.monitoring.alarm.truncated') }}</span>
+      <span v-else-if="!loaded" class="text-xs text-dim">
+        {{ t('infra.monitoring.notLoaded') }}
+      </span>
+      <span v-if="truncated" class="text-xs text-dim">
+        {{ t('infra.monitoring.alarm.truncated') }}
+      </span>
     </div>
 
-    <ul v-if="alarms.length > 0" class="ias-list">
+    <ul v-if="alarms.length > 0" class="m-0 flex min-w-0 list-none flex-wrap gap-1.5 p-0">
       <li v-for="a in ordered" :key="a.name">
-        <button
-          class="ias-chip"
-          :class="`st-${a.state}`"
-          type="button"
+        <Button
+          variant="outline"
+          size="xs"
+          class="h-auto gap-1 rounded-sm px-2 py-0.5 font-normal shadow-none [&_svg]:size-3"
+          :class="STATE_TEXT[a.state]"
           :title="a.stateReason || a.name"
           @click="emit('open-history', a.name)"
         >
-          <Icon :name="ICON[a.state]" class="ias-ic" />
-          <span class="ias-name">{{ a.name }}</span>
-          <span class="ias-state">{{ t(`infra.monitoring.state.${a.state}`) }}</span>
-          <span v-if="sinceOf(a)" class="ias-since">{{ sinceOf(a) }}</span>
-        </button>
+          <Icon :name="ICON[a.state]" />
+          <span class="text-muted-foreground">{{ a.name }}</span>
+          <span class="font-semibold">{{ t(`infra.monitoring.state.${a.state}`) }}</span>
+          <span v-if="sinceOf(a)" class="text-faint tabular-nums">{{ sinceOf(a) }}</span>
+        </Button>
       </li>
     </ul>
-    <p v-else-if="loaded" class="ihint">{{ t('infra.monitoring.alarm.noneForTarget') }}</p>
+    <p v-else-if="loaded" class="mt-1.5 text-xs text-faint">
+      {{ t('infra.monitoring.alarm.noneForTarget') }}
+    </p>
 
     <!-- Hai con số ở CUỐI, mờ, không bấm được nhầm thành sự cố. Chúng trả lời câu
-         "thế còn những cảnh báo khác thì sao" mà không đổ chúng lên màn. -->
-    <span v-if="loaded && scalingCount > 0" class="ias-aside">
-      {{ t('infra.monitoring.alarm.scalingCount', { n: scalingCount }) }}
+         "thế còn những cảnh báo khác thì sao" mà không đổ chúng lên màn. Phần đã tách
+         ra: mờ, cuối dòng, không mang màu trạng thái nào. -->
+    <span
+      v-if="loaded && (scalingCount > 0 || otherCount > 0)"
+      class="ml-auto flex gap-2.5 text-xs text-faint"
+    >
+      <span v-if="scalingCount > 0">
+        {{ t('infra.monitoring.alarm.scalingCount', { n: scalingCount }) }}
+      </span>
+      <span v-if="otherCount > 0">
+        {{ t('infra.monitoring.alarm.otherCount', { n: otherCount }) }}
+      </span>
     </span>
-    <span v-if="loaded && otherCount > 0" class="ias-aside">
-      {{ t('infra.monitoring.alarm.otherCount', { n: otherCount }) }}
-    </span>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -81,6 +98,20 @@ const { t } = useI18n()
 
 const ICON: Record<AlarmState, string> = { alarm: 'alert', ok: 'check', insufficient: 'minus' }
 
+/** Ba màu cho ba trạng thái — chữ và icon đi kèm nên màu chỉ là lớp thứ hai. */
+const STATE_TEXT: Record<AlarmState, string> = {
+  alarm: 'text-destructive',
+  ok: 'text-primary',
+  insufficient: 'text-dim',
+}
+
+/** Viền của cả dải theo trạng thái tổng; chưa-biết giữ viền mặc định. */
+const STATE_BORDER: Record<AlarmState, string> = {
+  alarm: 'border-destructive/40',
+  ok: 'border-primary/40',
+  insufficient: '',
+}
+
 /** Đang báo lên đầu, rồi tới chưa-biết, rồi mới tới bình thường. Trong cùng nhóm
  *  thì theo tên — thứ tự ổn định giữa hai lần nạp là thứ tự đọc được. */
 const RANK: Record<AlarmState, number> = { alarm: 0, insufficient: 1, ok: 2 }
@@ -96,118 +127,3 @@ function sinceOf(a: WireAlarm): string {
   return a.stateUpdatedAt === null ? '' : formatAxisTime(a.stateUpdatedAt, 86400)
 }
 </script>
-
-<style scoped>
-.ias {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 6px 10px;
-  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — xem app-shell.css. Bốn khối
-     của màn này TỪNG tự khai lại cùng một bộ, với ba nền khác nhau (`--bgSubtle`,
-     `--bgEl`), nên chúng đọc ra thành ba loại bề mặt trong cùng một màn. */
-}
-
-.ias-sum {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-
-.ias-sum-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.ias-sum-t {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 650;
-}
-
-.ias-sum-n {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ias-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 0;
-}
-
-.ias-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-
-.ias-chip:hover {
-  background: var(--bgHover);
-}
-
-.ias-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.ias-name {
-  color: var(--textMuted);
-}
-
-.ias-state {
-  font-weight: 600;
-}
-
-.ias-since {
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Phần đã tách ra: mờ, cuối dòng, không mang màu trạng thái nào. */
-.ias-aside {
-  margin-left: auto;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ias-aside + .ias-aside {
-  margin-left: 0;
-}
-
-/* Ba màu cho ba trạng thái — chữ và icon đi kèm nên màu chỉ là lớp thứ hai. */
-.st-alarm {
-  color: var(--danger);
-}
-
-.st-ok {
-  color: var(--accent);
-}
-
-.st-insufficient {
-  color: var(--textDim);
-}
-
-.ias.st-alarm {
-  border-color: var(--dangerBorder);
-}
-
-.ias.st-ok {
-  border-color: var(--accentBorder);
-}
-</style>

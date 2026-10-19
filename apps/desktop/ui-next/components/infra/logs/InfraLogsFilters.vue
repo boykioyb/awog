@@ -1,29 +1,42 @@
 <template>
-  <div class="lfl">
-    <div class="lfl-row">
-      <div class="lfl-field">
-        <Icon name="search" class="lfl-field-ic" />
+  <div class="flex flex-col gap-1.5">
+    <div class="flex items-center gap-2">
+      <div class="relative min-w-0 flex-auto">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-faint"
+        />
         <Input
           :model-value="quick"
           type="search"
           spellcheck="false"
+          class="h-ctrl-sm pl-8"
           :placeholder="t('infra.logs.filters.quickPh')"
           @update:model-value="onQuick"
         />
       </div>
-      <div class="lfl-levels" role="group" :aria-label="t('infra.logs.filters.level')">
-        <button
+      <!-- Chọn MỘT mức — ToggleGroup. Bấm lại ô đang bật KHÔNG bỏ chọn (reka gửi giá
+           trị rỗng, `onLevel` bỏ qua) nên luôn có đúng một mức, "Tất cả" là `ALL`. -->
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        :spacing="1"
+        class="shrink-0"
+        :model-value="level || ALL"
+        :aria-label="t('infra.logs.filters.level')"
+        @update:model-value="onLevel"
+      >
+        <ToggleGroupItem
           v-for="lv in LEVELS"
           :key="lv || 'all'"
-          class="lfl-level"
-          :class="[{ on: level === lv }, lv ? `lv-${lv.toLowerCase()}` : '']"
-          type="button"
-          @click="emit('update:level', lv)"
+          :value="lv || ALL"
+          class="h-ctrl-xs min-w-0 rounded-sm px-2 text-xs font-normal text-dim shadow-none"
+          :class="LEVEL_ON[lv]"
         >
           {{ lv || t('infra.logs.filters.all') }}
-        </button>
-      </div>
-      <span class="lfl-count">
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <span class="shrink-0 text-xs text-dim tabular-nums">
         {{ t('infra.logs.filters.showing', { shown: shown, total: total }) }}
       </span>
     </div>
@@ -31,21 +44,27 @@
     <!-- Facet: bấm một giá trị ⇒ chèn `filter <trường> = "giá trị"` vào câu lệnh.
          Đây là đường NGẮN NHẤT từ "tôi thấy một giá trị lạ" tới "cho tôi mọi dòng
          có giá trị đó" — không phải tự gõ lại tên trường. -->
-    <div v-if="facets.length > 0" class="lfl-facets">
-      <div v-for="f in facets" :key="f.field" class="lfl-facet">
-        <span class="lfl-facet-field">{{ f.field }}</span>
-        <button
+    <div v-if="facets.length > 0" class="flex flex-col gap-1">
+      <div v-for="f in facets" :key="f.field" class="flex flex-wrap items-center gap-1">
+        <!-- mono-ok: tên trường của bản ghi log, không phải câu văn -->
+        <span class="min-w-24 font-mono text-xs text-dim">{{ f.field }}</span>
+        <Button
           v-for="v in f.values"
           :key="v.value"
-          class="lfl-chip"
-          :class="{ on: active?.field === f.field && active.value === v.value }"
-          type="button"
+          variant="outline"
+          size="xs"
+          class="block h-auto max-w-65 truncate rounded-sm px-2 py-0.5 font-normal shadow-none"
+          :class="
+            active?.field === f.field && active.value === v.value
+              ? 'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary'
+              : 'text-muted-foreground'
+          "
           :title="t('infra.logs.filters.insertHint')"
           @click="emit('insert', f.field, v.value)"
         >
           {{ v.value }}
-          <span class="lfl-chip-n">{{ v.count }}</span>
-        </button>
+          <span class="ml-1 text-faint tabular-nums">{{ v.count }}</span>
+        </Button>
       </div>
     </div>
   </div>
@@ -82,141 +101,26 @@ const active = computed(() => props.active)
 function onQuick(v: string): void {
   emit('update:quick', v)
 }
+
+type Level = (typeof LEVELS)[number]
+
+/** Giá trị đại diện "Tất cả" trong ToggleGroup — reka coi chuỗi rỗng là bỏ chọn. */
+const ALL = 'ALL'
+
+/** Màu trạng thái của ô đang bật: lỗi đỏ, cảnh báo vàng, còn lại accent-tint. */
+const LEVEL_ON: Record<Level, string> = {
+  '': 'data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:text-primary',
+  ERROR:
+    'data-[state=on]:border-destructive data-[state=on]:bg-selected data-[state=on]:text-destructive',
+  WARN: 'data-[state=on]:border-warning data-[state=on]:bg-selected data-[state=on]:text-warning',
+  INFO: 'data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:text-primary',
+  DEBUG:
+    'data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:text-primary',
+}
+
+/** Bấm lại ô đang bật thì reka gửi giá trị rỗng — bỏ qua để luôn có một mức. */
+function onLevel(v: unknown): void {
+  if (typeof v !== 'string' || v === '') return
+  emit('update:level', v === ALL ? '' : (v as Level))
+}
 </script>
-
-<style scoped>
-.lfl {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.lfl-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.lfl-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-}
-
-.lfl-field-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-
-.lfl-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-}
-
-.lfl-levels {
-  display: flex;
-  gap: 3px;
-  flex: 0 0 auto;
-}
-
-.lfl-level {
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-
-.lfl-level.on {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-  background: var(--accentDim);
-}
-
-.lfl-level.lv-error.on {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.lfl-level.lv-warn.on {
-  border-color: var(--amber);
-  color: var(--amber);
-}
-
-.lfl-count {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-
-.lfl-facets {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.lfl-facet {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.lfl-facet-field {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  min-width: 96px;
-  /* mono-ok: tên trường của bản ghi log, không phải câu văn */
-  font-family: var(--code);
-}
-
-.lfl-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lfl-chip.on {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-  background: var(--accentDim);
-}
-
-.lfl-chip-n {
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-</style>

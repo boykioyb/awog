@@ -6,9 +6,9 @@
     :width="520"
     @close="emit('close')"
   >
-    <div class="tpd">
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.saveDialog.sourceProject') }}</label>
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.saveDialog.sourceProject') }}</Label>
         <AppSelect
           v-model="pickedProjectId"
           :options="projectOptions"
@@ -17,36 +17,38 @@
         />
       </div>
 
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.saveDialog.name') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.saveDialog.name') }}</Label>
         <Input v-model="name" :placeholder="t('templates.saveDialog.namePh')" />
       </div>
 
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.saveDialog.description') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.saveDialog.description') }}</Label>
+        <Textarea
           v-model="description"
-          class="tpd-input tpd-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('templates.saveDialog.descPh')"
         />
       </div>
 
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.saveDialog.include') }}</label>
-        <div class="tpd-kinds">
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.saveDialog.include') }}</Label>
+        <div class="flex flex-col gap-0.5">
           <label
             v-for="k in KIND_ORDER"
             :key="k"
-            class="tpd-kind"
-            :class="{ on: includedKinds.has(k) }"
+            class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
+            :class="includedKinds.has(k) ? 'bg-selected' : 'hover:bg-accent'"
           >
-            <input type="checkbox" :checked="includedKinds.has(k)" @change="toggleKind(k)" />
-            <span class="tpd-kind-label">{{ t('templates.kind.' + k) }}</span>
-            <span class="chip tpd-count">{{ countByKind[k] }}</span>
+            <Checkbox :model-value="includedKinds.has(k)" @update:model-value="toggleKind(k)" />
+            <span class="text-sm font-medium text-foreground">{{ t('templates.kind.' + k) }}</span>
+            <Badge variant="outline" class="ml-auto rounded-sm tabular-nums text-muted-foreground">
+              {{ countByKind[k] }}
+            </Badge>
           </label>
         </div>
-        <div class="tpd-hint">{{ t('templates.saveDialog.hint') }}</div>
+        <div class="text-xs text-dim">{{ t('templates.saveDialog.hint') }}</div>
       </div>
     </div>
 
@@ -61,8 +63,7 @@
 
 <script setup lang="ts">
 // Save-as-template dialog — export a source project's project-tier entities into
-// a new template bundle. Port of the old UI SaveAsTemplateDialog, rendered in
-// prototype CSS inside LibraryEntityModal. Project-tier entities are resolved via
+// a new template bundle, rendered inside LibraryEntityModal. Project-tier entities are resolved via
 // the store's resolveProjectEntities (entity-list RPCs) so this component never
 // imports the sibling entity stores.
 import { computed, ref, watch } from 'vue'
@@ -163,79 +164,3 @@ const onSave = async () => {
   }
 }
 </script>
-
-<style scoped>
-.tpd {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.tpd-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tpd-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.tpd-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.tpd-input:focus {
-  border-color: var(--accent);
-}
-.tpd-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.tpd-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.tpd-kinds {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.tpd-kind {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.tpd-kind:hover {
-  background: var(--bgHover);
-}
-.tpd-kind.on {
-  background: var(--bgActive);
-}
-.tpd-kind input {
-  accent-color: var(--accent);
-}
-.tpd-kind-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.tpd-count {
-  margin-left: auto;
-}
-</style>

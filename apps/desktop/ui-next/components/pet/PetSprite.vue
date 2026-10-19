@@ -1,9 +1,11 @@
 <template>
-  <div class="sprite-wrap" aria-hidden="true">
-    <div class="mirror" :class="{ flip: facing === 'left' }">
+  <div class="relative flex h-17 w-16.5 justify-center" aria-hidden="true">
+    <!-- Lật để quay mặt sang trái. An toàn với animation nền: nền vẽ trước, rồi cả phần
+         tử mới bị transform. -->
+    <div class="relative h-16 w-16.5" :class="{ '-scale-x-100': facing === 'left' }">
       <div class="sprite" :class="[rowClass, `pet-${sprite}`, sheetClass]" />
     </div>
-    <div class="shadow" :class="`is-${state}`" />
+    <div class="pet-shadow" :class="`is-${state}`" />
   </div>
 </template>
 
@@ -69,24 +71,9 @@ const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' :
 </script>
 
 <style scoped>
-.sprite-wrap {
-  position: relative;
-  width: 66px;
-  height: 68px;
-  display: flex;
-  justify-content: center;
-}
-
-.mirror {
-  position: relative;
-  width: 66px;
-  height: 64px;
-}
-/* Mirror to face the other way. Safe alongside the background animation: the
-   background is painted first, then the whole element is transformed. */
-.flip {
-  transform: scaleX(-1);
-}
+/* style-ok: sprite sheet — chọn hàng/khung bằng background-position + @keyframes chạy
+   khung (steps) và chuyển động thân; bóng đổ mờ dưới chân. Hình học là chính dữ liệu
+   ảnh (cell 66×64, số khung mỗi hàng), Tailwind không diễn đạt được. */
 
 /* Two animations run together on the sprite: one steps through the FRAMES
    (background-position), the other adds body MOTION (transform). They touch different
@@ -273,7 +260,7 @@ const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' :
 
 /* Grounding shadow — the artwork has none, and without it the pet looks pasted on
    top of the desktop rather than sitting on it. */
-.shadow {
+.pet-shadow {
   position: absolute;
   bottom: 0;
   width: 34px;
@@ -282,12 +269,12 @@ const sheetClass = computed(() => (SHEET_12.includes(props.sprite) ? 'sheet12' :
   background: rgba(0, 0, 0, 0.3);
   filter: blur(2px);
 }
-.shadow.is-offline {
+.pet-shadow.is-offline {
   opacity: 0.4;
 }
 /* The shadow tightens as the pet lifts — without it the bob reads as the whole
    sticker sliding up, not the animal pushing off the ground. */
-.shadow.is-working {
+.pet-shadow.is-working {
   animation: pet-shadow 0.35s ease-in-out infinite;
 }
 @keyframes pet-shadow {

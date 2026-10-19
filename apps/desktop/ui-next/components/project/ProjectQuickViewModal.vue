@@ -7,22 +7,36 @@
        useProjectActions flows. Launching an action closes the peek first so the
        action's own modal (z:100) isn't hidden behind this overlay (z:120). -->
   <Teleport to="body">
-    <div v-if="isOpen" class="ovl on projovl" @click.self="close">
-      <div class="projmodal">
-        <div class="projmodal-head">
-          <Icon
-            name="projects"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
-          <span class="projmodal-title">
+    <!-- Giữ overlay tự dựng (không Dialog reka): từ trong peek người dùng mở file qua
+         PreviewModal / hộp nhập dùng chung teleport ra body — Dialog modal của reka khoá
+         pointer-events của body nên các bề mặt đó sẽ không bấm được. -->
+    <!-- hook-ok: `.ovl.on` — OVERLAYS trong composables/useEmbeddedBrowser.ts -->
+    <div v-if="isOpen" class="ovl on" :class="OVERLAY" @click.self="close">
+      <div
+        class="flex h-[86vh] w-[min(1100px,95vw)] flex-col overflow-hidden rounded-lg border border-input bg-background shadow-lg"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="flex flex-none items-center gap-2 border-b bg-card px-3.5 py-2.5">
+          <Icon name="projects" class="size-3.5 text-primary" />
+          <span class="font-semibold">
             {{ project ? project.name : t('sessions.workspace.projectModal.title') }}
           </span>
-          <span style="flex: 1" />
-          <button class="projmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          <span class="flex-1" />
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-dim"
+            :title="t('common.close')"
+            :aria-label="t('common.close')"
+            @click="close"
+          >
+            <Icon name="x" class="size-3.5" />
+          </Button>
         </div>
-        <div class="projmodal-body">
+        <!-- ProjectDetail tự lo overflow (.dscroll / tab GH); ở đây chỉ chặn tràn khỏi
+             modal: flex cột + min-h-0 + overflow-hidden giống pane /projects. -->
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ProjectDetail
             v-if="project && view"
             :project="project"
@@ -37,7 +51,7 @@
             @install-template="onInstallTemplate"
             @imported="(n) => actions.onImported(n)"
           />
-          <div v-else class="fd" style="padding: 24px">
+          <div v-else class="p-6 text-sm text-dim">
             {{ t('sessions.workspace.projectModal.notFound') }}
           </div>
         </div>
@@ -107,6 +121,10 @@ import { useProjectView } from '~/composables/useProjectView'
 import { useProjectActions } from '~/composables/useProjectActions'
 import { useProjectsStore } from '~/stores/projects'
 import type { Project } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+
+// Scrim của peek: z-120 (trên shell, dưới modal hành động z-100+ khi peek đã đóng).
+const OVERLAY = 'fixed inset-0 z-120 flex items-center justify-center bg-black/55 p-6'
 
 const { t } = useI18n()
 const { isOpen, key, tab, ghNumber, target, close } = useProjectModal()
@@ -158,71 +176,3 @@ function onKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
-<style scoped>
-/* Center the modal (the base .ovl pins to the top for small dialogs). */
-.projovl {
-  align-items: center;
-  padding: 24px;
-  z-index: 120;
-}
-.projmodal {
-  width: min(1100px, 95vw);
-  height: 86vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-.projmodal-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bgEl);
-}
-.projmodal-title {
-  font-weight: 600;
-}
-.projmodal-x {
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  display: inline-flex;
-}
-.projmodal-x:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-/* ProjectDetail (.detail) fills the remaining space; its own .dscroll / GH tabs
-   handle overflow. Mirror the /projects detail pane constraints (flex column +
-   min-height:0 + overflow:hidden) so it never spills past the modal. */
-.projmodal-body {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-/* The issue/PR fullscreen drawer overlays its pane via position:absolute. On the
-   /projects page that context comes from `[data-page='projects'] .projmain`; the
-   modal lives on another page, so re-apply the same context + overlay here. */
-.projmodal-body :deep(.projmain) {
-  position: relative;
-}
-.projmodal-body :deep(.ghdrawer.full) {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  z-index: 5;
-}
-</style>

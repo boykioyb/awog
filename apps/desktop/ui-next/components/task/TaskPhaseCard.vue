@@ -1,70 +1,129 @@
 <template>
-  <div class="tpc" :class="{ active: isActive }">
-    <button class="tpc-head" :class="{ click: isInteractive }" @click="onToggle">
-      <span class="tpc-idx tnum">{{ String(index).padStart(2, '0') }}</span>
-      <span class="tpc-box" :class="boxClass">
-        <Icon :name="statusIcon" class="tpc-boxi" :class="{ spin: phase.status === 'running' }" />
+  <Card
+    class="gap-0 overflow-hidden rounded-lg py-0"
+    :class="{ 'border-primary ring-1 ring-primary': isActive }"
+  >
+    <!-- raw-ok: tiêu đề card cả dòng là vùng bấm mở/đóng, chứa nhiều cột nội dung -->
+    <button
+      class="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+      :class="isInteractive ? 'cursor-pointer hover:bg-accent' : 'cursor-default'"
+      @click="onToggle"
+    >
+      <span class="min-w-4 shrink-0 text-xs tabular-nums text-faint">
+        {{ String(index).padStart(2, '0') }}
       </span>
-      <div class="tpc-main">
-        <div class="tpc-agent">{{ agentName }}</div>
-        <div class="tpc-skill mono">{{ phase.skillName }}</div>
+      <span class="grid size-6 shrink-0 place-items-center rounded-sm" :class="boxClass">
+        <Icon
+          :name="statusIcon"
+          class="size-3.5"
+          :class="{ 'animate-pulse': phase.status === 'running' }"
+        />
+      </span>
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-base font-medium text-foreground">{{ agentName }}</div>
+        <div class="truncate font-mono text-xs text-dim">{{ phase.skillName }}</div>
       </div>
-      <span v-if="phase.runs.length > 1 && latestRun" class="chip tnum tpc-ver">
+      <Badge
+        v-if="phase.runs.length > 1 && latestRun"
+        variant="outline"
+        class="shrink-0 rounded-sm tabular-nums text-muted-foreground"
+      >
         {{ t('tasks.phase.version', { v: latestRun.version, n: phase.runs.length }) }}
-      </span>
-      <span
+      </Badge>
+      <Badge
         v-if="latestVerdict"
-        class="tag tpc-verdict"
-        :class="latestVerdict === 'pass' ? 'ok' : 'fail'"
+        variant="outline"
+        class="shrink-0 rounded-sm"
+        :class="
+          latestVerdict === 'pass'
+            ? 'border-success text-success'
+            : 'border-destructive/40 text-destructive'
+        "
       >
         {{ latestVerdict === 'pass' ? t('tasks.phase.verdictPass') : t('tasks.phase.verdictFail') }}
-      </span>
-      <span v-if="gate && failCount > 0" class="chip tnum tpc-loop">
+      </Badge>
+      <Badge
+        v-if="gate && failCount > 0"
+        variant="outline"
+        class="shrink-0 rounded-sm border-warning/40 tabular-nums text-warning"
+      >
         {{ t('tasks.phase.loop', { n: failCount, max: gate.maxIterations }) }}
-      </span>
-      <span v-if="phase.status === 'waiting_approval'" class="tag warn tpc-flag">
+      </Badge>
+      <Badge
+        v-if="phase.status === 'waiting_approval'"
+        variant="outline"
+        class="shrink-0 rounded-sm border-warning/40 text-warning"
+      >
         {{ t('tasks.phase.approvalNeeded') }}
-      </span>
-      <span v-if="phase.status === 'running'" class="tpc-live">
-        <Icon name="act" class="tpc-livei" />
+      </Badge>
+      <span
+        v-if="phase.status === 'running'"
+        class="inline-flex shrink-0 items-center gap-1 text-xs text-dim"
+      >
+        <Icon name="act" class="size-2.5 animate-pulse" />
         {{ t('tasks.phase.live') }}
       </span>
-      <span v-else-if="currentRun?.duration" class="tpc-dur tnum">{{ currentRun.duration }}</span>
-      <Icon v-if="isInteractive" name="chev" class="tpc-chv" :class="{ open: expanded }" />
+      <span v-else-if="currentRun?.duration" class="shrink-0 text-xs tabular-nums text-dim">
+        {{ currentRun.duration }}
+      </span>
+      <Icon
+        v-if="isInteractive"
+        name="chev"
+        class="size-3.5 shrink-0 text-dim transition-transform"
+        :class="{ 'rotate-180': expanded }"
+      />
     </button>
 
-    <div v-if="expanded && currentRun" class="tpc-body">
+    <div v-if="expanded && currentRun" class="border-t">
       <!-- run history -->
-      <div v-if="phase.runs.length > 1" class="tpc-history">
-        <span class="tpc-history-label">{{ t('tasks.phase.history') }}</span>
-        <button
+      <div
+        v-if="phase.runs.length > 1"
+        class="flex flex-wrap items-center gap-2 border-b bg-muted px-3 py-2"
+      >
+        <span class="text-xs text-dim">{{ t('tasks.phase.history') }}</span>
+        <Button
           v-for="r in phase.runs"
           :key="r.version"
-          class="chip tnum tpc-runchip"
-          :class="{ on: shownVersion === r.version, dead: r.status === 'superseded' }"
+          variant="outline"
+          size="xs"
+          class="gap-1 tabular-nums"
+          :class="[
+            shownVersion === r.version ? 'bg-accent text-foreground' : 'text-muted-foreground',
+            { 'text-faint line-through': r.status === 'superseded' },
+          ]"
           :title="r.triggeredBy === 'auto-loop' ? t('tasks.phase.autoLoopRun') : undefined"
           @click.stop="selectedVersion = r.version"
         >
-          <Icon v-if="r.triggeredBy === 'auto-loop'" name="refresh" class="tpc-rc-loop" />
+          <Icon v-if="r.triggeredBy === 'auto-loop'" name="refresh" />
           v{{ r.version }}
-          <span v-if="r.verdict === 'pass'" class="tpc-rc-ok">✓</span>
-          <span v-else-if="r.verdict === 'fail'" class="tpc-rc-fail">✗</span>
-        </button>
+          <span v-if="r.verdict === 'pass'" class="text-success">✓</span>
+          <span v-else-if="r.verdict === 'fail'" class="text-destructive">✗</span>
+        </Button>
       </div>
 
       <!-- tabs + actions -->
-      <div class="tpc-tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="tpc-tab"
-          :class="{ on: activeTab === tab.id }"
-          @click.stop="activeTab = tab.id"
-        >
-          {{ tab.label }}
-          <span v-if="tab.badge != null" class="chip tnum tpc-tabbadge">{{ tab.badge }}</span>
-        </button>
-        <span class="tpc-tabsp" />
+      <div class="flex items-center gap-3 border-b bg-muted px-3">
+        <Tabs :model-value="activeTab" @update:model-value="(v) => (activeTab = v as Tab)">
+          <TabsList class="h-9 justify-start gap-3 rounded-none bg-transparent p-0">
+            <TabsTrigger
+              v-for="tab in tabs"
+              :key="tab.id"
+              :value="tab.id"
+              class="h-9 gap-1.5 rounded-none border-b-2 border-transparent px-0 text-sm text-dim data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              @click.stop
+            >
+              {{ tab.label }}
+              <Badge
+                v-if="tab.badge != null"
+                variant="outline"
+                class="rounded-sm px-1.5 py-0 tabular-nums text-muted-foreground"
+              >
+                {{ tab.badge }}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <span class="flex-1" />
         <Button
           v-if="phase.status === 'waiting_approval'"
           variant="default"
@@ -81,25 +140,32 @@
       </div>
 
       <!-- tab body -->
-      <div class="tpc-tabbody">
-        <div v-if="activeTab === 'output'" class="codeblk">
+      <div class="p-3">
+        <div
+          v-if="activeTab === 'output'"
+          class="rounded-lg border bg-muted p-3 font-mono text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground"
+        >
           {{ currentRun.output || t('tasks.phase.noOutput') }}
         </div>
-        <div v-else-if="activeTab === 'trace'" class="tpc-trace">
+        <div v-else-if="activeTab === 'trace'" class="font-mono">
           <TaskTraceNode v-for="node in currentRun.trace" :key="node.id" :item="node" :depth="0" />
-          <div v-if="!currentRun.trace.length" class="tpc-empty">
+          <div v-if="!currentRun.trace.length" class="py-2 text-sm text-dim">
             {{ t('tasks.phase.noTrace') }}
           </div>
         </div>
-        <div v-else class="tpc-discuss">
-          <div v-if="currentRun.messages.length" class="tpc-msgs">
-            <div v-for="(m, i) in currentRun.messages" :key="i" class="tpc-msg" :class="m.role">
-              <span class="tpc-msg-role">{{ t(`tasks.phase.role.${m.role}`) }}</span>
-              <span class="tpc-msg-text">{{ m.text }}</span>
+        <div v-else>
+          <div v-if="currentRun.messages.length" class="mb-3 flex flex-col gap-2">
+            <div v-for="(m, i) in currentRun.messages" :key="i" class="flex flex-col gap-1">
+              <span class="text-xs" :class="m.role === 'user' ? 'text-primary' : 'text-dim'">
+                {{ t(`tasks.phase.role.${m.role}`) }}
+              </span>
+              <span class="text-sm break-words whitespace-pre-wrap text-foreground">
+                {{ m.text }}
+              </span>
             </div>
           </div>
-          <div v-else class="tpc-empty">{{ t('tasks.phase.noDiscuss') }}</div>
-          <div class="tpc-composer">
+          <div v-else class="py-2 text-sm text-dim">{{ t('tasks.phase.noDiscuss') }}</div>
+          <div class="flex items-center gap-2">
             <Input
               v-model="draft"
               :placeholder="t('tasks.phase.discussPh')"
@@ -120,11 +186,11 @@
       :width="460"
       @close="rerunOpen = false"
     >
-      <div class="tpc-rerun">
-        <p class="tpc-rerun-hint">{{ t('tasks.rerun.hint') }}</p>
-        <textarea
+      <div class="flex flex-col gap-2.5">
+        <p class="text-sm text-muted-foreground">{{ t('tasks.rerun.hint') }}</p>
+        <Textarea
           v-model="rerunInstruction"
-          class="tpc-rerun-ta"
+          class="min-h-16 resize-y"
           rows="4"
           :placeholder="t('tasks.rerun.ph')"
         />
@@ -134,13 +200,12 @@
         <Button variant="default" @click="confirmRerun">{{ t('tasks.rerun.confirm') }}</Button>
       </template>
     </LibraryEntityModal>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
 // One pipeline phase — expandable card with status, run-version history, and
-// Output / Execution / Discussion tabs (plus approve + rerun actions). Port of
-// the old UI PhaseCard, condensed to the ui-next surface in prototype CSS.
+// Output / Execution / Discussion tabs (plus approve + rerun actions).
 // Expand/tab state is component-local (ui-next has no fullscreen editor round-trip
 // that would unmount this).
 import { computed, ref } from 'vue'
@@ -221,10 +286,11 @@ const STATUS_ICON: Record<TaskPhase['status'], string> = {
 }
 const statusIcon = computed(() => STATUS_ICON[props.phase.status])
 const boxClass = computed(() => {
-  if (props.phase.status === 'completed' || props.phase.status === 'running') return 'ok'
-  if (props.phase.status === 'waiting_approval') return 'warn'
-  if (props.phase.status === 'failed') return 'fail'
-  return 'idle'
+  if (props.phase.status === 'completed' || props.phase.status === 'running')
+    return 'bg-selected text-primary'
+  if (props.phase.status === 'waiting_approval') return 'bg-warning/15 text-warning'
+  if (props.phase.status === 'failed') return 'bg-destructive/15 text-destructive'
+  return 'bg-muted text-dim'
 })
 
 const countTrace = (run = currentRun.value): number => {
@@ -263,311 +329,3 @@ const confirmRerun = () => {
   rerunOpen.value = false
 }
 </script>
-
-<style scoped>
-.tpc {
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-  overflow: hidden;
-}
-.tpc.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-.tpc-head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 10px 13px;
-  background: transparent;
-  border: 0;
-  text-align: left;
-  cursor: default;
-}
-.tpc-head.click {
-  cursor: pointer;
-}
-.tpc-head.click:hover {
-  background: var(--bgHover);
-}
-.tpc-idx {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  flex: 0 0 auto;
-  min-width: 16px;
-}
-.tpc-box {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-xs);
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-}
-.tpc-box.ok {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.tpc-box.warn {
-  background: var(--amberDim);
-  color: var(--amber);
-}
-.tpc-box.fail {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.tpc-box.idle {
-  background: var(--bgActive);
-  color: var(--textDim);
-}
-.tpc-boxi {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.tpc-boxi.spin {
-  animation: tpc-pulse 1.4s ease-in-out infinite;
-}
-@keyframes tpc-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-.tpc-main {
-  flex: 1;
-  min-width: 0;
-}
-.tpc-agent {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tpc-skill {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tpc-ver,
-.tpc-flag,
-.tpc-verdict,
-.tpc-loop {
-  flex: 0 0 auto;
-}
-.tpc-verdict.ok {
-  color: var(--green);
-  border-color: var(--green);
-}
-.tpc-verdict.fail {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-}
-.tpc-loop {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-}
-.tpc-rc-loop {
-  width: 10px;
-  height: 10px;
-  margin-right: 3px;
-  vertical-align: -1px;
-}
-.tpc-rc-ok {
-  color: var(--green);
-  margin-left: 3px;
-}
-.tpc-rc-fail {
-  color: var(--danger);
-  margin-left: 3px;
-}
-.tpc-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.tpc-livei {
-  width: 10px;
-  height: 10px;
-  animation: tpc-pulse 1.4s ease-in-out infinite;
-}
-.tpc-dur {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.tpc-chv {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-  flex: 0 0 auto;
-  transition: transform 0.15s;
-}
-.tpc-chv.open {
-  transform: rotate(180deg);
-}
-.tpc-body {
-  border-top: 1px solid var(--border);
-}
-.tpc-history {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  padding: 9px 13px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bgSubtle);
-}
-.tpc-history-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.tpc-runchip {
-  cursor: pointer;
-}
-.tpc-runchip.on {
-  color: var(--text);
-  border-color: var(--borderStrong);
-  background: var(--bgActive);
-}
-.tpc-runchip.dead {
-  text-decoration: line-through;
-  color: var(--textFaint);
-}
-.tpc-tabs {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 13px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bgSubtle);
-}
-.tpc-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1.5px solid transparent;
-  margin-bottom: -1px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  cursor: pointer;
-}
-.tpc-tab.on {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-.tpc-tabbadge {
-  padding: 1px 6px;
-}
-.tpc-tabsp {
-  flex: 1;
-}
-.tpc-tabbody {
-  padding: 13px;
-}
-.tpc-trace {
-  /* mono-ok: phase trace output */
-  font-family: var(--code);
-}
-.tpc-empty {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  padding: 8px 0;
-}
-.tpc-msgs {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin-bottom: 11px;
-}
-.tpc-msg {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.tpc-msg-role {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.tpc-msg-text {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.tpc-msg.user .tpc-msg-role {
-  color: var(--accent);
-}
-.tpc-composer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tpc-input {
-  flex: 1;
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  color: var(--text);
-  border-radius: var(--r-sm);
-  padding: 7px 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.tpc-input:focus {
-  border-color: var(--accent);
-}
-.tpc-rerun {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.tpc-rerun-hint {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.tpc-rerun-ta {
-  width: 100%;
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  color: var(--text);
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
-  font-size: var(--fs-sm);
-  font-family: var(--sans);
-  resize: vertical;
-  min-height: 4rem;
-  outline: none;
-  line-height: var(--lh-sm);
-}
-.tpc-rerun-ta:focus {
-  border-color: var(--accent);
-}
-</style>

@@ -1,8 +1,8 @@
 <template>
-  <form class="cpf" @submit.prevent="onSubmit">
-    <div class="cpfgrid">
-      <label class="cpffield">
-        <span class="fd">{{ t('settingsModels.form.label') }}</span>
+  <form class="flex flex-col gap-3" @submit.prevent="onSubmit">
+    <div class="grid grid-cols-2 gap-3">
+      <label class="flex flex-col gap-1.5">
+        <span class="text-sm text-dim">{{ t('settingsModels.form.label') }}</span>
         <Input
           v-model="draft.label"
           :placeholder="t('settingsModels.custom.labelPlaceholder')"
@@ -10,60 +10,51 @@
           class="flex-1"
         />
       </label>
-      <label class="cpffield">
-        <span class="fd">{{ t('settingsModels.custom.apiType') }}</span>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-sm text-dim">{{ t('settingsModels.custom.apiType') }}</span>
         <AppSelect v-model="apiSel" :options="apiTypeOpts" width="100%" />
       </label>
     </div>
 
-    <label class="cpffield">
-      <span class="fd">
+    <label class="flex flex-col gap-1.5">
+      <span class="text-sm text-dim">
         {{
           isOpenAi
             ? t('settingsModels.custom.baseUrlOpenai')
             : t('settingsModels.custom.baseUrlAnthropic')
         }}
       </span>
+      <!-- mono-ok: base URL -->
       <Input
         v-model="draft.baseUrl"
         :placeholder="baseUrlPlaceholder"
         required
-        class="mono flex-1"
+        class="flex-1 font-mono"
       />
     </label>
 
-    <label class="cpffield">
-      <span class="fd">{{ t('settingsModels.custom.apiKeyLabel') }}</span>
-      <div class="keyrow">
-        <Input
-          v-model="draft.apiKey"
-          :type="reveal ? 'text' : 'password'"
-          :placeholder="editing ? t('settingsModels.edit.keyReplacePlaceholder') : 'sk-…'"
-          class="mono flex-1"
-        />
-        <span
-          class="keyeye"
-          :title="reveal ? t('settingsModels.form.hide') : t('settingsModels.form.show')"
-          @click="reveal = !reveal"
-        >
-          👁
-        </span>
-      </div>
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm text-dim">{{ t('settingsModels.custom.apiKeyLabel') }}</span>
+      <SettingsKeyRow
+        v-model="draft.apiKey"
+        :placeholder="editing ? t('settingsModels.edit.keyReplacePlaceholder') : 'sk-…'"
+        mono
+      />
       <!-- The stored key never leaves the sidecar (security invariant #1) — we can
            only tell the user that a key is saved, not show it. -->
-      <p v-if="editing" class="fd cpfnote">
+      <p v-if="editing" class="m-0 text-sm text-dim">
         {{
           hasKey ? t('settingsModels.edit.keySavedReplace') : t('settingsModels.edit.keyBlankKeep')
         }}
       </p>
-    </label>
+    </div>
 
-    <div class="cpffield">
-      <span class="fd">{{ t('settingsModels.custom.modelIds') }}</span>
+    <div class="flex flex-col gap-1.5">
+      <span class="text-sm text-dim">{{ t('settingsModels.custom.modelIds') }}</span>
       <ModelListEditor v-model="draft.models" placeholder="openrouter/auto" />
     </div>
 
-    <div class="cpfactions">
+    <div class="flex items-center justify-end gap-2 pt-0.5">
       <Button type="button" variant="outline" size="sm" @click="emit('cancel')">
         {{ t('settingsModels.form.cancel') }}
       </Button>
@@ -78,8 +69,6 @@
 import ModelListEditor from '~/components/settings/ModelListEditor.vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { EndpointApi } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 // Custom endpoint draft — local to the Models subtree (ui-next store does not
 // export a CustomProviderInput type). Mirrors the legacy shape.
@@ -111,7 +100,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const reveal = ref(false)
 
 // AppSelect's v-model is a plain string — bridge to the EndpointApi union.
 const apiSel = computed<string>({
@@ -138,39 +126,3 @@ const onSubmit = () => {
   if (canSubmit.value) emit('submit')
 }
 </script>
-
-<style scoped>
-.cpf {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.cpfgrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-@media (max-width: 560px) {
-  .cpfgrid {
-    grid-template-columns: 1fr;
-  }
-}
-.cpffield {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cpffield > .keyinp {
-  width: 100%;
-}
-.cpfnote {
-  margin: 0;
-}
-.cpfactions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 2px;
-}
-</style>

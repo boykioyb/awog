@@ -1,18 +1,23 @@
 <template>
-  <div class="lhg">
-    <div class="lhg-head">
-      <span class="lhg-title">{{ t('infra.logs.hist.title') }}</span>
-      <span class="lhg-hint">
+  <div class="flex flex-col gap-1">
+    <div class="flex items-baseline justify-between gap-2">
+      <span class="text-sm font-semibold">{{ t('infra.logs.hist.title') }}</span>
+      <span class="text-xs text-dim">
         {{ fromRows ? t('infra.logs.hist.fromRows') : t('infra.logs.hist.fromQuery') }}
       </span>
     </div>
 
-    <div v-if="buckets.length === 0" class="lhg-empty">{{ t('infra.logs.hist.empty') }}</div>
+    <div
+      v-if="buckets.length === 0"
+      class="rounded-md border px-2.5 py-4.5 text-center text-sm text-dim"
+    >
+      {{ t('infra.logs.hist.empty') }}
+    </div>
 
     <svg
       v-else
       ref="svgRef"
-      class="lhg-svg"
+      class="block h-30 w-full cursor-crosshair touch-none rounded-md border bg-card"
       :viewBox="`0 0 ${W} ${H}`"
       preserveAspectRatio="none"
       role="img"
@@ -26,7 +31,7 @@
       <line
         v-for="g in 4"
         :key="g"
-        class="lhg-grid"
+        class="stroke-border stroke-1 [vector-effect:non-scaling-stroke]"
         :x1="0"
         :x2="W"
         :y1="(H * g) / 5"
@@ -35,24 +40,34 @@
       <rect
         v-for="(b, i) in bars"
         :key="i"
-        class="lhg-bar"
+        class="fill-primary opacity-72 hover:opacity-100"
         :x="b.x"
         :y="b.y"
         :width="b.w"
         :height="b.h"
       />
-      <rect v-if="sel" class="lhg-sel" :x="sel.x" :y="0" :width="sel.w" :height="H" />
+      <rect
+        v-if="sel"
+        class="fill-primary opacity-18"
+        :x="sel.x"
+        :y="0"
+        :width="sel.w"
+        :height="H"
+      />
     </svg>
 
-    <div v-if="buckets.length > 0" class="lhg-axis">
+    <div
+      v-if="buckets.length > 0"
+      class="flex justify-between gap-2 text-xs text-faint tabular-nums"
+    >
       <span>{{ fmt(buckets[0]?.t ?? 0) }}</span>
       <span v-if="sel">{{ selLabel }}</span>
       <span>{{ fmt(buckets[buckets.length - 1]?.t ?? 0) }}</span>
     </div>
 
-    <div v-if="sel" class="lhg-actions">
+    <div v-if="sel" class="flex gap-1">
       <Button type="button" variant="outline" size="sm" @click="applyZoom">
-        <Icon name="search" class="lhg-ic" />
+        <Icon name="search" />
         {{ t('infra.logs.hist.zoom') }}
       </Button>
       <Button type="button" variant="outline" size="sm" @click="sel = null">
@@ -180,91 +195,3 @@ function fmt(ms: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 </script>
-
-<style scoped>
-.lhg {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.lhg-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.lhg-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-
-.lhg-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lhg-empty {
-  padding: 18px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-
-.lhg-svg {
-  display: block;
-  width: 100%;
-  height: 120px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-  cursor: crosshair;
-  touch-action: none;
-}
-
-.lhg-grid {
-  stroke: var(--border);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.lhg-bar {
-  fill: var(--accent);
-  opacity: 0.72;
-}
-
-.lhg-bar:hover {
-  opacity: 1;
-}
-
-.lhg-sel {
-  fill: var(--accent);
-  opacity: 0.18;
-}
-
-.lhg-axis {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.lhg-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.lhg-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-</style>

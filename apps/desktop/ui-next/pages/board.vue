@@ -1,5 +1,6 @@
 <template>
-  <section class="page on boardpage" data-page="board">
+  <!-- relative: neo cho thanh bulk nổi đáy. -->
+  <section class="relative flex min-w-0 flex-1 flex-col overflow-hidden" data-page="board">
     <!-- Issues-page khuôn Multica — board hợp nhất của MỌI project (sidecar
          vẫn lưu per-project, đây là view gộp): CollectionHeader + toolbar
          (search · project filter · view toggle) + kanban/list 2 chế độ. -->
@@ -19,7 +20,7 @@
       </Button>
     </CollectionHeader>
 
-    <div class="bp-bar">
+    <div class="flex shrink-0 items-center gap-2 border-b px-4 py-2">
       <div class="relative">
         <Icon
           name="search"
@@ -50,7 +51,10 @@
       />
       <!-- Việc con MẶC ĐỊNH ẩn để mặt bảng chỉ nhìn tầng trên của cây — tick
            mới bung các sub-issue (con vẫn đếm được qua chip ListTree). -->
-      <label class="bp-hidekids" :title="t('board.showChildrenTitle')">
+      <label
+        class="inline-flex cursor-pointer items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground select-none"
+        :title="t('board.showChildrenTitle')"
+      >
         <AppCheckbox v-model:checked="showChildren" />
         {{ t('board.showChildren') }}
       </label>
@@ -78,15 +82,17 @@
               :class="activePreset?.id === p.id ? 'text-primary' : 'opacity-0'"
             />
             <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
-            <button
+            <Button
               type="button"
-              class="rounded p-0.5 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+              variant="ghost"
+              size="iconSm"
+              class="size-5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive [&_svg]:size-3"
               :title="t('board.preset.delete')"
               :aria-label="t('board.preset.delete')"
               @click.stop="deletePreset(p.id)"
             >
-              <Icon name="x" class="size-3" />
-            </button>
+              <Icon name="x" />
+            </Button>
           </DropdownMenuItem>
           <div v-if="!presets.length" class="px-2 py-1.5 text-xs text-muted-foreground">
             {{ t('board.preset.empty') }}
@@ -102,32 +108,31 @@
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <span class="bp-flex" />
+      <span class="flex-1" />
       <!-- View toggle — segmented dùng đúng shadcn Tabs (muted track, active nổi). -->
       <Tabs :model-value="view" @update:model-value="(v) => (view = v as typeof view)">
         <TabsList>
-          <TabsTrigger
-            value="board"
-            class="size-[var(--ctrl-h-xs)] p-0"
-            :title="t('board.viewBoard')"
-          >
+          <TabsTrigger value="board" class="size-(--ctrl-h-xs) p-0" :title="t('board.viewBoard')">
             <Icon name="board" class="size-3.5" />
           </TabsTrigger>
-          <TabsTrigger
-            value="list"
-            class="size-[var(--ctrl-h-xs)] p-0"
-            :title="t('board.viewList')"
-          >
+          <TabsTrigger value="list" class="size-(--ctrl-h-xs) p-0" :title="t('board.viewList')">
             <Icon name="listul" class="size-3.5" />
           </TabsTrigger>
         </TabsList>
       </Tabs>
     </div>
 
-    <div class="bp-body">
-      <div v-if="!projects.length" class="bp-empty">
-        <span class="bp-empty-ic"><Icon name="board" class="size-5" /></span>
-        <div class="bp-empty-t">{{ t('board.empty') }}</div>
+    <div class="flex min-h-0 flex-auto flex-col overflow-hidden">
+      <div
+        v-if="!projects.length"
+        class="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground"
+      >
+        <span
+          class="mb-1 inline-flex size-11 items-center justify-center rounded-lg border bg-muted text-muted-foreground"
+        >
+          <Icon name="board" class="size-5" />
+        </span>
+        <div class="text-sm text-muted-foreground">{{ t('board.empty') }}</div>
       </div>
       <template v-else>
         <!-- Kanban giữ mounted khi sang list để editor modal (teleport) vẫn
@@ -148,7 +153,7 @@
              updated. Click → cùng editor của kanban. -->
         <CollectionList v-show="view === 'list'" :cols="LIST_COLS">
           <template #head>
-            <span class="bp-checkhead" @click.stop>
+            <span class="flex items-center justify-center p-0" @click.stop>
               <AppCheckbox
                 :checked="allVisibleSelected"
                 :indeterminate="selected.size > 0 && !allVisibleSelected"
@@ -166,48 +171,67 @@
             v-for="it in visibleItems"
             :key="`${it.projectId}:${it.id}`"
             class="cl-row"
-            :class="{ 'cl-row-sel': selected.has(itemKey(it)) }"
+            :class="{ 'bg-selected': selected.has(itemKey(it)) }"
             @click="boardEl?.openItem(it.id)"
           >
-            <div class="cl-cell bp-check" @click.stop>
+            <div class="cl-cell justify-center p-0" @click.stop>
               <AppCheckbox :checked="selected.has(itemKey(it))" @update:checked="toggleItem(it)" />
             </div>
-            <div class="cl-cell bp-id">
-              <span class="bp-title-cell">
-                <span v-if="it.parentId" class="bp-parent-hint">↳</span>
-                {{ it.title }}
-              </span>
-              <span v-if="it.desc" class="bp-desc">{{ it.desc }}</span>
+            <!-- Ô xếp DỌC (tiêu đề + mô tả) bọc trong div riêng: CollectionList đặt
+                 `items-center` cho mọi `.cl-cell`, nên căn trái phải nằm ở lớp trong. -->
+            <div class="cl-cell">
+              <div class="flex w-full min-w-0 flex-col items-start justify-center gap-px">
+                <span class="max-w-full truncate text-sm font-medium text-foreground">
+                  <span v-if="it.parentId" class="mr-0.5 text-faint">↳</span>
+                  {{ it.title }}
+                </span>
+                <span v-if="it.desc" class="max-w-full truncate text-xs text-muted-foreground">
+                  {{ it.desc }}
+                </span>
+              </div>
             </div>
             <div class="cl-cell">
-              <span class="bp-ttag" :data-type="it.type ?? 'task'">
+              <!-- Tag loại việc — màu khớp icon type trên card kanban. -->
+              <Badge
+                variant="outline"
+                class="border-current"
+                :class="TYPE_BADGE[it.type ?? 'task']"
+              >
                 {{ t(`board.type.${it.type ?? 'task'}`) }}
-              </span>
+              </Badge>
             </div>
             <div class="cl-cell">
-              <span class="bp-status" :style="{ '--st': statusColor(it.status) }">
+              <Badge variant="outline" :class="STATUS_BADGE[it.status]">
                 {{ statusLabel(it.status) }}
-              </span>
+              </Badge>
             </div>
             <div class="cl-cell">
-              <span v-if="assigneeOf(it)" class="bp-cell">{{ assigneeOf(it) }}</span>
-              <span v-else class="bp-none">—</span>
+              <span v-if="assigneeOf(it)" class="truncate">{{ assigneeOf(it) }}</span>
+              <span v-else>—</span>
             </div>
             <div class="cl-cell">
-              <span class="bp-cell">{{ projectName(it.projectId) }}</span>
+              <span class="truncate">{{ projectName(it.projectId) }}</span>
             </div>
             <div class="cl-cell">
-              <span class="bp-cell">{{ fmtDate(it.updatedAt) }}</span>
+              <span class="truncate">{{ fmtDate(it.updatedAt) }}</span>
             </div>
           </div>
-          <div v-if="!visibleItems.length" class="bp-empty-list">{{ t('board.noItems') }}</div>
+          <div v-if="!visibleItems.length" class="p-8 text-center text-sm text-muted-foreground">
+            {{ t('board.noItems') }}
+          </div>
         </CollectionList>
       </template>
     </div>
 
     <!-- Bulk bar — nổi đáy khi list view có tick chọn. -->
-    <div v-if="selected.size" class="bp-bulk">
-      <span class="bp-bulk-n">{{ t('board.bulk.selected', { n: selected.size }) }}</span>
+    <!-- Bulk bar nổi — đáy giữa, trên mọi nội dung board. -->
+    <div
+      v-if="selected.size"
+      class="absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-lg border bg-popover px-3 py-2 shadow-lg"
+    >
+      <span class="pr-1 text-sm font-semibold text-foreground">
+        {{ t('board.bulk.selected', { n: selected.size }) }}
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button variant="outline" size="sm">
@@ -217,9 +241,7 @@
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center">
           <DropdownMenuItem v-for="s in STATUSES" :key="s" @click="bulkSetStatus(s)">
-            <span class="bp-status" :style="{ '--st': statusColor(s) }">
-              {{ statusLabel(s) }}
-            </span>
+            <Badge variant="outline" :class="STATUS_BADGE[s]">{{ statusLabel(s) }}</Badge>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -272,6 +294,7 @@ import {
   useBoardStore,
   type BoardItem,
   type BoardItemStatus,
+  type BoardItemType,
 } from '~/stores/board'
 import { useProjectsStore } from '~/stores/projects'
 import { useSessionsStore } from '~/stores/sessions'
@@ -461,7 +484,28 @@ async function bulkDelete(): Promise<void> {
 }
 
 // Nhãn + màu status: một nguồn với chip issue / view Issues (useIssueStatus).
-const { statusLabel, statusColor } = useIssueStatus()
+const { statusLabel } = useIssueStatus()
+// Pill status — class màu ngữ nghĩa (chữ + viền), cùng ý nghĩa với bảng màu của
+// useIssueStatus nhưng ở dạng utility thay cho var màu inline.
+const STATUS_BADGE: Record<BoardItemStatus, string> = {
+  backlog: 'border-muted-foreground text-muted-foreground',
+  todo: 'border-info text-info',
+  in_progress: 'border-primary text-primary',
+  in_review: 'border-warning text-warning',
+  changes: 'border-lavender text-lavender',
+  pending: 'border-muted-foreground text-muted-foreground',
+  blocked: 'border-destructive text-destructive',
+  done: 'border-success text-success',
+  cancelled: 'border-muted-foreground text-muted-foreground',
+}
+// Tag loại việc — màu khớp icon type trên card kanban.
+const TYPE_BADGE: Record<BoardItemType, string> = {
+  epic: 'text-lavender',
+  story: 'text-success',
+  task: 'text-info',
+  subtask: 'text-muted-foreground',
+  bug: 'text-destructive',
+}
 const STATUSES = BOARD_STATUS_ORDER
 
 const projectName = (id: string): string => projectsStore.projectById(id)?.name ?? id
@@ -545,186 +589,3 @@ watch(projects, (list) => {
   }
 })
 </script>
-
-<style scoped>
-.boardpage.page {
-  flex-direction: column;
-  position: relative; /* neo cho .bp-bulk nổi đáy */
-}
-.bp-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.bp-flex {
-  flex: 1;
-}
-.bp-hidekids {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-}
-
-.bp-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.bp-body :deep(.wssec) {
-  margin-top: 0;
-}
-
-/* List cells */
-/* `.cl-row .cl-cell.bp-id` chứ không phải `.bp-id` trơn: CollectionList đặt
-   `align-items: center` cho mọi ô qua `.cl-body :slotted(.cl-cell)` với độ ưu tiên
-   cao hơn — ở ô xếp DỌC (tiêu đề + mô tả) `center` căn NGANG, nên tiêu đề ngắn bị đẩy
-   vào giữa ô. Căn trái theo chiều ngang, giữ căn giữa theo chiều dọc. */
-.cl-row .cl-cell.bp-id {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1px;
-  min-width: 0;
-}
-.bp-title-cell {
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  color: var(--foreground);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bp-desc {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bp-cell {
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bp-none {
-  color: var(--muted-foreground);
-}
-/* Checkbox col + hàng được chọn */
-.bp-check,
-.bp-checkhead {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-.cl-row-sel {
-  background: var(--accent-wash);
-}
-
-/* Bulk bar nổi — đáy giữa, trên mọi nội dung board. */
-.bp-bulk {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--popover);
-  box-shadow: var(--shadow-lg);
-}
-.bp-bulk-n {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--foreground);
-  padding-right: 4px;
-}
-.bp-status {
-  font-size: var(--fs-xs);
-  font-weight: 500;
-  color: var(--st);
-  border: 1px solid var(--st);
-  border-radius: var(--r-pill);
-  padding: 1px 8px;
-  white-space: nowrap;
-}
-/* Tag loại việc trong list — màu khớp icon type trên card kanban. */
-.bp-ttag {
-  font-size: var(--fs-xs);
-  font-weight: 500;
-  border: 1px solid currentColor;
-  border-radius: var(--r-pill);
-  padding: 1px 8px;
-  white-space: nowrap;
-}
-.bp-ttag[data-type='epic'] {
-  color: var(--violet);
-}
-.bp-ttag[data-type='story'] {
-  color: var(--success);
-}
-.bp-ttag[data-type='task'] {
-  color: var(--info);
-}
-.bp-ttag[data-type='subtask'] {
-  color: var(--muted-foreground);
-}
-.bp-ttag[data-type='bug'] {
-  color: var(--destructive);
-}
-.bp-parent-hint {
-  color: var(--textFaint);
-  margin-right: 2px;
-}
-.bp-empty-list {
-  padding: 32px;
-  text-align: center;
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-}
-
-/* Empty */
-.bp-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 100%;
-  color: var(--muted-foreground);
-}
-.bp-empty-ic {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  margin-bottom: 4px;
-}
-.bp-empty-t {
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-}
-</style>

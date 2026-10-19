@@ -2,17 +2,20 @@
   <!-- Khung bảng dùng chung của Explorer (task 3.1).
        Ba thứ nằm ở đây chứ không ở màn: thanh công cụ (tìm · nạp lúc · nạp thêm),
        bảng, và các trạng thái rỗng/lỗi. Màn chỉ bind state vào. -->
-  <div class="ixt">
-    <div class="ixt-bar">
-      <label class="srch">
-        <Icon name="search" />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex items-center gap-2 pb-2">
+      <div class="relative min-w-0 flex-1">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-dim"
+        />
         <Input
-          unstyled
+          class="h-ctrl-sm pl-8"
           :model-value="search"
           :placeholder="t('infra.explorer.search.placeholder')"
           @update:model-value="$emit('update:search', $event)"
         />
-      </label>
+      </div>
       <Button
         type="button"
         :disabled="loading"
@@ -25,99 +28,122 @@
       </Button>
       <!-- Nhãn này là một phần của hợp đồng: "nạp lúc HH:MM" để không ai đọc số
            cũ như thể nó đang sống. Không có mốc giờ thì không có gì để tin. -->
-      <span v-if="loadedAtLabel" class="ixt-when">{{ loadedAtLabel }}</span>
+      <span v-if="loadedAtLabel" class="ml-auto text-xs text-faint tabular-nums">
+        {{ loadedAtLabel }}
+      </span>
     </div>
 
     <!-- Tìm ở đây lọc TRÊN TRANG ĐÃ NẠP, không phải trên cả tài khoản. Nói thẳng
          ra thay vì để người dùng tin rằng họ vừa tìm khắp nơi. -->
-    <p v-if="search.trim()" class="ixt-note">{{ t('infra.explorer.search.localOnly') }}</p>
+    <p v-if="search.trim()" class="mb-1.5 text-xs text-dim">
+      {{ t('infra.explorer.search.localOnly') }}
+    </p>
 
-    <div ref="scroller" class="ixt-scroll tblcard" @scroll="onScroll">
-      <p v-if="loading && !rows.length" class="ixt-state">{{ t('infra.explorer.loading') }}</p>
-      <p v-else-if="error" class="ixt-state err">{{ error }}</p>
-      <p v-else-if="!rows.length" class="ixt-state">
+    <!-- Khung cuộn = card. Chính phần tử này là `scroller` của cửa sổ ảo hoá. -->
+    <div
+      ref="scroller"
+      class="min-h-0 flex-1 overflow-auto rounded-xl border bg-card shadow-sm"
+      @scroll="onScroll"
+    >
+      <p v-if="loading && !rows.length" :class="STATE">{{ t('infra.explorer.loading') }}</p>
+      <p v-else-if="error" :class="[STATE, 'text-destructive']">{{ error }}</p>
+      <p v-else-if="!rows.length" :class="STATE">
         {{ search.trim() ? t('infra.explorer.emptyFiltered') : t('infra.explorer.empty') }}
       </p>
 
-      <table v-else class="kt">
-        <thead>
-          <tr>
-            <th
+      <!-- `<table>` trần thay cho `Table`: `Table` bọc bảng trong một div
+           `overflow-auto` riêng, mà sticky header bám theo khung cuộn GẦN NHẤT — tức
+           cái div không bao giờ cuộn đó — nên tiêu đề cột sẽ trôi mất. Khung cuộn
+           phải là `scroller` phía trên (cửa sổ ảo hoá đọc `scrollTop` của nó). -->
+      <table v-else class="w-full border-collapse text-sm">
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead
               v-for="col in columns"
               :key="col.key"
               :style="col.width ? { width: col.width } : undefined"
-              :class="{ 'kt-num': col.align === 'right' }"
+              :class="[HEAD, col.align === 'right' && 'text-right tabular-nums']"
             >
               {{ t(col.label) }}
-            </th>
-            <th class="kt-act" />
+            </TableHead>
+            <TableHead :class="[HEAD, 'w-[1%]']" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <tr v-if="padTop" aria-hidden="true">
+            <td :colspan="columns.length + 1" class="p-0" :style="{ height: `${padTop}px` }" />
           </tr>
-        </thead>
-        <tbody>
-          <tr v-if="padTop" aria-hidden="true" class="ixt-pad">
-            <td :colspan="columns.length + 1" :style="{ height: `${padTop}px` }" />
-          </tr>
-          <tr
+          <TableRow
             v-for="row in slice"
             :key="row['id'] || row['name']"
-            class="kt-click"
-            :class="{ on: selectedId && (row['id'] === selectedId || row['name'] === selectedId) }"
+            class="cursor-pointer hover:bg-accent data-[state=selected]:bg-selected"
+            :data-state="isSelected(row) ? 'selected' : undefined"
             tabindex="0"
             @click="$emit('row', row)"
             @keydown.enter.prevent="$emit('row', row)"
           >
-            <td
+            <!-- Một ARN hay một chuỗi tag dài phải cắt bằng ellipsis chứ không được
+                 đẩy bảng cuộn ngang; cột `wide` là lối thoát cho cột cố ý cho dài. -->
+            <TableCell
               v-for="col in columns"
               :key="col.key"
-              :class="{ 'kt-num': col.align === 'right', 'kt-wide': col.wide }"
+              class="truncate px-2.5 py-1.5"
+              :class="[
+                col.wide ? 'max-w-none' : 'max-w-80',
+                col.align === 'right' && 'text-right tabular-nums',
+              ]"
             >
               {{ row[col.key] || '—' }}
-            </td>
-            <td class="ixt-acts" @click.stop>
-              <!-- Nút ghi bị ẨN khi dò quyền nói chắc chắn thiếu (task 3.3); lý do
-                   nằm ở tooltip của hàng, không phải một hộp thoại lỗi sau cú bấm. -->
-              <Button
-                v-for="a in visibleActions"
-                :key="a.id"
-                :class="{ danger: a.danger }"
-                type="button"
-                :disabled="actionDenied(a.id)"
-                :title="actionDenied(a.id) ? t('infra.explorer.denied') : t(a.consequence)"
-                variant="outline"
-                size="sm"
-                @click="$emit('action', { action: a, row })"
-              >
-                {{ t(a.label) }}
-              </Button>
-              <Button
-                v-if="hasConsole"
-                type="button"
-                :title="t('infra.explorer.console')"
-                variant="outline"
-                size="sm"
-                @click="$emit('console', row)"
-              >
-                <Icon name="external" />
-              </Button>
-              <Button
-                type="button"
-                :title="t('infra.explorer.ask')"
-                variant="outline"
-                size="sm"
-                @click="$emit('ask', row)"
-              >
-                <Icon name="sparkles" />
-              </Button>
-            </td>
+            </TableCell>
+            <TableCell class="px-2.5 py-1" @click.stop>
+              <div class="flex justify-end gap-1">
+                <!-- Nút ghi bị ẨN khi dò quyền nói chắc chắn thiếu (task 3.3); lý do
+                     nằm ở tooltip của hàng, không phải một hộp thoại lỗi sau cú bấm. -->
+                <Button
+                  v-for="a in visibleActions"
+                  :key="a.id"
+                  :class="{ 'text-destructive': a.danger }"
+                  type="button"
+                  :disabled="actionDenied(a.id)"
+                  :title="actionDenied(a.id) ? t('infra.explorer.denied') : t(a.consequence)"
+                  variant="outline"
+                  size="sm"
+                  @click="$emit('action', { action: a, row })"
+                >
+                  {{ t(a.label) }}
+                </Button>
+                <Button
+                  v-if="hasConsole"
+                  type="button"
+                  :title="t('infra.explorer.console')"
+                  :aria-label="t('infra.explorer.console')"
+                  variant="outline"
+                  size="iconMd"
+                  @click="$emit('console', row)"
+                >
+                  <Icon name="external" />
+                </Button>
+                <Button
+                  type="button"
+                  :title="t('infra.explorer.ask')"
+                  :aria-label="t('infra.explorer.ask')"
+                  variant="outline"
+                  size="iconMd"
+                  @click="$emit('ask', row)"
+                >
+                  <Icon name="sparkles" />
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+          <tr v-if="padBottom" aria-hidden="true">
+            <td :colspan="columns.length + 1" class="p-0" :style="{ height: `${padBottom}px` }" />
           </tr>
-          <tr v-if="padBottom" aria-hidden="true" class="ixt-pad">
-            <td :colspan="columns.length + 1" :style="{ height: `${padBottom}px` }" />
-          </tr>
-        </tbody>
+        </TableBody>
       </table>
     </div>
 
-    <div v-if="nextToken" class="ixt-more">
+    <div v-if="nextToken" class="flex justify-center pt-2">
       <Button
         type="button"
         :disabled="loading"
@@ -174,6 +200,16 @@ defineEmits<{
 
 const { t } = useI18n()
 
+/** Câu "đang tải" / "rỗng" / "lỗi" đứng THAY CHỖ bảng nên chiếm chiều cao của một bảng. */
+const STATE = 'px-3.5 py-5.5 text-center text-sm text-dim'
+/** Tiêu đề cột dính khi cuộn, nền đục — bảng dài hơn khung mà mất nhãn cột là bảng mù. */
+const HEAD = 'sticky top-0 z-1 h-auto bg-muted px-2.5 py-1.5 text-xs font-medium whitespace-nowrap'
+
+function isSelected(row: InfraResourceRow): boolean {
+  const id = props.selectedId
+  return !!id && (row['id'] === id || row['name'] === id)
+}
+
 /** Nút bị từ chối thì không dựng ra nữa — ẩn thật, không phải disable. */
 const visibleActions = computed(() => props.actions.filter((a) => !props.actionDenied(a.id)))
 
@@ -207,96 +243,3 @@ const slice = computed(() => props.rows.slice(start.value, end.value))
 const padTop = computed(() => (props.virtual ? start.value * ROW_H : 0))
 const padBottom = computed(() => (props.virtual ? (props.rows.length - end.value) * ROW_H : 0))
 </script>
-
-<style scoped>
-.ixt {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-
-.ixt-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 0 8px;
-}
-
-.ixt-when {
-  margin-left: auto;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.ixt-note {
-  margin: 0 0 6px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-/* Skin card nằm ở `.tblcard` toàn cục (app-shell.css); đây chỉ còn bố cục. */
-.ixt-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.ixt-state {
-  margin: 0;
-  padding: 22px 14px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-
-.ixt-state.err {
-  color: var(--red);
-}
-
-/* Da bảng ở app-shell.css. Dưới đây CHỈ là override riêng của bảng tài nguyên. */
-
-/* Một ARN hay một chuỗi tag dài phải cắt bằng ellipsis chứ không được đẩy bảng
-   cuộn ngang; `.kt-wide` là lối thoát cho cột cố ý cho phép dài. */
-.kt td {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kt-wide {
-  max-width: none;
-}
-
-.kt-num {
-  text-align: right;
-}
-
-.ixt-acts {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
-  padding: 4px 10px;
-}
-
-.ixt-acts .btn.danger {
-  color: var(--red);
-  border-color: var(--border);
-}
-
-.ixt-pad td {
-  padding: 0;
-  border: 0;
-}
-
-.ixt-more {
-  padding: 8px 0 0;
-  display: flex;
-  justify-content: center;
-}
-</style>

@@ -2,8 +2,12 @@
   <!-- Avatar tròn 2 ký tự — palette deterministic theo seed (khuôn
        ActorAvatar của Multica: agent = initials từ tên, squad = icon users
        để phân biệt ngay trên list). -->
-  <span class="eav" :class="[`s-${size}`]" :style="style">
-    <Icon v-if="variant === 'squad'" name="users" class="eav-ic" />
+  <span
+    class="inline-flex flex-none items-center justify-center rounded-full font-semibold select-none"
+    :class="SIZE_CLASS[size]"
+    :style="style"
+  >
+    <Icon v-if="variant === 'squad'" name="users" class="size-[55%]" />
     <template v-else>{{ initials }}</template>
   </span>
 </template>
@@ -12,14 +16,17 @@
 import { computed } from 'vue'
 import Icon from '~/components/Icon.vue'
 
+// Màu DỮ LIỆU (mỗi entity một màu cố định theo seed), không phải màu theme. Chưa
+// chuyển sang token: bảng token ngữ nghĩa chưa có hồng + xanh ngọc (xem báo cáo đợt
+// chuyển shadcn) — đổi số màu thì mọi avatar đổi màu theo.
 const PALETTE: { bg: string; fg: string }[] = [
-  { bg: 'rgba(167,139,250,.15)', fg: '#c4b5fd' },
-  { bg: 'rgba(16,185,129,.15)', fg: '#6ee7b7' },
-  { bg: 'rgba(239,68,68,.13)', fg: '#fca5a5' },
-  { bg: 'rgba(96,165,250,.15)', fg: '#93c5fd' },
-  { bg: 'rgba(245,158,11,.15)', fg: '#fcd34d' },
-  { bg: 'rgba(236,72,153,.15)', fg: '#f9a8d4' },
-  { bg: 'rgba(45,212,191,.15)', fg: '#5eead4' },
+  { bg: 'rgba(167,139,250,.15)', fg: '#c4b5fd' }, // hex-ok: màu nhận diện entity (dữ liệu)
+  { bg: 'rgba(16,185,129,.15)', fg: '#6ee7b7' }, // hex-ok: màu nhận diện entity (dữ liệu)
+  { bg: 'rgba(239,68,68,.13)', fg: '#fca5a5' }, // hex-ok: màu nhận diện entity (dữ liệu)
+  { bg: 'rgba(96,165,250,.15)', fg: '#93c5fd' }, // hex-ok: màu nhận diện entity (dữ liệu)
+  { bg: 'rgba(245,158,11,.15)', fg: '#fcd34d' }, // hex-ok: màu nhận diện entity (dữ liệu)
+  { bg: 'rgba(236,72,153,.15)', fg: '#f9a8d4' }, // hex-ok: màu nhận diện entity (dữ liệu)
+  { bg: 'rgba(45,212,191,.15)', fg: '#5eead4' }, // hex-ok: màu nhận diện entity (dữ liệu)
 ]
 
 const props = withDefaults(
@@ -33,6 +40,13 @@ const props = withDefaults(
   }>(),
   { seed: '', variant: 'entity', size: 'md' },
 )
+
+const SIZE_CLASS = {
+  // px-ok: chữ viết tắt trong avatar 20px — cỡ chữ đi theo đường kính, không theo thang chữ
+  sm: 'size-5 text-[9px]',
+  md: 'size-7 text-xs',
+  lg: 'size-10 rounded-lg text-lg',
+} as const
 
 const initials = computed(() => {
   const words = props.name
@@ -52,35 +66,3 @@ const style = computed(() => {
   return { background: c.bg, color: c.fg }
 })
 </script>
-
-<style scoped>
-.eav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-weight: 600;
-  flex: 0 0 auto;
-  user-select: none;
-}
-.s-sm {
-  width: 20px;
-  height: 20px;
-  font-size: 9px;
-}
-.s-md {
-  width: 28px;
-  height: 28px;
-  font-size: 11px;
-}
-.s-lg {
-  width: 40px;
-  height: 40px;
-  font-size: 15px;
-  border-radius: var(--r-btn);
-}
-.eav-ic {
-  width: 55%;
-  height: 55%;
-}
-</style>

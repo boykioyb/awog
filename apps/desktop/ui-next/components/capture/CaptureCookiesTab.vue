@@ -1,83 +1,87 @@
 <template>
-  <div class="cap-tab">
-    <section class="cap-sec">
-      <h4>{{ t('capture.cookies.sent', { n: sent.length }) }}</h4>
-      <table v-if="sent.length" class="cap-kv">
-        <thead>
-          <tr>
-            <th>{{ t('capture.cookies.name') }}</th>
-            <th>{{ t('capture.cookies.value') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(c, i) in sent" :key="i">
-            <th class="cap-code">{{ c.name }}</th>
-            <td class="cap-code cap-wrap">{{ c.value }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="cap-note">{{ t('capture.cookies.noneSent') }}</div>
+  <div :class="CAP_TAB">
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">{{ t('capture.cookies.sent', { n: sent.length }) }}</h4>
+      <Table v-if="sent.length" :class="CAP_KV">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{{ t('capture.cookies.name') }}</TableHead>
+            <TableHead>{{ t('capture.cookies.value') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="(c, i) in sent" :key="i">
+            <TableHead class="font-mono">{{ c.name }}</TableHead>
+            <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">{{ c.value }}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <div v-else :class="CAP_NOTE">{{ t('capture.cookies.noneSent') }}</div>
     </section>
 
-    <section class="cap-sec">
-      <h4>{{ t('capture.cookies.received', { n: received.length }) }}</h4>
-      <div v-if="received.length" class="cap-scroll-x">
-        <table class="cap-kv cap-cookies">
-          <thead>
-            <tr>
-              <th>{{ t('capture.cookies.name') }}</th>
-              <th>{{ t('capture.cookies.value') }}</th>
-              <th>Domain</th>
-              <th>Path</th>
-              <th>Expires / Max-Age</th>
-              <th>HttpOnly</th>
-              <th>Secure</th>
-              <th>SameSite</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(c, i) in received" :key="i">
-              <th class="cap-code">{{ c.name }}</th>
-              <td class="cap-code cap-wrap">{{ c.value }}</td>
-              <td class="cap-code">{{ c.domain }}</td>
-              <td class="cap-code">{{ c.path }}</td>
-              <td>{{ c.expires }}</td>
-              <td>
+    <section :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">{{ t('capture.cookies.received', { n: received.length }) }}</h4>
+      <div v-if="received.length" class="overflow-x-auto">
+        <Table class="[&_td]:min-w-[8ch] [&_td]:pr-3 [&_th]:pr-3" :class="CAP_KV">
+          <TableHeader>
+            <TableRow>
+              <TableHead>{{ t('capture.cookies.name') }}</TableHead>
+              <TableHead>{{ t('capture.cookies.value') }}</TableHead>
+              <TableHead>Domain</TableHead>
+              <TableHead>Path</TableHead>
+              <TableHead>Expires / Max-Age</TableHead>
+              <TableHead>HttpOnly</TableHead>
+              <TableHead>Secure</TableHead>
+              <TableHead>SameSite</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="(c, i) in received" :key="i">
+              <TableHead class="font-mono">{{ c.name }}</TableHead>
+              <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">
+                {{ c.value }}
+              </TableCell>
+              <TableCell class="font-mono">{{ c.domain }}</TableCell>
+              <TableCell class="font-mono">{{ c.path }}</TableCell>
+              <TableCell>{{ c.expires }}</TableCell>
+              <TableCell>
                 <Badge :variant="c.httpOnly ? 'success' : 'destructive'">
                   {{ c.httpOnly ? '✓' : t('capture.cookies.missing') }}
                 </Badge>
-              </td>
-              <td>
+              </TableCell>
+              <TableCell>
                 <Badge :variant="c.secure ? 'success' : 'destructive'">
                   {{ c.secure ? '✓' : t('capture.cookies.missing') }}
                 </Badge>
-              </td>
-              <td>
+              </TableCell>
+              <TableCell>
                 <Badge :variant="sameSiteVariant(c)">
                   {{ c.sameSite || t('capture.cookies.missing') }}
                 </Badge>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
-      <div v-else class="cap-note">{{ t('capture.cookies.noneReceived') }}</div>
+      <div v-else :class="CAP_NOTE">{{ t('capture.cookies.noneReceived') }}</div>
     </section>
 
-    <section v-if="entry.blockedCookies?.length" class="cap-sec">
-      <h4>{{ t('capture.cookies.blocked', { n: entry.blockedCookies.length }) }}</h4>
-      <table class="cap-kv">
-        <tbody>
-          <tr v-for="(b, i) in entry.blockedCookies" :key="i">
-            <th class="cap-code">{{ b.name || '—' }}</th>
-            <td class="cap-wrap">
+    <section v-if="entry.blockedCookies?.length" :class="CAP_SEC">
+      <h4 :class="CAP_SEC_TITLE">
+        {{ t('capture.cookies.blocked', { n: entry.blockedCookies.length }) }}
+      </h4>
+      <Table :class="CAP_KV">
+        <TableBody>
+          <TableRow v-for="(b, i) in entry.blockedCookies" :key="i">
+            <TableHead class="font-mono">{{ b.name || '—' }}</TableHead>
+            <TableCell class="whitespace-pre-wrap wrap-anywhere">
               <Badge v-for="r in b.reasons" :key="r" variant="destructive" class="mr-1">
                 {{ r }}
               </Badge>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </section>
   </div>
 </template>
@@ -86,6 +90,7 @@
 import { computed } from 'vue'
 import type { CaptureEntry } from '~/types/network-capture'
 import { parseCookieHeader, parseSetCookie } from '~/utils/capture-export'
+import { CAP_KV, CAP_NOTE, CAP_SEC, CAP_SEC_TITLE, CAP_TAB } from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()

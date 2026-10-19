@@ -4,16 +4,16 @@
        Preview theo `st.content` nên sửa source đổi ngay hình. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div
-      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim shadow-[inset_0_-1px_0_var(--border)] bg-[var(--bgEl)]"
+      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim shadow-[inset_0_-1px_0_var(--border)] bg-card"
     >
       <span class="truncate font-mono">{{ rel }}</span>
-      <span v-if="sizeLabel" class="flex-none text-[var(--textFaint)]">· {{ sizeLabel }}</span>
+      <span v-if="sizeLabel" class="flex-none text-faint">· {{ sizeLabel }}</span>
       <DocReloadButton class="ml-auto" :doc="props.doc" @reloaded="onReloaded" />
       <DocButtonGroup :options="modeOptions" :active="mode" @select="mode = $event" />
     </div>
     <div
       v-if="st.status === 'loading' || st.status === 'idle'"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center text-sm text-faint"
     >
       {{ t('workbench.file.loading') }}
     </div>
@@ -24,9 +24,10 @@
       {{ st.error }}
     </div>
     <template v-else>
+      <!-- Root `.mmd` của MermaidView lấp khung diagram (thay h-64 mặc định của nó). -->
       <div
         v-show="mode === 'diagram'"
-        class="diagram flex min-h-0 flex-1 flex-col overflow-hidden p-3"
+        class="flex min-h-0 flex-1 flex-col overflow-hidden p-3 [&_.mmd]:h-auto [&_.mmd]:min-h-0 [&_.mmd]:flex-1"
       >
         <MermaidView :code="st.content" />
       </div>
@@ -94,13 +95,3 @@ function onReloaded() {
   edRef.value?.setValue(props.doc.id, st.content)
 }
 </script>
-
-<style scoped>
-/* MermaidView root (.mmd) fill khung diagram — :deep() cho lib con, Tailwind
-   không emit được nên scoped còn lại. */
-.diagram :deep(.mmd) {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-}
-</style>

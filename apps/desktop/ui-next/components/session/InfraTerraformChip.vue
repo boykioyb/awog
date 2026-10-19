@@ -7,38 +7,38 @@
 
        Chip chỉ hiện khi quét thấy ít nhất một thư mục có `*.tf` trong project
        (hoặc khi phiên đã ghim sẵn) — repo không có Terraform không thấy gì. -->
-  <span v-if="visible" class="iwrap">
-    <button
-      ref="chipEl"
-      type="button"
-      class="ctxchip"
-      :class="{ on: open, acc: !pinned }"
+  <span v-if="visible" class="relative inline-flex min-w-0 shrink">
+    <SessionCtxChip
+      ref="chipRef"
+      icon="terraform"
+      :label="dirLabel"
+      :sub="chipSub"
+      chev
+      :on="open"
+      :acc="!pinned"
       :title="t('infra.tf.chip.title')"
       @click.stop="open = !open"
-    >
-      <Icon name="terraform" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="ctxchip-lbl">{{ dirLabel }}</span>
-      <span v-if="chipSub" class="ctxchip-sub">{{ chipSub }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+    />
 
     <Teleport to="body">
-      <div v-if="open" class="ibackdrop" @click="open = false" />
-      <div v-if="open" ref="popEl" class="pop ipop" :style="popStyle" @click.stop>
-        <div class="pl">{{ t('infra.tf.pop.title') }}</div>
+      <div v-if="open" class="fixed inset-0 z-40" @click="open = false" />
+      <SessionCtxPop v-if="open" ref="popRef" class="w-74" :style="popStyle" @click.stop>
+        <div class="mb-2 flex justify-between text-sm text-dim">{{ t('infra.tf.pop.title') }}</div>
 
         <!-- Công tắc on/off của tool Terraform cho phiên (2026-09-15). Tắt = xoá
              thư mục làm việc của phiên; bật = chọn sẵn thư mục đầu tiên. -->
-        <div class="itoggle">
-          <span class="itoggle-lbl">{{ t('infra.toggle.tf') }}</span>
+        <div class="flex items-center justify-between gap-2.5">
+          <span class="text-sm text-foreground">{{ t('infra.toggle.tf') }}</span>
           <SettingsTog :model-value="pinned" @update:model-value="setEnabled" />
         </div>
-        <p v-if="!pinned" class="ihint">{{ t('infra.toggle.tfHint') }}</p>
+        <p v-if="!pinned" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+          {{ t('infra.toggle.tfHint') }}
+        </p>
 
         <template v-if="pinned">
           <!-- 1 · Thư mục. Đây là giá trị duy nhất `tf_cli` dùng để định vị stack. -->
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.tf.dir.label') }}</div>
+          <div class="mt-3">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.tf.dir.label') }}</div>
             <AppSelect
               :model-value="effective.workspace ?? ''"
               :options="dirOptions"
@@ -46,32 +46,42 @@
               width="100%"
               @update:model-value="onDir"
             />
-            <p v-if="loading" class="ihint">{{ t('infra.tf.dir.loading') }}</p>
-            <p v-else-if="loadError" class="ierr">{{ loadError }}</p>
-            <p v-else-if="!dirs.length" class="ihint">{{ t('infra.tf.dir.empty') }}</p>
+            <p v-if="loading" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.tf.dir.loading') }}
+            </p>
+            <p v-else-if="loadError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+              {{ loadError }}
+            </p>
+            <p v-else-if="!dirs.length" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.tf.dir.empty') }}
+            </p>
           </div>
 
           <!-- 2 · State nằm ở đâu — câu phải trả lời được TRƯỚC khi động vào. Chỉ
              metadata: loại backend + khoá địa chỉ (`bucket`, `key`, `region`…);
              khoá credential không bao giờ được đọc ra khỏi file `.tf`. -->
           <template v-if="selectedDir">
-            <div class="iout">
-              <div class="iout-row">
-                <span class="iout-k">{{ t('infra.tf.backend') }}</span>
-                <span class="iout-v">
+            <div class="mt-2.5 grid gap-1">
+              <div class="flex gap-2 text-xs leading-4.5">
+                <span class="shrink-0 text-faint">{{ t('infra.tf.backend') }}</span>
+                <span class="min-w-0 font-mono break-all text-foreground">
                   {{ selectedDir.backendSummary || t('infra.tf.backend.local') }}
                 </span>
               </div>
-              <div v-if="selectedDir.requiredVersion" class="iout-row">
-                <span class="iout-k">{{ t('infra.tf.requiredVersion') }}</span>
-                <span class="iout-v">{{ selectedDir.requiredVersion }}</span>
+              <div v-if="selectedDir.requiredVersion" class="flex gap-2 text-xs leading-4.5">
+                <span class="shrink-0 text-faint">{{ t('infra.tf.requiredVersion') }}</span>
+                <span class="min-w-0 font-mono break-all text-foreground">
+                  {{ selectedDir.requiredVersion }}
+                </span>
               </div>
-              <div class="iout-row">
-                <span class="iout-k">{{ t('infra.tf.files') }}</span>
-                <span class="iout-v">{{ selectedDir.fileCount }}</span>
+              <div class="flex gap-2 text-xs leading-4.5">
+                <span class="shrink-0 text-faint">{{ t('infra.tf.files') }}</span>
+                <span class="min-w-0 font-mono break-all text-foreground">
+                  {{ selectedDir.fileCount }}
+                </span>
               </div>
             </div>
-            <p class="ihint">
+            <p class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
               {{
                 selectedDir.initialized ? t('infra.tf.initialized') : t('infra.tf.notInitialized')
               }}
@@ -81,12 +91,20 @@
                (không phải một trường của ngữ cảnh), nên chip chỉ ĐỌC và nói ra
                điều đó — lệnh `tf_cli` của agent chạy đúng workspace mà thư mục
                đang chọn. Nạp là một cú bấm, vì lệnh này chạm state thật. -->
-            <button type="button" class="iact" :disabled="wsLoading" @click="loadWorkspaces()">
-              <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Button
+              variant="outline"
+              size="sm"
+              class="mt-3 h-auto w-full justify-start gap-2 rounded-sm border-input px-2 py-1.5 text-sm font-normal text-foreground shadow-none disabled:opacity-55 [&_svg]:size-3.5 [&_svg]:text-dim"
+              :disabled="wsLoading"
+              @click="loadWorkspaces()"
+            >
+              <Icon name="layers" class="size-3.5" />
               {{ wsLoading ? t('infra.tf.ws.loading') : t('infra.tf.ws.load') }}
-            </button>
-            <p v-if="wsError" class="ierr">{{ wsError }}</p>
-            <p v-else-if="wsLoaded" class="ihint">
+            </Button>
+            <p v-if="wsError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+              {{ wsError }}
+            </p>
+            <p v-else-if="wsLoaded" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
               {{
                 workspaces.length
                   ? t('infra.tf.ws.list', {
@@ -96,15 +114,17 @@
                   : t('infra.tf.ws.empty')
               }}
             </p>
-            <p class="ihint">{{ t('infra.tf.ws.note') }}</p>
+            <p class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">{{ t('infra.tf.ws.note') }}</p>
           </template>
 
           <!-- terraform cài ngoài allowlist (asdf, tfenv…) ⇒ cùng đường sửa. -->
           <InfraToolBinaryHint tool="terraform" />
 
-          <p v-if="saveError" class="ierr">{{ saveError }}</p>
+          <p v-if="saveError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+            {{ saveError }}
+          </p>
         </template>
-      </div>
+      </SessionCtxPop>
     </Teleport>
   </span>
 </template>
@@ -141,8 +161,12 @@ type TerraformDirEntry = {
 const open = ref(false)
 // Chip đứng trên hàng header `.dh`, có thể sát mép phải — neo `fixed` + kẹp
 // viewport thay vì `absolute` trong `.iwrap`.
-const chipEl = ref<HTMLElement | null>(null)
-const popEl = ref<HTMLElement | null>(null)
+// Chip + popover là component (Button / SessionCtxPop) ⇒ template ref là instance,
+// phần tử DOM nằm ở `$el`.
+const chipRef = useTemplateRef<{ $el: HTMLElement }>('chipRef')
+const popRef = useTemplateRef<{ $el: HTMLElement }>('popRef')
+const chipEl = computed(() => chipRef.value?.$el ?? null)
+const popEl = computed(() => popRef.value?.$el ?? null)
 const { style: popStyle } = usePopoverAnchor(chipEl, popEl, open)
 
 const loading = ref(false)

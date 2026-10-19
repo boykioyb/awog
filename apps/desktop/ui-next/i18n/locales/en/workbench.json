@@ -39,6 +39,10 @@
   "wb.strip.deleteTitle": "Permanently delete \"{title}\"?",
   "wb.strip.deleteDesc": "The session's transcript will be removed from disk and cannot be recovered.",
   "wb.strip.deleteConfirm": "Delete permanently",
+  "wb.strip.deleteAllArchived": "Delete all",
+  "wb.strip.deleteAllArchivedTitle": "Permanently delete {n} closed sessions?",
+  "wb.strip.deleteAllArchivedDesc": "Their transcripts will be removed from disk and cannot be recovered.",
+  "wb.strip.deleteAllArchivedConfirm": "Delete {n} sessions",
   "wb.strip.clearAllTitle": "Clear every session transcript in this project?",
   "wb.strip.clearAllDesc": "{n} sessions will lose their whole transcript (running sessions are skipped). This cannot be undone.",
   "wb.strip.clearAllConfirm": "Clear {n} sessions",
@@ -117,5 +121,12 @@
   "wb.gitlog.loading": "Loading…",
   "wb.gitlog.pick": "Pick a commit to see its changed files and details.",
   "wb.gitlog.files": "{n} changed file(s)",
-  "wb.gitlog.parents": "Parents"
+  "wb.gitlog.parents": "Parents",
+  "workbench.office.openExternal": "Open in external app",
+  "workbench.office.tooLarge": "File too large to preview in the app ({size}) — open it in an external app.",
+  "workbench.file.modeTable": "Table",
+  "wb.sessions.group.today": "Today",
+  "wb.sessions.group.yesterday": "Yesterday",
+  "wb.sessions.group.week": "Previous 7 days",
+  "wb.sessions.group.older": "Older"
 }

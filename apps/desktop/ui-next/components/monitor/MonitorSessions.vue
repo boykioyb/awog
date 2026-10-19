@@ -1,61 +1,91 @@
 <template>
-  <div class="tile monsec">
-    <div class="monsech">
-      <span class="monsect">{{ t('monitor.sessions.title') }}</span>
-      <span class="fd">{{ t('monitor.sessions.count', { n: sessions.length }) }}</span>
+  <Card class="gap-2 px-3.5 pt-3 pb-1">
+    <div class="flex items-baseline gap-2">
+      <span class="text-base text-foreground">{{ t('monitor.sessions.title') }}</span>
+      <span class="text-sm text-dim">
+        {{ t('monitor.sessions.count', { n: sessions.length }) }}
+      </span>
     </div>
 
-    <div v-if="sessions.length === 0" class="monempty">{{ t('monitor.sessions.empty') }}</div>
+    <div
+      v-if="sessions.length === 0"
+      class="rounded-xl border border-dashed p-4 text-center text-sm text-faint"
+    >
+      {{ t('monitor.sessions.empty') }}
+    </div>
 
-    <table v-else class="montbl">
-      <thead>
-        <tr>
-          <th>{{ t('monitor.sessions.col.session') }}</th>
-          <th class="num">{{ t('monitor.col.cpu') }}</th>
-          <th class="num">{{ t('monitor.col.mem') }}</th>
-          <th class="num">{{ t('monitor.sessions.col.procs') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
+    <Table v-else>
+      <TableHeader>
+        <TableRow class="hover:bg-transparent">
+          <TableHead class="h-auto px-2.5 py-1.5 text-faint">
+            {{ t('monitor.sessions.col.session') }}
+          </TableHead>
+          <TableHead class="h-auto w-23 px-2.5 py-1.5 text-right text-faint">
+            {{ t('monitor.col.cpu') }}
+          </TableHead>
+          <TableHead class="h-auto w-23 px-2.5 py-1.5 text-right text-faint">
+            {{ t('monitor.col.mem') }}
+          </TableHead>
+          <TableHead class="h-auto w-23 px-2.5 py-1.5 text-right text-faint">
+            {{ t('monitor.sessions.col.procs') }}
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow
           v-for="s in sessions"
           :key="s.sessionId"
-          class="monrow"
+          class="cursor-pointer text-dim hover:bg-accent"
           @click="emit('open', s.sessionId)"
         >
-          <td>
-            <div class="monsesnm">
-              <span class="mondot" :class="{ on: s.running }" />
-              <span class="monsest" :title="s.title">{{ s.title }}</span>
-              <span class="tag" :class="{ warn: s.attribution !== 'own-process' }">
-                {{ t(`monitor.sessions.attribution.${s.attribution}`) }}
+          <TableCell class="px-2.5 py-2 align-top">
+            <div class="flex min-w-0 items-center gap-2">
+              <span
+                class="size-2 shrink-0 rounded-full"
+                :class="s.running ? 'bg-primary' : 'bg-faint'"
+              />
+              <span class="max-w-105 truncate text-foreground" :title="s.title">
+                {{ s.title }}
               </span>
+              <Badge
+                variant="outline"
+                class="rounded-sm"
+                :class="
+                  s.attribution !== 'own-process'
+                    ? 'border-warning/40 text-warning'
+                    : 'text-muted-foreground'
+                "
+              >
+                {{ t(`monitor.sessions.attribution.${s.attribution}`) }}
+              </Badge>
             </div>
             <!-- Phiên chạy trong engine/daemon dùng chung: nói rõ VÌ SAO cột CPU
                  trống, thay vì để người dùng tưởng phiên đang rảnh. -->
-            <div v-if="s.attribution !== 'own-process'" class="monseshint">
+            <div v-if="s.attribution !== 'own-process'" class="mt-0.5 text-xs text-faint">
               {{ t(`monitor.sessions.hint.${s.attribution}`) }}
             </div>
-          </td>
+          </TableCell>
           <!-- Màu chỉ có nghĩa khi con số là của ĐÚNG phiên này; phiên chạy trong
                engine dùng chung thì ô trống, tô màu ô trống là vô nghĩa. -->
-          <td
-            class="num tnum"
-            :style="{ color: own(s) ? levelColor(cpuLevel(s.cpuPercent)) : undefined }"
+          <TableCell
+            class="px-2.5 py-2 text-right align-top tabular-nums"
+            :class="own(s) ? levelText(cpuLevel(s.cpuPercent)) : undefined"
           >
             {{ own(s) ? formatCpuLoad(s.cpuPercent) : '—' }}
-          </td>
-          <td
-            class="num tnum"
-            :style="{ color: own(s) ? levelColor(memLevel(s.rssKb, totalMemKb)) : undefined }"
+          </TableCell>
+          <TableCell
+            class="px-2.5 py-2 text-right align-top tabular-nums"
+            :class="own(s) ? levelText(memLevel(s.rssKb, totalMemKb)) : undefined"
           >
             {{ own(s) ? formatMem(s.rssKb) : '—' }}
-          </td>
-          <td class="num tnum">{{ s.pids.length }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+          </TableCell>
+          <TableCell class="px-2.5 py-2 text-right align-top tabular-nums">
+            {{ s.pids.length }}
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -63,10 +93,10 @@ import {
   cpuLevel,
   formatCpuLoad,
   formatMem,
-  levelColor,
   memLevel,
   type MonitorSession,
 } from '~/composables/useMonitorManager'
+import { levelText } from './monitor-level'
 
 defineProps<{ sessions: MonitorSession[]; totalMemKb: number }>()
 const emit = defineEmits<{ (e: 'open', sessionId: string): void }>()
@@ -75,90 +105,3 @@ const { t } = useI18n()
 
 const own = (s: MonitorSession): boolean => s.attribution === 'own-process'
 </script>
-
-<style scoped>
-.monsec {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px 4px;
-}
-.monsech {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.monsect {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-.monempty {
-  padding: 16px;
-  text-align: center;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-  border: 1px dashed var(--border);
-  border-radius: var(--r-card);
-}
-.montbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.montbl th {
-  text-align: left;
-  padding: 6px 10px;
-  color: var(--textFaint);
-  font-weight: 500;
-  border-bottom: 1px solid var(--border);
-}
-.montbl th.num,
-.montbl td.num {
-  text-align: right;
-  width: 92px;
-}
-.montbl td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--borderSoft, var(--border));
-  color: var(--textDim);
-  vertical-align: top;
-}
-.monrow {
-  cursor: pointer;
-}
-.monrow:hover td {
-  background: var(--bgHover);
-}
-.monsesnm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.monsest {
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 420px;
-}
-.monseshint {
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.mondot {
-  flex: 0 0 auto;
-  width: 7px; /* design-token-ok: chấm trạng thái — con số px CHÍNH LÀ hình dạng */
-  height: 7px; /* design-token-ok: như trên */
-  border-radius: 50%;
-  background: var(--textFaint);
-}
-.mondot.on {
-  background: var(--accent);
-}
-</style>

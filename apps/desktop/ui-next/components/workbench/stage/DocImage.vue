@@ -4,10 +4,10 @@
        qua useZoomPan khi phóng. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div
-      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim shadow-[inset_0_-1px_0_var(--border)] bg-[var(--bgEl)]"
+      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim shadow-[inset_0_-1px_0_var(--border)] bg-card"
     >
       <span class="truncate font-mono">{{ rel }}</span>
-      <span v-if="metaLabel" class="flex-none text-[var(--textFaint)]">· {{ metaLabel }}</span>
+      <span v-if="metaLabel" class="flex-none text-faint">· {{ metaLabel }}</span>
       <DocReloadButton class="ml-auto" :doc="props.doc" />
       <DocButtonGroup
         :options="zoomOptions"
@@ -17,7 +17,7 @@
     </div>
     <div
       v-if="st.status === 'loading' || st.status === 'idle'"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center text-sm text-faint"
     >
       {{ t('workbench.file.loading') }}
     </div>
@@ -29,7 +29,7 @@
     </div>
     <div
       v-else-if="st.truncated || !src"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center text-sm text-faint"
     >
       {{ t('workbench.img.tooLarge', { size: st.byteSize ? formatBytes(st.byteSize) : '—' }) }}
     </div>
@@ -50,15 +50,13 @@
       <img
         ref="imgEl"
         :src="src"
-        class="max-h-[88%] max-w-[92%] select-none rounded-[var(--r-sm)] object-contain"
+        class="max-h-[88%] max-w-[92%] select-none rounded-md object-contain"
         :style="picStyle"
         draggable="false"
         alt=""
         @load="onImgLoad"
       />
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-2.5 text-center text-xs text-[var(--textFaint)]"
-      >
+      <div class="pointer-events-none absolute inset-x-0 bottom-2.5 text-center text-xs text-faint">
         {{ rel }}
       </div>
     </div>

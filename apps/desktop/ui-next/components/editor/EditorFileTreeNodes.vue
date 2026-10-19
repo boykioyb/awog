@@ -1,9 +1,15 @@
 <template>
-  <div class="edtn">
+  <div>
     <template v-for="node in nodes" :key="node.path">
+      <!-- raw-ok: hàng cây file — cả dòng là vùng bấm, thụt lề theo depth -->
       <button
-        class="edtn-row"
-        :class="{ on: node.kind === 'file' && node.path === selectedPath }"
+        type="button"
+        class="flex w-full cursor-pointer items-center gap-1.5 border-l-2 py-1 pr-2.5 text-left text-foreground hover:bg-accent"
+        :class="
+          node.kind === 'file' && node.path === selectedPath
+            ? 'border-l-primary bg-selected'
+            : 'border-l-transparent'
+        "
         :style="{ paddingLeft: `${depth * 12 + 10}px` }"
         @click="onClick(node)"
         @contextmenu.prevent="ctrl.onContext?.($event, node.path, node.kind)"
@@ -11,12 +17,13 @@
         <Icon
           v-if="node.kind === 'dir'"
           name="chev"
-          class="edtn-chev"
-          :class="{ open: ctrl.isExpanded(node.path) }"
+          class="size-3 shrink-0 text-faint transition-transform"
+          :class="{ '-rotate-90': !ctrl.isExpanded(node.path) }"
         />
-        <span v-else class="edtn-chev-spacer" />
-        <Icon :name="node.kind === 'dir' ? 'folder' : 'text'" class="edtn-icon" />
-        <span class="edtn-name">{{ node.name }}</span>
+        <span v-else class="size-3 shrink-0" />
+        <Icon :name="node.kind === 'dir' ? 'folder' : 'text'" class="size-3.5 shrink-0 text-dim" />
+        <!-- mono: tên file/thư mục trong cây -->
+        <span class="min-w-0 truncate font-mono">{{ node.name }}</span>
       </button>
 
       <!-- Recursively render an expanded directory's children. -->
@@ -49,56 +56,3 @@ function onClick(node: WorkspaceTreeNode): void {
   else props.ctrl.openFile(node.path)
 }
 </script>
-
-<style scoped>
-.edtn-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 10px 4px 10px;
-  text-align: left;
-  color: var(--text);
-  background: transparent;
-  border: none;
-  border-left: 2px solid transparent;
-  cursor: pointer;
-}
-.edtn-row:hover {
-  background: var(--bgHover);
-}
-.edtn-row.on {
-  background: var(--bgActive);
-  border-left-color: var(--accent);
-}
-.edtn-chev {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--textFaint);
-  flex-shrink: 0;
-  transform: rotate(-90deg);
-  transition: transform 0.12s;
-}
-.edtn-chev.open {
-  transform: rotate(0deg);
-}
-.edtn-chev-spacer {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-}
-.edtn-icon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-  flex-shrink: 0;
-}
-.edtn-name {
-  /* mono-ok: file tree node name */
-  font-family: var(--code);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-</style>

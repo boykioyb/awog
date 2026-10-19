@@ -1,23 +1,26 @@
 <template>
-  <!-- App-wide terminal dock. Lives in the layout flex column ABOVE the status
-       bar, so when open it pushes the page up (a real panel, not an overlay).
-       `v-show` (display:none when closed) removes it from the flex flow entirely
-       while keeping the inner terminal mounted so its PTY + scrollback survive a
-       close → reopen. When collapsed the dock shrinks to just this header (the
-       body is hidden but its PTYs live on — an in-place "roll-up" minimize). -->
+  <!-- App-wide terminal dock. FLOATS over the bottom of the SidebarInset (absolute,
+       SidebarInset là `relative`) thay vì nằm trong cột flex: nằm trong cột thì nó
+       ăn chiều cao của cả hàng trang, làm ngắn list Sessions và để lại khoảng chết
+       bên dưới; float thì chỉ cột bị phủ phải chừa chỗ (app-shell.css làm việc đó
+       bằng `--awog-dock-h`, publish từ đây). z-40: band trang (page ≤61 · detail
+       80/81 · drawer 90-92 · modal 100-300).
+       `v-show` (display:none when closed) keeps the inner terminal mounted so its
+       PTY + scrollback survive a close → reopen. When collapsed the dock shrinks to
+       just this header (the body is hidden but its PTYs live on — an in-place
+       "roll-up" minimize). -->
   <section
     v-show="isOpen"
     ref="rootEl"
-    class="gterm"
-    :class="{ 'gterm--collapsed': collapsed }"
+    class="absolute inset-x-0 bottom-0 z-40 flex min-h-0 flex-col border-t bg-background"
     :style="dockStyle"
     :aria-hidden="!isOpen"
   >
     <!-- Top-edge resize handle: drag up to grow the dock. Hidden while collapsed
-         (nothing to resize). -->
+         (nothing to resize). Dải mỏng vắt qua viền trên. -->
     <div
       v-if="!collapsed"
-      class="gterm-rsz"
+      class="absolute inset-x-0 -top-0.75 z-1 h-1.75 cursor-ns-resize hover:bg-selected"
       role="separator"
       aria-orientation="horizontal"
       :title="t('terminalGlobal.resize')"
@@ -25,42 +28,68 @@
     />
 
     <!-- Clicking a collapsed header bar rolls the dock back open. -->
-    <header class="gterm-head" :class="{ 'gterm-head--clickable': collapsed }" @click="onHeadClick">
-      <span class="gterm-dot" :class="`gterm-dot--${dotState}`" :title="dotTitle" />
-      <span class="gterm-title">
-        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <header
+      class="flex h-7.5 shrink-0 items-center gap-2 bg-sidebar pr-2 pl-2.5 data-collapsed:cursor-pointer"
+      :data-collapsed="collapsed || undefined"
+      @click="onHeadClick"
+    >
+      <!-- Status dot: live PTY (accent, nhịp thở), mounted-but-idle (mờ), sidecar
+           unavailable (danger). Read-only reflection of dotState — see script setup. -->
+      <span
+        class="size-1.75 shrink-0 rounded-full"
+        :class="DOT_CLASS[dotState]"
+        :title="dotTitle"
+      />
+      <span class="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
+        <Icon name="commands" class="size-3.5" />
         {{ t('terminalGlobal.title') }}
       </span>
-      <span class="gterm-cwd" :title="cwdTitle">{{ cwdLabel }}</span>
-      <button
-        class="gterm-btn gterm-btn--lead"
-        :class="{ 'gterm-btn--on': snippetsOpen }"
+      <!-- mono-ok: tên thư mục cwd của terminal (đường dẫn) -->
+      <span class="font-mono text-sm text-dim" :title="cwdTitle">{{ cwdLabel }}</span>
+      <!-- Nút đầu cụm phải (Snippets) đẩy cả cụm ra mép. Bật = accent-tint. -->
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="ml-auto size-5.5"
+        :class="
+          snippetsOpen
+            ? 'bg-selected text-primary hover:bg-selected hover:text-primary'
+            : 'text-dim'
+        "
         :title="t('terminalSnippet.toggle')"
         :aria-label="t('terminalSnippet.toggle')"
+        :aria-pressed="snippetsOpen"
         @click.stop="onToggleSnippets"
       >
-        <ScrollText :size="14" />
-      </button>
-      <button
-        class="gterm-btn"
+        <ScrollText />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-5.5 text-dim"
         :title="collapsed ? t('terminalGlobal.expand') : t('terminalGlobal.collapse')"
         :aria-label="collapsed ? t('terminalGlobal.expand') : t('terminalGlobal.collapse')"
         @click.stop="toggleCollapse"
       >
-        <component :is="collapsed ? ChevronUp : ChevronDown" :size="14" />
-      </button>
-      <button
-        class="gterm-btn"
+        <component :is="collapsed ? ChevronUp : ChevronDown" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-5.5 text-dim"
         :title="t('terminalGlobal.close')"
         :aria-label="t('terminalGlobal.close')"
         @click.stop="close"
       >
-        <X :size="14" />
-      </button>
+        <X />
+      </Button>
     </header>
+    <!-- Thu gọn thì header là cả dock — hairline dưới nó thừa. -->
+    <Separator v-if="!collapsed" />
 
-    <div v-show="!collapsed" class="gterm-body">
-      <div class="gterm-main">
+    <div v-show="!collapsed" class="flex min-h-0 flex-1">
+      <!-- Terminal column: yields all remaining width to the (fixed-width) snippets rail. -->
+      <div class="h-full min-w-0 flex-1">
         <!-- One WorkspaceTerminal instance PER open project tab, ALL mounted at once
              and toggled with v-show — only the active tab's is shown; the rest stay
              mounted-but-hidden so their tab set + live PTYs survive a switch away and
@@ -207,6 +236,11 @@ const dotState = computed<'live' | 'idle' | 'off'>(() => {
   return activeConnId.value ? 'live' : 'idle'
 })
 const dotTitle = computed(() => t(`terminalGlobal.status.${dotState.value}`))
+const DOT_CLASS: Record<'live' | 'idle' | 'off', string> = {
+  live: 'bg-primary animate-pulse motion-reduce:animate-none',
+  idle: 'bg-faint',
+  off: 'bg-destructive',
+}
 
 // Expand the roll-up when the collapsed header bar is clicked (buttons stop
 // propagation, so only the bar itself triggers this).
@@ -360,157 +394,3 @@ function onResize(ev: PointerEvent): void {
   handle.addEventListener('pointerup', onUp)
 }
 </script>
-
-<style scoped>
-/* The dock FLOATS over the bottom of `.main` rather than sitting in its flex column.
-   In the column it took height from the whole page row, which shortened the Sessions
-   list and left a dead gap beneath it; floating means only the column it covers has to
-   reserve room (app-shell.css does that with `--awog-dock-h`, published from here).
-   `.main` is the containing block (app-shell.css gives it position:relative), and being
-   positioned also keeps `.gterm-rsz` anchored to this box as before.
-   This lives HERE, not in app-shell.css: a scoped selector compiles to
-   `.gterm[data-v-hash]` (0,2,0) and would outrank a bare `.gterm` rule in a global
-   stylesheet — the earlier attempt to set `position` from app-shell.css silently lost. */
-.gterm {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* Page band (page ≤61 · detail 80/81 · drawer 90-92 · modal 100-300). */
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-top: 1px solid var(--border);
-  background: var(--background);
-}
-/* Thin grab strip straddling the top border. */
-.gterm-rsz {
-  position: absolute;
-  top: -3px;
-  left: 0;
-  right: 0;
-  height: 7px;
-  cursor: ns-resize;
-  z-index: 1;
-}
-.gterm-rsz:hover {
-  background: var(--accentDim);
-}
-/* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
-   box under `box-sizing: border-box`, leaving an odd height (30 - 1 = 29) that puts every
-   vertically centred child on a half pixel. A shadow takes no layout space. Inset rather
-   than outset so the next sibling's background cannot paint over the line. */
-.gterm-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 8px 0 10px;
-  box-shadow: inset 0 -1px 0 var(--border);
-  background: var(--sidebar);
-}
-/* Collapsed: the header is the whole dock, so its bottom border is redundant and
-   the whole bar becomes a click target to expand. */
-.gterm--collapsed .gterm-head {
-  box-shadow: none;
-}
-.gterm-head--clickable {
-  cursor: pointer;
-}
-/* Status dot: live PTY (accent, breathing), mounted-but-idle (dim), sidecar
-   unavailable (danger). Read-only reflection of dotState — see script setup. */
-.gterm-dot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--textFaint);
-}
-.gterm-dot--live {
-  background: var(--primary);
-  animation: gterm-dot-breathe 1.6s ease-in-out infinite;
-}
-.gterm-dot--idle {
-  background: var(--textFaint);
-}
-.gterm-dot--off {
-  background: var(--destructive);
-}
-@keyframes gterm-dot-breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .gterm-dot--live {
-    animation: none;
-  }
-}
-.gterm-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--foreground);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-}
-.gterm-cwd {
-  color: var(--textDim);
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 12px;
-}
-.gterm-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-/* First button of the right cluster (Snippets) pushes the cluster to the edge. */
-.gterm-btn--lead {
-  margin-left: auto;
-}
-.gterm-btn:hover {
-  color: var(--foreground);
-  background: var(--accent-wash);
-}
-/* Active toggle (snippets rail open) — accent tint, no solid gray fill. Declared
-   after :hover so it wins for the open state (equal specificity, later source). */
-.gterm-btn--on,
-.gterm-btn--on:hover {
-  color: var(--primary);
-  background: var(--accentDim);
-}
-.gterm-btn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.gterm-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: row;
-}
-/* Terminal column: yields all remaining width to the (fixed-width) snippets rail. */
-.gterm-main {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-}
-</style>

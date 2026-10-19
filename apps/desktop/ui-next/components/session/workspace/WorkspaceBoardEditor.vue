@@ -1,9 +1,19 @@
 <template>
   <Teleport to="body">
-    <div class="ovl on wsed-ovl" @click.self="emit('close')">
+    <!-- Overlay tự viết thay vì Dialog của reka: Esc đi theo lớp (peek full → peek →
+         modal full → đóng, useEscToClose), và modal gọi confirm()/PreviewModal/peek
+         full nổi bên trên — Dialog modal khoá pointer-events ngoài content.
+         `.ovl.on` giữ làm hook: nằm trong OVERLAYS (useEmbeddedBrowser.ts).
+         hook-ok: `.ovl.on` do OVERLAYS của useEmbeddedBrowser.ts đọc -->
+    <div class="ovl on" :class="OVERLAY_CLASS" @click.self="emit('close')">
+      <!-- `edFull` (nút ⤢ trên header): bung gần hết viewport, giữ lề 12px + overlay mờ. -->
       <div
-        class="wsed flex w-[1120px] max-w-[94vw] flex-col rounded-xl border border-border bg-popover"
-        :class="{ full: edFull, 'h-[86vh]': !!item, 'max-h-[86vh]': !item }"
+        class="flex flex-col rounded-xl border border-border bg-popover shadow-lg"
+        :class="
+          edFull
+            ? 'h-[calc(100vh-1.5rem)] w-[calc(100vw-1.5rem)]'
+            : ['w-280 max-w-[94vw]', item ? 'h-[86vh]' : 'max-h-[86vh]']
+        "
         role="dialog"
         aria-modal="true"
         @click.stop
@@ -26,40 +36,42 @@
                Mở dropdown là refresh usage rollup (lượt + token) của roster. -->
           <DropdownMenu v-if="item && roster.length" @update:open="onRosterOpen">
             <DropdownMenuTrigger as-child>
-              <button
-                type="button"
-                class="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted"
+              <Button
+                variant="outline"
+                size="xs"
+                class="shrink-0 gap-1.5 rounded-full px-2 font-normal text-foreground [&_svg]:size-3.5"
               >
                 <span class="flex -space-x-1.5">
                   <span
                     v-for="m in roster.slice(0, 3)"
                     :key="m.engineId ?? m.id"
-                    class="grid size-4 place-items-center rounded-full text-[8px] font-semibold text-white ring-1 ring-popover"
+                    class="grid size-4 place-items-center rounded-full font-semibold text-white ring-1 ring-popover"
+                    :class="AVATAR_TEXT_XS"
                     :style="{ background: avatarColor(m) }"
                   >
                     {{ initial(m.title) }}
                   </span>
                 </span>
-                <span class="max-w-[160px] truncate">{{ rosterLabel }}</span>
-                <ChevronDown class="size-3.5 text-dim" />
-              </button>
+                <span class="max-w-40 truncate">{{ rosterLabel }}</span>
+                <ChevronDown class="text-dim" />
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-[300px]">
+            <DropdownMenuContent align="end" class="w-75">
               <DropdownMenuLabel
-                class="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wide text-dim"
+                class="flex items-center justify-between gap-3 text-xs font-medium text-dim"
               >
                 <span>{{ t('sessions.workspace.group.roster') }} · {{ roster.length }}</span>
                 <!-- Tổng token cả ê-kíp — rollup lũy kế các phiên member,
                      nạp khi mở dropdown (memberStats). -->
                 <span
                   v-if="rosterTotals.tokens"
-                  class="normal-case tracking-normal text-faint"
+                  class="font-normal text-faint"
                   :title="t('board.rosterTotals', { n: rosterTotals.turns })"
                 >
                   {{ formatTokenCount(rosterTotals.tokens) }} tok
                 </span>
               </DropdownMenuLabel>
-              <div class="max-h-[280px] overflow-y-auto">
+              <div class="max-h-70 overflow-y-auto">
                 <DropdownMenuItem
                   v-for="m in roster"
                   :key="m.engineId ?? m.id"
@@ -67,7 +79,8 @@
                   @select="peek(m)"
                 >
                   <span
-                    class="grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
+                    class="grid size-5 shrink-0 place-items-center rounded-full font-semibold text-white"
+                    :class="AVATAR_TEXT_SM"
                     :style="{ background: avatarColor(m) }"
                   >
                     {{ initial(m.title) }}
@@ -78,7 +91,7 @@
                          số lượt đã chạy + tổng token. Chưa có lượt nào → giấu. -->
                     <span
                       v-if="m.engineId && memberStats[m.engineId]?.turns"
-                      class="block truncate text-[10px] leading-4 text-faint"
+                      class="block truncate text-xs text-faint"
                     >
                       {{ t('board.member.turns', { n: memberStats[m.engineId]!.turns }) }} ·
                       {{ formatTokenCount(memberStats[m.engineId]!.tokens) }} tok
@@ -87,8 +100,8 @@
                   <Crown v-if="m.engineId === runRoot" class="size-3 shrink-0 text-warning" />
                   <component
                     :is="statusIcon(m.status)"
-                    class="mstat size-3.5 shrink-0"
-                    :data-st="m.status"
+                    class="size-3.5 shrink-0"
+                    :class="statusIconClass(m.status)"
                   />
                 </DropdownMenuItem>
               </div>
@@ -142,27 +155,25 @@
         >
           <ArrowLeft class="size-3 shrink-0 text-faint" />
           <template v-for="p in parentChain" :key="p.id">
-            <button
-              type="button"
-              class="flex min-w-0 items-center gap-1 text-[11px] text-dim transition-colors hover:text-primary"
+            <Button
+              variant="ghost"
+              class="h-auto min-w-0 gap-1 p-0 text-xs font-normal text-dim hover:bg-transparent hover:text-primary [&_svg]:size-3"
               :title="`${t('board.parentUp')} — ${p.title}`"
               @click="emit('openItem', p.id)"
             >
-              <component
-                :is="typeIconOf(p)"
-                class="size-3 shrink-0"
-                :data-type="p.type ?? 'task'"
-              />
+              <component :is="typeIconOf(p)" class="shrink-0" :class="typeColorOf(p)" />
               <span class="truncate">{{ p.title }}</span>
-            </button>
+            </Button>
             <ChevronRight class="size-3 shrink-0 text-faint" />
           </template>
-          <span class="min-w-0 truncate text-[11px] font-medium text-foreground">
+          <span class="min-w-0 truncate text-xs font-medium text-foreground">
             {{ item.title }}
           </span>
         </div>
 
-        <div class="wsed-main" :class="{ 'wsed-main-rel': item }">
+        <!-- Edit mode: drawer WorkspaceAgentPeek neo absolute vào cạnh phải của vùng
+             body (dưới header), không phải cả modal ⇒ relative + overflow-hidden. -->
+        <div class="flex min-h-0 flex-auto flex-col" :class="{ 'relative overflow-hidden': item }">
           <!-- ═══ EDIT MODE ═══ -->
           <template v-if="item">
             <!-- Layout kiểu Jira: KHÔNG còn tab trên cùng. Cột chính cuộn liền — tiêu đề,
@@ -188,23 +199,19 @@
                   <span class="text-xs text-muted-foreground">
                     {{ t('board.children') }} · {{ childItems.length }}
                   </span>
-                  <button
+                  <Button
                     v-for="c in childItems"
                     :key="c.id"
-                    type="button"
-                    class="flex min-w-0 items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:bg-accent-wash"
+                    variant="ghost"
+                    class="h-auto min-w-0 justify-start gap-2 rounded-md border border-border px-2.5 py-1.5 text-left font-normal [&_svg]:size-3.5"
                     @click="emit('openItem', c.id)"
                   >
-                    <component
-                      :is="typeIconOf(c)"
-                      class="size-3.5 shrink-0"
-                      :data-type="c.type ?? 'task'"
-                    />
+                    <component :is="typeIconOf(c)" class="shrink-0" :class="typeColorOf(c)" />
                     <span class="min-w-0 flex-1 truncate text-xs">{{ c.title }}</span>
-                    <span class="shrink-0 text-[10px] text-dim">
+                    <span class="shrink-0 text-xs text-dim">
                       {{ statusLabel(c.status) }}
                     </span>
-                  </button>
+                  </Button>
                 </div>
                 <!-- Advanced — override LLM per-slot (collapse mặc định):
                      nằm cột trái cho rộng, không nén vào sidebar props. -->
@@ -218,7 +225,7 @@
                   :signals="advSignals"
                 />
                 <div
-                  class="flex flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-dashed border-border pt-2.5 text-[11px] text-faint"
+                  class="flex flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-dashed border-border pt-2.5 text-xs text-faint"
                 >
                   <span>
                     {{ t('sessions.workspace.group.detailProject') }}:
@@ -259,7 +266,12 @@
                       </TabsList>
                     </Tabs>
                   </div>
-                  <div class="wsed-activity flex min-h-0 flex-col rounded-md border border-border">
+                  <!-- Thread là messenger (transcript cuộn riêng + composer ở đáy) nên cần
+                       chiều cao cố định trong cột cuộn — theo khung nhìn, có sàn để
+                       composer luôn vừa. -->
+                  <div
+                    class="flex h-[max(420px,60vh)] min-h-0 flex-col rounded-md border border-border"
+                  >
                     <div v-if="tab === 'media'" class="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
                       <WorkspaceInfoMedia :session="mediaSession" />
                     </div>
@@ -284,9 +296,7 @@
                 </section>
               </div>
               <!-- Sidebar thuộc tính (khuôn GitHub/Jira) — luôn hiện, cuộn riêng. -->
-              <aside
-                class="w-[300px] flex-none overflow-y-auto px-4 py-4 shadow-[inset_1px_0_0_var(--border)]"
-              >
+              <aside class="w-75 flex-none overflow-y-auto border-l border-border px-4 py-4">
                 <WorkspaceIssueSidebar
                   v-model:status="status"
                   v-model:assignee="assignee"
@@ -369,17 +379,21 @@
             <template v-else>
               <!-- AI strip — chỉ mode tạo manual: brief → boards.draft điền
                    title/desc, model theo cấu hình AI authoring. -->
-              <div v-if="!item" class="wsed-ai">
-                <button
-                  type="button"
-                  class="wsed-aitoggle"
-                  :class="{ on: aiOpen }"
+              <div v-if="!item" class="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  class="gap-1.5 self-start border-dashed font-normal hover:border-primary hover:bg-transparent hover:text-foreground [&_svg]:size-3.5"
+                  :class="aiOpen ? 'border-primary text-foreground' : 'text-muted-foreground'"
                   @click="aiOpen = !aiOpen"
                 >
-                  <Sparkles class="wsed-aiicn" />
+                  <Sparkles />
                   {{ t('board.ai.toggle') }}
-                </button>
-                <div v-if="aiOpen" class="wsed-aibody">
+                </Button>
+                <div
+                  v-if="aiOpen"
+                  class="flex flex-col gap-2 rounded-lg border border-dashed border-border p-2.5"
+                >
                   <Textarea
                     v-model="aiBrief"
                     rows="3"
@@ -387,7 +401,7 @@
                     :disabled="aiBusy"
                     :placeholder="t('board.ai.briefPh')"
                   />
-                  <div class="wsed-airow">
+                  <div class="flex items-center justify-between gap-2">
                     <AiModelPicker width="200px" />
                     <Button size="sm" :disabled="aiBusy || !aiBrief.trim()" @click="runAiDraft">
                       <Sparkles v-if="!aiBusy" class="size-3.5" />
@@ -407,7 +421,7 @@
               />
               <Textarea
                 v-model="desc"
-                class="min-h-[120px] resize-y"
+                class="min-h-30 resize-y"
                 rows="8"
                 :placeholder="t('sessions.workspace.group.field.desc')"
               />
@@ -454,7 +468,8 @@
             />
           </div>
           <!-- File picker ẩn cho menu `+` của composer brief (agent mode). -->
-          <input ref="fileInput" type="file" multiple style="display: none" @change="onPick" />
+          <!-- raw-ok: input file ẩn, chỉ để mở hộp chọn file của hệ điều hành -->
+          <input ref="fileInput" type="file" multiple class="hidden" @change="onPick" />
         </div>
 
         <div class="flex items-center gap-2 border-t border-border px-4 py-2.5">
@@ -892,7 +907,7 @@ provideMemberPeek((handle) => {
 const initial = nameInitial
 const avatarColor = (m: Session): string => avatarHue(m.engineId ?? String(m.id))
 
-// Icon trạng thái member trong dropdown — animation sống trong CSS .mstat.
+// Icon trạng thái member trong dropdown — màu + animation ở statusIconClass().
 const STATUS_ICONS: Record<SessionStatus, unknown> = {
   streaming: LoaderCircle,
   awaiting: Hourglass,
@@ -901,6 +916,21 @@ const STATUS_ICONS: Record<SessionStatus, unknown> = {
   idle: CircleDashed,
 }
 const statusIcon = (st: SessionStatus | undefined): unknown => STATUS_ICONS[st ?? 'idle']
+// Overlay phủ toàn màn, căn GIỮA modal, z 160 (trên band modal thường).
+const OVERLAY_CLASS =
+  'fixed inset-0 z-160 flex items-center justify-center bg-black/55 [-webkit-app-region:no-drag]'
+// Màu icon trạng thái member: streaming xoay chậm, awaiting pulse nhẹ (kiểu "đang
+// làm việc" thay vì chữ), error đỏ, còn lại mờ.
+function statusIconClass(st: SessionStatus | undefined): string {
+  if (st === 'streaming') return 'animate-[spin_1.6s_linear_infinite] text-primary'
+  if (st === 'awaiting') return 'animate-pulse text-warning'
+  if (st === 'error') return 'text-destructive'
+  return 'text-faint'
+}
+// Chữ cái đầu trong avatar tròn 16/20px — nhỏ hơn bậc text-xs của thang, cố ý cố
+// định vì là hình vẽ trong một hộp cố định, không phải chữ đọc.
+const AVATAR_TEXT_XS = 'text-[8px]' // px-ok: initials trong avatar 16px
+const AVATAR_TEXT_SM = 'text-[9px]' // px-ok: initials trong avatar 20px
 
 // Mode TẠO: 'manual' = item thường; 'agent' = assignee spec bắt buộc, mặc định
 // xếp backlog (spec chờ), nút dispatch mới đặt todo + tin giao việc vào inbox
@@ -1168,6 +1198,16 @@ const TYPE_ICON_OF: Record<BoardItemType, unknown> = {
   bug: Bug,
 }
 const typeIconOf = (it: BoardItem): unknown => TYPE_ICON_OF[it.type ?? 'task']
+// Màu icon loại — cùng palette card ngoài board (epic tím / story xanh lá / task
+// xanh dương / subtask xám / bug đỏ).
+const TYPE_COLOR_OF: Record<BoardItemType, string> = {
+  epic: 'text-lavender',
+  story: 'text-success',
+  task: 'text-info',
+  subtask: 'text-muted-foreground',
+  bug: 'text-destructive',
+}
+const typeColorOf = (it: BoardItem): string => TYPE_COLOR_OF[it.type ?? 'task']
 
 // Việc con (cây sub-issue): item nào trỏ parentId vào item đang mở — render
 // trong tab General, click nhảy sang editor của item con (emit openItem).
@@ -1482,154 +1522,3 @@ onMounted(async () => {
   void agentsStore.loadAgents(projectSel.value ? [projectSel.value] : [])
 })
 </script>
-
-<style scoped>
-/* Overlay .ovl.on của prototype.css đã flex + dim; căn GIỮA thay vì 13vh. */
-.wsed-ovl {
-  align-items: center;
-  padding-top: 0;
-  z-index: 160;
-}
-/* Elevation — layout-only scoped rules; every color/edge lives in the
-   template's token utilities. */
-.wsed {
-  box-shadow: var(--shadow-lg);
-}
-/* Chế độ toàn màn — nút ⤢ trên header: bung gần hết viewport (giữ lề 12px +
-   overlay mờ bên dưới). max-h/max-w của class utility bị đè tại đây. */
-.wsed.full {
-  width: calc(100vw - 24px);
-  max-width: none;
-  max-height: none;
-  height: calc(100vh - 24px);
-  border-radius: var(--r-lg, 12px);
-}
-.wsed-main {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* Edit mode: drawer WorkspaceAgentPeek neo absolute vào cạnh phải của vùng
-   body (dưới tab bar), không phải cả modal. */
-.wsed-main-rel {
-  position: relative;
-  overflow: hidden;
-}
-/* Khung Hoạt động: thread là messenger (transcript cuộn riêng + composer ở đáy) nên
-   cần chiều cao cố định trong cột cuộn — theo khung nhìn, có sàn để composer luôn vừa. */
-.wsed-activity {
-  height: max(420px, 60vh);
-}
-
-/* Icon trạng thái trong member dropdown — màu theo token status; streaming
-   xoay chậm, awaiting pulse nhẹ (kiểu "đang làm việc" thay vì chữ). */
-.mstat {
-  color: var(--textFaint);
-}
-.mstat[data-st='streaming'] {
-  color: var(--accent);
-  animation: mstat-spin 1.6s linear infinite;
-}
-.mstat[data-st='awaiting'] {
-  color: var(--amber);
-  animation: mstat-pulse 1.6s ease-in-out infinite;
-}
-.mstat[data-st='error'] {
-  color: var(--danger);
-}
-@keyframes mstat-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes mstat-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-/* AI draft strip — viền dashed như hint agent-mode, toggle là ghost link. */
-.wsed-ai {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.wsed-aitoggle {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-size: 11.5px;
-  color: var(--textMuted);
-  cursor: pointer;
-  transition:
-    color var(--fast) ease,
-    border-color var(--fast) ease;
-}
-.wsed-aitoggle:hover,
-.wsed-aitoggle.on {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.wsed-aiicn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.wsed-aibody {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r-btn);
-}
-.wsed-airow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-/* Màu icon loại item (breadcrumb cha + list việc con) — cùng palette
-   .wsb-ticon của card ngoài board. */
-.wsed [data-type='epic'] {
-  color: var(--violet);
-}
-.wsed [data-type='story'] {
-  color: var(--success);
-}
-.wsed [data-type='task'] {
-  color: var(--info);
-}
-.wsed [data-type='subtask'] {
-  color: var(--muted-foreground);
-}
-.wsed [data-type='bug'] {
-  color: var(--destructive);
-}
-
-/* Màn hẹp: lưới props 3 cột co về một cột; lưới khuôn Jira 4 cột co đôi. */
-@media (max-width: 640px) {
-  .wsed .grid-cols-3 {
-    grid-template-columns: 1fr;
-  }
-  .wsed .grid-cols-4 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* Màn hẹp: layout General 9/3 xếp chồng — sidebar props xuống dưới nội dung. */
-@media (max-width: 900px) {
-  .wsed-gen {
-    grid-template-columns: 1fr;
-  }
-  .wsed-gen > * {
-    grid-column: 1 / -1;
-  }
-}
-</style>

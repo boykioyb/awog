@@ -1,5 +1,5 @@
 <template>
-  <div class="forkcanvas">
+  <div class="forkcanvas relative size-full">
     <VueFlow
       :model-value="vfElements"
       :node-types="nodeTypes"
@@ -82,17 +82,9 @@ function onNodeClick(e: NodeMouseEvent) {
 }
 </script>
 
-<style scoped>
-.forkcanvas {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background-image: none;
-}
-</style>
-
 <style>
-/* Blend VueFlow internals with the shared palette (unscoped — reaches the controls). */
+/* style-ok: DOM nội bộ của VueFlow (handle, nút controls) — class không chạm tới được.
+   Unscoped để với tới controls; scope dưới `.forkcanvas`. */
 .forkcanvas .vue-flow__handle {
   width: 7px;
   height: 7px;

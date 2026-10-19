@@ -30,29 +30,39 @@
        KHÔNG có picker tài khoản thứ hai ở dưới: cả bảng tài nguyên lẫn danh mục
        đều derive từ `settings.infra` — đúng ADR 0088 §7 và đúng lý do "hai bảng
        cạnh nhau nói về hai tài khoản khác nhau mà không ai nhận ra". -->
-  <div class="ictx">
-    <span class="iwrap">
-      <button
+  <!-- Một hàng, cao bằng hàng tab, đẩy sang phải hàng tab (không chen vào giữa các
+       tab). Không nhãn đứng trước: giá trị bên trong ("dev-sandbox · Theo profile")
+       đã tự nói đây là ngữ cảnh nào. -->
+  <div class="ml-auto flex items-center gap-1.5">
+    <span class="relative inline-flex min-w-0 flex-initial">
+      <Button
         type="button"
-        class="ictx-btn"
-        :class="{ on: open }"
+        variant="outline"
+        class="h-ctrl-sm max-w-80 justify-start gap-2 px-2.5 font-normal text-foreground hover:border-input"
+        :class="{ 'border-selected-border': open }"
         :title="t('infra.bar.hint')"
         aria-haspopup="listbox"
         :aria-expanded="open"
         @click="open = !open"
       >
-        <Icon name="layers" class="ictx-ic" />
-        <span class="ictx-val">
-          <span class="ictx-who">{{ profileLabel }}</span>
-          <span class="ictx-dot">·</span>
-          <span class="ictx-where">{{ regionLabel }}</span>
+        <Icon name="layers" class="flex-none text-faint" />
+        <!-- Tên profile tự cắt (nó dài nhất và hay đổi), region thì không — mã region
+             ngắn và bị cắt thì mất luôn thông tin. -->
+        <span class="flex min-w-0 items-center gap-1.5">
+          <span class="min-w-0 truncate">{{ profileLabel }}</span>
+          <span class="flex-none text-dim">·</span>
+          <span class="flex-none text-dim">{{ regionLabel }}</span>
         </span>
-        <Icon name="chev" class="ictx-chev" :class="{ open }" />
-      </button>
+        <Icon name="chev" class="flex-none text-faint" :class="{ 'rotate-180': open }" />
+      </Button>
 
       <template v-if="open">
-        <div class="ibackdrop" @click="close" />
-        <div class="pop ipop ictx-pop" @click.stop>
+        <div class="fixed inset-0 z-40" @click="close" />
+        <!-- `.pop` là selector trong OVERLAYS (useEmbeddedBrowser.ts): trình duyệt
+             nhúng phải nhường chỗ khi menu này mở. Utility ở POPUP_CLASS (script) để
+             thẻ mở nằm gọn một dòng ngay dưới comment hook-ok. -->
+        <!-- hook-ok: `.pop` đọc bởi OVERLAYS trong composables/useEmbeddedBrowser.ts -->
+        <div class="pop" :class="POPUP_CLASS" @click.stop>
           <!-- MỖI MỤC MỘT Ô TÌM RIÊNG (2026-09-14: "SearchableCombobox cho từng
                mục riêng biệt chứ sao lại 1 mục chung vậy?"). Một ô tìm chung lọc
                cả hai danh sách nghe thì gọn, nhưng nó trả lời sai câu người dùng
@@ -63,15 +73,18 @@
 
                Focus ở lại trong ô tìm — mọi phím điều hướng đều bắt từ đó, nên
                không có chuyện bấm ↓ rồi "mất dấu" vì focus đã nhảy xuống một hàng. -->
-          <div class="ictx-sec" role="group" :aria-label="t('infra.profile.label')">
-            <div class="ilbl">{{ t('infra.profile.label') }}</div>
-            <label class="srch ictx-srch">
-              <Icon name="search" />
+          <div role="group" :aria-label="t('infra.profile.label')">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.profile.label') }}</div>
+            <label
+              class="flex flex-none items-center gap-2 rounded-md border border-input px-2 py-1.5 text-sm text-dim"
+            >
+              <Icon name="search" class="size-3.5 flex-none" />
               <Input
                 ref="profileSearchEl"
                 v-model="profileQuery"
                 unstyled
                 type="text"
+                class="text-foreground"
                 role="combobox"
                 aria-autocomplete="list"
                 aria-controls="ictx-list-profile"
@@ -82,34 +95,42 @@
               />
             </label>
             <!-- `Quản lý profile…` là LỐI ĐI chứ không phải một giá trị, nên nó ở
-                 cuối danh sách và không bao giờ được tick. -->
+                 cuối danh sách và không bao giờ được tick.
+                 Danh sách cuộn TRONG khi ô tìm đứng yên; trần 140px để danh sách
+                 profile ngắn không chiếm chỗ của danh sách region (và ngược lại). -->
             <div
               id="ictx-list-profile"
               ref="profileListEl"
-              class="ictx-list"
+              class="mt-1.5 max-h-35 overflow-y-auto"
               role="listbox"
               :aria-label="t('infra.profile.label')"
             >
+              <!-- hook-ok: `.ictx-opt.ictx-cur` được scrollActiveIntoView() đọc qua
+                   querySelector. Không đặt tên `.cursor` — đó là class toàn cục của
+                   con trỏ nhấp nháy trong composer. -->
               <div
                 v-for="(p, i) in shownProfiles"
                 :id="`ictx-o-${i}`"
                 :key="p.value"
-                class="ictx-opt"
-                :class="{ on: p.value === profile, 'ictx-cur': active === i }"
+                class="ictx-opt flex w-full cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm text-foreground"
+                :class="{ 'text-primary': p.value === profile, 'ictx-cur bg-accent': active === i }"
                 role="option"
                 :aria-selected="p.value === profile"
                 @mouseenter="setActive(i)"
                 @click="pickProfile(p.value)"
               >
-                <span class="ictx-opt-l">{{ p.label }}</span>
-                <Icon v-if="p.value === profile" name="check" class="ictx-tick" />
+                <span class="min-w-0 truncate">{{ p.label }}</span>
+                <Icon v-if="p.value === profile" name="check" class="flex-none text-primary" />
               </div>
               <!-- Vì sao danh sách trống — ba nguyên nhân khác nhau, ba câu khác
                    nhau, và ở trong menu thì có chỗ nói câu ĐẦY ĐỦ. Câu này hiện
                    cả khi còn một hàng "Quản lý profile…": lượt đọc `~/.aws` hỏng
                    thì hàng đó vẫn vẽ ra được, và im lặng về lý do là để người dùng
                    tưởng tài khoản của mình biến mất. -->
-              <p v-if="profileNote || !shownProfiles.length" class="ihint ictx-note">
+              <p
+                v-if="profileNote || !shownProfiles.length"
+                class="mt-1 mb-0 px-2 text-xs text-faint"
+              >
                 {{ profileNote || t('infra.bar.noMatch', { q: profileQuery }) }}
               </p>
             </div>
@@ -118,16 +139,21 @@
           <!-- Region. Mục đầu là "Theo profile" — cùng nhãn với ô region của chip
                trong phiên, vì cùng một giá trị: `run.ts` chỉ chèn `--region` khi
                `ctx.region` có giá trị, nên để trống nghĩa là không truyền cờ và
-               `aws` tự lấy region từ `~/.aws/config` của profile. -->
-          <div class="ictx-sec" role="group" :aria-label="t('infra.region.label')">
-            <div class="ilbl">{{ t('infra.region.label') }}</div>
-            <label class="srch ictx-srch">
-              <Icon name="search" />
+               `aws` tự lấy region từ `~/.aws/config` của profile.
+               Vạch ngăn giữa hai mục: hai thứ khác loại (tài khoản vs vị trí), lẫn
+               vào một danh sách phẳng là đọc nhầm mã region thành tên profile. -->
+          <div class="mt-2.5 border-t pt-2.5" role="group" :aria-label="t('infra.region.label')">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.region.label') }}</div>
+            <label
+              class="flex flex-none items-center gap-2 rounded-md border border-input px-2 py-1.5 text-sm text-dim"
+            >
+              <Icon name="search" class="size-3.5 flex-none" />
               <Input
                 ref="regionSearchEl"
                 v-model="regionQuery"
                 unstyled
                 type="text"
+                class="text-foreground"
                 role="combobox"
                 aria-autocomplete="list"
                 aria-controls="ictx-list-region"
@@ -140,25 +166,29 @@
             <div
               id="ictx-list-region"
               ref="regionListEl"
-              class="ictx-list"
+              class="mt-1.5 max-h-35 overflow-y-auto"
               role="listbox"
               :aria-label="t('infra.region.label')"
             >
+              <!-- hook-ok: `.ictx-opt.ictx-cur` được scrollActiveIntoView() đọc. -->
               <div
                 v-for="(r, i) in shownRegions"
                 :id="`ictx-o-${shownProfiles.length + i}`"
                 :key="r.value"
-                class="ictx-opt"
-                :class="{ on: r.value === region, 'ictx-cur': active === shownProfiles.length + i }"
+                class="ictx-opt flex w-full cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm text-foreground"
+                :class="{
+                  'text-primary': r.value === region,
+                  'ictx-cur bg-accent': active === shownProfiles.length + i,
+                }"
                 role="option"
                 :aria-selected="r.value === region"
                 @mouseenter="setActive(shownProfiles.length + i)"
                 @click="pickRegion(r.value)"
               >
-                <span class="ictx-opt-l">{{ r.label }}</span>
-                <Icon v-if="r.value === region" name="check" class="ictx-tick" />
+                <span class="min-w-0 truncate">{{ r.label }}</span>
+                <Icon v-if="r.value === region" name="check" class="flex-none text-primary" />
               </div>
-              <p v-if="!shownRegions.length" class="ihint ictx-note">
+              <p v-if="!shownRegions.length" class="mt-1 mb-0 px-2 text-xs text-faint">
                 {{ t('infra.bar.noMatch', { q: regionQuery }) }}
               </p>
             </div>
@@ -205,6 +235,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/**
+ * Khung menu xổ. Neo PHẢI: thanh này nằm ở cuối hàng tab, neo trái thì menu 320px
+ * tràn ra ngoài cửa sổ. Trần chiều cao để hai mục + hai ô tìm luôn nằm gọn trong màn.
+ */
+const POPUP_CLASS =
+  'absolute top-full right-0 left-auto z-130 mt-1 max-h-[min(70vh,460px)] w-80 overflow-y-auto rounded-lg border border-input bg-popover p-3.5 text-popover-foreground shadow-md'
 
 const open = ref(false)
 function close(): void {
@@ -402,140 +439,3 @@ function pickRegion(value: string): void {
   emit('select-region', value)
 }
 </script>
-
-<style scoped>
-/* Một hàng, cao bằng hàng tab. Không nhãn đứng trước: giá trị bên trong
-   ("dev-sandbox · Theo profile") đã tự nói đây là ngữ cảnh nào. */
-.ictx {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* Đẩy cả cụm sang phải hàng tab, không để nó chen vào giữa các tab. */
-  margin-left: auto;
-}
-
-/* Cùng vocabulary với `.aseltrigger` mà hai ô chọn cũ dùng: cao bằng nhau, cùng
-   nền `--bgInput`. Đổi sang dáng chip (`.ctxchip`) sẽ làm thanh này lệch hàng tab. */
-.ictx-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 320px;
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  border-radius: var(--r-sm);
-  padding: 7px 10px;
-  font-family: var(--sans);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  cursor: pointer;
-}
-.ictx-btn:hover {
-  border-color: var(--borderStrong);
-}
-.ictx-btn.on {
-  border-color: var(--accentBorder);
-}
-
-.ictx-ic,
-.ictx-chev {
-  flex: 0 0 auto;
-  color: var(--textFaint);
-}
-.ictx-chev.open {
-  transform: rotate(180deg);
-}
-
-/* Giá trị: tên profile tự cắt (nó dài nhất và hay đổi), region thì không — mã
-   region ngắn và bị cắt thì mất luôn thông tin. */
-.ictx-val {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.ictx-who {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ictx-dot,
-.ictx-where {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-
-/* Menu neo PHẢI: thanh này nằm ở cuối hàng tab, neo trái thì menu 320px tràn ra
-   ngoài cửa sổ. Trần chiều cao để hai mục + hai ô tìm luôn nằm gọn trong màn. */
-.ictx-pop {
-  left: auto;
-  right: 0;
-  width: 320px;
-  max-height: min(70vh, 460px);
-  overflow-y: auto;
-}
-
-/* Hai mục là hai khối RIÊNG, mỗi khối có ô tìm của nó. Vạch ngăn thay cho
-   `.ictx-sep` cũ: hai thứ khác loại (tài khoản vs vị trí), và lẫn chúng vào một
-   danh sách phẳng là để người dùng đọc nhầm một mã region thành một tên profile. */
-.ictx-sec + .ictx-sec {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-
-.ictx-srch {
-  flex: 0 0 auto;
-}
-
-/* Danh sách cuộn TRONG khi ô tìm đứng yên: gõ thêm một ký tự mà ô tìm trôi mất
-   thì lần gõ tiếp theo là một cú nhắm chuột. Trần 140px để danh sách profile ngắn
-   không chiếm chỗ của danh sách region (và ngược lại). */
-.ictx-list {
-  max-height: 140px;
-  overflow-y: auto;
-  margin-top: 6px;
-}
-
-.ictx-opt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--r-xs);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-/* Tên lớp KHÔNG được là `.cursor`: đó là class dùng chung của con trỏ nhấp nháy
-   trong composer (`prototype.css` — `width:7px; height:15px; animation: bl 1s
-   steps(2) infinite`), và class toàn cục thì vẫn áp lên phần tử của component
-   scoped. Bản trước dùng `.cursor` nên hàng đang chọn bị ép thành một ô 7×15px
-   nhấp nháy — đúng cái "nháy hover" và "lỗi hiển thị" của 2026-09-14. */
-.ictx-opt.ictx-cur {
-  background: var(--bgHover);
-}
-.ictx-opt.on {
-  color: var(--accent);
-}
-.ictx-opt-l {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ictx-tick {
-  flex: 0 0 auto;
-  color: var(--accent);
-}
-
-.ictx-note {
-  margin: 4px 0 0;
-  padding: 0 8px;
-}
-</style>

@@ -2,44 +2,52 @@
   <!-- Tools whitelist — checkbox list over the canonical tool catalogue
        (utils/tool-catalog, same list the session Tools denylist shows) +
        `mcp__<server>` rows per connection + free-form chips for anything else.
-       Styles global (.awp-*). Empty/undefined = full toolset. -->
+       Khung dùng chung AgentPickList / AgentPickRow. Empty/undefined = full toolset. -->
   <div>
-    <Input v-model="q" :placeholder="t('common.search')" class="awp-search" />
-    <div class="awp-list">
-      <label
+    <Input v-model="q" :placeholder="t('common.search')" class="mb-2" />
+    <AgentPickList
+      :is-empty="filteredRows.length === 0"
+      :empty-text="t('agents.editor.toolsEmpty')"
+    >
+      <AgentPickRow
         v-for="row in filteredRows"
         :key="row.id"
-        class="awp-row"
-        :class="{ on: isOn(row.id) }"
+        :checked="isOn(row.id)"
+        @toggle="toggle(row.id)"
       >
-        <input type="checkbox" :checked="isOn(row.id)" class="awp-cbx" @change="toggle(row.id)" />
-        <span class="awp-name mono">{{ row.id }}</span>
-        <span class="awp-tier">{{ row.group }}</span>
-      </label>
-      <div v-if="filteredRows.length === 0" class="awp-empty">
-        {{ t('agents.editor.toolsEmpty') }}
-      </div>
-    </div>
-    <div v-if="extraTools.length" class="awp-chips">
-      <span
+        <!-- mono-ok: tên tool -->
+        <span class="font-mono text-sm font-medium text-foreground">{{ row.id }}</span>
+        <span class="truncate text-xs text-faint">{{ row.group }}</span>
+      </AgentPickRow>
+    </AgentPickList>
+    <div v-if="extraTools.length" class="flex flex-wrap gap-1">
+      <!-- mono-ok: tên tool mcp__… -->
+      <Badge
         v-for="tool in extraTools"
         :key="tool"
-        class="chip"
-        :class="{ mono: tool.startsWith('mcp__') }"
+        variant="outline"
+        :class="{ 'font-mono': tool.startsWith('mcp__') }"
       >
         {{ tool }}
-        <button class="awp-chipx" :title="t('agents.editor.removeTool')" @click="remove(tool)">
-          <Icon name="x" style="width: 10px; height: 10px" />
-        </button>
-      </span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-4 text-dim hover:bg-transparent hover:text-destructive"
+          :title="t('agents.editor.removeTool')"
+          @click="remove(tool)"
+        >
+          <Icon name="x" class="size-2.5!" />
+        </Button>
+      </Badge>
     </div>
+    <!-- mono-ok: tên tool -->
     <Input
       v-model="input"
       :placeholder="t('agents.editor.toolsPh')"
-      class="mono"
+      class="font-mono"
       @keydown.enter.prevent="add"
     />
-    <div class="awp-hint">{{ t('agents.editor.toolsHint') }}</div>
+    <div class="text-xs text-dim">{{ t('agents.editor.toolsHint') }}</div>
   </div>
 </template>
 

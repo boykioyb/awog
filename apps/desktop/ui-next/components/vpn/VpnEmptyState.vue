@@ -1,8 +1,12 @@
 <template>
-  <div class="vpn-es">
-    <span class="vpn-es-ic"><Icon :name="icon" style="width: 22px; height: 22px" /></span>
-    <div class="vpn-es-title">{{ title }}</div>
-    <div class="vpn-es-body">{{ body }}</div>
+  <div
+    class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center"
+  >
+    <span class="grid size-12 place-items-center rounded-xl border bg-muted text-muted-foreground">
+      <Icon :name="icon" class="size-5" />
+    </span>
+    <div class="text-lg font-semibold text-foreground">{{ title }}</div>
+    <div class="max-w-80 text-sm text-muted-foreground">{{ body }}</div>
   </div>
 </template>
 
@@ -11,39 +15,3 @@
 // short title + one line of dim copy. Nothing interactive.
 defineProps<{ icon: string; title: string; body: string }>()
 </script>
-
-<style scoped>
-.vpn-es {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 48px 24px;
-  text-align: center;
-}
-.vpn-es-ic {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--r-card);
-  color: var(--textDim);
-  background: var(--bgHover);
-  border: 1px solid var(--border);
-}
-.vpn-es-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.vpn-es-body {
-  max-width: 320px;
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-</style>

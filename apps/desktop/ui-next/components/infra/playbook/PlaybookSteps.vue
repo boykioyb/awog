@@ -4,43 +4,80 @@
        của nó chứ không chỉ nói tên.
 
        Chế độ Đơn giản giấu dòng lệnh sau mục gập; chế độ Kỹ thuật mở sẵn (luật 1). -->
-  <section class="pbs">
-    <h3 class="pbs-hd">{{ t('playbooks.steps.title') }}</h3>
+  <section class="flex flex-col gap-2">
+    <h3 class="text-sm font-semibold text-muted-foreground">{{ t('playbooks.steps.title') }}</h3>
 
-    <p v-if="!columns.length" class="pbs-empty">{{ t('playbooks.steps.empty') }}</p>
+    <p v-if="!columns.length" class="text-sm text-dim">{{ t('playbooks.steps.empty') }}</p>
 
-    <ol v-else class="pbs-items">
-      <li v-for="col in columns" :key="col.step.id" class="pbs-item">
-        <div class="pbs-line">
-          <span class="pbs-no">{{ col.index + 1 }}</span>
-          <span class="chip" :class="`cls-${col.klass}`">
-            {{ t(`playbooks.verb.${col.step.verb}`) }}
+    <ol v-else class="m-0 flex list-none flex-col gap-1.5 p-0">
+      <li
+        v-for="col in columns"
+        :key="col.step.id"
+        class="flex flex-col gap-1 rounded-md border bg-card px-2.5 py-2"
+      >
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="min-w-4.5 shrink-0 text-xs text-faint tabular-nums">
+            {{ col.index + 1 }}
           </span>
-          <span class="pbs-ttl">{{ col.step.title }}</span>
-          <span v-if="col.state" class="pbs-st" :class="`st-${col.state}`">
+          <Badge variant="outline" class="rounded-sm font-medium" :class="VERB_CLASS[col.klass]">
+            {{ t(`playbooks.verb.${col.step.verb}`) }}
+          </Badge>
+          <span class="min-w-0 truncate text-sm text-foreground">{{ col.step.title }}</span>
+          <span
+            v-if="col.state"
+            class="ml-auto text-xs"
+            :class="STATE_CLASS[col.state] ?? 'text-dim'"
+          >
             {{ t(`playbooks.run.state.${col.state}`) }}
           </span>
         </div>
 
-        <p v-if="col.step.note" class="pbs-note" :title="t('playbooks.steps.note')">
+        <p
+          v-if="col.step.note"
+          class="text-xs leading-(--lh-sm) text-dim"
+          :title="t('playbooks.steps.note')"
+        >
           {{ col.step.note }}
         </p>
 
         <!-- Cảnh báo gắn NGAY trên bước, không gom xuống cuối: người đọc phải thấy
              "thay bản đang chạy" ở đúng dòng nó xảy ra. -->
-        <p v-for="key in col.warnKeys" :key="key" class="pbs-warn">
-          <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <p
+          v-for="key in col.warnKeys"
+          :key="key"
+          class="flex items-center gap-1 text-xs leading-(--lh-sm) text-warning"
+        >
+          <Icon name="alert" class="size-3" />
           {{ t(key) }}
         </p>
 
-        <!-- Cột kỹ thuật nằm trong mục gập (spec §"Với người không rành kỹ thuật"). -->
-        <details class="pbs-tech" :open="mode === 'expert'">
-          <summary>{{ t('playbooks.steps.technical') }}</summary>
-          <div class="pbs-cmd">
-            <span class="pbs-cmd-lbl">{{ t('playbooks.steps.command') }}</span>
-            <code class="pbs-cmd-txt">{{ commandOf(col.step) }}</code>
-          </div>
-        </details>
+        <!-- Cột kỹ thuật nằm trong mục gập (spec §"Với người không rành kỹ thuật").
+             `:key="mode"` + `default-open` giữ đúng nghĩa của `<details :open>` cũ: đổi
+             chế độ thì đặt lại trạng thái mở theo chế độ, còn trong một chế độ người
+             dùng tự gập/mở được. -->
+        <Collapsible
+          :key="mode"
+          :default-open="mode === 'expert'"
+          class="text-xs leading-(--lh-sm) text-dim"
+        >
+          <CollapsibleTrigger
+            class="inline-flex cursor-default items-center gap-1 [&[data-state=open]_svg]:rotate-90"
+          >
+            <Icon name="chev-right" class="size-3 transition-transform" />
+            {{ t('playbooks.steps.technical') }}
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div class="flex min-w-0 items-baseline gap-1.5 pt-1">
+              <span class="shrink-0 text-faint">{{ t('playbooks.steps.command') }}</span>
+              <!-- mono-ok: dòng lệnh CLI, người dùng copy nguyên văn vào terminal -->
+              <code
+                class="min-w-0 font-mono text-xs leading-(--lh-sm) wrap-anywhere text-foreground"
+              >
+                {{ commandOf(col.step) }}
+              </code>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </li>
     </ol>
   </section>
@@ -58,6 +95,25 @@ defineProps<{
 
 const { t } = useI18n()
 
+/** Màu chip verb theo loại lệnh: đọc · ghi · phá huỷ. */
+const VERB_CLASS: Record<string, string> = {
+  read: 'border-info text-info',
+  write: 'border-success text-success',
+  destructive: 'border-destructive text-destructive',
+}
+
+/**
+ * Màu trạng thái bước. Bước bị cổng quyền chặn giữa đường KHÔNG phải bước hỏng (hợp
+ * đồng §2): lượt chạy về lại `approved` và chạy tiếp được kèm vé — tô màu cảnh báo,
+ * tô đỏ ở đây là báo sai rằng việc hỏng.
+ */
+const STATE_CLASS: Record<string, string> = {
+  ok: 'text-success',
+  failed: 'text-destructive',
+  blocked: 'text-warning',
+  running: 'text-primary',
+}
+
 /**
  * Lệnh của bước, dựng từ `tool` + `args` — KHÔNG phải chuỗi shell đã ghép sẵn (hợp
  * đồng §4: `args` là mảng). Đây là bản ĐỂ ĐỌC; cờ ngữ cảnh do sidecar chèn lúc chạy
@@ -67,162 +123,3 @@ function commandOf(step: PlaybookStep): string {
   return [step.tool, ...step.args].join(' ')
 }
 </script>
-
-<style scoped>
-.pbs {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.pbs-hd {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 650;
-}
-
-.pbs-empty {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pbs-items {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pbs-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-}
-
-.pbs-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.pbs-no {
-  flex: 0 0 auto;
-  min-width: 18px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.pbs-ttl {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pbs-st {
-  margin-left: auto;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pbs-st.st-ok {
-  color: var(--green);
-}
-
-.pbs-st.st-failed {
-  color: var(--red);
-}
-
-/* Bước bị cổng quyền chặn giữa đường KHÔNG phải bước hỏng (hợp đồng §2): lượt chạy
-   về lại `approved` và chạy tiếp được kèm vé. Tô đỏ ở đây là báo sai rằng việc hỏng. */
-.pbs-st.st-blocked {
-  color: var(--amber);
-}
-
-.pbs-st.st-running {
-  color: var(--accent);
-}
-
-.pbs-note {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pbs-warn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pbs-tech {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pbs-tech > summary {
-  cursor: default;
-}
-
-.pbs-cmd {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 5px 0 0;
-  min-width: 0;
-}
-
-.pbs-cmd-lbl {
-  flex: 0 0 auto;
-  color: var(--textFaint);
-}
-
-/* Dòng lệnh CLI — người dùng copy nguyên văn vào terminal. */
-.pbs-cmd-txt {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  /* mono-ok: dòng lệnh CLI, người dùng copy nguyên văn vào terminal */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.chip.cls-read {
-  color: var(--blue);
-  border-color: var(--blue);
-}
-
-.chip.cls-write {
-  color: var(--green);
-  border-color: var(--green);
-}
-
-.chip.cls-destructive {
-  color: var(--red);
-  border-color: var(--red);
-}
-</style>

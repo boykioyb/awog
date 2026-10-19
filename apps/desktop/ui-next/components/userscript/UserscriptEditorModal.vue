@@ -1,26 +1,36 @@
 <template>
+  <!-- KHÔNG dựng trên Dialog reka: reka bắt Esc ở capture phase của document nên Esc
+       để đóng gợi ý / ô tìm của Monaco sẽ đóng luôn cả hộp; overlay tự dựng chỉ nhận
+       Esc khi Monaco không giữ phím. -->
   <Teleport to="body">
-    <div v-if="open" class="ovl on" @click.self="emit('close')" @keydown.esc="emit('close')">
-      <div class="use-card" role="dialog" aria-modal="true" @keydown="onKeydown">
-        <div class="use-head">
-          <Icon name="code" class="icn" />
-          <span class="use-title">
+    <!-- hook-ok: `.ovl.on` nằm trong OVERLAYS (useEmbeddedBrowser.ts); skin cũ bị utility đè hết -->
+    <div v-if="open" :class="SCRIM" @click.self="emit('close')" @keydown.esc="emit('close')">
+      <div
+        class="flex h-[min(40rem,88vh)] w-[min(53.75rem,94vw)] flex-col gap-2.5 rounded-xl border bg-popover px-4.5 py-4 shadow-lg"
+        role="dialog"
+        aria-modal="true"
+        @keydown="onKeydown"
+      >
+        <div class="flex items-center gap-2">
+          <Icon name="code" />
+          <span class="flex-1 text-lg text-foreground">
             {{ scriptId ? t('userscripts.editor.editTitle') : t('userscripts.editor.newTitle') }}
           </span>
-          <button
-            type="button"
-            class="use-x"
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-dim"
             :title="t('common.close')"
             :aria-label="t('common.close')"
             @click="emit('close')"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="x" />
+          </Button>
         </div>
 
-        <p class="use-hint">{{ t('userscripts.editor.hint') }}</p>
+        <p class="m-0 text-sm text-dim">{{ t('userscripts.editor.hint') }}</p>
 
-        <div class="use-body">
+        <div class="min-h-0 flex-auto overflow-hidden rounded-lg border">
           <MonacoEditor
             v-if="source !== null"
             ref="editorRef"
@@ -29,13 +39,13 @@
             @change="onEditorChange"
             @save="save"
           />
-          <div v-else-if="loadError" class="use-err">{{ loadError }}</div>
-          <div v-else class="use-loading">{{ t('common.loading') }}</div>
+          <div v-else-if="loadError" :class="ERR">{{ loadError }}</div>
+          <div v-else class="p-3 text-sm text-faint">{{ t('common.loading') }}</div>
         </div>
 
-        <div v-if="saveError" class="use-err" role="alert">{{ saveError }}</div>
+        <div v-if="saveError" :class="ERR" role="alert">{{ saveError }}</div>
 
-        <div class="use-foot">
+        <div class="flex justify-end gap-2">
           <Button variant="outline" size="sm" :disabled="busy" @click="emit('close')">
             {{ t('common.cancel') }}
           </Button>
@@ -60,7 +70,6 @@
 import { defineAsyncComponent } from 'vue'
 import type { MonacoEditorHandle } from '~/components/editor/types'
 import type { UserscriptItem } from '~/types'
-import Button from '~/components/ui/button/Button.vue'
 import { buildUserscriptTemplate, useUserscripts } from '~/composables/useUserscripts'
 import { sidecarErrorText } from '~/composables/useSidecar'
 
@@ -85,6 +94,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const api = useUserscripts()
+
+// Scrim: `ovl on` chỉ còn là hook cho OVERLAYS — skin cũ (vị trí, nền, căn, z) bị utility
+// dưới đây đè. z-100 = band modal thường như `.ovl` cũ.
+const SCRIM =
+  'ovl on fixed inset-0 z-100 flex items-start justify-center bg-black/55 pt-[13vh] [-webkit-app-region:no-drag]'
+const ERR = 'rounded-lg bg-destructive/10 px-2.5 py-2 text-sm whitespace-pre-wrap text-destructive'
 
 const editorRef = useTemplateRef<MonacoEditorHandle>('editorRef')
 // null = chưa có nguồn để hiện (đang tải script cũ); chuỗi (kể cả rỗng) = đã có.
@@ -173,78 +188,3 @@ const onKeydown = (event: KeyboardEvent): void => {
   }
 }
 </script>
-
-<style scoped>
-.use-card {
-  width: min(860px, 94vw);
-  height: min(640px, 88vh);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-}
-.use-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.use-title {
-  flex: 1;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  color: var(--text);
-}
-.use-x {
-  display: flex;
-  align-items: center;
-  padding: 4px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.use-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.use-hint {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.use-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-}
-.use-body :deep(.mehost) {
-  height: 100%;
-}
-.use-loading {
-  padding: 12px;
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.use-err {
-  padding: 8px 10px;
-  border-radius: var(--r-btn);
-  background: var(--dangerBg);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-}
-.use-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

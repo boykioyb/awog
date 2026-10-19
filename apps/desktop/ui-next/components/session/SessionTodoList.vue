@@ -1,21 +1,33 @@
 <template>
   <div class="flex flex-col gap-0.5">
-    <button
+    <!-- Hàng checklist — wash khi hover. Là nút để bấm được bằng bàn phím; bản chỉ
+         đọc (bản ghi trong transcript) thì không có con trỏ bấm. -->
+    <Button
       v-for="(td, i) in todos"
       :key="i"
       type="button"
-      class="tdrow"
-      :class="{ done: td.done, ip: td.status === 'in_progress' }"
+      variant="ghost"
+      class="h-auto w-full justify-start gap-2 rounded-md px-1.5 py-0.5 text-left text-base font-normal whitespace-normal disabled:opacity-100 [&_svg]:size-3"
+      :class="td.done ? 'text-muted-foreground line-through' : 'text-foreground'"
       :disabled="!editable"
       :title="editable ? t('sessions.todo.cycle') : undefined"
       @click="emit('cycle', i)"
     >
-      <span class="tdck">
-        <Icon v-if="td.done" name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span v-else-if="td.status === 'in_progress'" class="tddot" />
+      <!-- Ô tick: viền input; xong = viền primary + nền primary nhạt + dấu tick; đang
+           làm = viền primary + chấm nhỏ. px-ok: nét ô 1.5px là hình vẽ. -->
+      <span
+        class="grid size-4 flex-none place-items-center rounded-sm border-[1.5px] text-primary"
+        :class="{
+          'border-primary': td.done || td.status === 'in_progress',
+          'border-input': !td.done && td.status !== 'in_progress',
+          'bg-primary/15': td.done,
+        }"
+      >
+        <Icon v-if="td.done" name="check" />
+        <span v-else-if="td.status === 'in_progress'" class="size-1.5 rounded-full bg-primary" />
       </span>
       {{ td.t }}
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -35,67 +47,3 @@ const emit = defineEmits<{ (e: 'cycle', index: number): void }>()
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-/* Checkbox row — rounded-md hover wash (proto list-row idiom). Rows are <button>
-   for keyboard access; strip the native chrome so they keep the plain-row look in
-   both the editable and the read-only case. */
-.tdrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 3px 6px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: none;
-  text-align: left;
-  font: inherit;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--foreground);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.tdrow:hover:not(:disabled) {
-  background: var(--accent-wash);
-}
-/* Read-only rows (the transcript record) — no pointer affordance. */
-.tdrow:disabled {
-  cursor: default;
-}
-/* Checkbox box: hairline input border; done = primary fill + tick. */
-.tdck {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 1.5px solid var(--input);
-  border-radius: var(--r-xs);
-  color: var(--primary);
-}
-.tdrow.done {
-  color: var(--muted-foreground);
-  text-decoration: line-through;
-}
-.tdrow.done .tdck {
-  border-color: var(--primary);
-  background: rgb(from var(--primary) r g b / 14%);
-}
-/* In-progress marker: primary box + a small live dot (vs. empty pending / ✓ done). */
-.tdrow.ip .tdck {
-  border-color: var(--primary);
-}
-.tddot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--primary);
-}
-@media (prefers-reduced-motion: reduce) {
-  .tdrow {
-    transition: none;
-  }
-}
-</style>

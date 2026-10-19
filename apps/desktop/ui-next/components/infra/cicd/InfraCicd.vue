@@ -8,15 +8,18 @@
        dùng tài khoản nào". Ngữ cảnh AWS vẫn là ngữ cảnh chung của `/infra`.
 
        SFC này chỉ ghép khối + bind. Mọi state/lời gọi RPC nằm ở `useInfraCicd()`
-       (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
-  <div class="icd">
-    <!-- Thanh lọc là một CARD (`.itoolbar`), và ba ô lọc + nút ↻ là hai CỤM, không
-         phải bốn mục rời của một hàng `flex-wrap`: hàng phẳng bỏ rơi nút ↻ xuống
-         dòng riêng khi hết chỗ. Xem ghi chú `.itoolbar` ở app-shell.css. -->
-    <div class="itoolbar ifields ictool">
-      <div class="itoolgrp ifields">
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.cicd.filter.source') }}</div>
+       (khuôn page-controller của .claude/rules/nuxt-vue.md).
+       Lề 14px 16px là lề chung của Logs · Giám sát · Bảng · Chi phí · Báo cáo. -->
+  <div class="flex h-full min-h-0 flex-col gap-2 px-4 py-3.5">
+    <!-- Thanh lọc là một CARD, và ba ô lọc + nút ↻ là hai CỤM, không phải bốn mục
+         rời của một hàng `flex-wrap`: hàng phẳng bỏ rơi nút ↻ xuống dòng riêng khi
+         hết chỗ. Ô có nhãn-trên-control ⇒ căn theo ĐÁY để các ô không lệch nhau. -->
+    <div
+      class="flex flex-none flex-wrap items-end gap-2.5 rounded-xl border bg-card px-2.5 py-2 shadow-sm"
+    >
+      <div class="flex flex-none flex-wrap items-end gap-1.5">
+        <div class="flex min-w-35 flex-col gap-1">
+          <div class="text-xs text-muted-foreground">{{ t('infra.cicd.filter.source') }}</div>
           <AppSelect
             :model-value="sourceFilter"
             :options="sourceOptions"
@@ -26,8 +29,8 @@
           />
         </div>
 
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.cicd.filter.branch') }}</div>
+        <div class="flex min-w-35 flex-col gap-1">
+          <div class="text-xs text-muted-foreground">{{ t('infra.cicd.filter.branch') }}</div>
           <Input
             v-model="branchFilter"
             type="text"
@@ -37,8 +40,8 @@
           />
         </div>
 
-        <div class="ifield narrow">
-          <div class="ilbl">{{ t('infra.cicd.filter.window') }}</div>
+        <div class="flex min-w-27.5 flex-col gap-1">
+          <div class="text-xs text-muted-foreground">{{ t('infra.cicd.filter.window') }}</div>
           <AppSelect
             :model-value="windowKey"
             :options="windowOptions"
@@ -56,11 +59,7 @@
           variant="outline"
           @click="refresh()"
         >
-          <Icon
-            name="refresh"
-            :class="{ spin: loading }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon name="refresh" class="size-3.5" :class="{ 'animate-spin': loading }" />
           {{ t('infra.cicd.refresh') }}
         </Button>
       </div>
@@ -68,17 +67,28 @@
       <!-- `v-if`: cụm RỖNG vẫn là một mục flex, và với `margin-left: auto` nó vẫn
            chiếm một hàng của thanh — đo được 20px chiều cao chết khi chưa nạp gì
            (2026-09-16). Không có số nào để khoe thì cụm không tồn tại. -->
-      <div v-if="hasStats" class="itoolgrp iend icstats">
-        <span v-if="counts.running" class="icstat run">
+      <div
+        v-if="hasStats"
+        class="ml-auto flex flex-none flex-wrap items-center gap-2 text-xs text-muted-foreground"
+      >
+        <Badge v-if="counts.running" variant="outline" class="border-info font-normal text-info">
           {{ t('infra.cicd.statusCount.running', { n: counts.running }) }}
-        </span>
-        <span v-if="counts.waiting" class="icstat wait">
+        </Badge>
+        <Badge
+          v-if="counts.waiting"
+          variant="outline"
+          class="border-warning/40 bg-warning/10 font-normal text-warning"
+        >
           {{ t('infra.cicd.statusCount.waiting', { n: counts.waiting }) }}
-        </span>
-        <span v-if="counts.failed" class="icstat fail">
+        </Badge>
+        <Badge
+          v-if="counts.failed"
+          variant="outline"
+          class="border-destructive/40 bg-destructive/10 font-normal text-destructive"
+        >
           {{ t('infra.cicd.statusCount.failed', { n: counts.failed }) }}
-        </span>
-        <span v-if="loadedAt" class="icwhen">
+        </Badge>
+        <span v-if="loadedAt">
           {{ t('infra.cicd.loadedAt', { at: loadedLabel }) }}
         </span>
       </div>
@@ -86,153 +96,205 @@
 
     <!-- Nguồn không đọc được PHẢI nhìn thấy được: một bảng thiếu nguồn mà im lặng
          là bảng trả lời sai câu "có gì hỏng không". -->
-    <div v-if="sourceIssues.length" class="icissues">
-      <div v-for="issue in sourceIssues" :key="issue.source" class="icissue">
-        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="icissuetxt">
+    <div v-if="sourceIssues.length" class="flex flex-col gap-1">
+      <div
+        v-for="issue in sourceIssues"
+        :key="issue.source"
+        class="flex items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-xs text-foreground"
+      >
+        <Icon name="alert" class="size-3 flex-none" />
+        <span class="min-w-0 truncate">
           <b>{{ t(`infra.cicd.source.${issue.source}`) }}</b>
           <template v-if="issue.error">— {{ msg(issue.error) }}</template>
           <template v-else-if="issue.blocked">— {{ issue.blocked.reason }}</template>
         </span>
-        <button
+        <Button
           v-if="issue.blocked?.requiresApproval"
           type="button"
-          class="linkbtn"
+          variant="link"
+          size="xs"
+          class="h-auto p-0 font-normal text-info"
           @click="approveSource(issue.source)"
         >
           {{ t('infra.cicd.approve') }}
-        </button>
-        <button
+        </Button>
+        <Button
           v-else-if="issue.blocked"
           type="button"
-          class="linkbtn"
+          variant="link"
+          size="xs"
+          class="h-auto p-0 font-normal text-info"
           @click="copyCommand(issue.blocked.command)"
         >
           {{ t('infra.cicd.copyCommand') }}
-        </button>
+        </Button>
       </div>
     </div>
 
     <!-- Nguồn bị cắt bớt: nói ra độ phủ, để "bảng không có gì" không bị đọc thành
          "hệ thống không có gì". -->
-    <div v-if="sourceNotes.length" class="icnotes">
+    <div v-if="sourceNotes.length" class="flex flex-col gap-0.5 text-xs text-faint">
       <span v-for="n in sourceNotes" :key="n.source">
         <b>{{ t(`infra.cicd.source.${n.source}`) }}</b>
         — {{ noteText(n.note) }}
       </span>
     </div>
 
-    <div v-if="error" class="icerr">{{ msg(error) }}</div>
+    <div
+      v-if="error"
+      class="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
+    >
+      {{ msg(error) }}
+    </div>
 
-    <div class="icbody">
-      <div class="tblcard iclist" :class="{ narrow: !!openId }">
-        <div v-if="!rows.length && !loading" class="icempty">
+    <div class="flex min-h-0 flex-1 gap-2.5">
+      <div class="min-w-0 flex-1 overflow-auto rounded-xl border bg-card shadow-sm">
+        <div v-if="!rows.length && !loading" class="px-3 py-2.5 text-xs text-muted-foreground">
           {{ results.length ? t('infra.cicd.empty.filtered') : t('infra.cicd.empty') }}
         </div>
 
+        <!-- Dòng đang chọn = accent-tint + thanh accent 2px (inset, không ăn vào đệm
+             trái) — luật chọn của cả app, không nền xám. -->
+        <!-- raw-ok: hàng list cả dòng là một vùng bấm (mở chi tiết lần chạy) -->
         <button
           v-for="run in rows"
           :key="run.id"
           type="button"
-          class="icrow"
-          :class="[`st-${run.status}`, { on: run.id === openId }]"
+          class="flex w-full cursor-pointer items-center gap-2.5 border-b bg-transparent px-2.5 py-2 text-left text-foreground"
+          :class="
+            run.id === openId
+              ? 'bg-selected shadow-[inset_2px_0_0_var(--color-primary)]'
+              : 'hover:bg-accent'
+          "
           @click="openRun(run)"
         >
           <span
-            class="icdot"
-            :class="`st-${run.status}`"
+            class="size-2 flex-none rounded-full"
+            :class="statusDot(run.status)"
             :title="t(`infra.cicd.status.${run.status}`)"
           />
-          <span class="icmain">
-            <span class="icline1">
-              <span class="icproj">{{ run.project }}</span>
-              <span class="ictitle">{{ run.title }}</span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="flex min-w-0 items-baseline gap-2">
+              <span class="text-sm font-semibold">{{ run.project }}</span>
+              <span class="truncate text-sm text-muted-foreground">{{ run.title }}</span>
             </span>
-            <span class="icsub">{{ subline(run) }}</span>
+            <span class="truncate text-xs text-faint">{{ subline(run) }}</span>
           </span>
-          <span class="icmeta">
-            <span v-if="run.branch" class="icbranch">
-              <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <span class="flex flex-none items-center gap-2.5 text-xs text-muted-foreground">
+            <span v-if="run.branch" class="inline-flex items-center gap-1">
+              <Icon name="branch" class="size-3" />
               {{ run.branch }}
             </span>
-            <code v-if="run.commit" class="iccommit">{{ run.commit }}</code>
-            <span class="icdur">{{ duration(run.durationMs) }}</span>
-            <span class="icstatus">{{ t(`infra.cicd.status.${run.status}`) }}</span>
+            <!-- mono-ok: SHA commit — người dùng copy sang git. -->
+            <code v-if="run.commit" class="font-mono text-xs">{{ run.commit }}</code>
+            <span class="min-w-14 text-right">{{ duration(run.durationMs) }}</span>
+            <span class="min-w-14 text-right">{{ t(`infra.cicd.status.${run.status}`) }}</span>
           </span>
-          <span class="icrowacts" @click.stop>
-            <button
+          <span class="flex flex-none gap-2" @click.stop>
+            <Button
               v-if="run.status === 'failed'"
               type="button"
-              class="linkbtn"
+              variant="link"
+              size="xs"
+              class="h-auto p-0 font-normal text-info"
               :disabled="busy"
               @click="rerun(run)"
             >
               {{ t('infra.cicd.action.rerun') }}
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="run.needsApproval"
               type="button"
-              class="linkbtn strong"
+              variant="link"
+              size="xs"
+              class="h-auto p-0 font-normal text-warning"
               :disabled="busy"
               @click="openRun(run)"
             >
               {{ t('infra.cicd.approve') }}
-            </button>
+            </Button>
           </span>
         </button>
       </div>
 
       <!-- Cột chi tiết: bước · log từng bước · artifact · PR · tên biến môi trường. -->
-      <aside v-if="openId" class="tblcard icdetail">
-        <div class="icdhead">
-          <div class="icdtitle">
-            <span class="icdot" :class="`st-${detail?.run.status ?? 'unknown'}`" />
+      <aside
+        v-if="openId"
+        class="flex w-95 min-w-0 flex-none flex-col gap-2 overflow-auto rounded-xl border bg-card p-2.5 shadow-sm"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex min-w-0 items-center gap-2">
+            <span
+              class="size-2 flex-none rounded-full"
+              :class="statusDot(detail?.run.status ?? 'unknown')"
+            />
             <b>{{ detail?.run.project ?? '' }}</b>
-            <span class="icdsub">{{ detail?.run.title ?? '' }}</span>
+            <span class="truncate text-sm text-muted-foreground">
+              {{ detail?.run.title ?? '' }}
+            </span>
           </div>
           <Button
             type="button"
             :title="t('infra.cicd.close')"
-            variant="outline"
+            :aria-label="t('infra.cicd.close')"
+            variant="ghost"
             size="iconMd"
             @click="closeDetail()"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="x" class="size-3.5" />
           </Button>
         </div>
 
-        <div v-if="detailLoading" class="icdnote">{{ t('infra.cicd.loading') }}</div>
-        <div v-else-if="detailError" class="icerr">{{ msg(detailError) }}</div>
+        <div v-if="detailLoading" class="px-3 py-2.5 text-xs text-muted-foreground">
+          {{ t('infra.cicd.loading') }}
+        </div>
+        <div
+          v-else-if="detailError"
+          class="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
+        >
+          {{ msg(detailError) }}
+        </div>
 
         <template v-else-if="detail">
-          <div class="icdmeta">
-            <span v-if="detail.run.branch" class="icbranch">
-              <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <div class="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
+            <span v-if="detail.run.branch" class="inline-flex items-center gap-1">
+              <Icon name="branch" class="size-3" />
               {{ detail.run.branch }}
             </span>
-            <code v-if="detail.run.commit" class="iccommit">{{ detail.run.commit }}</code>
+            <code v-if="detail.run.commit" class="font-mono text-xs">{{ detail.run.commit }}</code>
             <span v-if="detail.run.actor">{{ detail.run.actor }}</span>
             <span>{{ duration(detail.run.durationMs) }}</span>
-            <button
+            <Button
               v-if="detail.run.url"
               type="button"
-              class="linkbtn"
+              variant="link"
+              size="xs"
+              class="h-auto p-0 font-normal text-info"
               @click="openUrl(detail.run.url)"
             >
               {{ t('infra.cicd.openOnHost') }}
-            </button>
+            </Button>
           </div>
 
-          <div v-if="detail.pr" class="icdpr">
-            <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
-            <button type="button" class="linkbtn" @click="openPr(detail.pr)">
+          <div v-if="detail.pr" class="flex items-center gap-2">
+            <Icon name="git" class="size-3" />
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              class="h-auto p-0 font-normal text-info"
+              @click="openPr(detail.pr)"
+            >
               {{ t('infra.cicd.pr', { n: detail.pr.number, repo: detail.pr.repo }) }}
-            </button>
+            </Button>
           </div>
 
           <!-- Duyệt bước thủ công: chỉ hiện khi CÓ việc đang chờ người. -->
-          <div v-if="detail.approvals.length" class="icdapprove">
-            <div v-for="ap in detail.approvals" :key="ap.id" class="icdapv">
+          <div
+            v-if="detail.approvals.length"
+            class="flex flex-col gap-1.5 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs"
+          >
+            <div v-for="ap in detail.approvals" :key="ap.id" class="flex items-center gap-2">
               <span>{{ t('infra.cicd.approvalPending', { label: ap.label }) }}</span>
               <Button
                 type="button"
@@ -253,7 +315,7 @@
             </div>
           </div>
 
-          <div class="icdacts">
+          <div class="flex flex-wrap gap-2">
             <Button
               v-if="detail.run.status === 'failed'"
               type="button"
@@ -261,7 +323,7 @@
               variant="outline"
               @click="rerun(detail.run)"
             >
-              <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="refresh" class="size-3.5" />
               {{ t('infra.cicd.action.rerun') }}
             </Button>
             <Button
@@ -271,7 +333,7 @@
               variant="outline"
               @click="cancel(detail.run)"
             >
-              <Icon name="stop" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="stop" class="size-3.5" />
               {{ t('infra.cicd.action.cancel') }}
             </Button>
             <Button
@@ -280,58 +342,76 @@
               variant="outline"
               @click="openDispatch(detail.run)"
             >
-              <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="play" class="size-3.5" />
               {{ t('infra.cicd.action.dispatch') }}
             </Button>
             <Button type="button" :disabled="busy" variant="outline" @click="askAbout(detail.run)">
-              <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="sparkles" class="size-3.5" />
               {{ t('infra.cicd.askAgent') }}
             </Button>
           </div>
 
-          <div class="icdsec">
-            <div class="icdlbl">{{ t('infra.cicd.steps') }}</div>
-            <button
+          <div class="flex flex-col gap-1 border-t pt-2">
+            <div class="text-xs font-medium text-muted-foreground">{{ t('infra.cicd.steps') }}</div>
+            <Button
               v-for="step in detail.steps"
               :key="step.id"
               type="button"
-              class="icstep"
-              :class="[`st-${step.status}`, { on: stepLog?.stepId === step.id }]"
+              variant="ghost"
+              class="h-auto w-full justify-start gap-2 rounded-sm border border-transparent px-1.5 py-1 text-left text-xs font-normal text-foreground"
+              :class="{ 'border-selected-border bg-selected': stepLog?.stepId === step.id }"
               @click="onStep(detail.run, step)"
             >
-              <span class="icdot sm" :class="`st-${step.status}`" />
-              <span class="icstepname">
+              <span class="size-1.5 flex-none rounded-full" :class="statusDot(step.status)" />
+              <span class="min-w-0 flex-1 truncate">
                 <template v-if="step.group">{{ step.group }} /</template>
                 {{ step.name }}
               </span>
-              <span class="icstepmeta">{{ duration(step.durationMs) }}</span>
+              <span class="text-muted-foreground">{{ duration(step.durationMs) }}</span>
               <Icon
                 v-if="step.logRef || step.logUrl || detail.run.source === 'github'"
                 :name="step.logUrl ? 'external' : 'file'"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
+                class="size-3"
               />
-            </button>
-            <div v-if="!detail.steps.length" class="icdnote">{{ t('infra.cicd.noSteps') }}</div>
+            </Button>
+            <div v-if="!detail.steps.length" class="px-3 py-2.5 text-xs text-muted-foreground">
+              {{ t('infra.cicd.noSteps') }}
+            </div>
           </div>
 
           <!-- Log của ĐÚNG bước vừa bấm: đã redact + clamp ở sidecar. -->
-          <div v-if="stepLog || logLoading || logError" class="icdsec">
-            <div class="icdlbl">
+          <div v-if="stepLog || logLoading || logError" class="flex flex-col gap-1 border-t pt-2">
+            <div
+              class="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground"
+            >
               {{ t('infra.cicd.stepLog') }}
-              <button
+              <Button
                 type="button"
-                class="linkbtn"
+                variant="link"
+                size="xs"
+                class="h-auto p-0 font-normal text-info"
                 @click="copyCommand(stepLog?.value.command ?? '')"
               >
                 {{ t('infra.cicd.copyCommand') }}
-              </button>
+              </Button>
             </div>
-            <div v-if="logLoading" class="icdnote">{{ t('infra.cicd.loadingLog') }}</div>
+            <div v-if="logLoading" class="px-3 py-2.5 text-xs text-muted-foreground">
+              {{ t('infra.cicd.loadingLog') }}
+            </div>
             <!-- Hỏng thì nói TẠI CHỖ, không chỉ một toast đã trôi mất. -->
-            <div v-else-if="logError" class="icerr">{{ msg(logError) }}</div>
+            <div
+              v-else-if="logError"
+              class="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
+            >
+              {{ msg(logError) }}
+            </div>
             <template v-else-if="stepLog">
-              <pre class="iclog">{{ stepLog.value.lines.join('\n') }}</pre>
-              <div v-if="stepLog.value.truncated" class="icdnote">
+              <!-- mono-ok: log CI nguyên văn — người dùng đọc và copy dòng lỗi. -->
+              <pre
+                class="m-0 max-h-80 overflow-auto rounded-md border bg-background p-2 font-mono text-xs break-words whitespace-pre-wrap text-foreground"
+                >{{ stepLog.value.lines.join('\n') }}</pre
+              >
+              <div v-if="stepLog.value.truncated" class="px-3 py-2.5 text-xs text-muted-foreground">
                 {{
                   t('infra.cicd.logTruncated', {
                     shown: stepLog.value.lines.length,
@@ -342,28 +422,43 @@
             </template>
           </div>
 
-          <div v-if="detail.artifacts.length" class="icdsec">
-            <div class="icdlbl">{{ t('infra.cicd.artifacts') }}</div>
-            <button
+          <div v-if="detail.artifacts.length" class="flex flex-col gap-1 border-t pt-2">
+            <div class="text-xs font-medium text-muted-foreground">
+              {{ t('infra.cicd.artifacts') }}
+            </div>
+            <Button
               v-for="art in detail.artifacts"
               :key="art.name"
               type="button"
-              class="linkbtn"
+              variant="link"
+              size="xs"
+              class="h-auto justify-start p-0 font-normal text-info"
               @click="art.url && openUrl(art.url)"
             >
-              <Icon name="download" style="width: var(--icon-xs); height: var(--icon-xs)" />
+              <Icon name="download" class="size-3" />
               {{ art.name }}
               <template v-if="art.sizeBytes">· {{ bytes(art.sizeBytes) }}</template>
-            </button>
+            </Button>
           </div>
 
-          <div v-if="detail.envNames.length" class="icdsec">
-            <div class="icdlbl">{{ t('infra.cicd.envNames') }}</div>
-            <div class="icchips">
-              <code v-for="name in detail.envNames" :key="name" class="icchip">{{ name }}</code>
+          <div v-if="detail.envNames.length" class="flex flex-col gap-1 border-t pt-2">
+            <div class="text-xs font-medium text-muted-foreground">
+              {{ t('infra.cicd.envNames') }}
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <!-- mono-ok: tên biến môi trường — định danh copy vào cấu hình. -->
+              <code
+                v-for="name in detail.envNames"
+                :key="name"
+                class="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-xs"
+              >
+                {{ name }}
+              </code>
             </div>
             <!-- Nói rõ vì sao chỉ có tên: người dùng không phải đoán đây là thiếu sót. -->
-            <div class="icdnote">{{ t('infra.cicd.envNamesOnly') }}</div>
+            <div class="px-3 py-2.5 text-xs text-muted-foreground">
+              {{ t('infra.cicd.envNamesOnly') }}
+            </div>
           </div>
         </template>
       </aside>
@@ -371,32 +466,17 @@
 
     <!-- Kích hoạt chạy mới: GitHub cần tên file workflow + git ref; AWS chỉ cần
          bấm (pipeline/build/app đã nằm trong `ref` của dòng). -->
-    <div
-      v-if="dispatchOpen"
-      class="icmodal"
-      role="dialog"
-      aria-modal="true"
-      @click.self="closeDispatch()"
-    >
-      <div class="icmodalbox">
-        <div class="icdhead">
-          <b>{{ t('infra.cicd.action.dispatch') }}</b>
-          <Button
-            type="button"
-            :title="t('infra.cicd.close')"
-            variant="outline"
-            size="iconMd"
-            @click="closeDispatch()"
-          >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </Button>
-        </div>
-        <div class="icdnote">
-          {{ t('infra.cicd.consequence.dispatch', { project: dispatchRun?.project ?? '' }) }}
-        </div>
-        <div v-if="dispatchRun?.source === 'github'" class="icform">
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.cicd.form.workflow') }}</div>
+    <Dialog :open="dispatchOpen" @update:open="(v) => !v && closeDispatch()">
+      <DialogContent class="gap-2.5 p-3.5 sm:max-w-105">
+        <DialogHeader>
+          <DialogTitle class="text-base">{{ t('infra.cicd.action.dispatch') }}</DialogTitle>
+          <DialogDescription class="text-xs text-muted-foreground">
+            {{ t('infra.cicd.consequence.dispatch', { project: dispatchRun?.project ?? '' }) }}
+          </DialogDescription>
+        </DialogHeader>
+        <div v-if="dispatchRun?.source === 'github'" class="flex flex-col gap-2.5">
+          <div class="flex flex-col gap-1">
+            <div class="text-xs text-muted-foreground">{{ t('infra.cicd.form.workflow') }}</div>
             <AppSelect
               :model-value="dispatchWorkflow"
               :options="workflowOptions"
@@ -408,12 +488,12 @@
               @update:model-value="(v: string) => (dispatchWorkflow = v)"
             />
           </div>
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.cicd.form.ref') }}</div>
+          <div class="flex flex-col gap-1">
+            <div class="text-xs text-muted-foreground">{{ t('infra.cicd.form.ref') }}</div>
             <Input v-model="dispatchRefValue" type="text" placeholder="main" />
           </div>
         </div>
-        <div class="icdacts">
+        <div class="flex flex-wrap gap-2">
           <Button
             type="button"
             :disabled="busy || (dispatchRun?.source === 'github' && !dispatchWorkflow)"
@@ -426,8 +506,8 @@
             {{ t('common.cancel') }}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
@@ -539,6 +619,18 @@ function setSource(v: string): void {
   void refresh()
 }
 
+/** Màu chấm trạng thái của lần chạy / bước. Không khớp trạng thái nào ⇒ chấm mờ. */
+function statusDot(status: string): string {
+  if (status === 'success') return 'bg-primary'
+  if (status === 'failed') return 'bg-destructive'
+  if (status === 'running') return 'bg-info'
+  if (status === 'waiting') return 'bg-warning'
+  if (status === 'queued' || status === 'cancelled' || status === 'skipped') {
+    return 'bg-muted-foreground'
+  }
+  return 'bg-faint'
+}
+
 function isLive(status: string): boolean {
   return status === 'queued' || status === 'running' || status === 'waiting'
 }
@@ -628,419 +720,3 @@ function openPr(pr: { url: string }): void {
   void openExternally(pr.url)
 }
 </script>
-
-<style scoped>
-/* Root là `.icd`, KHÔNG phải `.ic`: `prototype.css` dành `.ic` cho inline code (mono ·
-   nền --bgActive). Trước 2026-09-15 màn này mang đúng tên đó nên toàn màn hiện bằng
-   monospace 12px trên nền xám. */
-.icd {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  gap: 8px;
-  /* Lề của riêng màn. Trước khi đổi tên, màn này KHÔNG khai padding và chỉ mượn
-     `1px 5px` của rule inline-code toàn cục — một con số không ai chọn cho một màn.
-     14px 16px là lề chung của Logs · Giám sát · Bảng · Chi phí · Báo cáo. */
-  padding: 14px 16px;
-}
-/* Bố cục + da của thanh, và khuôn `.ifield`/`.ilbl` bên trong thanh, nay ở
-   app-shell.css — đây từng là một trong BA bản khai `.ifield` khác nhau của khu. */
-.icinput {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.icinput:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
-.icstats {
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.icstat {
-  padding: 2px 8px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-}
-.icstat.run {
-  color: var(--blue);
-  border-color: var(--blue);
-}
-.icstat.wait {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
-}
-.icstat.fail {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-}
-.icnotes {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.icissues {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.icissue {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 9px;
-  border: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.icissuetxt {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icerr {
-  padding: 8px 10px;
-  border: 1px solid var(--dangerBorder);
-  background: var(--dangerDim);
-  border-radius: var(--r-sm);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.icbody {
-  display: flex;
-  gap: 10px;
-  min-height: 0;
-  flex: 1;
-}
-/* Da card (viền · bo · nền · bóng) ở `.tblcard`; đây chỉ còn bố cục. */
-.iclist {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-}
-.icempty,
-.icdnote {
-  padding: 10px 12px;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.icrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.icrow:hover {
-  background: var(--bgHover);
-}
-/* Dòng đang chọn = accent-tint + thanh accent 2px, KHÔNG nền xám `--bgActive` —
-   luật chọn của cả app (.claude/rules/nuxt-vue.md §UI patterns; nền xám đã thử và
-   bị bác). `box-shadow: inset` vẽ thanh mà không ăn vào đệm trái của dòng. */
-.icrow.on {
-  background: var(--accentDim);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.icdot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--textFaint);
-}
-.icdot.sm {
-  width: 6px;
-  height: 6px;
-}
-.icdot.st-success {
-  background: var(--accent);
-}
-.icdot.st-failed {
-  background: var(--danger);
-}
-.icdot.st-running {
-  background: var(--blue);
-}
-.icdot.st-waiting {
-  background: var(--amber);
-}
-.icdot.st-queued,
-.icdot.st-cancelled,
-.icdot.st-skipped {
-  background: var(--textMuted);
-}
-.icmain {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-.icline1 {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  min-width: 0;
-}
-.icproj {
-  font-weight: 600;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ictitle {
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icsub {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icmeta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  flex: 0 0 auto;
-}
-.icbranch {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.iccommit {
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
-}
-.icdur,
-.icstatus {
-  min-width: 56px;
-  text-align: right;
-}
-.icrowacts {
-  display: flex;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-.linkbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  background: transparent;
-  color: var(--blue);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  padding: 0;
-}
-.linkbtn:hover {
-  text-decoration: underline;
-}
-.linkbtn.strong {
-  color: var(--amber);
-}
-.icdetail {
-  flex: 0 0 380px;
-  min-width: 0;
-  overflow: auto;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.icdhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.icdtitle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.icdsub {
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icdmeta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.icdpr,
-.icdapv {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.icdapprove {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.icdacts {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.icdsec {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-}
-.icdlbl {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.icstep {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.icstep:hover {
-  background: var(--bgHover);
-}
-.icstep.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.icstepname {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icstepmeta {
-  color: var(--textMuted);
-}
-.iclog {
-  margin: 0;
-  max-height: 320px;
-  overflow: auto;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgCanvas);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.icchips {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.icchip {
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgSubtle);
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
-}
-.icmodal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: grid;
-  place-items: center;
-  z-index: 40;
-}
-.icmodalbox {
-  width: min(420px, 90vw);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
-}
-.icform {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.spin {
-  animation: ic-spin 900ms linear infinite;
-}
-@keyframes ic-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

@@ -5,178 +5,191 @@
     :width="600"
     @close="emit('cancel')"
   >
-    <div class="sse">
-      <div class="sse-grid">
-        <div class="sse-field">
-          <label class="sse-label">
+    <div class="flex flex-col gap-4">
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
             {{ t('ssh.editor.name') }}
-            <span class="sse-req" aria-hidden="true">*</span>
-          </label>
+            <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+          </Label>
           <Input
             v-model="name"
-            :class="{ 'has-err': touched.name && nameError }"
+            :class="{ 'border-destructive': touched.name && nameError }"
             :placeholder="t('ssh.editor.namePh')"
             :aria-invalid="touched.name && !!nameError"
             @blur="touched.name = true"
           />
-          <div v-if="touched.name && nameError" class="sse-err">{{ nameError }}</div>
+          <div v-if="touched.name && nameError" class="mt-1 text-sm text-destructive">
+            {{ nameError }}
+          </div>
         </div>
-        <div class="sse-field">
-          <label class="sse-label">{{ t('ssh.editor.folder') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
+            {{ t('ssh.editor.folder') }}
+          </Label>
           <AppSelect v-model="folderSelect" :options="folderOptions" width="100%" />
           <Input
             v-if="folderMode === 'new'"
             v-model="folder"
             :placeholder="t('ssh.editor.folderPh')"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
           />
         </div>
       </div>
 
-      <div class="sse-grid sse-grid-host">
-        <div class="sse-field">
-          <label class="sse-label">
+      <div class="grid grid-cols-[1fr_minmax(90px,0.4fr)] gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
             {{ t('ssh.editor.host') }}
-            <span class="sse-req" aria-hidden="true">*</span>
-          </label>
+            <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+          </Label>
           <Input
             v-model="hostName"
-            :class="{ 'has-err': touched.host && hostError }"
+            :class="{ 'border-destructive': touched.host && hostError }"
             :placeholder="t('ssh.editor.hostPh')"
             spellcheck="false"
             :aria-invalid="touched.host && !!hostError"
-            class="mono"
+            class="font-mono"
             @blur="touched.host = true"
           />
-          <div v-if="touched.host && hostError" class="sse-err">{{ hostError }}</div>
+          <div v-if="touched.host && hostError" class="mt-1 text-sm text-destructive">
+            {{ hostError }}
+          </div>
         </div>
-        <div class="sse-field">
-          <label class="sse-label">
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
             {{ t('ssh.editor.port') }}
-            <span class="sse-req" aria-hidden="true">*</span>
-          </label>
+            <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+          </Label>
           <Input
             v-model.number="port"
             type="number"
             min="1"
             max="65535"
-            :class="{ 'has-err': touched.port && portError }"
+            :class="{ 'border-destructive': touched.port && portError }"
             :aria-invalid="touched.port && !!portError"
-            class="mono"
+            class="font-mono"
             @blur="touched.port = true"
           />
-          <div v-if="touched.port && portError" class="sse-err">{{ portError }}</div>
+          <div v-if="touched.port && portError" class="mt-1 text-sm text-destructive">
+            {{ portError }}
+          </div>
         </div>
       </div>
 
-      <div class="sse-field">
-        <label class="sse-label">
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
           {{ t('ssh.editor.user') }}
-          <span class="sse-req" aria-hidden="true">*</span>
-        </label>
+          <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+        </Label>
         <Input
           v-model="user"
-          :class="{ 'has-err': touched.user && userError }"
+          :class="{ 'border-destructive': touched.user && userError }"
           :placeholder="t('ssh.editor.userPh')"
           spellcheck="false"
           :aria-invalid="touched.user && !!userError"
-          class="mono"
+          class="font-mono"
           @blur="touched.user = true"
         />
-        <div v-if="touched.user && userError" class="sse-err">{{ userError }}</div>
+        <div v-if="touched.user && userError" class="mt-1 text-sm text-destructive">
+          {{ userError }}
+        </div>
       </div>
 
-      <div class="sse-field">
-        <label class="sse-label">{{ t('ssh.editor.authMethod') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
+          {{ t('ssh.editor.authMethod') }}
+        </Label>
         <AppSelect v-model="authMethodSelect" :options="authMethodOptions" width="100%" />
-        <div class="sse-hint">{{ t('ssh.editor.authHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.editor.authHint') }}</div>
       </div>
 
       <!-- Identity picker (key auth) — links a saved identity to this host. -->
-      <div v-if="authMethod === 'key'" class="sse-field">
-        <label class="sse-label">{{ t('ssh.editor.identity') }}</label>
+      <div v-if="authMethod === 'key'" class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
+          {{ t('ssh.editor.identity') }}
+        </Label>
         <AppSelect v-model="identitySelect" :options="identityOptions" width="100%" />
-        <div class="sse-hint">{{ t('ssh.editor.identityHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.editor.identityHint') }}</div>
       </div>
 
       <!-- Host password (password auth). Prefilled from the keychain when editing and
            revealable behind the eye toggle — the user's own login, shown like a password
            manager. Omitted on save when left blank so it never clobbers a stored value. -->
-      <div v-if="authMethod === 'password'" class="sse-secret">
-        <div class="sse-secret-head">
-          <Icon
-            name="shield"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
-          <span class="sse-secret-title">{{ t('ssh.editor.password') }}</span>
+      <div
+        v-if="authMethod === 'password'"
+        class="flex flex-col gap-3 rounded-lg border border-selected-border bg-selected p-3"
+      >
+        <div class="flex items-center gap-2">
+          <Icon name="shield" class="size-3.5 text-primary" />
+          <span class="text-sm font-semibold text-foreground">{{ t('ssh.editor.password') }}</span>
         </div>
-        <div class="sse-pw">
+        <div class="relative">
           <Input
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
             :placeholder="t('ssh.editor.passwordPh')"
             spellcheck="false"
             autocomplete="off"
-            class="mono has-eye"
+            class="pr-10 font-mono"
           />
-          <button
-            type="button"
-            class="sse-eye"
-            :class="{ on: showPassword }"
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-70 hover:opacity-100"
+            :class="{ 'text-foreground opacity-100': showPassword }"
             :title="showPassword ? t('ssh.editor.hidePassword') : t('ssh.editor.showPassword')"
             :aria-label="showPassword ? t('ssh.editor.hidePassword') : t('ssh.editor.showPassword')"
             :aria-pressed="showPassword"
             @click="showPassword = !showPassword"
           >
-            <Icon
-              :name="showPassword ? 'eye-off' : 'eye'"
-              style="width: var(--icon-md); height: var(--icon-md)"
-            />
-          </button>
+            <Icon :name="showPassword ? 'eye-off' : 'eye'" />
+          </Button>
         </div>
-        <div class="sse-hint">
+        <div class="text-xs text-muted-foreground">
           {{ isExisting ? t('ssh.editor.secretHintKeep') : t('ssh.editor.secretHint') }}
         </div>
       </div>
 
       <!-- Jump host (bastion) — optional; excludes this host from the list. -->
-      <div class="sse-field">
-        <label class="sse-label">{{ t('ssh.editor.jumpHost') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
+          {{ t('ssh.editor.jumpHost') }}
+        </Label>
         <AppSelect v-model="jumpHostSelect" :options="jumpHostOptions" width="100%" />
       </div>
 
       <!-- VPN (ADR 0065 P3) — a VpnProfile brought up (shared, ref-counted) before
            ssh2 dials this host, so the host is reachable via OS routing. -->
-      <div class="sse-field">
-        <label class="sse-label">{{ t('ssh.editor.vpn') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">{{ t('ssh.editor.vpn') }}</Label>
         <AppSelect v-model="vpnSelect" :options="vpnOptions" width="100%" />
-        <div class="sse-hint">{{ t('ssh.editor.vpnHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.editor.vpnHint') }}</div>
       </div>
 
-      <div class="sse-field">
-        <label class="sse-label">{{ t('ssh.editor.tags') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
+          {{ t('ssh.editor.tags') }}
+        </Label>
         <Input v-model="tagsText" :placeholder="t('ssh.editor.tagsPh')" spellcheck="false" />
-        <div class="sse-hint">{{ t('ssh.editor.tagsHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.editor.tagsHint') }}</div>
       </div>
 
       <!-- Expose to session agents as an SSH tool (ADR 0064 unified model). -->
-      <div class="sse-field">
-        <button
-          type="button"
-          class="sse-toggle"
-          :aria-pressed="agentEnabled"
-          @click="agentEnabled = !agentEnabled"
+      <div class="flex flex-col gap-1.5">
+        <label
+          class="inline-flex cursor-pointer items-center gap-2 self-start text-sm text-foreground"
         >
-          <span class="tog2" :class="{ off: !agentEnabled }" />
+          <Switch v-model:checked="agentEnabled" />
           <span>{{ t('ssh.editor.agentEnabled') }}</span>
-        </button>
-        <div class="sse-hint">{{ t('ssh.editor.agentEnabledHint') }}</div>
+        </label>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.editor.agentEnabledHint') }}</div>
       </div>
     </div>
 
     <template #footer>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('ssh.editor.save') }}
@@ -429,135 +442,3 @@ function parseTags(text: string): string[] {
   return out
 }
 </script>
-
-<style scoped>
-.sse {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.sse-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.sse-grid-host {
-  grid-template-columns: 1fr minmax(90px, 0.4fr);
-}
-.sse-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sse-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.sse-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.sse-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — host / command / key path */
-  font-family: var(--code);
-}
-.sse-input:focus {
-  border-color: var(--accent);
-}
-.sse-input.has-err,
-.sse-input.has-err:focus {
-  border-color: var(--danger);
-}
-/* Required-field marker + inline validation error. */
-.sse-req {
-  color: var(--danger);
-  font-weight: 700;
-}
-.sse-err {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--danger);
-}
-/* Masked password field + its reveal toggle (mirrors VpnEditor's .vpe-eye). */
-.sse-pw {
-  position: relative;
-}
-.sse-input.has-eye {
-  padding-right: 38px;
-}
-.sse-eye {
-  position: absolute;
-  right: 5px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  opacity: 0.7;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease;
-}
-.sse-eye:hover,
-.sse-eye.on {
-  opacity: 1;
-  color: var(--text);
-}
-.sse-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Toggle row (reuses the global .tog2 switch) — a clickable label + switch. */
-.sse-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-/* Secret callout — a subtle accent-tinted card (mirrors SshDetail's .ssh-err dim
-   bg + matching border idiom), signalling "write-only, goes to the keychain". */
-.sse-secret {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-}
-.sse-secret-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.sse-secret-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-</style>

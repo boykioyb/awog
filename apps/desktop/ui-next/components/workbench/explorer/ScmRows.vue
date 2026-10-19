@@ -7,7 +7,7 @@
     <!-- Dir row: toggle collapse + context menu (nếu có handler) + ops theo dir. -->
     <div
       v-if="n.isDir"
-      class="group/row flex h-[24px] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--text)] hover:bg-[var(--bgHover)]"
+      class="group/row flex h-[var(--lh-xl)] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--text)] hover:bg-[var(--bgHover)]"
       :style="{ paddingLeft: 8 + n.depth * 12 + 'px' }"
       :title="n.path"
       @click="emit('toggleDir', n)"
@@ -53,7 +53,7 @@
     <!-- File row: click → diff; actions hiện khi hover, đè lên dir suffix. -->
     <div
       v-else
-      class="group/row relative flex h-[24px] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
+      class="group/row relative flex h-[var(--lh-xl)] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
       :style="{ paddingLeft: 8 + n.depth * 12 + 'px' }"
       :title="n.file!.f"
       @click="emit('openDiff', n.file!.f)"
@@ -139,6 +139,7 @@ import {
   Plus,
   Undo2,
   Video,
+  FileSpreadsheet,
   Workflow,
 } from 'lucide-vue-next'
 import type { GitFile } from '~/components/git/git-types'
@@ -181,6 +182,8 @@ function fileIcon(p: string) {
       return Image
     case 'vid':
       return Video
+    case 'office':
+      return FileSpreadsheet
     case 'mmd':
       return Workflow
     default:

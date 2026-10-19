@@ -3,30 +3,53 @@
        dùng chung thay vì một dải riêng chiếm trọn bề ngang. Hành vi giữ nguyên luật
        của ADR 0069 — chip KHÔNG tự ẩn khi xong, và nó không tự bung: danh sách đầy
        đủ vẫn là một cú bấm, y như strip `done/total` trước đây. -->
-  <span v-if="variant === 'chip' && bannerVisible && !dismissed" class="ctxwrap2">
-    <button
+  <span
+    v-if="variant === 'chip' && bannerVisible && !dismissed"
+    class="relative inline-flex flex-none"
+  >
+    <Button
       ref="chipEl"
       type="button"
-      class="ctxchip"
-      :class="{ acc: allDone, on: popOpen }"
+      variant="outline"
+      size="xs"
+      class="h-5.5 gap-1.5 rounded-md px-2.5 font-normal text-dim shadow-none hover:text-foreground [&_svg]:size-3"
+      :class="{
+        'border-selected-border text-primary': allDone || popOpen,
+        'bg-selected': popOpen,
+      }"
       :title="t('sessions.todo.title')"
       @click.stop="popOpen = !popOpen"
     >
-      <Icon
-        :name="allDone ? 'check' : 'tasks'"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
-      />
-      <span class="tdn">{{ doneCount }}/{{ total }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+      <Icon :name="allDone ? 'check' : 'tasks'" />
+      <span class="tabular-nums">{{ doneCount }}/{{ total }}</span>
+      <Icon name="chev" />
+    </Button>
     <Teleport to="body">
-      <div v-if="popOpen" class="ctxbackdrop2" @click="popOpen = false" />
-      <div v-if="popOpen" ref="popEl" class="pop todopop" :style="popStyle" @click.stop>
-        <div class="pl todopop-h">
+      <div v-if="popOpen" class="fixed inset-0 z-40" @click="popOpen = false" />
+      <!-- Neo `fixed` qua usePopoverAnchor. -->
+      <!-- role=dialog + data-state=open: khớp selector `[role="dialog"][data-state="open"]`
+           trong OVERLAYS (useEmbeddedBrowser.ts) để trình duyệt nhúng nhường chỗ. -->
+      <div
+        v-if="popOpen"
+        ref="popEl"
+        role="dialog"
+        data-state="open"
+        class="fixed z-130 w-85 overflow-y-auto rounded-lg border bg-popover p-3 text-popover-foreground shadow-md"
+        :style="popStyle"
+        @click.stop
+      >
+        <div class="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
           {{ t('sessions.todo.title') }}
-          <button type="button" class="todox" :title="t('sessions.todo.hide')" @click="hide">
-            <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          </button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="iconSm"
+            class="ml-auto size-5 text-dim [&_svg]:size-3"
+            :title="t('sessions.todo.hide')"
+            @click="hide"
+          >
+            <Icon name="x" />
+          </Button>
         </div>
         <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
       </div>
@@ -40,34 +63,45 @@
        the full list is a click away, or in the Plan & Progress tab / the inline
        transcript step. The × dismisses it for this session.
        Rows are editable — a click cycles a row's status (see useSessionTodo). -->
+  <!-- Biến thể bar — khung card: chevron + tiêu đề + đếm done/total + × hiện khi hover. -->
   <div
     v-else-if="variant === 'bar' && bannerVisible && !dismissed"
-    class="todop"
-    :class="{ col: collapsed }"
+    class="mx-3.5 mt-3 flex-none rounded-lg border bg-card"
   >
     <div
-      class="todoh"
+      class="group flex cursor-pointer items-center gap-2 px-3 py-2 text-base font-medium select-none"
       :title="collapsed ? t('sessions.todo.expand') : t('sessions.todo.collapse')"
       @click="collapsed = !collapsed"
     >
-      <Icon name="chev" class="todochev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <Icon
-        :name="allDone ? 'check' : 'tasks'"
-        class="todoic"
-        style="width: var(--icon-sm); height: var(--icon-sm)"
+        name="chev"
+        class="size-3 text-dim transition-transform motion-reduce:transition-none"
+        :class="[collapsed ? '-rotate-90' : '']"
       />
+      <Icon :name="allDone ? 'check' : 'tasks'" class="size-3.5 text-dim" />
       <span>{{ t('sessions.todo.title') }}</span>
-      <span class="tdn">{{ doneCount }}/{{ total }}</span>
-      <button
+      <span class="ml-auto text-sm text-dim tabular-nums">{{ doneCount }}/{{ total }}</span>
+      <!-- × chỉ hiện khi hover header: header tự nó là vùng bấm, một × luôn nổi sẽ
+           tranh chỗ với nó. Trong popover của chip thì × luôn hiện (hàng đó không
+           phải công tắc). -->
+      <Button
         type="button"
-        class="todox"
+        variant="ghost"
+        size="iconSm"
+        class="-my-1 -mr-1 ml-0.5 size-5 text-dim opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3"
         :title="t('sessions.todo.hide')"
         @click.stop="dismissed = true"
       >
-        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </div>
-    <SessionTodoList v-if="!collapsed" class="todol" :todos="todos" editable @cycle="cycleTodo" />
+    <SessionTodoList
+      v-if="!collapsed"
+      class="px-3 pb-2.5"
+      :todos="todos"
+      editable
+      @cycle="cycleTodo"
+    />
   </div>
 </template>
 
@@ -85,8 +119,10 @@ const { t } = useI18n()
 const popOpen = ref(false)
 // Chip nằm trên hàng header `.dh` và có thể đứng sát mép phải cửa sổ — neo fixed
 // kẹp viewport thay vì `absolute` trong wrapper (thò ra ngoài là bị cắt).
-const chipEl = ref<HTMLElement | null>(null)
-const popEl = ref<HTMLElement | null>(null)
+// `Button` là component ⇒ template ref trả instance, phần tử thật ở `$el`.
+const chipBtn = useTemplateRef<{ $el: HTMLElement }>('chipEl')
+const chipEl = computed(() => chipBtn.value?.$el ?? null)
+const popEl = useTemplateRef<HTMLElement>('popEl')
 const { style: popStyle } = usePopoverAnchor(chipEl, popEl, popOpen, { maxHeight: 360 })
 function hide() {
   popOpen.value = false
@@ -125,107 +161,3 @@ watch(total, (n, prev) => {
   }
 })
 </script>
-
-<style scoped>
-/* Bar variant — card chrome (border + card surface + lg radius), chevron + title
-   + done/total count + hover-revealed × dismiss. */
-.todop {
-  margin: 12px 14px 0;
-  flex: 0 0 auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-}
-.todoh {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-}
-.todochev {
-  color: var(--textDim);
-  transition: transform 0.15s ease;
-}
-.todop.col .todochev {
-  transform: rotate(-90deg);
-}
-.todoic {
-  color: var(--textDim);
-}
-.tdn {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--textDim);
-}
-.todol {
-  padding: 0 12px 10px;
-}
-/* Icon-only × — revealed on header hover: the header is a click target itself,
-   so a permanently loud × would compete with it. In the chip popover header it
-   stays visible (that row is not a toggle). */
-.todox {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  margin: -4px -4px -4px 2px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.todoh .todox {
-  opacity: 0;
-}
-.todoh:hover .todox,
-.todoh .todox:focus-visible {
-  opacity: 1;
-}
-.todox:hover {
-  color: var(--foreground);
-  background: var(--accent-wash);
-}
-
-/* ── Biến thể chip: popover neo vào chip trong hàng ngữ cảnh (§3.2) ─────── */
-.ctxwrap2 {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-.ctxbackdrop2 {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-/* Neo `fixed` qua usePopoverAnchor — `.pop` lo position/z-index; đây chỉ còn skin. */
-.todopop {
-  width: 340px;
-  overflow-y: auto;
-}
-.todopop-h {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.todopop-h .todox {
-  margin-left: auto;
-}
-@media (prefers-reduced-motion: reduce) {
-  .todochev,
-  .todox {
-    transition: none;
-  }
-}
-</style>

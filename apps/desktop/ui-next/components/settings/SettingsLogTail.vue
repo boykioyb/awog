@@ -1,45 +1,67 @@
 <template>
-  <div class="logtail">
-    <div class="logtail-bar">
-      <span class="logtail-title mono" :title="logPath || undefined">
+  <div class="relative mb-3.5 flex h-85 flex-col overflow-hidden rounded-lg border bg-background">
+    <div class="flex shrink-0 items-center justify-between gap-2 bg-card py-1.5 pr-2 pl-3">
+      <!-- mono-ok: đường dẫn file log. rtl để tên file vẫn thấy khi đường dẫn tràn. -->
+      <span
+        class="truncate text-left font-mono text-sm text-dim [direction:rtl]"
+        :title="logPath || undefined"
+      >
         {{ logPath || t('settings.workspace.diagnostics.logTitle') }}
       </span>
-      <div class="logtail-actions">
-        <button
-          class="logtail-act"
+      <div class="flex shrink-0 items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
           :title="t('settings.workspace.diagnostics.reveal')"
+          :aria-label="t('settings.workspace.diagnostics.reveal')"
           @click="onReveal"
         >
           <Icon name="folder" />
-        </button>
-        <button
-          class="logtail-act"
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
           :title="t('settings.workspace.diagnostics.clear')"
+          :aria-label="t('settings.workspace.diagnostics.clear')"
           @click="onClear"
         >
           <Icon name="trash" />
-        </button>
-        <button
-          class="logtail-act"
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
           :title="t('settings.workspace.diagnostics.hideLogs')"
+          :aria-label="t('settings.workspace.diagnostics.hideLogs')"
           @click="emit('close')"
         >
           <Icon name="x" />
-        </button>
+        </Button>
       </div>
     </div>
+    <Separator />
 
-    <div ref="scrollerRef" class="logtail-body" @scroll="onScroll">
-      <div v-if="errorMsg" class="logtail-empty danger">{{ errorMsg }}</div>
-      <div v-else-if="!text" class="logtail-empty">
+    <div ref="scrollerRef" class="min-h-0 flex-1 overflow-auto px-3 py-2" @scroll="onScroll">
+      <div v-if="errorMsg" class="py-1.5 text-sm text-destructive">{{ errorMsg }}</div>
+      <div v-else-if="!text" class="py-1.5 text-sm text-dim">
         {{ t('settings.workspace.diagnostics.waiting') }}
       </div>
-      <pre v-else class="logtail-pre">{{ text }}</pre>
+      <!-- mono-ok: nội dung file log -->
+      <pre v-else class="m-0 font-mono text-sm break-words whitespace-pre-wrap text-foreground">{{
+        text
+      }}</pre>
     </div>
 
-    <button v-if="!following && text" class="logtail-follow" @click="resumeFollow">
+    <Button
+      v-if="!following && text"
+      size="xs"
+      class="absolute right-3.5 bottom-3 font-semibold"
+      @click="resumeFollow"
+    >
       {{ t('settings.workspace.diagnostics.follow') }}
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -137,104 +159,3 @@ onBeforeUnmount(() => {
   sc.stopLogTail().catch(() => undefined)
 })
 </script>
-
-<style scoped>
-.logtail {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  margin: 0 0 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-  height: 340px;
-  background: var(--bg);
-}
-.logtail-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 0 0 auto;
-  padding: 6px 8px 6px 12px;
-  background: var(--bgEl);
-  border-bottom: 1px solid var(--border);
-}
-.logtail-title {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  direction: rtl; /* keep the filename visible when the path overflows */
-  text-align: left;
-}
-.logtail-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-}
-.logtail-act {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: transparent;
-  color: var(--textDim);
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.logtail-act:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.logtail-act .icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.logtail-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 8px 12px;
-}
-.logtail-pre {
-  margin: 0;
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.logtail-empty {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  padding: 6px 0;
-}
-.logtail-empty.danger {
-  color: var(--danger);
-}
-.logtail-follow {
-  position: absolute;
-  right: 14px;
-  bottom: 12px;
-  padding: 5px 12px;
-  border: none;
-  border-radius: var(--r-sm);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 650;
-  color: var(--accentText);
-  background: var(--accent);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-}
-</style>

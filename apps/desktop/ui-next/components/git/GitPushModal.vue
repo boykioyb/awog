@@ -13,7 +13,7 @@
             {{ t('git.pushDialog.branchLabel') }}
           </span>
           <div
-            class="flex h-[var(--ctrl-h)] min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-3 font-mono text-sm shadow-sm"
+            class="flex h-(--ctrl-h) min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-3 font-mono text-sm shadow-xs"
           >
             <Icon name="branch" class="size-3.5 shrink-0 text-muted-foreground" />
             <span class="truncate">{{ currentBranch }}</span>
@@ -37,10 +37,10 @@
         </label>
 
         <!-- Upstream / ahead hints -->
-        <div v-if="needsUpstream && selectedTarget" class="pl-[68px] text-sm text-warning">
+        <div v-if="needsUpstream && selectedTarget" class="pl-17 text-sm text-warning">
           {{ t('git.pushDialog.setUpstreamHint', { target: selectedTarget }) }}
         </div>
-        <div v-else-if="ahead > 0" class="pl-[68px] text-sm text-muted-foreground">
+        <div v-else-if="ahead > 0" class="pl-17 text-sm text-muted-foreground">
           {{ t('git.pushDialog.aheadSummary', { count: ahead }) }}
         </div>
 

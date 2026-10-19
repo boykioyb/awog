@@ -1,35 +1,58 @@
 <template>
-  <div class="cview" :class="{ embedded }">
+  <!-- Hộp code viền mảnh trên nền wash nhạt — cùng chrome ở step body lẫn đứng riêng. -->
+  <div class="overflow-hidden rounded-md border bg-muted/40" :class="embedded ? 'm-0' : 'my-1'">
     <!-- When embedded inside a step body the filename header is redundant (the step
          header already names the tool + file), so it's hidden. -->
-    <div v-if="!embedded" class="cvhead">
-      <Icon
-        :name="mode === 'diff' ? 'git' : 'commands'"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
-      />
-      <span class="min-w-0 truncate">{{ fname }}</span>
-      <span class="cvlang">{{ mode === 'diff' ? 'diff' : 'ts' }}</span>
-    </div>
+    <template v-if="!embedded">
+      <!-- mono: đường dẫn file đang hiển thị -->
+      <div
+        class="flex items-center gap-2 bg-muted px-2.5 py-1.5 font-mono text-xs text-muted-foreground"
+      >
+        <Icon :name="mode === 'diff' ? 'git' : 'commands'" class="size-3" />
+        <span class="min-w-0 truncate">{{ fname }}</span>
+        <span class="ml-auto shrink-0 tracking-wide text-faint uppercase">
+          {{ mode === 'diff' ? 'diff' : 'ts' }}
+        </span>
+      </div>
+      <Separator />
+    </template>
 
     <!-- Unified diff: one row per line — [new-side line no.] [sign] [content].
          + rows tint success, − rows tint destructive, @@ hunk headers sit muted
          italic on a faint wash (proto diff idiom). -->
-    <div v-if="mode === 'diff'" class="cvdiff">
+    <div v-if="mode === 'diff'" class="overflow-x-auto font-mono text-xs leading-4.5">
       <div
         v-for="(l, i) in lines"
         :key="i"
-        class="drow"
-        :class="{ add: l.t === '+', del: l.t === '-', hunk: l.t === '@' }"
+        class="flex min-w-max"
+        :class="
+          l.t === '+'
+            ? 'bg-success/10 text-success'
+            : l.t === '-'
+              ? 'bg-destructive/10 text-destructive'
+              : l.t === '@'
+                ? 'bg-muted/60 text-muted-foreground italic'
+                : 'text-muted-foreground'
+        "
       >
-        <span class="dnum">{{ l.n ?? '' }}</span>
-        <span class="dsign">{{ SIGN[l.t] }}</span>
-        <span class="dc">{{ l.s }}</span>
+        <!-- Rãnh số dòng: cột hẹp cố định, chữ nửa độ đậm; cột dấu mang +/−. -->
+        <span class="w-8 shrink-0 border-r px-1.5 text-right tabular-nums opacity-50 select-none">
+          {{ l.n ?? '' }}
+        </span>
+        <span class="w-4 shrink-0 text-center select-none">{{ SIGN[l.t] }}</span>
+        <span class="pr-3 whitespace-pre">{{ l.s }}</span>
       </div>
     </div>
 
-    <div v-else class="cvbody">
-      <pre class="cvgut">{{ gutter }}</pre>
-      <pre class="cvcode">{{ code }}</pre>
+    <div v-else class="flex overflow-x-auto">
+      <pre
+        class="m-0 shrink-0 border-r bg-muted p-2 text-right font-mono text-xs leading-4.5 whitespace-pre text-faint select-none"
+        >{{ gutter }}</pre
+      >
+      <pre
+        class="m-0 flex-1 px-3 py-2 font-mono text-xs leading-4.5 whitespace-pre text-foreground/90"
+        >{{ code }}</pre
+      >
     </div>
   </div>
 </template>
@@ -60,113 +83,3 @@ const gutter = computed(() =>
 // Per-line change marker shown in the diff gutter (− is U+2212, matching the +N −N badge).
 const SIGN: Record<DiffLine['t'], string> = { '+': '+', '-': '−', ' ': '', '@': '' }
 </script>
-
-<style scoped>
-/* Bordered code box on a faint wash — same chrome in step bodies and standalone
-   (proto: `rounded-md border border-border` + `bg-muted/40` on file content). */
-.cview {
-  margin: 4px 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: rgb(from var(--muted) r g b / 40%);
-}
-.cview.embedded {
-  margin: 0;
-}
-.cvhead {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--code); /* mono-ok: the file path being shown */
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--muted-foreground);
-  background: var(--muted);
-}
-.cvlang {
-  margin-left: auto;
-  flex: 0 0 auto;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--textFaint);
-}
-.cvbody {
-  display: flex;
-  overflow-x: auto;
-}
-.cvgut {
-  margin: 0;
-  padding: 8px;
-  text-align: right;
-  color: var(--textFaint);
-  font-family: var(--code); /* mono-ok: gutter numbers sit in the code grid */
-  font-size: 11px;
-  line-height: 18px;
-  user-select: none;
-  border-right: 1px solid var(--border);
-  background: var(--muted);
-  white-space: pre;
-  flex: 0 0 auto;
-}
-.cvcode {
-  margin: 0;
-  padding: 8px 12px;
-  font-family: var(--code); /* mono-ok: file content */
-  font-size: 11px;
-  line-height: 18px;
-  color: rgb(from var(--foreground) r g b / 90%);
-  white-space: pre;
-  flex: 1;
-}
-.cvdiff {
-  font-family: var(--code); /* mono-ok: diff body */
-  font-size: 11px;
-  line-height: 18px;
-  overflow-x: auto;
-}
-/* `.drow` — named away from the legacy global `.dl` rules so no property leaks
-   in from prototype.css. */
-.drow {
-  display: flex;
-  min-width: max-content;
-  color: var(--muted-foreground);
-}
-/* Line-number gutter: fixed narrow rail, half-strength text (proto `w-8 …
-   opacity-50`); the sign column carries the +/− marker. */
-.dnum {
-  width: 32px;
-  flex: 0 0 auto;
-  padding: 0 6px;
-  text-align: right;
-  user-select: none;
-  border-right: 1px solid var(--border);
-  opacity: 0.5;
-  font-variant-numeric: tabular-nums;
-}
-.dsign {
-  width: 16px;
-  flex: 0 0 auto;
-  text-align: center;
-  user-select: none;
-}
-.dc {
-  padding-right: 12px;
-  white-space: pre;
-}
-.drow.add {
-  background: rgb(from var(--success) r g b / 10%);
-  color: var(--success);
-}
-.drow.del {
-  background: rgb(from var(--destructive) r g b / 10%);
-  color: var(--destructive);
-}
-.drow.hunk {
-  background: rgb(from var(--muted) r g b / 60%);
-  color: var(--muted-foreground);
-  font-style: italic;
-}
-</style>

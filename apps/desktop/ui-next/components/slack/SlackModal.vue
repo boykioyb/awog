@@ -4,9 +4,27 @@
        `-webkit-app-region: no-drag` (assets/css/app-shell.css). SlackWorkspace chỉ mount
        khi mở ⇒ poll + listener chỉ sống trong lúc modal hiện. -->
   <Teleport to="body">
-    <Transition name="slkfade">
-      <div v-if="isOpen" class="ovl on slkovl" @click.self="close">
-        <div class="slkmodal" role="dialog" aria-modal="true" :aria-label="t('slack.title')">
+    <!-- Mở/đóng: nền mờ dần + hộp phóng nhẹ QUANH TÂM (scale, không translate) — hộp căn
+         giữa bằng flex của lớp nền nên transform-origin mặc định là tâm hộp. -->
+    <Transition
+      enter-active-class="transition-opacity duration-150 [&>div]:transition-transform [&>div]:duration-150 motion-reduce:transition-none motion-reduce:[&>div]:transition-none"
+      leave-active-class="transition-opacity duration-150 [&>div]:transition-transform [&>div]:duration-150 motion-reduce:transition-none motion-reduce:[&>div]:transition-none"
+      enter-from-class="opacity-0 [&>div]:scale-97"
+      leave-to-class="opacity-0 [&>div]:scale-97"
+    >
+      <!-- hook-ok: `.ovl.on` nằm trong OVERLAYS (useEmbeddedBrowser), `.slkovl` bị NESTED_OVERLAYS bên dưới loại trừ.
+           z-110: đáy band modal (100–300) — hộp xác nhận, xem trước file, menu… mở TỪ trong modal phải nổi trên nó. -->
+      <div
+        v-if="isOpen"
+        class="ovl on slkovl fixed inset-0 z-110 flex items-center justify-center bg-black/55 p-0 [-webkit-app-region:no-drag]"
+        @click.self="close"
+      >
+        <div
+          class="flex h-[88vh] w-[90vw] flex-col overflow-hidden rounded-xl border bg-background shadow-lg"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('slack.title')"
+        >
           <SlackWorkspace mode="modal" />
         </div>
       </div>
@@ -44,50 +62,3 @@ function onKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
-<style scoped>
-/* Modal lớn căn giữa (`.ovl` gốc ghim lên trên cho hộp nhỏ). z-index ở đáy band modal
-   (100–300): hộp xác nhận, xem trước file, menu… mở TỪ trong modal phải nổi trên nó. */
-.slkovl {
-  align-items: center;
-  padding: 0;
-  z-index: 110;
-}
-.slkmodal {
-  display: flex;
-  flex-direction: column;
-  width: 90vw;
-  height: 88vh;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  background: var(--bg);
-  box-shadow: var(--shadow-lg);
-}
-/* Mở/đóng: nền mờ dần + hộp phóng nhẹ QUANH TÂM (scale, không translate) — hộp được
-   căn giữa bằng flex của .slkovl nên transform-origin mặc định là tâm hộp. */
-.slkfade-enter-active,
-.slkfade-leave-active {
-  transition: opacity 0.16s ease;
-}
-.slkfade-enter-active .slkmodal,
-.slkfade-leave-active .slkmodal {
-  transition: transform 0.16s ease;
-}
-.slkfade-enter-from,
-.slkfade-leave-to {
-  opacity: 0;
-}
-.slkfade-enter-from .slkmodal,
-.slkfade-leave-to .slkmodal {
-  transform: scale(0.97);
-}
-@media (prefers-reduced-motion: reduce) {
-  .slkfade-enter-active,
-  .slkfade-leave-active,
-  .slkfade-enter-active .slkmodal,
-  .slkfade-leave-active .slkmodal {
-    transition: none;
-  }
-}
-</style>

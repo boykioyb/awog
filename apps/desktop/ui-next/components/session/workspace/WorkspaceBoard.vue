@@ -1,10 +1,9 @@
 <template>
-  <section ref="rootEl" class="wssec" :class="{ bare }">
+  <section ref="rootEl" :class="bare ? 'flex h-full flex-col' : 'mt-3'">
     <div v-if="!bare" class="flex items-center gap-1.5">
       <Button
         variant="ghost"
-        class="h-auto p-0 flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left font-sans text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-        type="button"
+        class="h-auto min-w-0 flex-1 justify-start gap-1.5 px-0 py-0.5 text-left text-xs font-medium text-muted-foreground hover:bg-transparent hover:text-foreground [&_svg]:size-3"
         @click="open = !open"
       >
         <ChevronDown class="size-3 shrink-0 transition-transform" :class="{ 'rotate-180': open }" />
@@ -14,20 +13,24 @@
       <!-- Tạo work-item: mở editor ở mode "mới" (status backlog mặc định). -->
       <Button
         variant="outline"
-        class="h-auto p-0 flex size-[18px] shrink-0 items-center justify-center rounded-sm border border-border text-muted-foreground transition-colors hover:border-input hover:bg-accent hover:text-foreground"
+        size="iconSm"
+        class="h-4.5 w-4.5 shrink-0 rounded-sm text-muted-foreground [&_svg]:size-3"
         :title="t('sessions.workspace.group.newItem')"
         :aria-label="t('sessions.workspace.group.newItem')"
         @click.stop="createItem()"
       >
-        <Plus class="size-3" />
+        <Plus />
       </Button>
     </div>
 
-    <div v-show="open" class="wsb" :class="{ cols: layout === 'columns' }">
+    <!-- Kanban ngang (columns) cho màn Board riêng: mỗi status là một LANE có panel
+         riêng (nền + viền), card nổi bên trong; lane tự cuộn dọc, strip cuộn ngang
+         khi hẹp. Stack = cụm status xếp dọc cho panel hẹp của cockpit. -->
+    <div v-show="open" :class="bodyClass">
       <!-- Kanban (columns) luôn vẽ đủ lane kể cả board rỗng — khung pipeline
            backlog→todo→… chính là thông tin; chỉ stack mode mới thu về một
            dòng empty cho gọn. -->
-      <div v-if="!items.length && layout !== 'columns'" class="wsb-empty">
+      <div v-if="!items.length && !cols" class="px-0.5 py-1.5 text-xs text-faint">
         {{ t('sessions.workspace.group.boardEmpty') }}
       </div>
       <!-- Panel hẹp ⇒ board đọc theo CỤM status thay vì kanban ngang. -->
@@ -35,66 +38,123 @@
         <div
           v-for="col in columns"
           :key="col.status"
-          class="wsb-group"
-          :data-st="col.status"
-          :class="{ drop: dropLane === col.status && dragItem?.status !== col.status }"
+          :class="
+            cols
+              ? [
+                  'flex max-h-full w-58 min-w-0 flex-none flex-col rounded-lg border transition-colors',
+                  dropLane === col.status && dragItem?.status !== col.status
+                    ? 'border-ring bg-primary/10'
+                    : 'border-border bg-muted',
+                ]
+              : 'mb-2'
+          "
           @dragover.prevent="onLaneOver(col.status)"
           @dragleave="onLaneLeave(col.status)"
           @drop.prevent="onLaneDrop(col.status)"
         >
-          <div class="wsb-st" :data-st="col.status">
-            <span class="wsb-dot" />
+          <div
+            class="flex items-center gap-1.5 text-xs font-medium"
+            :class="[
+              STATUS_HEAD[col.status] ?? 'text-muted-foreground',
+              cols ? 'sticky top-0 px-2.5 pt-2 pb-1.5' : 'px-0.5 pt-0.5 pb-1',
+            ]"
+          >
+            <span
+              class="size-2 flex-none rounded-full"
+              :class="STATUS_DOT[col.status] ?? 'bg-faint'"
+            />
             {{ statusLabel(col.status) }}
-            <span class="wsb-stn">{{ col.items.length }}</span>
+            <span class="text-faint" :class="{ 'ml-auto font-normal': cols }">
+              {{ col.items.length }}
+            </span>
           </div>
-          <div class="wsb-lane">
+          <div
+            :class="{
+              'min-h-6 flex-auto overflow-y-auto px-2 pt-0.5 pb-2 [scrollbar-width:thin]': cols,
+            }"
+          >
+            <!-- raw-ok: card nhiều dòng kéo-thả được, cả card là một vùng bấm -->
             <button
               v-for="it in col.items"
               :key="it.id"
-              class="wsb-card"
+              type="button"
+              :class="[
+                'block w-full cursor-pointer rounded-md border border-border bg-card px-2.5 text-left font-sans transition-colors hover:border-input hover:bg-accent',
+                cols
+                  ? ['mb-1.5 border-l-3 py-2 shadow-sm', CARD_EDGE[it.status] ?? '']
+                  : 'mb-1 py-2',
+              ]"
               :data-item="it.id"
-              :data-st="it.status"
-              :draggable="layout === 'columns'"
+              :draggable="cols"
               @dragstart="onDragStart(it, $event)"
               @dragend="onDragEnd"
               @click="openEditor(it.id)"
             >
               <!-- Breadcrumb cha — "không biết issue cha là cái nào" của board
                    rối sub-issue: một dòng mờ trên title trỏ về item cha. -->
-              <div v-if="parentTitle(it)" class="wsb-parent" :title="parentTitle(it)">
+              <div
+                v-if="parentTitle(it)"
+                class="mb-0.5 flex items-center gap-1 truncate text-xs text-faint"
+                :title="parentTitle(it)"
+              >
                 <CornerDownRight class="size-3 shrink-0" />
                 {{ parentTitle(it) }}
               </div>
-              <div class="wsb-title">
+              <div
+                class="line-clamp-2 font-medium text-foreground"
+                :class="cols ? 'text-base' : 'text-sm'"
+              >
                 <component
                   :is="typeIcon(it)"
-                  class="wsb-ticon"
-                  :data-type="typeOf(it)"
+                  class="mr-1 inline-block size-3 flex-none align-middle"
+                  :class="TYPE_COLOR[typeOf(it)]"
                   :stroke-width="2.2"
                 />
                 {{ it.title }}
               </div>
-              <div v-if="it.desc" class="wsb-desc">{{ it.desc }}</div>
-              <div class="wsb-meta">
-                <span v-if="showProject" class="wsb-proj" :title="it.projectId">
+              <div
+                v-if="it.desc"
+                class="line-clamp-2 text-xs text-muted-foreground"
+                :class="{ 'mt-0.5': cols }"
+              >
+                {{ it.desc }}
+              </div>
+              <div
+                class="flex min-w-0 items-center text-xs text-muted-foreground"
+                :class="cols ? 'mt-1.5 flex-wrap gap-1.5' : 'mt-0.5 gap-2'"
+              >
+                <span
+                  v-if="showProject"
+                  class="inline-flex max-w-35 min-w-0 items-center gap-1 truncate"
+                  :class="
+                    cols
+                      ? 'rounded-full border border-border px-1.5 py-px text-muted-foreground'
+                      : 'text-faint'
+                  "
+                  :title="it.projectId"
+                >
                   <Folder class="size-3" />
                   {{ projectName(it.projectId) }}
                 </span>
-                <span v-if="typeof it.stage === 'number'" class="wsb-stage">
+                <span
+                  v-if="typeof it.stage === 'number'"
+                  class="inline-flex min-w-0 items-center gap-1 truncate"
+                  :class="{ [PILL]: cols, 'text-faint': cols }"
+                >
                   {{ t('sessions.workspace.group.stage', { n: it.stage }) }}
                 </span>
                 <span
                   v-if="it.priority && it.priority !== 'medium'"
-                  class="wsb-prio"
-                  :data-prio="it.priority"
+                  class="inline-flex items-center gap-1"
+                  :class="PRIO_COLOR[it.priority]"
                   :title="t(`board.prio.${it.priority}`)"
                 >
                   <Flag class="size-3" />
                 </span>
                 <span
                   v-if="it.severity"
-                  class="wsb-sev"
-                  :data-sev="it.severity"
+                  class="inline-flex items-center gap-1"
+                  :class="SEV_COLOR[it.severity]"
                   :title="t(`board.sev.${it.severity}`)"
                 >
                   <TriangleAlert class="size-3" />
@@ -102,26 +162,47 @@
                 <!-- Hạn chót (khuôn GitHub Projects) — đỏ khi đã qua mà việc chưa đóng. -->
                 <span
                   v-if="it.dueDate"
-                  class="wsb-due"
-                  :class="{ late: isOverdue(it) }"
+                  class="inline-flex items-center gap-1"
+                  :class="isOverdue(it) ? 'text-destructive' : 'text-faint'"
                   :title="t('board.field.dueDate')"
                 >
                   <CalendarClock class="size-3" />
                   {{ fmtDue(it.dueDate) }}
                 </span>
-                <span v-if="it.sprint" class="wsb-kids" :title="t('board.field.sprint')">
+                <span
+                  v-if="it.sprint"
+                  class="inline-flex items-center gap-1 text-faint"
+                  :title="t('board.field.sprint')"
+                >
                   {{ it.sprint }}
                 </span>
-                <span v-if="childCount(it)" class="wsb-kids" :title="t('board.children')">
+                <span
+                  v-if="childCount(it)"
+                  class="inline-flex items-center gap-1 text-faint"
+                  :title="t('board.children')"
+                >
                   <ListTree class="size-3" />
                   {{ childCount(it) }}
                 </span>
-                <span v-if="assigneeOf(it)" class="wsb-who">{{ assigneeOf(it) }}</span>
-                <span v-if="it.comments?.length" class="wsb-cmt">
+                <span
+                  v-if="assigneeOf(it)"
+                  class="inline-flex min-w-0 items-center gap-1 truncate"
+                  :class="{ [PILL]: cols }"
+                >
+                  {{ assigneeOf(it) }}
+                </span>
+                <span
+                  v-if="it.comments?.length"
+                  class="inline-flex min-w-0 items-center gap-1 truncate"
+                >
                   <MessageSquare class="size-3" />
                   {{ it.comments.length }}
                 </span>
-                <span v-if="it.mergedBranch" class="wsb-merged" :title="it.mergedBranch">
+                <span
+                  v-if="it.mergedBranch"
+                  class="inline-flex text-success"
+                  :title="it.mergedBranch"
+                >
                   <GitMerge class="size-3" />
                 </span>
               </div>
@@ -171,6 +252,8 @@ import {
   BOARD_STATUS_ORDER,
   useBoardStore,
   type BoardItem,
+  type BoardItemPriority,
+  type BoardItemSeverity,
   type BoardItemStatus,
   type BoardItemType,
 } from '~/stores/board'
@@ -220,6 +303,65 @@ const open = ref(true)
 const rootEl = ref<HTMLElement | null>(null)
 
 const items = computed<BoardItem[]>(() => props.items ?? board.itemsFor(props.projectId))
+
+// ── Trình bày ──
+const cols = computed(() => props.layout === 'columns')
+// Trang Issues đứng một mình (bare + columns): strip kanban cần đệm quanh như
+// thanh .bp-bar (8/16) — cockpit nhúng giữ compact vì panel cha đã có padding.
+const bodyClass = computed(() => {
+  if (!cols.value) return 'mt-2'
+  const strip = 'flex items-stretch gap-3 overflow-x-auto'
+  return props.bare ? `${strip} min-h-0 flex-auto px-4 pt-3 pb-4` : `${strip} mt-2 pb-1`
+})
+// Chip meta dạng pill trên card kanban (card cockpit giữ chữ trơn cho gọn).
+const PILL = 'max-w-full rounded-full bg-accent px-1.5 py-px'
+// Status → màu chấm + mép trái card: một nguồn màu, hai chỗ đọc. Status vắng mặt
+// rơi về màu mặc định (chấm faint, mép viền thường).
+const STATUS_DOT: Partial<Record<BoardItemStatus, string>> = {
+  in_progress: 'bg-primary',
+  in_review: 'bg-warning',
+  blocked: 'bg-destructive',
+  changes: 'bg-lavender',
+  todo: 'bg-info',
+  done: 'bg-success',
+  // pending = tạm gác — cùng màu với useIssueStatus (muted, khác chấm backlog nhạt hơn).
+  pending: 'bg-muted-foreground',
+}
+const CARD_EDGE: Partial<Record<BoardItemStatus, string>> = {
+  in_progress: 'border-l-primary',
+  in_review: 'border-l-warning',
+  blocked: 'border-l-destructive',
+  changes: 'border-l-lavender',
+  todo: 'border-l-info',
+  done: 'border-l-success',
+}
+// Item cần mắt tới đọc rõ hơn hẳn — tông của status thay vì xám đều.
+const STATUS_HEAD: Partial<Record<BoardItemStatus, string>> = {
+  in_review: 'text-warning',
+  blocked: 'text-destructive',
+  changes: 'text-warning',
+}
+// Khuôn Jira: màu type theo thói quen Jira — epic tím / story xanh lá / task xanh
+// dương / subtask xám / bug đỏ; cờ ưu tiên + cảnh báo severity cùng một thang.
+const TYPE_COLOR: Record<BoardItemType, string> = {
+  epic: 'text-lavender',
+  story: 'text-success',
+  task: 'text-info',
+  subtask: 'text-muted-foreground',
+  bug: 'text-destructive',
+}
+const PRIO_COLOR: Record<BoardItemPriority, string> = {
+  urgent: 'text-destructive',
+  high: 'text-warning',
+  medium: '',
+  low: 'text-faint',
+}
+const SEV_COLOR: Record<BoardItemSeverity, string> = {
+  blocker: 'text-destructive',
+  major: 'text-warning',
+  minor: 'text-info',
+  trivial: 'text-faint',
+}
 // Stack (panel hẹp) giấu cụm rỗng cho gọn; columns (kanban) giữ đủ lane —
 // lane trống chính là thông tin "không có gì đang kẹt ở đây".
 const columns = computed(() => {
@@ -319,7 +461,7 @@ async function openItem(itemId: string): Promise<void> {
   openEditor(itemId)
 }
 
-// Nút "+ Tạo việc" của toolbar trang Board (bare mode giấu hẳn wssec-head).
+// Nút "+ Tạo việc" của toolbar trang Board (bare mode giấu hẳn header section).
 function openCreate(): void {
   createItem()
 }
@@ -379,363 +521,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-.wssec {
-  margin-top: 12px;
-}
-.wsb {
-  margin-top: 8px;
-}
-/* ── Kanban ngang cho màn Board riêng ────────────────────────────────────
-   Mỗi status là một LANE có panel riêng (nền + viền) chứ card nổi bên trong;
-   lane tự cuộn dọc, strip cuộn ngang khi hẹp. bare=section full-height nên
-   cả khối dàn cao hết body thay vì cụm card lơ lửng trên đầu trang. */
-.wssec.bare {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  margin-top: 0;
-}
-.wssec.bare .wsb.cols {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin-top: 0;
-  /* Trang Issues đứng một mình: strip kanban cần đệm quanh như .bp-bar
-     (8/16) — cockpit nhúng giữ compact vì panel cha đã có padding. */
-  padding: 12px 16px 16px;
-}
-.wsb.cols {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-.wsb.cols .wsb-group {
-  flex: 0 0 232px;
-  min-width: 0;
-  margin-bottom: 0;
-  display: flex;
-  flex-direction: column;
-  max-height: 100%;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-/* Lane đang được rê card tới: viền primary + nền nhấc nhẹ — đích thả phải rõ. */
-.wsb.cols .wsb-group.drop {
-  border-color: var(--ring);
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
-}
-.wsb.cols .wsb-st {
-  position: sticky;
-  top: 0;
-  padding: 8px 10px 6px;
-}
-.wsb-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--textFaint);
-  flex: 0 0 auto;
-}
-/* Status → màu chấm + mép trái card: một nguồn màu, hai chỗ đọc. */
-.wsb-st[data-st='in_progress'] .wsb-dot,
-.wsb-group[data-st='in_progress'] .wsb-dot {
-  background: var(--primary);
-}
-.wsb-st[data-st='in_review'] .wsb-dot,
-.wsb-group[data-st='in_review'] .wsb-dot {
-  background: var(--warning);
-}
-.wsb-st[data-st='blocked'] .wsb-dot,
-.wsb-group[data-st='blocked'] .wsb-dot {
-  background: var(--destructive);
-}
-.wsb-st[data-st='changes'] .wsb-dot,
-.wsb-group[data-st='changes'] .wsb-dot {
-  background: var(--violet);
-}
-.wsb-st[data-st='todo'] .wsb-dot,
-.wsb-group[data-st='todo'] .wsb-dot {
-  background: var(--info);
-}
-.wsb-st[data-st='done'] .wsb-dot,
-.wsb-group[data-st='done'] .wsb-dot {
-  background: var(--success);
-}
-/* pending = tạm gác — cùng màu với useIssueStatus (muted, khác chấm backlog nhạt hơn). */
-.wsb-st[data-st='pending'] .wsb-dot,
-.wsb-group[data-st='pending'] .wsb-dot {
-  background: var(--muted-foreground);
-}
-.wsb.cols .wsb-stn {
-  margin-left: auto;
-  font-weight: 400;
-}
-/* Thân lane cuộn riêng; card xếp trong nó. */
-.wsb.cols .wsb-lane {
-  flex: 1 1 auto;
-  min-height: 24px;
-  overflow-y: auto;
-  padding: 2px 8px 8px;
-  scrollbar-width: thin;
-}
-.wsb.cols .wsb-card {
-  text-align: left;
-  padding: 9px 10px 8px;
-  margin-bottom: 6px;
-  border: 1px solid var(--border);
-  border-left-width: 3px;
-  border-radius: var(--r-sm);
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
-}
-.wsb.cols .wsb-card:hover {
-  border-color: var(--input);
-  background: var(--accent-wash);
-}
-.wsb-card[data-st='in_progress'] {
-  border-left-color: var(--primary);
-}
-.wsb-card[data-st='in_review'] {
-  border-left-color: var(--warning);
-}
-.wsb-card[data-st='blocked'] {
-  border-left-color: var(--destructive);
-}
-.wsb-card[data-st='changes'] {
-  border-left-color: var(--violet);
-}
-.wsb-card[data-st='todo'] {
-  border-left-color: var(--info);
-}
-.wsb-card[data-st='done'] {
-  border-left-color: var(--success);
-}
-.wsb-card[data-st='backlog'],
-.wsb-card[data-st='cancelled'] {
-  border-left-color: var(--border);
-}
-/* Card trên màn kanban đọc rộng hơn card cockpit — chữ to hơn một nấc, chip
-   meta là pill rõ ràng. Các rule đều scope `.wsb.cols` để panel Nhóm của phiên
-   gốc giữ nguyên mật độ compact cũ. */
-.wsb.cols .wsb-title {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.wsb.cols .wsb-desc {
-  margin-top: 3px;
-}
-.wsb.cols .wsb-meta {
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.wsb.cols .wsb-who,
-.wsb.cols .wsb-stage {
-  max-width: 100%;
-  padding: 1px 7px;
-  border-radius: var(--r-pill);
-  background: var(--accent-wash);
-}
-.wsb.cols .wsb-stage {
-  color: var(--textFaint);
-}
-.wsb-empty {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  padding: 6px 2px;
-}
-.wsb-group {
-  margin-bottom: 8px;
-}
-/* Group header — spec §6: text-[10px] uppercase tracking-wide muted. */
-.wsb-st {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-  padding: 2px 2px 4px;
-}
-.wsb-stn {
-  color: var(--textFaint);
-}
-/* Item cần mắt tới đọc rõ hơn hẳn — tông của status thay vì xám đều. */
-.wsb-st[data-st='in_review'] {
-  color: var(--warning);
-}
-.wsb-st[data-st='blocked'] {
-  color: var(--destructive);
-}
-.wsb-st[data-st='changes'] {
-  color: var(--warning);
-}
-.wsb-card {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 7px 10px;
-  margin-bottom: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--card);
-  cursor: pointer;
-  font-family: var(--sans);
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.wsb-card:hover {
-  border-color: var(--input);
-  background: var(--accent-wash);
-}
-.wsb-title {
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.wsb-desc {
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.wsb-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 3px;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  min-width: 0;
-}
-.wsb-proj {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--textFaint);
-}
-.wsb.cols .wsb-proj {
-  padding: 1px 7px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-}
-.wsb-who,
-.wsb-stage,
-.wsb-cmt {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsb-merged {
-  color: var(--success);
-  display: inline-flex;
-}
-
-/* ── Khuôn Jira: breadcrumb cha · icon loại · cờ ưu tiên · cảnh báo sev ·
-   đếm con. Màu type theo thói quen Jira: epic violet / story xanh lá /
-   task xanh dương / subtask xám / bug đỏ. */
-.wsb-parent {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  line-height: 1.2;
-  color: var(--textFaint);
-  margin-bottom: 2px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.wsb-ticon {
-  display: inline-block;
-  vertical-align: -2px;
-  width: 12px;
-  height: 12px;
-  margin-right: 3px;
-  flex: 0 0 auto;
-}
-.wsb-ticon[data-type='epic'] {
-  color: var(--violet);
-}
-.wsb-ticon[data-type='story'] {
-  color: var(--success);
-}
-.wsb-ticon[data-type='task'] {
-  color: var(--info);
-}
-.wsb-ticon[data-type='subtask'] {
-  color: var(--muted-foreground);
-}
-.wsb-ticon[data-type='bug'] {
-  color: var(--destructive);
-}
-.wsb-prio,
-.wsb-sev,
-.wsb-kids {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-.wsb-prio[data-prio='urgent'] {
-  color: var(--destructive);
-}
-.wsb-prio[data-prio='high'] {
-  color: var(--warning);
-}
-.wsb-prio[data-prio='low'] {
-  color: var(--textFaint);
-}
-.wsb-sev[data-sev='blocker'] {
-  color: var(--destructive);
-}
-.wsb-sev[data-sev='major'] {
-  color: var(--warning);
-}
-.wsb-sev[data-sev='minor'] {
-  color: var(--info);
-}
-.wsb-sev[data-sev='trivial'] {
-  color: var(--textFaint);
-}
-.wsb-kids {
-  color: var(--textFaint);
-}
-.wsb-due {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--textFaint);
-}
-.wsb-due.late {
-  color: var(--destructive);
-}
-</style>

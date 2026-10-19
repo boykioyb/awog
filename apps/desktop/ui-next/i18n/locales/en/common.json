@@ -128,5 +128,8 @@
   "common.discard": "Discard",
   "common.remove": "Remove",
   "common.time.never": "No activity",
-  "common.openSettings": "Open settings"
+  "common.openSettings": "Open settings",
+  "common.preview.csvTable": "Table",
+  "common.preview.csvSource": "Source",
+  "common.preview.remoteImageBlocked": "External image blocked"
 }

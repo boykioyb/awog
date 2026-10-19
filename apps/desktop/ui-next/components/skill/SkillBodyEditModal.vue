@@ -6,13 +6,13 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="sbe">
-      <div class="sbe-hint">{{ t('skills.bodyEdit.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('skills.bodyEdit.hint') }}</div>
 
-      <div v-if="!draft" class="sbe-promptbox">
-        <textarea
+      <div v-if="!draft">
+        <Textarea
           v-model="prompt"
-          class="sbe-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('skills.bodyEdit.placeholder')"
@@ -20,14 +20,17 @@
         />
       </div>
 
-      <div v-if="error" class="sbe-err">{{ error }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
 
-      <div v-if="draft" class="sbe-preview">
-        <div class="sbe-prow">
-          <span class="mono sbe-pname">{{ draft.name }}</span>
-          <span v-if="draft.id" class="tag mono">/{{ draft.id }}</span>
+      <div v-if="draft" class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- mono-ok: định danh (slug / lệnh) -->
+          <span class="font-mono text-sm font-medium text-foreground">{{ draft.name }}</span>
+          <Badge v-if="draft.id" variant="secondary" class="font-mono">/{{ draft.id }}</Badge>
         </div>
-        <div class="sbe-pdesc">{{ draft.description }}</div>
+        <div class="text-sm text-muted-foreground">{{ draft.description }}</div>
         <LibraryMarkdownBody
           :title="t('skills.bodyEdit.proposed')"
           :content="draft.body || t('skills.bodyEdit.emptyBody')"
@@ -57,7 +60,10 @@
         variant="default"
         @click="onGenerate"
       >
-        <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+        <Icon
+          :name="isGenerating ? 'refresh' : 'sparkles'"
+          :class="{ 'animate-spin': isGenerating }"
+        />
         {{ isGenerating ? t('skills.bodyEdit.generating') : t('skills.bodyEdit.generate') }}
       </Button>
       <Button v-else :disabled="!canApply" variant="default" @click="onApply">
@@ -225,73 +231,3 @@ const onGenerateSave = () => {
   })
 }
 </script>
-
-<style scoped>
-.sbe {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.sbe-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.sbe-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.sbe-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.sbe-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.sbe-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sbe-prow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sbe-pname {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.sbe-pdesc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.spin {
-  animation: sbe-spin 0.9s linear infinite;
-}
-@keyframes sbe-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

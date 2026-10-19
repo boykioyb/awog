@@ -7,12 +7,14 @@
     @connect="emit('quick', $event.id, $event)"
   />
 
-  <div v-else class="cdp">
+  <div v-else class="flex flex-col gap-3">
     <!-- Gợi ý theo ngữ cảnh: chỉ hiện khi chưa gõ tìm kiếm, và chỉ khi có bằng
          chứng thật. Không có tín hiệu ⇒ nói thẳng là không có, không bịa. -->
-    <section v-if="!query.trim()" class="cdp-sug">
-      <div class="cdp-sug-head">
-        <span class="cdp-lbl">{{ t('connectionsDiscover.suggest.title') }}</span>
+    <section v-if="!query.trim()" class="flex flex-col gap-2 border-b pb-3">
+      <div class="flex items-center justify-between gap-2.5">
+        <span class="text-xs font-medium text-muted-foreground">
+          {{ t('connectionsDiscover.suggest.title') }}
+        </span>
         <AppSelect
           v-if="projectOptions.length"
           v-model="projectId"
@@ -20,54 +22,66 @@
           width="190px"
         />
       </div>
-      <p v-if="!projectOptions.length" class="cdp-muted">
+      <p v-if="!projectOptions.length" class="m-0 text-xs leading-relaxed text-muted-foreground">
         {{ t('connectionsDiscover.suggest.noProject') }}
       </p>
-      <p v-else-if="!suggestions.length" class="cdp-muted">
+      <p v-else-if="!suggestions.length" class="m-0 text-xs leading-relaxed text-muted-foreground">
         {{ t('connectionsDiscover.suggest.none') }}
       </p>
       <template v-else>
-        <button
+        <Button
           v-for="s in suggestions"
           :key="s.id"
-          type="button"
-          class="cdp-row"
+          variant="outline"
+          class="h-auto w-full items-start justify-start gap-2.5 rounded-lg px-3 py-2 text-left font-normal hover:border-primary [&_svg]:mt-0.5 [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
           @click="onSuggestion(s)"
         >
-          <Icon name="bulb" class="cdp-row-ic" />
-          <span class="cdp-row-tx">
-            <span class="cdp-row-nm">
+          <Icon name="bulb" />
+          <span class="flex min-w-0 flex-auto flex-col gap-1">
+            <span class="flex items-center gap-2 text-sm font-semibold text-foreground">
               {{ s.name }}
-              <span v-if="s.kind === 'preset'" class="tag">
+              <Badge v-if="s.kind === 'preset'" variant="secondary" class="px-1.5 py-0">
                 {{ t('connectionsDiscover.badge.curated') }}
-              </span>
+              </Badge>
             </span>
-            <span class="cdp-row-why">{{ reasonText(s.reason) }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ reasonText(s.reason) }}</span>
           </span>
-        </button>
+        </Button>
       </template>
     </section>
 
     <!-- Tìm kiếm registry -->
-    <div class="cdp-bar">
-      <Icon name="search" class="cdp-bar-ic" />
+    <div class="flex items-center gap-2">
+      <Icon name="search" class="size-3.5 flex-none text-muted-foreground" />
       <Input v-model="query" type="text" :placeholder="t('connectionsDiscover.search')" />
-      <button
-        type="button"
-        class="cdp-refresh"
+      <Button
+        variant="outline"
+        size="iconMd"
+        class="flex-none text-muted-foreground [&_svg]:size-3.5"
         :title="t('connectionsDiscover.refresh')"
+        :aria-label="t('connectionsDiscover.refresh')"
         :disabled="loading"
         @click="load(true)"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="refresh" />
+      </Button>
     </div>
 
-    <p class="cdp-origin" :class="{ stale: result.stale }">{{ originText }}</p>
+    <p
+      class="m-0 text-xs leading-relaxed"
+      :class="result.stale ? 'text-warning' : 'text-muted-foreground'"
+    >
+      {{ originText }}
+    </p>
 
-    <div class="cdp-list">
-      <p v-if="loading" class="cdp-muted">{{ t('connectionsDiscover.loading') }}</p>
-      <p v-else-if="!result.entries.length" class="cdp-muted">
+    <div class="flex max-h-80 flex-col gap-1.5 overflow-y-auto">
+      <p v-if="loading" class="m-0 text-xs leading-relaxed text-muted-foreground">
+        {{ t('connectionsDiscover.loading') }}
+      </p>
+      <p
+        v-else-if="!result.entries.length"
+        class="m-0 text-xs leading-relaxed text-muted-foreground"
+      >
         {{
           query.trim()
             ? t('connectionsDiscover.emptySearch', { query: query.trim() })
@@ -75,25 +89,30 @@
         }}
       </p>
       <template v-else>
-        <button
+        <Button
           v-for="e in result.entries"
           :key="e.id"
-          type="button"
-          class="cdp-row"
+          variant="outline"
+          class="h-auto w-full items-start justify-start gap-2.5 rounded-lg px-3 py-2 text-left font-normal hover:border-primary [&_svg]:mt-0.5 [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
           @click="selected = e"
         >
-          <Icon name="conn" class="cdp-row-ic" />
-          <span class="cdp-row-tx">
-            <span class="cdp-row-nm">
+          <Icon name="conn" />
+          <span class="flex min-w-0 flex-auto flex-col gap-1">
+            <span class="flex items-center gap-2 text-sm font-semibold text-foreground">
               {{ e.title }}
-              <span class="tag" :class="e.install.kind === 'unsupported' ? 'warn' : ''">
+              <Badge
+                :variant="e.install.kind === 'unsupported' ? 'warning' : 'secondary'"
+                class="px-1.5 py-0"
+              >
                 {{ badgeFor(e) }}
-              </span>
+              </Badge>
             </span>
-            <span class="cdp-row-sub">{{ e.description || e.name }}</span>
+            <span class="truncate text-xs text-muted-foreground">
+              {{ e.description || e.name }}
+            </span>
           </span>
-          <Icon name="chev-right" class="cdp-row-go" />
-        </button>
+          <Icon name="chev-right" />
+        </Button>
       </template>
     </div>
   </div>
@@ -231,156 +250,3 @@ const originText = computed(() => {
   return t('connectionsDiscover.origin.network')
 })
 </script>
-
-<style scoped>
-.cdp {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.cdp-sug {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.cdp-sug-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.cdp-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-}
-.cdp-muted {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.cdp-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cdp-bar-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.cdp-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.cdp-refresh {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  padding: 6px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.cdp-refresh:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.cdp-refresh:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.cdp-origin {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.cdp-origin.stale {
-  color: var(--amber);
-}
-.cdp-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 320px;
-  overflow-y: auto;
-}
-.cdp-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-.cdp-row:hover {
-  border-color: var(--accent);
-  background: var(--bgHover);
-}
-.cdp-row-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--textDim);
-}
-.cdp-row-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.cdp-row-nm {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.cdp-row-sub,
-.cdp-row-why {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cdp-row-why {
-  color: var(--textMuted);
-}
-.cdp-row-go {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--textDim);
-}
-</style>

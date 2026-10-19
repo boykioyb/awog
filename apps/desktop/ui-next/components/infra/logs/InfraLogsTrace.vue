@@ -1,52 +1,57 @@
 <template>
-  <div class="ltr">
+  <div class="flex min-h-0 flex-auto flex-col gap-2">
     <!-- ── Thanh chạy: id + nút ─────────────────────────────────────────────── -->
-    <div class="itoolbar ltr-bar">
-      <div class="itoolgrp ltr-idgrp">
-        <!-- Khuôn ô nhập của khu `/infra`: viền + nền ở phần TỬ BỌC, `<input>` để
-             trần bên trong (giống `.lgp-field` của bộ chọn nhóm log ngay cột bên).
-             Bản đầu gắn `class="inp"` — một class KHÔNG tồn tại ở đâu trong repo,
-             nên ô này render bằng mặc định trần của trình duyệt. -->
-        <div class="ltr-field">
+    <!-- Thanh công cụ là một Card; mỗi cụm nghĩa là một đơn vị gãy dòng (`shrink-0`)
+         nên khi hẹp thanh xuống dòng theo cụm, không bỏ rơi một nút lẻ. -->
+    <Card class="shrink-0 flex-row flex-wrap items-center gap-2.5 px-2.5 py-2">
+      <div class="flex min-w-0 flex-[1_1_16rem] flex-wrap items-center gap-1.5">
+        <div class="relative flex min-w-0 flex-auto items-center">
+          <!-- mono-ok: trace id là chuỗi người dùng copy-paste từ log/terminal -->
           <Input
             v-model="traceId"
             type="text"
             spellcheck="false"
             :placeholder="t('infra.trace.idPh')"
             :aria-label="t('infra.trace.idLabel')"
-            class="ltr-id"
+            class="h-ctrl-sm font-mono"
+            :class="kindLabel ? 'pr-24' : ''"
             @keydown.enter.prevent="emit('run')"
           />
-          <span v-if="kindLabel" class="ltr-kind">{{ kindLabel }}</span>
+          <span
+            v-if="kindLabel"
+            class="pointer-events-none absolute right-2.5 text-xs whitespace-nowrap text-dim"
+          >
+            {{ kindLabel }}
+          </span>
         </div>
       </div>
 
-      <div class="itoolgrp">
+      <div class="flex shrink-0 flex-wrap items-center gap-1.5">
         <Button type="button" :disabled="!canRun" variant="default" @click="emit('run')">
-          <Icon :name="running ? 'clock' : 'branch'" class="ltr-ic" />
+          <Icon :name="running ? 'clock' : 'branch'" />
           {{ running ? t('infra.trace.running') : t('infra.trace.go') }}
         </Button>
         <Button v-if="running" type="button" variant="outline" @click="emit('cancel')">
-          <Icon name="stop" class="ltr-ic" />
+          <Icon name="stop" />
           {{ t('infra.trace.cancel') }}
         </Button>
       </div>
 
-      <div class="itoolgrp iend">
-        <span v-if="trace" class="ltr-meta">
+      <div class="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+        <span v-if="trace" class="text-xs text-muted-foreground">
           {{ t(`infra.trace.source.${trace.source}`) }}
-          <span v-if="trace.totalMs !== null" class="ltr-meta-dim">
+          <span v-if="trace.totalMs !== null" class="text-faint">
             · {{ t('infra.trace.total', { ms: formatMs(trace.totalMs) }) }}
           </span>
         </span>
         <!-- Chi phí: số ĐO ĐƯỢC khi đã có, còn lúc đang chạy thì con số ước lượng
              mà sidecar tính bằng CHÍNH câu lần-theo này. -->
-        <span v-if="bytesScanned > 0" class="ltr-meta">
+        <span v-if="bytesScanned > 0" class="text-xs text-muted-foreground">
           {{
             t('infra.trace.scanned', { size: formatBytes(bytesScanned), usd: usdOf(bytesScanned) })
           }}
         </span>
-        <span v-else-if="estimate" class="ltr-meta ltr-meta-dim">
+        <span v-else-if="estimate" class="text-xs text-faint">
           {{
             t('infra.trace.estimate', {
               size: formatBytes(estimate.bytes),
@@ -67,77 +72,125 @@
           size="sm"
           @click="emit('show-on-graph')"
         >
-          <Icon name="branch" class="ltr-ic" />
+          <Icon name="branch" />
           {{ t('infra.trace.onGraph') }}
         </Button>
       </div>
-    </div>
+    </Card>
 
     <!-- Câu nói thật về NGUỒN. Nhánh log không có độ trễ từng chặng, và người đọc
          phải biết điều đó TRƯỚC khi diễn giải các con số bên dưới. -->
-    <p v-if="trace" class="ltr-note">{{ t(`infra.trace.sourceNote.${trace.source}`) }}</p>
-    <p v-for="key in notes" :key="key" class="ltr-note">{{ t(key) }}</p>
-    <p v-if="error" class="ltr-error">{{ errorText }}</p>
-    <p v-if="trace?.truncated" class="ltr-warn">{{ t('infra.trace.truncated') }}</p>
+    <p v-if="trace" class="text-xs leading-(--lh-sm) text-dim">
+      {{ t(`infra.trace.sourceNote.${trace.source}`) }}
+    </p>
+    <p v-for="key in notes" :key="key" class="text-xs leading-(--lh-sm) text-dim">{{ t(key) }}</p>
+    <p v-if="error" class="text-xs leading-(--lh-sm) text-destructive">{{ errorText }}</p>
+    <p v-if="trace?.truncated" class="text-xs leading-(--lh-sm) text-warning">
+      {{ t('infra.trace.truncated') }}
+    </p>
 
     <!-- ── Dòng thời gian dọc ───────────────────────────────────────────────── -->
-    <div v-if="trace && trace.hops.length > 0" class="ltr-timeline">
-      <div v-for="(hop, i) in trace.hops" :key="hop.key" class="ltr-hop">
-        <div class="ltr-rail">
-          <span class="ltr-dot" :class="{ bad: hop.status === 'error' }">
-            <Icon :name="serviceIcon(hop.service)" class="ltr-dot-ic" />
+    <div
+      v-if="trace && trace.hops.length > 0"
+      class="flex flex-auto flex-col overflow-auto px-0.5 py-1"
+    >
+      <div v-for="(hop, i) in trace.hops" :key="hop.key" class="flex min-h-0 gap-2.5">
+        <div class="flex shrink-0 flex-col items-center">
+          <span
+            class="flex size-6.5 shrink-0 items-center justify-center rounded-full border"
+            :class="
+              hop.status === 'error'
+                ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                : 'bg-card text-muted-foreground'
+            "
+          >
+            <Icon :name="serviceIcon(hop.service)" class="size-3.5" />
           </span>
-          <span v-if="i < trace.hops.length - 1" class="ltr-line" />
+          <!-- Đường nối kéo dài hết phần thân của chặng — chiều cao do flex quyết
+               định, nên một chặng đang mở log vẫn nối liền xuống chặng sau. -->
+          <span v-if="i < trace.hops.length - 1" class="min-h-3 w-px flex-auto bg-border" />
         </div>
 
-        <div class="ltr-body">
-          <button class="ltr-head" type="button" @click="emit('toggle-hop', hop.key)">
-            <span class="ltr-name" :title="hop.label">{{ hop.label }}</span>
-            <span class="ltr-svc">{{ hop.service }}</span>
-            <span v-if="hop.status === 'error'" class="ltr-badge bad">
-              {{ hop.note || t('infra.trace.failed') }}
+        <div class="min-w-0 flex-auto pb-2.5">
+          <!-- raw-ok: tiêu đề chặng là cả một hàng bấm để mở/đóng log, không phải nút -->
+          <button
+            class="flex w-full cursor-pointer items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-foreground hover:bg-accent"
+            type="button"
+            @click="emit('toggle-hop', hop.key)"
+          >
+            <span class="max-w-85 truncate text-sm font-semibold" :title="hop.label">
+              {{ hop.label }}
             </span>
-            <span v-else-if="hop.note" class="ltr-badge">{{ hop.note }}</span>
-            <span class="ltr-gap" />
-            <span class="ltr-time">{{ clock(hop.firstAt) }}</span>
+            <span class="text-xs whitespace-nowrap text-dim">{{ hop.service }}</span>
+            <Badge
+              v-if="hop.status === 'error'"
+              variant="outline"
+              class="border-destructive/40 px-1.5 py-0 font-normal text-destructive"
+            >
+              {{ hop.note || t('infra.trace.failed') }}
+            </Badge>
+            <Badge v-else-if="hop.note" variant="outline" class="px-1.5 py-0 font-normal text-dim">
+              {{ hop.note }}
+            </Badge>
+            <span class="flex-auto" />
+            <span class="text-xs whitespace-nowrap text-dim tabular-nums">
+              {{ clock(hop.firstAt) }}
+            </span>
             <!-- Độ trễ THẬT chỉ có ở nhánh X-Ray; nhãn khác nhau cố ý, để không ai
                  đọc "cách chặng sau 400ms" thành "chặng này chạy mất 400ms". -->
-            <span v-if="hop.durationMs !== null" class="ltr-dur">
+            <span
+              v-if="hop.durationMs !== null"
+              class="text-xs whitespace-nowrap text-muted-foreground tabular-nums"
+            >
               {{ t('infra.trace.duration', { ms: formatMs(hop.durationMs) }) }}
             </span>
-            <span v-else-if="hop.gapToNextMs !== null" class="ltr-dur dim">
+            <span
+              v-else-if="hop.gapToNextMs !== null"
+              class="text-xs whitespace-nowrap text-faint tabular-nums"
+            >
               {{ t('infra.trace.gap', { ms: formatMs(hop.gapToNextMs) }) }}
             </span>
-            <Icon :name="openHopKey === hop.key ? 'chev' : 'chev-right'" class="ltr-ic" />
+            <Icon :name="openHopKey === hop.key ? 'chev' : 'chev-right'" class="size-3" />
           </button>
 
-          <div class="ltr-sub">
+          <div class="flex items-center gap-2 px-1.5 text-xs text-faint">
             <!-- `count` ở nhánh X-Ray đếm SEGMENT, không đếm dòng log — hiện "1 dòng"
                  cạnh một chặng mà mở ra lại nói "không kèm dòng log nào" là tự mâu
                  thuẫn. Nhãn này vì thế chỉ có nghĩa ở nhánh log. -->
             <span v-if="trace?.source === 'logs'">
               {{ t('infra.trace.lines', { n: hop.count }) }}
             </span>
-            <button
+            <Button
               v-if="hop.logGroup"
-              class="ltr-link"
-              type="button"
+              variant="link"
+              size="xs"
+              class="h-auto p-0 font-normal"
               :title="hop.logGroup"
               @click="emit('open-logs', hop.logGroup)"
             >
               {{ t('infra.trace.openLogs') }}
-            </button>
+            </Button>
           </div>
 
-          <div v-if="openHopKey === hop.key" class="ltr-rows">
-            <p v-if="hop.rows.length === 0" class="ltr-rows-empty">
+          <div
+            v-if="openHopKey === hop.key"
+            class="mt-1 max-h-55 overflow-auto rounded-md border bg-card"
+          >
+            <p
+              v-if="hop.rows.length === 0"
+              class="px-2 py-1.5 text-xs leading-(--lh-sm) text-faint"
+            >
               {{ t('infra.trace.noRows') }}
             </p>
             <template v-else>
-              <pre v-for="(row, ri) in hop.rows" :key="ri" class="ltr-row">{{
-                row['@message'] ?? ''
-              }}</pre>
-              <p v-if="hop.rowsTruncated" class="ltr-rows-empty">
+              <!-- mono-ok: dòng log nguyên bản -->
+              <pre
+                v-for="(row, ri) in hop.rows"
+                :key="ri"
+                class="m-0 border-b px-2 py-1 font-mono text-xs leading-(--lh-sm) break-words whitespace-pre-wrap text-muted-foreground last:border-b-0"
+                >{{ row['@message'] ?? '' }}</pre
+              >
+              <p v-if="hop.rowsTruncated" class="px-2 py-1.5 text-xs leading-(--lh-sm) text-faint">
                 {{ t('infra.trace.rowsTruncated', { n: hop.count }) }}
               </p>
             </template>
@@ -147,9 +200,12 @@
     </div>
 
     <!-- Rỗng KHÔNG im lặng: mỗi ca nói ra bước tiếp theo. -->
-    <div v-else class="ltr-empty">
-      <Icon name="branch" class="ltr-empty-ic" />
-      <p class="ltr-empty-txt">{{ emptyText }}</p>
+    <div
+      v-else
+      class="flex flex-auto flex-col items-center justify-center gap-1.5 px-3 py-5.5 text-dim"
+    >
+      <Icon name="branch" class="size-5" />
+      <p class="max-w-105 text-center text-sm">{{ emptyText }}</p>
     </div>
   </div>
 </template>
@@ -290,302 +346,3 @@ function formatMs(ms: number): string {
   return `${(ms / 60_000).toFixed(1)} min`
 }
 </script>
-
-<style scoped>
-.ltr {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 8px;
-  flex: 1 1 auto;
-}
-
-.ltr-bar {
-  flex-wrap: wrap;
-}
-
-.ltr-idgrp {
-  flex: 1 1 260px;
-  min-width: 0;
-}
-
-.ltr-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-}
-
-.ltr-id {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  /* mono-ok: trace id là chuỗi người dùng copy-paste từ log/terminal */
-  font-family: var(--code);
-}
-
-.ltr-kind {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-
-.ltr-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.ltr-meta {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ltr-meta-dim {
-  color: var(--textFaint);
-}
-
-.ltr-note,
-.ltr-warn,
-.ltr-error {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.ltr-note {
-  color: var(--textDim);
-}
-
-.ltr-warn {
-  color: var(--warn);
-}
-
-.ltr-error {
-  color: var(--danger);
-}
-
-/* ── Dòng thời gian ───────────────────────────────────────────────────────── */
-
-.ltr-timeline {
-  flex: 1 1 auto;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  padding: 4px 2px;
-}
-
-.ltr-hop {
-  display: flex;
-  gap: 10px;
-  min-height: 0;
-}
-
-.ltr-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-.ltr-dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--bgEl);
-  color: var(--textMuted);
-  flex: 0 0 auto;
-}
-
-.ltr-dot.bad {
-  border-color: var(--dangerBorder, var(--danger));
-  background: var(--dangerBg, var(--bgEl));
-  color: var(--danger);
-}
-
-.ltr-dot-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-/* Đường nối kéo dài hết phần thân của chặng — chiều cao do flex quyết định, nên
-   một chặng đang mở log vẫn nối liền xuống chặng sau. */
-.ltr-line {
-  flex: 1 1 auto;
-  width: 1px;
-  min-height: 12px;
-  background: var(--border);
-}
-
-.ltr-body {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-bottom: 10px;
-}
-
-.ltr-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 3px 6px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.ltr-head:hover {
-  background: var(--bgHover);
-}
-
-.ltr-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 340px;
-}
-
-.ltr-svc,
-.ltr-time,
-.ltr-dur {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-
-.ltr-time {
-  font-variant-numeric: tabular-nums;
-}
-
-.ltr-dur {
-  font-variant-numeric: tabular-nums;
-  color: var(--textMuted);
-}
-
-.ltr-dur.dim {
-  color: var(--textFaint);
-}
-
-.ltr-badge {
-  padding: 0 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-.ltr-badge.bad {
-  border-color: var(--dangerBorder, var(--danger));
-  color: var(--danger);
-}
-
-.ltr-gap {
-  flex: 1 1 auto;
-}
-
-.ltr-sub {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 6px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ltr-link {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-
-.ltr-link:hover {
-  text-decoration: underline;
-}
-
-.ltr-rows {
-  margin-top: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-  max-height: 220px;
-  overflow: auto;
-}
-
-.ltr-row {
-  margin: 0;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  /* mono-ok: dòng log nguyên bản */
-  font-family: var(--code);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.ltr-row:last-child {
-  border-bottom: 0;
-}
-
-.ltr-rows-empty {
-  margin: 0;
-  padding: 6px 8px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.ltr-empty {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 22px 12px;
-  color: var(--textDim);
-}
-
-.ltr-empty-ic {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-}
-
-.ltr-empty-txt {
-  margin: 0;
-  max-width: 420px;
-  text-align: center;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

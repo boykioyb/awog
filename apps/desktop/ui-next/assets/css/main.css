@@ -1,7 +1,126 @@
-/* Tailwind layers only. The design system lives in prototype.css (ported from
-   the UI spec); app-shell.css applies full-window overrides on top. This file is
-   prepended by @nuxtjs/tailwindcss (cssPath), so it loads first — Tailwind base
-   resets sit underneath the prototype design system. */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Điểm vào CSS duy nhất của app — Tailwind v4 + shadcn-vue.
+
+   THỨ TỰ LAYER (quan trọng): Tailwind v4 đặt preflight/utilities trong cascade
+   layer, mà CSS KHÔNG nằm trong layer nào luôn thắng mọi layer bất kể
+   specificity. Nếu prototype.css/app-shell.css nạp trơn như hồi Tailwind 3 thì
+   rule kiểu `button { background: transparent }` của prototype sẽ đè `bg-primary`
+   của mọi Button shadcn. Vì vậy toàn bộ CSS cũ được nhốt vào layer `legacy`:
+     - trên `base`  → vẫn đè preflight như trước;
+     - dưới `utilities` → class Tailwind/shadcn thắng CSS cũ khi cùng thuộc tính.
+   `<style scoped>` trong SFC vẫn không có layer nên vẫn thắng tất cả — đó là phần
+   sẽ được dỡ dần khi chuyển từng màn sang shadcn. */
+@layer theme, base, legacy, components, utilities;
+
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@import './prototype.css' layer(legacy);
+@import './app-shell.css' layer(legacy);
+/* Theme neutral cho trang /proto — scope dưới body.proto-shadcn. */
+@import './proto-shadcn.css' layer(legacy);
+/* Tên biến chuẩn shadcn (--background, --primary…) alias về token AWOG/Cute. */
+@import './shadcn-bridge.css' layer(legacy);
+/* Prose markdown `.mdbody` dùng chung (ADR 0073). */
+@import './markdown.css' layer(legacy);
+/* Theme family Cute — mọi rule scope dưới body[data-theme-family='cute']. */
+@import './theme-cute.css' layer(legacy);
+
+/* AWOG mặc định là TỐI, sáng là `body.light` — `dark:` của shadcn bám theo đó. */
+@custom-variant dark (&:where(body:not(.light), body:not(.light) *));
+
+/* `inline`: utility đọc thẳng var gốc nên đổi theme (light/cute/accent tuỳ biến)
+   có hiệu lực ngay; `/alpha` (`bg-primary/90`) Tailwind v4 tự lo bằng color-mix. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  /* `--accent` là màu brand của AWOG, KHÔNG phải hover-wash trung tính của shadcn —
+     wash nằm ở `--accent-wash` (bridge + proto đều khai). */
+  --color-accent: var(--accent-wash);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  /* Hai bậc chữ AWOG dưới muted-foreground. */
+  --color-dim: var(--textDim);
+  --color-faint: var(--textFaint);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  /* Hàng/tab ĐANG CHỌN = accent-tint (luật nuxt-vue.md: không dùng nền xám).
+     Dùng `bg-selected border-selected-border`, không tự pha màu ở từng chỗ. */
+  --color-selected: var(--accentDim);
+  --color-selected-border: var(--accentBorder);
+  /* Màu phụ thương hiệu + màu diff git — chỉ những thứ shadcn không có sẵn. */
+  --color-lavender: var(--violet);
+  --color-diff-add: var(--add);
+  --color-diff-del: var(--del);
+  --color-diff-mod: var(--mod);
+
+  /* Chiều cao control theo Appearance (ADR 0079): h-ctrl / h-ctrl-sm / size-ctrl-xs…
+     Hàng list, ô nhập, toolbar dùng các bậc này thay vì px tự đặt. */
+  --spacing-ctrl-xs: var(--ctrl-h-xs);
+  --spacing-ctrl-sm: var(--ctrl-h-sm);
+  --spacing-ctrl: var(--ctrl-h);
+  --spacing-ctrl-lg: var(--ctrl-h-lg);
+  /* Khối title bar full-width: px CỐ ĐỊNH (không theo rem/Appearance) vì phải khớp
+     đèn giao thông macOS mà Electron đặt bằng px (window.ts TRAFFIC_LIGHT_POSITION
+     y=15 ⇒ tâm đèn ≈ 22 = giữa thanh 44). Dùng `h-titlebar` / `top-titlebar`. */
+  --spacing-titlebar: 44px;
+
+  /* Font theo Appearance → Font family. */
+  --font-sans: var(--sans);
+  /* mono-ok: utility font-mono chỉ dùng cho code/path/SHA/lệnh (docs/coding/shadcn-migration.md). */
+  --font-mono: var(--code);
+
+  /* text-xs…2xl bám thang --fs-N + --lh-N (ADR 0079) để theo Appearance → Font size. */
+  --text-xs: var(--fs-xs);
+  --text-xs--line-height: var(--lh-xs);
+  --text-sm: var(--fs-sm);
+  --text-sm--line-height: var(--lh-sm);
+  --text-base: var(--fs-md);
+  --text-base--line-height: var(--lh-md);
+  --text-lg: var(--fs-lg);
+  --text-lg--line-height: var(--lh-lg);
+  --text-xl: var(--fs-xl);
+  --text-xl--line-height: var(--lh-xl);
+  --text-2xl: var(--fs-2xl);
+  --text-2xl--line-height: var(--lh-2xl);
+
+  /* Quy ước radius shadcn: một --radius, các bậc suy ra. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Tailwind v4 đổi màu viền mặc định thành currentColor; giữ hairline theme như
+   shadcn để `border` trơn không thành viền màu chữ. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
+}

@@ -5,21 +5,26 @@
     :width="640"
     @close="emit('cancel')"
   >
-    <div class="cne">
+    <div class="flex flex-col gap-4">
       <!-- Preset setup hint — shown only when a catalog provider seeded this new
            form (never on edit). Provider-specific guidance from the catalog. -->
-      <div v-if="setupHint && !isExisting" class="cne-setup">
-        <Icon name="bulb" style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto" />
-        <div class="cne-setup-tx">
-          <span class="cne-setup-t">{{ t('connections.editor.setupTitle') }}</span>
+      <div
+        v-if="setupHint && !isExisting"
+        class="flex items-start gap-2 rounded-md border border-primary bg-selected px-3 py-2.5 text-foreground"
+      >
+        <Icon name="bulb" class="size-3.5 flex-none" />
+        <div class="flex flex-col gap-0.5 text-sm">
+          <span class="font-semibold">{{ t('connections.editor.setupTitle') }}</span>
           <span>{{ setupHint }}</span>
         </div>
       </div>
 
       <!-- top-level source type: switches the whole form (mcp vs api). Locked on
            edit — changing an existing source's kind would orphan its config. -->
-      <div class="cne-field">
-        <label class="cne-label">{{ t('connections.editor.sourceType') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('connections.editor.sourceType') }}
+        </Label>
         <AppSelect
           v-model="typeSelect"
           :options="typeOptions"
@@ -28,90 +33,116 @@
         />
       </div>
 
-      <div class="cne-grid">
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.slug') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.slug') }}
+          </Label>
           <Input
             :model-value="draft.slug"
             placeholder="e.g. github"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
             @update:model-value="onSlugInput"
           />
-          <div class="cne-hint">
+          <div class="text-xs text-muted-foreground">
             {{
               isExisting ? t('connections.editor.slugRenameHint') : t('connections.editor.slugHint')
             }}
           </div>
         </div>
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.name') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.name') }}
+          </Label>
           <Input v-model="draft.name" :placeholder="t('connections.editor.namePh')" />
         </div>
       </div>
 
-      <div class="cne-field">
-        <label class="cne-label">{{ t('connections.editor.description') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('connections.editor.description') }}
+        </Label>
+        <Textarea
           v-model="draft.description"
-          class="cne-input cne-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('connections.editor.descPh')"
         />
       </div>
 
-      <div class="cne-grid">
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.icon') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.icon') }}
+          </Label>
           <Input
             v-model="draft.icon"
             :placeholder="t('connections.editor.iconPh')"
             spellcheck="false"
           />
-          <div class="cne-hint">{{ t('connections.editor.iconHint') }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('connections.editor.iconHint') }}</div>
         </div>
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.tagline') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.tagline') }}
+          </Label>
           <Input v-model="draft.tagline" :placeholder="t('connections.editor.taglinePh')" />
         </div>
       </div>
 
-      <div class="cne-grid">
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.trust') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.trust') }}
+          </Label>
           <AppSelect v-model="trustSelect" :options="trustOptions" width="100%" />
         </div>
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.timeout') }}</label>
-          <Input v-model.number="draft.timeoutMs" type="number" class="mono" />
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.timeout') }}
+          </Label>
+          <Input v-model.number="draft.timeoutMs" type="number" class="font-mono" />
         </div>
       </div>
 
       <!-- ── MCP source ────────────────────────────────────────────────── -->
       <template v-if="draft.type === 'mcp'">
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.transport') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.transport') }}
+          </Label>
           <AppSelect v-model="transportSelect" :options="transportOptions" width="100%" />
         </div>
 
         <!-- stdio config -->
         <template v-if="draft.transport === 'stdio'">
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.command') }}</label>
-            <Input v-model="draft.command" placeholder="npx, uvx, /path/to/bin" class="mono" />
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.command') }}
+            </Label>
+            <Input v-model="draft.command" placeholder="npx, uvx, /path/to/bin" class="font-mono" />
           </div>
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.args') }}</label>
-            <textarea
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.args') }}
+            </Label>
+            <Textarea
               v-model="argsText"
-              class="cne-input cne-ta mono"
+              class="min-h-12 resize-y font-mono"
               rows="3"
               :placeholder="t('connections.editor.argsPh')"
             />
           </div>
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.cwd') }}</label>
-            <Input v-model="draft.cwd" :placeholder="t('connections.editor.cwdPh')" class="mono" />
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.cwd') }}
+            </Label>
+            <Input
+              v-model="draft.cwd"
+              :placeholder="t('connections.editor.cwdPh')"
+              class="font-mono"
+            />
           </div>
           <LibraryKvEditor
             v-model="envEntries"
@@ -122,30 +153,38 @@
 
         <!-- http config -->
         <template v-else>
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.url') }}</label>
-            <Input v-model="draft.url" placeholder="https://mcp.example.com/v1" class="mono" />
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.url') }}
+            </Label>
+            <Input v-model="draft.url" placeholder="https://mcp.example.com/v1" class="font-mono" />
           </div>
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.authType') }}</label>
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.authType') }}
+            </Label>
             <AppSelect v-model="authTypeSelect" :options="authTypeOptions" width="100%" />
-            <div class="cne-hint">{{ t('connections.editor.authTypeHint') }}</div>
+            <div class="text-xs text-muted-foreground">
+              {{ t('connections.editor.authTypeHint') }}
+            </div>
           </div>
           <!-- Bearer: a single Token field — the user pastes only the token and
                AWOG sends `Authorization: Bearer <token>` (the scheme is added at
                the send layer). 'none': raw header rows for custom auth. 'oauth':
                tokens come from the sign-in flow (Connect on the detail pane). -->
-          <div v-if="draft.authType === 'bearer'" class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.credentialToken') }}</label>
+          <div v-if="draft.authType === 'bearer'" class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.credentialToken') }}
+            </Label>
             <Input
               v-model="mcpBearerToken"
               type="password"
               :placeholder="t('connections.editor.mcpBearerPh')"
               spellcheck="false"
               autocomplete="off"
-              class="mono"
+              class="font-mono"
             />
-            <div class="cne-hint">{{ mcpBearerHint }}</div>
+            <div class="text-xs text-muted-foreground">{{ mcpBearerHint }}</div>
           </div>
           <LibraryKvEditor
             v-else-if="draft.authType !== 'oauth'"
@@ -154,39 +193,47 @@
             :secret-mode="secretMode"
           />
           <template v-else>
-            <div class="cne-hint">{{ t('connections.editor.oauthHeadersNote') }}</div>
+            <div class="text-xs text-muted-foreground">
+              {{ t('connections.editor.oauthHeadersNote') }}
+            </div>
             <!-- BYO OAuth app creds — chỉ cần khi provider không có Dynamic
                  Client Registration (Slack): user tự đăng ký app rồi nhập
                  client_id/secret. Provider có DCR (Linear, Notion) bỏ trống. -->
-            <div class="cne-field">
-              <label class="cne-label">{{ t('connections.editor.oauthClientId') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-sm font-medium text-foreground">
+                {{ t('connections.editor.oauthClientId') }}
+              </Label>
               <Input
                 v-model="oauthClientId"
                 :placeholder="t('connections.editor.oauthClientIdPh')"
                 spellcheck="false"
-                class="mono"
+                class="font-mono"
               />
             </div>
-            <div class="cne-field">
-              <label class="cne-label">{{ t('connections.editor.oauthClientSecret') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-sm font-medium text-foreground">
+                {{ t('connections.editor.oauthClientSecret') }}
+              </Label>
               <Input
                 v-model="oauthClientSecret"
                 type="password"
                 :placeholder="t('connections.editor.oauthClientSecretPh')"
                 spellcheck="false"
                 autocomplete="off"
-                class="mono"
+                class="font-mono"
               />
-              <div class="cne-hint">{{ oauthClientSecretHint }}</div>
+              <div class="text-xs text-muted-foreground">{{ oauthClientSecretHint }}</div>
             </div>
           </template>
         </template>
 
         <!-- auth probe (optional) — Verify calls this tool after the handshake to
              check the token actually authenticates (handshake alone never does). -->
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.healthCheck') }}</label>
-          <div class="cne-hint">{{ t('connections.editor.healthHint') }}</div>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.healthCheck') }}
+          </Label>
+          <div class="text-xs text-muted-foreground">{{ t('connections.editor.healthHint') }}</div>
           <AppSelect
             v-if="hasDetectedTools"
             v-model="healthTool"
@@ -198,16 +245,16 @@
             v-model="healthTool"
             :placeholder="t('connections.editor.healthToolPh')"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
           />
           <template v-if="healthTool">
-            <textarea
+            <Textarea
               v-model="healthArgsText"
-              class="cne-input cne-ta mono"
+              class="min-h-12 resize-y font-mono"
               rows="3"
               :placeholder="t('connections.editor.healthArgsPh')"
             />
-            <div v-if="!healthArgsValid" class="cne-err">
+            <div v-if="!healthArgsValid" class="text-xs text-destructive">
               {{ t('connections.editor.healthArgsInvalid') }}
             </div>
           </template>
@@ -216,72 +263,88 @@
 
       <!-- ── API source ────────────────────────────────────────────────── -->
       <template v-else-if="draft.type === 'api'">
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.baseUrl') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.baseUrl') }}
+          </Label>
           <Input
             v-model="draft.apiBaseUrl"
             placeholder="https://api.example.com/"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
           />
-          <div class="cne-hint">{{ t('connections.editor.baseUrlHint') }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('connections.editor.baseUrlHint') }}</div>
         </div>
 
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.authType') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.authType') }}
+          </Label>
           <AppSelect v-model="apiAuthTypeSelect" :options="apiAuthTypeOptions" width="100%" />
-          <div v-if="draft.apiAuthType === 'oauth'" class="cne-hint">
+          <div v-if="draft.apiAuthType === 'oauth'" class="text-xs text-muted-foreground">
             {{ t('connections.editor.apiOAuthNote') }}
           </div>
         </div>
 
         <!-- auth-dependent config + credential entry -->
         <template v-if="draft.apiAuthType === 'bearer'">
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.authScheme') }}</label>
-            <Input v-model="draft.apiAuthScheme" placeholder="Bearer" class="mono" />
-            <div class="cne-hint">{{ t('connections.editor.authSchemeHint') }}</div>
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.authScheme') }}
+            </Label>
+            <Input v-model="draft.apiAuthScheme" placeholder="Bearer" class="font-mono" />
+            <div class="text-xs text-muted-foreground">
+              {{ t('connections.editor.authSchemeHint') }}
+            </div>
           </div>
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.credentialToken') }}</label>
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.credentialToken') }}
+            </Label>
             <Input
               v-model="credValue"
               type="password"
               :placeholder="t('connections.editor.credentialTokenPh')"
               spellcheck="false"
               autocomplete="off"
-              class="mono"
+              class="font-mono"
             />
-            <div class="cne-hint">{{ credentialHint }}</div>
+            <div class="text-xs text-muted-foreground">{{ credentialHint }}</div>
           </div>
         </template>
 
         <template v-else-if="draft.apiAuthType === 'header'">
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.headerMode') }}</label>
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.headerMode') }}
+            </Label>
             <AppSelect v-model="headerModeSelect" :options="headerModeOptions" width="100%" />
           </div>
           <template v-if="draft.apiHeaderMode === 'single'">
-            <div class="cne-field">
-              <label class="cne-label">{{ t('connections.editor.headerName') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-sm font-medium text-foreground">
+                {{ t('connections.editor.headerName') }}
+              </Label>
               <Input
                 v-model="draft.apiHeaderName"
                 :placeholder="t('connections.editor.headerNamePh')"
                 spellcheck="false"
-                class="mono"
+                class="font-mono"
               />
             </div>
-            <div class="cne-field">
-              <label class="cne-label">{{ t('connections.editor.credentialApiKey') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-sm font-medium text-foreground">
+                {{ t('connections.editor.credentialApiKey') }}
+              </Label>
               <Input
                 v-model="credValue"
                 type="password"
                 :placeholder="t('connections.editor.credentialApiKeyPh')"
                 spellcheck="false"
                 autocomplete="off"
-                class="mono"
+                class="font-mono"
               />
-              <div class="cne-hint">{{ credentialHint }}</div>
+              <div class="text-xs text-muted-foreground">{{ credentialHint }}</div>
             </div>
           </template>
           <template v-else>
@@ -289,52 +352,65 @@
               v-model="multiHeaderEntries"
               :label="t('connections.editor.multiHeaders')"
             />
-            <div class="cne-hint">{{ credentialHint }}</div>
+            <div class="text-xs text-muted-foreground">{{ credentialHint }}</div>
           </template>
         </template>
 
         <template v-else-if="draft.apiAuthType === 'query'">
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.queryParam') }}</label>
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.queryParam') }}
+            </Label>
             <Input
               v-model="draft.apiQueryParam"
               :placeholder="t('connections.editor.queryParamPh')"
               spellcheck="false"
-              class="mono"
+              class="font-mono"
             />
           </div>
-          <div class="cne-field">
-            <label class="cne-label">{{ t('connections.editor.credentialApiKey') }}</label>
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm font-medium text-foreground">
+              {{ t('connections.editor.credentialApiKey') }}
+            </Label>
             <Input
               v-model="credValue"
               type="password"
               :placeholder="t('connections.editor.credentialApiKeyPh')"
               spellcheck="false"
               autocomplete="off"
-              class="mono"
+              class="font-mono"
             />
-            <div class="cne-hint">{{ credentialHint }}</div>
+            <div class="text-xs text-muted-foreground">{{ credentialHint }}</div>
           </div>
         </template>
 
         <template v-else-if="draft.apiAuthType === 'basic'">
-          <div class="cne-grid">
-            <div class="cne-field">
-              <label class="cne-label">{{ t('connections.editor.credentialUsername') }}</label>
-              <Input v-model="credUsername" spellcheck="false" autocomplete="off" class="mono" />
+          <div class="grid grid-cols-2 gap-3.5">
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-sm font-medium text-foreground">
+                {{ t('connections.editor.credentialUsername') }}
+              </Label>
+              <Input
+                v-model="credUsername"
+                spellcheck="false"
+                autocomplete="off"
+                class="font-mono"
+              />
             </div>
-            <div class="cne-field">
-              <label class="cne-label">{{ t('connections.editor.credentialPassword') }}</label>
+            <div class="flex flex-col gap-1.5">
+              <Label class="text-sm font-medium text-foreground">
+                {{ t('connections.editor.credentialPassword') }}
+              </Label>
               <Input
                 v-model="credPassword"
                 type="password"
                 spellcheck="false"
                 autocomplete="off"
-                class="mono"
+                class="font-mono"
               />
             </div>
           </div>
-          <div class="cne-hint">{{ credentialHint }}</div>
+          <div class="text-xs text-muted-foreground">{{ credentialHint }}</div>
         </template>
 
         <!-- optional default headers sent on every request (non-secret) -->
@@ -344,26 +420,30 @@
         />
 
         <!-- test endpoint sub-form — used by Verify to check the credential -->
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.testEndpoint') }}</label>
-          <div class="cne-hint">{{ t('connections.editor.testEndpointHint') }}</div>
-          <div class="cne-grid-te">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.testEndpoint') }}
+          </Label>
+          <div class="text-xs text-muted-foreground">
+            {{ t('connections.editor.testEndpointHint') }}
+          </div>
+          <div class="grid grid-cols-[minmax(5.625rem,0.4fr)_1fr] gap-2.5">
             <AppSelect v-model="apiTestMethodSelect" :options="testMethodOptions" width="100%" />
             <Input
               v-model="draft.apiTestPath"
               :placeholder="t('connections.editor.testPathPh')"
               spellcheck="false"
-              class="mono"
+              class="font-mono"
             />
           </div>
           <template v-if="draft.apiTestMethod === 'POST'">
-            <textarea
+            <Textarea
               v-model="apiTestBodyText"
-              class="cne-input cne-ta mono"
+              class="min-h-12 resize-y font-mono"
               rows="3"
               :placeholder="t('connections.editor.testBodyPh')"
             />
-            <div v-if="!apiTestBodyValid" class="cne-err">
+            <div v-if="!apiTestBodyValid" class="text-xs text-destructive">
               {{ t('connections.editor.testBodyInvalid') }}
             </div>
           </template>
@@ -372,47 +452,55 @@
 
       <!-- ── Local source ──────────────────────────────────────────────── -->
       <template v-else-if="draft.type === 'local'">
-        <div class="cne-field">
-          <label class="cne-label">{{ t('connections.editor.path') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('connections.editor.path') }}
+          </Label>
           <Input
             v-model="draft.localPath"
             :placeholder="t('connections.editor.pathPh')"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
           />
-          <div class="cne-hint">{{ t('connections.editor.pathHint') }}</div>
+          <div class="text-xs text-muted-foreground">{{ t('connections.editor.pathHint') }}</div>
         </div>
       </template>
 
-      <button
-        type="button"
-        class="cne-toggle"
-        :class="{ on: draft.enabled }"
-        @click="draft.enabled = !draft.enabled"
+      <!-- Cả hàng là nhãn của Switch: bấm chữ cũng lật công tắc. -->
+      <Label
+        class="cursor-pointer gap-2 rounded-md border bg-card px-3 py-2 text-sm leading-normal font-normal"
+        :class="draft.enabled ? 'text-foreground' : 'text-muted-foreground'"
       >
-        <span class="tog2 sm" :class="{ off: !draft.enabled }" />
+        <Switch v-model:checked="draft.enabled" />
         {{ t('connections.editor.enabled') }}
-      </button>
+      </Label>
 
       <!-- verify (save-first: source.test operates on the persisted source) -->
-      <div class="cne-verify">
-        <Button :disabled="!canVerify || verifying" variant="outline" size="sm" @click="onVerify">
-          <Icon
-            :name="verifying ? 'refresh' : 'check'"
-            :class="{ spin: verifying }"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
+      <div class="flex items-center gap-2.5 border-t pt-1">
+        <Button
+          :disabled="!canVerify || verifying"
+          variant="outline"
+          size="sm"
+          class="[&_svg]:size-3"
+          @click="onVerify"
+        >
+          <Icon :name="verifying ? 'refresh' : 'check'" :class="verifying && 'animate-spin'" />
           {{ verifying ? t('connections.editor.testing') : t('connections.editor.verify') }}
         </Button>
-        <span v-if="verifyResult" class="cne-verify-sum" :class="{ ok: verifyResult.ok }">
+        <span
+          v-if="verifyResult"
+          class="text-sm"
+          :class="verifyResult.ok ? 'text-success' : 'text-destructive'"
+        >
           {{ verifyResult.summary }}
         </span>
       </div>
-      <div v-if="verifyProbe" class="cne-verify-sum cne-probe" :class="{ ok: verifyProbe.ok }">
-        <Icon
-          :name="verifyProbe.ok ? 'check' : 'alert'"
-          style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-        />
+      <div
+        v-if="verifyProbe"
+        class="-mt-1.5 flex items-center gap-1.5 text-sm [&_svg]:size-3 [&_svg]:flex-none"
+        :class="verifyProbe.ok ? 'text-success' : 'text-destructive'"
+      >
+        <Icon :name="verifyProbe.ok ? 'check' : 'alert'" />
         <span>
           {{
             verifyProbe.ok
@@ -425,28 +513,39 @@
         </span>
       </div>
       <!-- Preview mode: the actual data the probe tool returned, so the user can
-           confirm the token yields real content (not just a non-error). -->
-      <details v-if="verifyProbe?.ok && verifyProbe.preview" class="cne-preview">
-        <summary>{{ t('connections.editor.probePreview', { tool: verifyProbe.tool }) }}</summary>
-        <pre class="cne-pre">{{ verifyProbe.preview }}</pre>
-      </details>
-      <pre v-if="verifyResult?.stderr?.length" class="cne-pre">{{
-        verifyResult.stderr.join('\n')
-      }}</pre>
+           confirm the token yields real content (not just a non-error). JSON ⇒ mono. -->
+      <Collapsible v-if="verifyProbe?.ok && verifyProbe.preview">
+        <CollapsibleTrigger
+          class="cursor-pointer py-0.5 text-xs text-muted-foreground select-none hover:text-foreground"
+        >
+          {{ t('connections.editor.probePreview', { tool: verifyProbe.tool }) }}
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <pre
+            class="mt-1.5 max-h-56 overflow-y-auto rounded-md border bg-muted px-2.5 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
+            >{{ verifyProbe.preview }}</pre
+          >
+        </CollapsibleContent>
+      </Collapsible>
+      <pre
+        v-if="verifyResult?.stderr?.length"
+        class="max-h-32 overflow-y-auto rounded-md border bg-muted px-2.5 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
+        >{{ verifyResult.stderr.join('\n') }}</pre
+      >
     </div>
 
     <template #footer>
       <Button
         v-if="isExisting"
         :title="t('connections.editor.refineAiHint')"
-        class="cne-ai"
+        class="[&_svg]:size-3.5"
         variant="outline"
         @click="emit('refine-ai')"
       >
-        <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="sparkles" />
         {{ t('connections.editor.refineAi') }}
       </Button>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('connections.editor.save') }}
@@ -1166,164 +1265,3 @@ function namesToEntries(names: string[]): KvEntry[] {
   return names.map((key) => ({ key, value: '' }))
 }
 </script>
-
-<style scoped>
-.cne {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.cne-setup {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 10px 12px;
-  border-radius: var(--r-sm);
-  background: var(--accentDim);
-  border: 1px solid var(--accent);
-  color: var(--text);
-}
-.cne-setup-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cne-setup-t {
-  font-weight: 600;
-}
-.cne-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.cne-grid-te {
-  display: grid;
-  grid-template-columns: minmax(90px, 0.4fr) 1fr;
-  gap: 10px;
-}
-.cne-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cne-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.cne-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.cne-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — command / args / env */
-  font-family: var(--code);
-}
-.cne-input:focus {
-  border-color: var(--accent);
-}
-.cne-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.cne-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.cne-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.cne-toggle {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.cne-toggle.on {
-  color: var(--text);
-}
-.cne-verify {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
-}
-.cne-verify-sum {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-.cne-verify-sum.ok {
-  color: var(--green);
-}
-.cne-probe {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: -6px;
-}
-.cne-err {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--danger);
-}
-.cne-pre {
-  /* mono-ok: JSON preview */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  max-height: 8rem;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-.cne-preview > summary {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  cursor: pointer;
-  user-select: none;
-  padding: 2px 0;
-}
-.cne-preview > summary:hover {
-  color: var(--text);
-}
-.cne-preview > .cne-pre {
-  margin-top: 6px;
-  max-height: 14rem;
-}
-.spin {
-  animation: cne-spin 0.9s linear infinite;
-}
-@keyframes cne-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

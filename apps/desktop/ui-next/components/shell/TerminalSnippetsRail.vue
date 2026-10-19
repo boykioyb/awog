@@ -1,91 +1,107 @@
 <template>
-  <div class="tsr">
-    <div class="tsr-head">
-      <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="tsr-head-t">{{ t('terminalSnippet.title') }}</span>
-      <span class="tsr-count">{{ visible.length }}</span>
-      <div class="tsr-tools">
-        <button
-          class="tsr-tool"
+  <div class="flex h-full w-65 shrink-0 flex-col overflow-hidden border-l bg-sidebar">
+    <div class="flex h-7.5 shrink-0 items-center gap-2 pr-2 pl-2.5 text-dim">
+      <Icon name="commands" class="size-3.5" />
+      <span class="text-sm font-semibold text-foreground">{{ t('terminalSnippet.title') }}</span>
+      <Badge variant="secondary" class="min-w-4.5 justify-center px-1.5 font-normal tabular-nums">
+        {{ visible.length }}
+      </Badge>
+      <div class="ml-auto flex items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-5.5 text-dim"
           :title="t('terminalSnippet.new')"
           :aria-label="t('terminalSnippet.new')"
           @click="openNew"
         >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="tsr-tool"
+          <Icon name="plus" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-5.5 text-dim"
           :title="t('terminalSnippet.close')"
           :aria-label="t('terminalSnippet.close')"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
     </div>
+    <Separator />
 
-    <div class="tsr-scroll">
-      <div v-if="isCute && !visible.length" class="cempty">
-        <AwogMascot :size="44" style="color: var(--primary)" />
-        <span class="cempty-t">{{ t('terminalSnippet.emptyTitle') }}</span>
-        <span class="cempty-b">{{ t('terminalSnippet.emptyBody') }}</span>
-        <div class="cempty-cta">
-          <Button size="sm" @click="openNew">
-            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('terminalSnippet.new') }}
-          </Button>
-        </div>
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <div
+        v-if="!visible.length"
+        class="flex flex-col items-center gap-2 px-4 py-8 text-center text-dim"
+      >
+        <Icon name="commands" class="size-6 opacity-50" />
+        <span class="font-medium text-foreground">{{ t('terminalSnippet.emptyTitle') }}</span>
+        <span>{{ t('terminalSnippet.emptyBody') }}</span>
+        <Button size="sm" class="mt-1" @click="openNew">
+          <Icon name="plus" />
+          {{ t('terminalSnippet.new') }}
+        </Button>
       </div>
-      <div v-else-if="!visible.length" class="tsr-empty">
-        <Icon name="commands" style="width: 22px; height: 22px; opacity: 0.5" />
-        <span class="tsr-empty-t">{{ t('terminalSnippet.emptyTitle') }}</span>
-        <span class="tsr-empty-b">{{ t('terminalSnippet.emptyBody') }}</span>
-      </div>
-      <div v-else class="tsr-list">
-        <div v-for="s in visible" :key="s.id" class="tsr-row">
-          <div class="tsr-main" @dblclick="run(s)">
-            <span class="tsr-name">
-              {{ s.name }}
-              <span v-if="s.project === null" class="tsr-badge">
+      <div v-else class="flex flex-col gap-1.5 p-2">
+        <div
+          v-for="s in visible"
+          :key="s.id"
+          class="flex items-center gap-1.5 rounded-sm border bg-card px-2 py-2"
+        >
+          <div class="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5" @dblclick="run(s)">
+            <span class="flex items-center gap-1.5 font-medium text-foreground">
+              <span class="min-w-0 truncate">{{ s.name }}</span>
+              <Badge v-if="s.project === null" variant="outline" class="shrink-0 text-dim">
                 {{ t('terminalSnippet.globalBadge') }}
-              </span>
+              </Badge>
             </span>
-            <span class="tsr-cmd mono">{{ s.command }}</span>
+            <!-- mono-ok: lệnh shell, người dùng copy-paste vào terminal -->
+            <span class="truncate font-mono text-sm text-dim">{{ s.command }}</span>
           </div>
-          <div class="tsr-acts">
-            <button
-              class="tsr-act"
+          <div class="flex shrink-0 items-center gap-px">
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="size-6 text-dim"
               :disabled="!canRun"
               :title="canRun ? t('terminalSnippet.run') : t('terminalSnippet.noTarget')"
               :aria-label="t('terminalSnippet.run')"
               @click="run(s)"
             >
-              <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="tsr-act"
+              <Icon name="play" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="size-6 text-dim"
               :title="t('terminalSnippet.copy')"
               :aria-label="t('terminalSnippet.copy')"
               @click="copy(s)"
             >
-              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="tsr-act"
+              <Icon name="copy" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="size-6 text-dim"
               :title="t('terminalSnippet.edit')"
               :aria-label="t('terminalSnippet.edit')"
               @click="openEdit(s)"
             >
-              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button
-              class="tsr-act del"
+              <Icon name="edit" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="size-6 text-dim hover:bg-destructive/10 hover:text-destructive"
               :title="t('terminalSnippet.delete')"
               :aria-label="t('terminalSnippet.delete')"
               @click="del(s)"
             >
-              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+              <Icon name="trash" />
+            </Button>
           </div>
         </div>
       </div>
@@ -113,6 +129,7 @@ import { computed, ref } from 'vue'
 import TerminalSnippetEditor from '~/components/shell/TerminalSnippetEditor.vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { useTerminalSnippetsStore, type TerminalSnippet } from '~/stores/terminalSnippets'
+import { sidecarErrorText } from '~/composables/useSidecar'
 
 const props = defineProps<{
   // Active project key (null = no project → only Global snippets show).
@@ -126,7 +143,6 @@ const emit = defineEmits<{ run: [command: string]; close: [] }>()
 const { t } = useI18n()
 const store = useTerminalSnippetsStore()
 const { confirm } = useConfirm()
-const { isCute } = useThemeFamily()
 
 // This project's snippets + the shared Global tier, project-first then by name.
 const visible = computed(() =>
@@ -167,10 +183,19 @@ function openEdit(snippet: TerminalSnippet): void {
   editing.value = snippet
   editorOpen.value = true
 }
-function onSave(name: string, command: string, project: string | null): void {
-  if (editing.value) store.update(editing.value.id, name, command, project)
-  else store.add(name, command, project)
+// Thư viện nằm ở sidecar (dùng chung với tool của agent) — lỗi ghi phải hiện ra,
+// không được nuốt thành một Promise không ai bắt.
+function reportSaveError(err: unknown): void {
+  useToast().add({ title: sidecarErrorText(err), color: 'error' })
+}
+async function onSave(name: string, command: string, project: string | null): Promise<void> {
   editorOpen.value = false
+  try {
+    if (editing.value) await store.update(editing.value.id, name, command, project)
+    else await store.add(name, command, project)
+  } catch (err) {
+    reportSaveError(err)
+  }
 }
 async function del(snippet: TerminalSnippet): Promise<void> {
   const ok = await confirm({
@@ -178,178 +203,11 @@ async function del(snippet: TerminalSnippet): Promise<void> {
     description: t('terminalSnippet.deleteHint', { name: snippet.name }),
     kind: 'danger',
   })
-  if (ok) store.remove(snippet.id)
+  if (!ok) return
+  try {
+    await store.remove(snippet.id)
+  } catch (err) {
+    reportSaveError(err)
+  }
 }
 </script>
-
-<style scoped>
-.tsr {
-  flex: 0 0 260px;
-  width: 260px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-left: 1px solid var(--border);
-  background: var(--sidebar);
-}
-/* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
-   box under `box-sizing: border-box`, leaving an odd height (30 - 1 = 29) that puts every
-   vertically centred child on a half pixel. A shadow takes no layout space. Inset rather
-   than outset so the next sibling's background cannot paint over the line. */
-.tsr-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  height: 30px;
-  padding: 0 8px 0 10px;
-  color: var(--textDim);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.tsr-head-t {
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--foreground);
-}
-.tsr-count {
-  font-size: 12px;
-  line-height: 12px;
-  min-width: 18px;
-  padding: 2px 6px;
-  border-radius: var(--r-xs);
-  text-align: center;
-  color: var(--textDim);
-  background: var(--accent-wash);
-  font-variant-numeric: tabular-nums;
-}
-.tsr-tools {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-}
-.tsr-tool {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.tsr-tool:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.tsr-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-.tsr-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 34px 18px;
-  text-align: center;
-  color: var(--textDim);
-}
-.tsr-empty-t {
-  font-size: 1em;
-  font-weight: 550;
-  color: var(--foreground);
-}
-.tsr-empty-b {
-  font-size: 1em;
-}
-.tsr-list {
-  padding: 8px;
-}
-.tsr-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--card);
-}
-.tsr-row + .tsr-row {
-  margin-top: 6px;
-}
-.tsr-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  cursor: pointer;
-}
-.tsr-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 1em;
-  font-weight: 550;
-  color: var(--foreground);
-}
-.tsr-badge {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 2px 6px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  border: 1px solid var(--border);
-  font-weight: 500;
-}
-.tsr-cmd {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tsr-acts {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  flex: 0 0 auto;
-}
-.tsr-act {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.tsr-act:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.tsr-act:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.tsr-act.del:hover:not(:disabled) {
-  background: var(--dangerDim);
-  color: var(--destructive);
-}
-</style>

@@ -1,111 +1,159 @@
 <template>
   <!-- Grid có vùng đặt tên: giờ và ghi chú không bao giờ đè lên nhau dù panel hẹp
-       cỡ nào (ở dưới 720px hàng tự xếp thành 3 tầng). -->
-  <div class="ltrow" :class="[entry.status, { editing }]">
-    <span class="ltpj">
-      <i class="ltdot" :style="{ background: color }" />
-      <b>{{ labelOf(entry.projectKey) }}</b>
+       cỡ nào (ở dưới 720px hàng tự xếp thành 3 tầng). Thẻ nền `bg-sidebar` (trắng ở
+       theme sáng, màu card ở theme tối) — dòng đã đẩy PMS giữ cùng nền vì trạng thái
+       đã có chip riêng; dòng đang sửa nhấc lên khỏi nền để mắt bám đúng dòng. -->
+  <div
+    class="grid grid-cols-[136px_minmax(0,1fr)_auto_auto_auto] items-center gap-x-2.5 gap-y-1 rounded-lg border px-3 py-2.5 [grid-template-areas:'pj_nt_hr_st_ops'] max-[720px]:grid-cols-[minmax(0,1fr)_auto_auto] max-[720px]:gap-y-2 max-[720px]:[grid-template-areas:'pj_hr_ops'_'nt_nt_nt'_'st_st_st']"
+    :class="[
+      editing ? 'border-selected-border bg-muted' : 'bg-sidebar',
+      { 'opacity-72': entry.status === 'locked' },
+    ]"
+  >
+    <span class="flex min-w-0 items-center gap-2 [grid-area:pj]">
+      <!-- Màu chấm là màu DỰ ÁN người dùng tự đặt (dữ liệu) nên đi qua :style. -->
+      <i class="size-2 shrink-0 rounded-full" :style="{ background: color }" />
+      <b class="truncate text-sm font-semibold">{{ labelOf(entry.projectKey) }}</b>
     </span>
 
-    <span ref="noteCellRef" class="ltnt">
-      <span v-if="editing" class="ltntedit">
+    <span ref="noteCellRef" class="min-w-0 [grid-area:nt]">
+      <span v-if="editing" class="flex min-w-0 items-center gap-1">
         <Input
           ref="noteEl"
           v-model="draftNote"
           :placeholder="t('logtime.form.note')"
-          class="ltedit"
+          class="h-auto bg-muted px-2 py-1 text-base focus-visible:border-selected-border"
           @keydown.enter.prevent="save"
           @keydown.esc.prevent="cancel"
         />
         <!-- Mở popover textarea + Sửa bằng AI (note dài không xem/sửa nổi trong ô một dòng). -->
-        <button
+        <Button
           type="button"
-          class="ltact"
+          variant="ghost"
+          size="iconSm"
+          class="size-6.5 text-faint shrink-0"
           :title="t('logtime.form.expandNote')"
           @click="notePopOpen = true"
         >
           <Icon name="edit" />
-        </button>
+        </Button>
       </span>
       <template v-else>
-        <span class="ltn1">{{ entry.note }}</span>
-        <span class="ltn2">
+        <!-- `block` bắt buộc: span inline thì truncate (overflow/ellipsis) không áp
+             dụng — thiếu là chữ tràn đè lên cột giờ. -->
+        <span class="block truncate text-base">{{ entry.note }}</span>
+        <span class="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-faint">
           <a
             v-if="issueUrl"
-            class="chip"
+            class="inline-flex min-w-0 max-w-[60%] items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium text-muted-foreground [&_svg]:size-3 [&_svg]:shrink-0 hover:text-foreground"
             :href="issueUrl"
             target="_blank"
             rel="noopener"
             :title="t('logtime.row.openIssue', { n: entry.task?.issue ?? 0 })"
           >
             <Icon name="link" />
-            <span>#{{ entry.task?.issue }} {{ entry.task?.title }}</span>
+            <span class="truncate">#{{ entry.task?.issue }} {{ entry.task?.title }}</span>
           </a>
-          <span v-else-if="entry.task?.id" class="chip">
+          <span
+            v-else-if="entry.task?.id"
+            class="inline-flex min-w-0 max-w-[60%] items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium text-muted-foreground [&_svg]:size-3 [&_svg]:shrink-0"
+          >
             <Icon name="link" />
-            <span>{{ entry.task?.title }}</span>
+            <span class="truncate">{{ entry.task?.title }}</span>
           </span>
-          <span class="ltsrc">{{ sourceNameOf(entry.projectKey) }}</span>
+          <span class="shrink-0 whitespace-nowrap">{{ sourceNameOf(entry.projectKey) }}</span>
         </span>
       </template>
     </span>
 
-    <span class="lthr">
+    <span class="min-w-11.5 text-right text-base font-semibold [grid-area:hr] max-[720px]:min-w-0">
       <Input
         v-if="editing"
         v-model="draftHours"
         inputmode="decimal"
-        class="ltedit ltnum tnum"
+        class="h-auto bg-muted px-2 py-1 text-base focus-visible:border-selected-border w-18 text-right tabular-nums"
         @keydown.enter.prevent="save"
         @keydown.esc.prevent="cancel"
       />
       <template v-else>{{ fmt(entry.hours) }}h</template>
     </span>
 
-    <span class="ltst">
-      <span v-if="entry.status === 'posted'" class="chip acc">
+    <span class="justify-self-start [grid-area:st]">
+      <Badge
+        v-if="entry.status === 'posted'"
+        variant="outline"
+        class="rounded-sm border-primary/40 bg-primary/10 text-primary"
+      >
         <Icon name="check" />
         {{ t('logtime.status.posted') }}
-      </span>
-      <span v-else-if="entry.status === 'locked'" class="chip warn">
+      </Badge>
+      <Badge
+        v-else-if="entry.status === 'locked'"
+        variant="outline"
+        class="rounded-sm border-warning/40 text-warning"
+      >
         <Icon name="shield" />
         {{ t('logtime.status.locked') }}
-      </span>
-      <span v-else-if="!canPush" class="chip dgr">
+      </Badge>
+      <Badge
+        v-else-if="!canPush"
+        variant="outline"
+        class="rounded-sm border-destructive/40 text-destructive"
+      >
         <Icon name="alert" />
         {{ t('logtime.status.unlinked') }}
-      </span>
-      <span v-else class="chip">{{ t('logtime.status.draft') }}</span>
+      </Badge>
+      <Badge v-else variant="outline" class="rounded-sm text-muted-foreground">
+        {{ t('logtime.status.draft') }}
+      </Badge>
     </span>
 
-    <span class="ltops">
+    <span class="flex gap-0.5 justify-self-end [grid-area:ops]">
       <template v-if="editing">
-        <button type="button" class="ltact ok" :title="t('common.save')" @click="save">
+        <Button
+          type="button"
+          variant="ghost"
+          size="iconSm"
+          class="size-6.5 text-faint hover:bg-selected hover:text-primary"
+          :title="t('common.save')"
+          @click="save"
+        >
           <Icon name="check" />
-        </button>
-        <button type="button" class="ltact" :title="t('common.cancel')" @click="cancel">
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="iconSm"
+          class="size-6.5 text-faint"
+          :title="t('common.cancel')"
+          @click="cancel"
+        >
           <Icon name="x" />
-        </button>
+        </Button>
       </template>
       <template v-else>
-        <button
+        <Button
           v-if="entry.status !== 'locked'"
           type="button"
-          class="ltact"
+          variant="ghost"
+          size="iconSm"
+          class="size-6.5 text-faint"
           :title="t('common.edit')"
           @click="startEdit"
         >
           <Icon name="edit" />
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="entry.status !== 'locked'"
           type="button"
-          class="ltact del"
+          variant="ghost"
+          size="iconSm"
+          class="size-6.5 text-faint hover:bg-destructive/10 hover:text-destructive"
           :title="t('common.delete')"
           @click="emit('remove')"
         >
           <Icon name="trash" />
-        </button>
+        </Button>
       </template>
     </span>
 
@@ -128,6 +176,7 @@ import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import type { LogtimeEntry } from '~/stores/logtime'
 import Input from '~/components/ui/input/Input.vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ entry: LogtimeEntry }>()
 // `update` chỉ mang note + hours: đổi dự án của một dòng đã đẩy là làm nó lệch khỏi
@@ -179,177 +228,3 @@ function save(): void {
   emit('update', patch)
 }
 </script>
-
-<style scoped>
-.ltrow {
-  display: grid;
-  gap: 4px 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  /* Thẻ nền trắng (card) thay vì nền xám nhạt — `--bgPanel` là trắng ở theme sáng,
-     màu card ở theme tối. */
-  background: var(--bgPanel);
-  grid-template-columns: 136px minmax(0, 1fr) auto auto auto;
-  grid-template-areas: 'pj nt hr st ops';
-}
-/* Đã đẩy PMS: giữ nền trắng như mọi thẻ; trạng thái đã có chip riêng nên không cần
-   phân biệt bằng nền (trước để `transparent`). */
-.ltrow.posted {
-  background: var(--bgPanel);
-}
-.ltrow.locked {
-  opacity: 0.72;
-}
-/* Hàng đang sửa nhấc lên khỏi nền để mắt bám đúng dòng. */
-.ltrow.editing {
-  border-color: var(--accentBorder);
-  background: var(--bgInput);
-}
-.ltpj {
-  grid-area: pj;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-.ltpj b {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltdot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.ltnt {
-  grid-area: nt;
-  min-width: 0;
-}
-/* Ô nhập note + nút mở popover khi đang sửa. */
-.ltntedit {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-/* `display:block` bắt buộc: .ltn1 là <span> nên inline, mà overflow/text-overflow
-   KHÔNG áp dụng cho phần tử inline — thiếu dòng này là chữ tràn đè lên cột giờ. */
-.ltn1 {
-  display: block;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ltn2 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  margin-top: 3px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.ltn2 .chip {
-  min-width: 0;
-  max-width: 60%;
-}
-.ltn2 .chip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltsrc {
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.lthr {
-  grid-area: hr;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  min-width: 46px;
-  text-align: right;
-}
-.ltst {
-  grid-area: st;
-  justify-self: start;
-}
-.ltops {
-  grid-area: ops;
-  justify-self: end;
-  display: flex;
-  gap: 3px;
-}
-/* Tên `.ltact` chứ KHÔNG phải `.ltop`: `prototype.css` đã có `.ltop` cho hàng đầu
-   của danh sách master-detail (`.md/.list/.srch`), mang `padding:11px` +
-   `border-bottom`. Rule scoped ở đây chỉ thắng những thuộc tính nó KHAI, nên
-   `padding` lọt qua từ bên kia: hộp 26×26 còn content box 2×2, icon 16px tràn ra
-   và neo vào góc trên-trái content box ⇒ glyph lệch +7px phải +7px xuống, dính
-   góc dưới-phải nút (đo được: svg 1537→1553 trong nút 1525→1551).
-   `padding: 0` khai tường minh vì đây là hộp cố định 26×26 — padding ăn thẳng vào icon. */
-.ltact {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: none;
-  color: var(--textFaint);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.ltact:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ltact.ok:hover {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.ltact.del:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-.ltedit {
-  width: 100%;
-  min-width: 0;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  padding: 5px 8px;
-  outline: none;
-}
-.ltedit:focus {
-  border-color: var(--accentBorder);
-}
-.ltnum {
-  width: 72px;
-  text-align: right;
-}
-@media (max-width: 720px) {
-  .ltrow {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: 'pj hr ops' 'nt nt nt' 'st st st';
-    row-gap: 7px;
-  }
-  .lthr {
-    min-width: 0;
-  }
-}
-</style>

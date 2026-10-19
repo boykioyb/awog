@@ -9,32 +9,49 @@
 
        Rỗng vẫn nói một câu: namespace không đặt hạn mức là một kết quả, không phải
        khối trống. -->
-  <div class="ikrq">
-    <div class="ikrq-head">
-      <span class="ikrq-t">{{ title }}</span>
-      <span v-if="list.length" class="ihint">{{ list.length }}</span>
+  <div class="flex min-w-0 flex-col gap-1.5">
+    <div class="flex flex-wrap items-baseline gap-2">
+      <span class="text-xs text-muted-foreground">{{ title }}</span>
+      <span v-if="list.length" class="text-xs text-faint">{{ list.length }}</span>
     </div>
 
-    <p v-if="gap" class="ikrq-gap">
+    <p v-if="gap" class="flex flex-col gap-0.5 text-sm text-foreground">
       {{ t('infra.kube.report.gapRead') }}
-      <span class="ihint">{{ gap }}</span>
+      <span class="text-xs text-faint">{{ gap }}</span>
     </p>
-    <span v-else-if="list.length === 0" class="ihint">{{ empty }}</span>
+    <span v-else-if="list.length === 0" class="text-xs text-faint">{{ empty }}</span>
 
     <template v-else>
-      <div v-for="q in list" :key="q.name" class="ikrq-q">
-        <code class="ikrq-name" :title="q.name">{{ q.name }}</code>
-        <div v-for="entry in q.entries" :key="entry.resource" class="ikrq-row">
-          <span class="ikrq-res" :title="entry.resource">{{ entry.resource }}</span>
-          <div class="ikrq-bar">
+      <div v-for="q in list" :key="q.name" class="flex min-w-0 flex-col gap-1">
+        <!-- mono-ok: tên quota là thứ dán vào kubectl -->
+        <code class="font-mono text-xs text-foreground" :title="q.name">{{ q.name }}</code>
+        <div
+          v-for="entry in q.entries"
+          :key="entry.resource"
+          class="flex min-w-0 items-center gap-2"
+        >
+          <span
+            class="w-33 shrink-0 truncate text-xs text-muted-foreground"
+            :title="entry.resource"
+          >
+            {{ entry.resource }}
+          </span>
+          <div class="h-1.5 min-w-0 flex-[1_1_5rem] overflow-hidden rounded-full bg-border">
             <span
-              class="ikrq-fill"
-              :class="`q-${usageRate(entry.pct)}`"
+              class="block h-full rounded-full"
+              :class="FILL[usageRate(entry.pct)] ?? 'bg-success'"
               :style="{ width: widthOf(entry.pct) }"
             />
           </div>
-          <span class="ikrq-pct" :class="`q-${usageRate(entry.pct)}`">{{ pctOf(entry.pct) }}</span>
-          <span class="ikrq-abs ihint">{{ entry.used }}/{{ entry.hard }}</span>
+          <span
+            class="shrink-0 text-xs tabular-nums"
+            :class="PCT_TEXT[usageRate(entry.pct)] ?? 'text-foreground'"
+          >
+            {{ pctOf(entry.pct) }}
+          </span>
+          <span class="shrink-0 text-xs text-faint tabular-nums">
+            {{ entry.used }}/{{ entry.hard }}
+          </span>
         </div>
       </div>
     </template>
@@ -56,6 +73,15 @@ defineProps<{
 
 const { t } = useI18n()
 
+const FILL: Record<string, string> = {
+  warn: 'bg-warning',
+  bad: 'bg-destructive',
+}
+const PCT_TEXT: Record<string, string> = {
+  warn: 'text-warning',
+  bad: 'text-destructive',
+}
+
 /** Dải của một dòng không đọc được tỉ lệ thì để TRỐNG, không vẽ 0% — 0% là một
  *  con số, còn cái ta có là không có con số nào. */
 function widthOf(value: number | null): string {
@@ -66,96 +92,3 @@ function pctOf(value: number | null): string {
   return value === null ? '—' : `${Math.round(value)}%`
 }
 </script>
-
-<style scoped>
-.ikrq {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.ikrq-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ikrq-t {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrq-gap {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ikrq-q {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.ikrq-name {
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: tên quota là thứ dán vào kubectl */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrq-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.ikrq-res {
-  flex: 0 0 132px;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ikrq-bar {
-  flex: 1 1 80px;
-  height: 6px;
-  min-width: 0;
-  overflow: hidden;
-  border-radius: var(--r-full);
-  background: var(--bgActive);
-}
-.ikrq-fill {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-full);
-  background: var(--green);
-}
-.ikrq-fill.q-warn {
-  background: var(--amber);
-}
-.ikrq-fill.q-bad {
-  background: var(--danger);
-}
-.ikrq-pct {
-  flex: 0 0 auto;
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-.ikrq-pct.q-warn {
-  color: var(--amber);
-}
-.ikrq-pct.q-bad {
-  color: var(--danger);
-}
-.ikrq-abs {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-}
-</style>

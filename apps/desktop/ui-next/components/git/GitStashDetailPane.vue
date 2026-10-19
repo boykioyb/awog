@@ -1,16 +1,19 @@
 <template>
-  <div class="gdetailpane">
-    <div v-if="!stash" class="gsecempty">{{ t('git.sidebar.empty') }}</div>
-    <div v-else style="max-width: 560px">
-      <div class="gdph">
-        <Icon name="clip" class="size-[18px] text-primary" />
-        <span class="mono text-primary">{{ stash.ref }}</span>
+  <div class="flex-1 overflow-auto p-6">
+    <div v-if="!stash" class="py-1.5 pr-2.5 pl-7 text-sm text-muted-foreground italic">
+      {{ t('git.sidebar.empty') }}
+    </div>
+    <div v-else class="max-w-140">
+      <div class="mb-3.5 flex items-center gap-2 px-3 py-2.5">
+        <Icon name="clip" class="size-4.5 text-primary" />
+        <!-- mono-ok: ref stash -->
+        <span class="font-mono text-primary">{{ stash.ref }}</span>
         <span class="text-dim">{{ t('git.stash.onBranch', { branch: stash.branch }) }}</span>
       </div>
-      <div class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
+      <div class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-xs">
         <div class="whitespace-pre-wrap text-foreground">{{ stash.m }}</div>
         <div class="mt-2 text-xs text-faint">{{ stash.w }}</div>
-        <div class="gdpactions">
+        <div class="mt-4 flex items-center gap-2">
           <Button size="sm" @click="emit('pop', stash.index)">
             {{ t('git.stash.pop') }}
           </Button>

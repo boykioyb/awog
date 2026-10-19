@@ -13,7 +13,7 @@
         :class="!open && '-rotate-90'"
       />
       <span
-        class="inline-flex h-4 min-w-[18px] items-center justify-center rounded border border-border px-1 font-mono text-[11px] leading-none"
+        class="inline-flex h-4 min-w-4.5 items-center justify-center rounded border border-border px-1 font-mono text-xs leading-none"
       >
         {{ entries.length }}
       </span>
@@ -29,7 +29,7 @@
     </Button>
 
     <!-- Body: tree indent — left hairline rail groups the run as one unit -->
-    <div v-if="open" class="mt-0.5 ml-[11px] flex flex-col gap-0.5 border-l border-border pl-3">
+    <div v-if="open" class="mt-0.5 ml-2.75 flex flex-col gap-0.5 border-l border-border pl-3">
       <template v-for="(e, i) in entries" :key="i">
         <!-- Tool step: icon + name + …dir/target + result + Ns + chev, body on expand -->
         <div v-if="e.kind === 'step'" class="rounded-md">
@@ -45,7 +45,7 @@
               <component :is="stepIcon(e.step.tool)" class="size-3.5" :class="iconCls(e.step)" />
               <span
                 v-if="e.step.status === 'running'"
-                class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary border-r-primary/50"
+                class="absolute -inset-0.75 animate-spin rounded-full border border-transparent border-t-primary border-r-primary/50"
               />
             </span>
             <span
@@ -71,7 +71,7 @@
             <!-- SessionStepResult parity — "+N −M" tokens tint add/del -->
             <span
               v-if="e.step.result"
-              class="shrink-0 rounded border border-border px-1 text-[10px] text-muted-foreground"
+              class="shrink-0 rounded border border-border px-1 text-xs text-muted-foreground"
             >
               <span
                 v-for="(t, ti) in resultTokens(e.step.result)"
@@ -112,9 +112,9 @@
           <div v-if="expanded.has(i)" class="mt-0.5 mb-1 ml-6 flex flex-col gap-1.5">
             <!-- Full path row for file payloads (header only shows the tail) -->
             <template v-if="isFileView(e.step)">
-              <span class="text-[10px] font-semibold text-muted-foreground uppercase">Path</span>
+              <span class="text-xs font-semibold text-muted-foreground uppercase">Path</span>
               <pre
-                class="font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-muted-foreground"
+                class="font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-muted-foreground"
                 >{{ e.step.target }}</pre
               >
             </template>
@@ -122,7 +122,7 @@
             <!-- Unified diff → colored +/- rows with new-side line numbers -->
             <div
               v-if="diffLines(e.step).length"
-              class="overflow-x-auto rounded-md border border-border font-mono text-[11px] leading-relaxed"
+              class="overflow-x-auto rounded-md border border-border font-mono text-xs leading-relaxed"
             >
               <div
                 v-for="(l, li) in diffLines(e.step)"
@@ -153,27 +153,27 @@
             <!-- File content (Write/Read) -->
             <pre
               v-else-if="e.step.detailKind === 'file' && e.step.detail"
-              class="overflow-x-auto rounded-md border border-border bg-muted/40 px-2.5 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-foreground/90"
+              class="overflow-x-auto rounded-md border border-border bg-muted/40 px-2.5 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-foreground/90"
               >{{ e.step.detail }}</pre
             >
 
             <!-- Raw: Input (full untruncated target) + Output -->
             <template v-else>
               <template v-if="e.step.target">
-                <span class="text-[10px] font-semibold text-muted-foreground uppercase">Input</span>
+                <span class="text-xs font-semibold text-muted-foreground uppercase">Input</span>
                 <pre
-                  class="font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-foreground/85"
+                  class="font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-foreground/85"
                   >{{ e.step.target }}</pre
                 >
               </template>
               <span
-                class="text-[10px] font-semibold text-muted-foreground uppercase"
+                class="text-xs font-semibold text-muted-foreground uppercase"
                 :class="e.step.target && 'border-t border-border/60 pt-1.5'"
               >
                 Output
               </span>
               <pre
-                class="font-mono text-[11px] leading-relaxed whitespace-pre-wrap"
+                class="font-mono text-xs leading-relaxed whitespace-pre-wrap"
                 :class="e.step.status === 'fail' ? 'text-destructive/90' : 'text-muted-foreground'"
                 >{{ e.step.output ?? e.step.detail ?? 'No output captured' }}</pre
               >

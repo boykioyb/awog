@@ -1,36 +1,41 @@
 <template>
-  <div class="stabs">
+  <!-- Strip tab project. Trong top bar `.top` nó hoà vào bar: KHÔNG nền, KHÔNG hairline
+       riêng; nền strip là vùng kéo cửa sổ (app-shell.css), còn tab / nút / menu thì
+       `no-drag` để click vẫn ăn.
+       hook-ok: `.stabs` do app-shell.css đọc (`.top .stabs` = vùng kéo cửa sổ) -->
+  <div class="stabs" :class="ROOT">
     <!-- Collapse / expand the session list column. Lives HERE, not in the list's own
          toolbar, because the strip stays visible when the list is hidden — a button
          inside the list could only ever collapse it. Hidden in compact mode, where the
-         list is already an off-canvas drawer toggled from the top bar. -->
+         list is already an off-canvas drawer toggled from the top bar. List collapsed →
+         the toggle reads as "on" (primary tint — a lit button explains the missing
+         column better than looking like a broken layout). -->
     <Button
       v-if="!compact && !hideListToggle"
       variant="ghost"
       size="iconSm"
-      class="stab-btn"
-      :class="{ on: listCollapsed }"
+      :class="[STRIP_BTN, listCollapsed && 'bg-primary/10 text-primary']"
       :aria-label="listCollapsed ? t('sessions.list.expand') : t('sessions.list.collapse')"
       :title="listCollapsed ? t('sessions.list.expand') : t('sessions.list.collapse')"
       :aria-expanded="!listCollapsed"
       aria-controls="slistcol"
       @click.stop="toggleList"
     >
-      <Icon name="dock-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Icon name="dock-left" class="size-3.5" />
     </Button>
-    <div ref="tablistEl" class="stabs-scroll" role="tablist" :aria-label="t('sessions.tabs.label')">
+    <!-- Proto `<Separator class="mx-1 h-4">` giữa nút ẩn/hiện danh sách và làn tab. -->
+    <Separator
+      v-if="!compact && !hideListToggle"
+      orientation="vertical"
+      class="mx-1 h-4 flex-none"
+    />
+    <!-- Làn tab: proto TabsList `h-8` — làn 32px cho tab h-7 căn giữa. Không pan
+         touch/pen gốc — kéo sắp xếp giữ cử chỉ ngang (cuộn chuột không ảnh hưởng). -->
+    <div ref="tablistEl" :class="LANE" role="tablist" :aria-label="t('sessions.tabs.label')">
       <div
         v-for="(tab, i) in tabs"
         :key="tab.id"
-        class="stab"
-        :class="{
-          on: tab.active,
-          running: tab.running,
-          'done-unread': tab.doneUnread,
-          dragging: dragId === tab.id,
-          'drop-before': dropIndex === i,
-          'drop-after': dropIndex === tabs.length && i === tabs.length - 1,
-        }"
+        :class="tabClass(tab, i)"
         :style="{ '--stab-color': tab.color }"
         :title="tab.doneUnread && !tab.running ? t('sessions.tabs.doneUnread') : undefined"
         :data-tab-index="i"
@@ -42,169 +47,184 @@
         @contextmenu.prevent="openTabCtx(tab.id, $event)"
       >
         <span
-          class="stab-dot"
-          :class="{ running: tab.running }"
-          :style="{ background: tab.color, '--stab-dot': tab.color }"
+          class="relative size-2 flex-none rounded-full"
+          :style="{ background: tab.color }"
           :role="tab.running ? 'img' : undefined"
           :aria-label="tab.running ? t('sessions.tabs.running') : undefined"
           :title="tab.running ? t('sessions.tabs.running') : undefined"
         />
-        <span class="stab-nm">{{ tab.name }}</span>
+        <span class="truncate" :class="tabNameClass(tab)">{{ tab.name }}</span>
         <!-- Running: a beam that chases the tab's border. Its own element, not a
-             pseudo-element — ::before/::after on .stab are taken by the drag-reorder drop
-             indicators. Sits on top of the running background tint. -->
+             pseudo-element — ::before/::after on the tab are taken by the drag-reorder
+             drop indicators. Sits on top of the running background tint. -->
         <span v-if="tab.running" class="stab-run" aria-hidden="true" />
+        <!-- Đếm unread / cần chú ý — viên hổ phách, cùng nghĩa + dáng với badge phiên
+             trên NavRail (.bdg.wait). Chỉ hiện khi > 0. -->
         <span
           v-if="tab.unread"
-          class="stab-unread"
+          class="grid h-4 min-w-4 place-items-center rounded-sm border border-warning/36 bg-warning/14 px-1 text-sm text-warning tabular-nums"
           :title="t('sessions.tabs.unread', { n: tab.unread })"
         >
           {{ tab.unread }}
         </span>
-        <button
+        <!-- × proto `ml-0.5 size-3.5`. Không nhảy layout: nút luôn tồn tại, chỉ hiện
+             khi hover / tab đang mở (proto `opacity-0 group-hover:opacity-100`). -->
+        <Button
           v-if="tab.closable"
-          class="stab-x"
+          variant="ghost"
+          size="iconSm"
+          class="ml-0.5 size-3.5 rounded-sm text-muted-foreground transition-opacity group-focus-within/tab:opacity-100 group-hover/tab:opacity-100 hover:bg-accent-foreground/10 hover:text-foreground motion-reduce:transition-none [&_svg]:size-2.5"
+          :class="tab.active ? 'opacity-100' : 'opacity-0'"
           :aria-label="t('sessions.tabs.closeName', { name: tab.name })"
           :title="t('sessions.tabs.close')"
           @pointerdown.stop
           @click.stop="closeTab(tab.id)"
           @keydown.stop
         >
-          <Icon name="x" style="width: 10px; height: 10px" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
     </div>
 
     <Button
       variant="ghost"
       size="iconSm"
-      class="stab-btn"
+      :class="STRIP_BTN"
       :aria-label="t('sessions.tabs.addProject')"
       :title="t('sessions.tabs.addProject')"
       @click.stop="toggleAdd"
     >
-      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Icon name="plus" class="size-3.5" />
     </Button>
     <Button
       v-if="tabs.length > 1"
       variant="ghost"
       size="iconSm"
-      class="stab-btn"
+      :class="STRIP_BTN"
       :aria-label="t('sessions.tabs.overflow')"
       :title="t('sessions.tabs.overflow')"
       @click.stop="toggleOverflow"
     >
-      <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Icon name="chev" class="size-3.5" />
     </Button>
 
     <!-- "+" project picker: projects not already open as a tab. A sticky search input
          filters by name (substring, case-insensitive); Enter opens the highlighted
-         (first) match, Esc closes + clears. -->
-    <div v-if="addMenu" class="smenu stabs-drop" @click.stop>
+         (first) match, Esc closes + clears. Menu tự dựng mang role=dialog +
+         data-state=open để khớp OVERLAYS của trình duyệt nhúng. -->
+    <div v-if="addMenu" role="dialog" data-state="open" :class="DROP" @click.stop>
+      <!-- Ô tìm dính đỉnh menu (danh sách cuộn dưới nó): hạ cao 30px, bỏ bo/viền/ring
+           của Input để đọc như một dòng sticky có hairline dưới. -->
       <Input
         ref="addSearchEl"
         v-model="addQuery"
         type="text"
         :placeholder="t('sessions.tabs.searchPlaceholder')"
         :aria-label="t('sessions.tabs.searchPlaceholder')"
-        class="stabs-search"
+        class="sticky top-0 z-1 h-7.5 min-h-0 w-full rounded-none border-0 border-b bg-popover px-2.5 py-1.25 text-sm shadow-none focus-visible:ring-0"
         @keydown.enter.prevent="pickFirstMatch"
         @keydown.esc.prevent="closeMenus"
       />
-      <div class="stabs-droplist">
+      <div class="py-0.5">
         <template v-if="filteredOpenable.length">
-          <div v-for="p in filteredOpenable" :key="p.id" class="mi" @click="pickProject(p.id)">
-            <span class="stabs-nm">{{ p.name }}</span>
-            <span v-if="p.dupePath" class="stabs-path">{{ p.dupePath }}</span>
+          <div
+            v-for="p in filteredOpenable"
+            :key="p.id"
+            :class="ITEM"
+            class="flex-col items-start gap-px"
+            @click="pickProject(p.id)"
+          >
+            <span class="max-w-full truncate">{{ p.name }}</span>
+            <!-- Dòng path phụ, chỉ hiện để phân biệt project trùng tên (OQ 1.a). -->
+            <span v-if="p.dupePath" class="max-w-full truncate text-xs text-muted-foreground">
+              {{ p.dupePath }}
+            </span>
           </div>
         </template>
-        <div v-else-if="openableProjects.length" class="stabs-empty">
+        <div v-else-if="openableProjects.length" class="px-3 py-2 text-muted-foreground">
           {{ t('sessions.tabs.noMatch') }}
         </div>
-        <div v-else class="stabs-empty">{{ t('sessions.tabs.noProjects') }}</div>
+        <div v-else class="px-3 py-2 text-muted-foreground">
+          {{ t('sessions.tabs.noProjects') }}
+        </div>
       </div>
     </div>
 
     <!-- Overflow: jump to any open tab (when the strip scrolls). -->
-    <div v-if="overflowMenu" class="smenu stabs-drop" @click.stop>
-      <div v-for="tab in tabs" :key="tab.id" class="mi" @click="jumpTab(tab.id)">
-        <span
-          class="stab-dot"
-          :class="{ running: tab.running }"
-          :style="{ background: tab.color, '--stab-dot': tab.color }"
-        />
+    <div v-if="overflowMenu" role="dialog" data-state="open" :class="DROP" class="p-1" @click.stop>
+      <div v-for="tab in tabs" :key="tab.id" :class="ITEM" @click="jumpTab(tab.id)">
+        <span class="mr-0.5 size-2 flex-none rounded-full" :style="{ background: tab.color }" />
         {{ tab.name }}
-        <Icon
-          v-if="tab.active"
-          name="check"
-          class="ck"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
+        <Icon v-if="tab.active" name="check" class="ml-auto text-primary" />
       </div>
     </div>
 
-    <div
-      v-if="addMenu || overflowMenu"
-      style="position: fixed; inset: 0; z-index: 40"
-      @click="closeMenus"
-    />
+    <div v-if="addMenu || overflowMenu" class="fixed inset-0 z-40" @click="closeMenus" />
 
     <!-- Right-click a tab → project-scoped actions (migrated from the old session
-         list group header). Same `.smenu`/`.ctxmenu` chrome as SessionList. -->
+         list group header). Cùng khuôn menu với SessionList. -->
     <template v-if="pctx">
       <div
-        class="ctxbackdrop"
+        class="fixed inset-0 z-60"
         @click="pctx = null"
         @contextmenu.prevent="pctx = null"
         @wheel="pctx = null"
       />
-      <div ref="pctxMenuEl" class="smenu ctxmenu" :style="pctxStyle">
-        <div class="mi" @click="pNewSession">
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div
+        ref="pctxMenuEl"
+        role="dialog"
+        data-state="open"
+        class="fixed z-61 min-w-44.5 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md [-webkit-app-region:no-drag]"
+        :style="pctxStyle"
+      >
+        <div :class="ITEM" @click="pNewSession">
+          <Icon name="plus" />
           {{ t('sessions.pctx.newSession') }}
         </div>
         <!-- Tab management (VSCode-style) — closing tabs never deletes sessions. -->
         <template v-if="showCloseGroup">
-          <div class="ctxsep" />
-          <div v-if="pctxClosable" class="mi" @click="pClose">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Separator :class="SEP" />
+          <div v-if="pctxClosable" :class="ITEM" @click="pClose">
+            <Icon name="x" />
             {{ t('sessions.tabs.close') }}
           </div>
-          <div v-if="othersCount" class="mi" @click="pCloseOthers">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div v-if="othersCount" :class="ITEM" @click="pCloseOthers">
+            <Icon name="x" />
             {{ t('sessions.tabs.closeOthers') }}
           </div>
-          <div v-if="rightCount" class="mi" @click="pCloseRight">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div v-if="rightCount" :class="ITEM" @click="pCloseRight">
+            <Icon name="x" />
             {{ t('sessions.tabs.closeRight') }}
           </div>
-          <div v-if="showCloseAll" class="mi" @click="pCloseAll">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div v-if="showCloseAll" :class="ITEM" @click="pCloseAll">
+            <Icon name="x" />
             {{ t('sessions.tabs.closeAll') }}
           </div>
         </template>
         <template v-if="pctxIsProject">
-          <div class="ctxsep" />
+          <Separator :class="SEP" />
           <!-- Nhà mới của quick-view project (session-ui-refactor §3.4): chip project ở
                status bar đã bỏ vì nó là lần xuất hiện THỨ BA của cùng tên project
                (tab strip · header · status bar). Tab chính là nơi đúng cho nó. -->
-          <div class="mi" @click="pOpenProject">
-            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="pOpenProject">
+            <Icon name="folder" />
             {{ t('sessions.pctx.openProject') }}
           </div>
-          <div class="mi" @click="pLlmDefaults">
-            <Icon name="brain" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="pLlmDefaults">
+            <Icon name="brain" />
             {{ t('sessions.pctx.llmDefaults') }}
           </div>
-          <div class="ctxsep" />
-          <div class="ctxcolor">
-            <span class="ctxcolorlbl">{{ t('sessions.pctx.color') }}</span>
-            <div class="ctxsw">
+          <Separator :class="SEP" />
+          <div class="px-2.5 pt-1 pb-1.5">
+            <span class="mb-1.5 block text-xs text-muted-foreground">
+              {{ t('sessions.pctx.color') }}
+            </span>
+            <div class="flex flex-wrap gap-1.75">
+              <!-- Ô màu là dữ liệu (màu project), không phải màu theme. -->
               <span
                 v-for="c in PROJECT_COLOR_PALETTE"
                 :key="c.token"
-                class="swatch"
-                :class="{ on: pctxColor === c.token }"
+                :class="[SWATCH, pctxColor === c.token && SWATCH_ON]"
                 :style="{ background: c.token }"
                 :title="c.label"
                 @click="pSetColor(c.token)"
@@ -212,52 +232,53 @@
               <!-- Custom color: a <label> wrapping a hidden native color input so
                    clicking the swatch opens the OS color picker anchored right here.
                    When a custom hex is active the swatch shows it; otherwise a
-                   palette glyph hints "pick your own". -->
+                   rainbow + palette glyph hints "pick your own". -->
               <label
-                class="swatch custom"
-                :class="{ on: pctxCustom }"
+                class="swatch-rainbow relative overflow-hidden text-foreground"
+                :class="[SWATCH, pctxCustom && SWATCH_ON]"
                 :style="pctxCustom ? { background: pctxColor } : undefined"
                 :title="t('sessions.pctx.colorCustom')"
               >
-                <Icon
-                  v-if="!pctxCustom"
-                  name="palette"
-                  style="width: var(--icon-xs); height: var(--icon-xs)"
-                />
+                <Icon v-if="!pctxCustom" name="palette" class="size-3" />
+                <!-- raw-ok: input color trong suốt phủ kín ô để mở bảng màu của OS ngay tại đây -->
                 <input
                   type="color"
-                  class="ctxcolorinput"
+                  class="absolute inset-0 m-0 size-full cursor-pointer border-0 p-0 opacity-0"
                   :value="customColorValue"
                   @input="onCustomColorInput"
                 />
               </label>
               <span
-                class="swatch clear"
-                :class="{ on: pctxColor === PROJECT_COLOR_DEFAULT }"
+                class="bg-transparent"
+                :class="[SWATCH, pctxColor === PROJECT_COLOR_DEFAULT && SWATCH_ON]"
                 :title="t('sessions.pctx.colorClear')"
                 @click="pSetColor(null)"
               >
-                <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                <Icon name="x" class="size-3" />
               </span>
             </div>
           </div>
         </template>
-        <div class="ctxsep" />
-        <div class="mi" @click="pSelectAll">
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Separator :class="SEP" />
+        <div :class="ITEM" @click="pSelectAll">
+          <Icon name="check" />
           {{ t('sessions.pctx.selectAll', { n: pctxCount }) }}
         </div>
-        <div class="mi" @click="pDeselectAll">
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div :class="ITEM" @click="pDeselectAll">
+          <Icon name="x" />
           {{ t('sessions.pctx.deselectAll') }}
         </div>
-        <div v-if="pctxPath" class="mi" @click="pOpenFinder">
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div v-if="pctxPath" :class="ITEM" @click="pOpenFinder">
+          <Icon name="folder" />
           {{ t('sessions.pctx.openFinder') }}
         </div>
-        <div class="ctxsep" />
-        <div class="mi danger" @click="pDeleteAll">
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Separator :class="SEP" />
+        <div
+          :class="ITEM"
+          class="text-destructive hover:bg-destructive/14 hover:text-destructive"
+          @click="pDeleteAll"
+        >
+          <Icon name="trash" />
           {{ t('sessions.pctx.deleteAll', { n: pctxCount }) }}
         </div>
       </div>
@@ -295,6 +316,67 @@ import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { tabs, openableProjects, projectPath, setActiveTab, closeTab } = useSessionTabs()
+
+// ── Class của strip (thay skin `.stab*` cũ) ──
+// Không tự gắn flex-none/flex-1: chỗ đặt quyết định (top bar cần co trong flex-1 để
+// không đẩy chuông + nút bên phải ra ngoài; trang /sessions cần flex-none).
+const ROOT = 'relative flex h-full min-w-0 items-center gap-1 p-0'
+// Làn tab cuộn ngang, ẩn thanh cuộn.
+const LANE =
+  'flex h-8 min-w-0 flex-1 touch-none items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+// Nút ghost của strip (ẩn/hiện danh sách · + · ▾) — no-drag để click được trong top bar.
+const STRIP_BTN = 'flex-none [-webkit-app-region:no-drag]'
+// Menu thả dưới strip (chọn project / nhảy tab): neo absolute, trên thân trang.
+const DROP =
+  'absolute top-full right-2 z-50 max-h-[60vh] min-w-55 overflow-y-auto rounded-lg border bg-popover text-popover-foreground shadow-md [-webkit-app-region:no-drag]'
+const ITEM =
+  'flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground [&>svg]:size-3.5'
+const SEP = 'mx-1.5 my-1 w-auto'
+const SWATCH =
+  'grid size-4.25 cursor-pointer place-items-center rounded-full text-muted-foreground ring-1 ring-border transition-transform hover:scale-112 motion-reduce:transition-none'
+const SWATCH_ON = 'ring-2 ring-primary ring-offset-2 ring-offset-popover'
+
+type StripTab = (typeof tabs.value)[number]
+
+// Một tab: viên proto — h-7, bo md, chữ sm. Phẳng mặc định; tab đang mở = wash trung
+// tính (idiom `data-[state=active]:bg-accent`), hover chỉ áp lên tab chưa mở.
+// Hai trạng thái sống, nói bằng nền + viền như phần còn lại của app:
+//   running     → nền nhuộm MÀU PROJECT + một tia chạy quanh viền (`.stab-run`) — nhìn
+//                 qua cả strip là thấy project nào đang chạy nền. Tab đang mở giữ nền
+//                 của nó, chỉ còn tia nói "đang chạy".
+//   done-unread → viên hổ phách tĩnh: có kết quả trong lúc bạn ở chỗ khác (hổ phách là
+//                 màu "cần mắt bạn" của app). Không áp lên tab đang mở.
+// Đang kéo sắp xếp: tab nhấc lên mờ đi để vạch chèn (accent 2px trước/sau tab) đọc được.
+function tabClass(tab: StripTab, i: number): unknown[] {
+  return [
+    'group/tab relative flex h-7 max-w-50 flex-none cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-sm select-none touch-none [-webkit-app-region:no-drag] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+    // Mỗi trạng thái tự đặt TRỌN màu viền + nền của nó (không để class gốc mang
+    // border-transparent rồi nhánh sau đè): thẻ <div> không qua tailwind-merge, hai
+    // utility cùng nhóm thì cái đứng sau trong CSS thắng chứ không phải cái điều kiện.
+    tabState(tab),
+    dragId.value === tab.id && 'opacity-40',
+    dropIndex.value === i && DROP_BEFORE,
+    dropIndex.value === tabs.value.length && i === tabs.value.length - 1 && DROP_AFTER,
+  ]
+}
+function tabState(tab: StripTab): string {
+  // Tab đang mở = accent-tint (luật "đang chọn" — cùng kiểu mục active của sidebar);
+  // bg-accent trung tính gần trùng nền bg-sidebar của title bar nên không nhìn ra.
+  if (tab.active) return 'border-selected-border bg-selected text-foreground'
+  if (tab.running)
+    return 'border-[color-mix(in_srgb,var(--stab-color,var(--primary))_30%,transparent)] bg-[color-mix(in_srgb,var(--stab-color,var(--primary))_11%,transparent)] text-muted-foreground hover:text-foreground'
+  if (tab.doneUnread)
+    return 'border-warning/34 bg-warning/12 text-muted-foreground hover:text-foreground'
+  return 'border-transparent text-muted-foreground hover:bg-accent/55 hover:text-foreground'
+}
+const DROP_BEFORE =
+  "before:absolute before:inset-y-1 before:-left-0.5 before:z-1 before:w-0.5 before:rounded-sm before:bg-primary before:content-['']"
+const DROP_AFTER =
+  "after:absolute after:inset-y-1 after:-right-0.5 after:z-1 after:w-0.5 after:rounded-sm after:bg-primary after:content-['']"
+function tabNameClass(tab: StripTab): string {
+  if (tab.doneUnread && !tab.active && !tab.running) return 'font-semibold text-warning'
+  return tab.active ? 'font-semibold' : 'font-medium'
+}
 withDefaults(defineProps<{ hideListToggle?: boolean }>(), { hideListToggle: false })
 const store = useSessionsStore()
 const projectModal = useProjectModal()
@@ -540,9 +622,9 @@ const pctxIsProject = computed(() => !!pctx.value && pctx.value.id !== '')
 const pctxColor = computed(() => (pctx.value?.id ? colorOf(pctx.value.id) : PROJECT_COLOR_DEFAULT))
 // True when the active project's dot uses a user-picked hex (not a palette token).
 const pctxCustom = computed(() => isCustomColor(pctxColor.value))
-// Native <input type="color"> only accepts `#rrggbb`; seed it with the current
+// Native color input only accepts `#rrggbb`; seed it with the current
 // custom hex, else a neutral start so the OS picker opens somewhere sensible.
-const customColorValue = computed(() => (pctxCustom.value ? pctxColor.value : '#888888'))
+const customColorValue = computed(() => (pctxCustom.value ? pctxColor.value : '#888888')) // hex-ok: giá trị mặc định cho ô chọn màu gốc (chỉ nhận dạng rrggbb)
 const pctxPath = computed<string | null>(() => (pctx.value?.id ? projectPath(pctx.value.id) : null))
 const pctxCount = computed(() =>
   pctx.value ? store.sessions.filter((s) => s.project === pctx.value!.id).length : 0,
@@ -652,117 +734,11 @@ async function pDeleteAll() {
 </script>
 
 <style scoped>
-.stabs {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  /* Trong top bar `.top` (row trên cùng app) — strip hoà vào bar, KHÔNG có nền
-     hay hairline riêng. Nằm riêng (WorkbencTopRow cũ) thì cần padding + hairline —
-     đã bỏ khi tab strip lên `.top`. */
-  padding: 0;
-  height: 100%;
-}
-.stabs-scroll {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-  /* proto TabsList `h-8` — a 32px lane the 28px (h-7) tabs centre inside. */
-  height: 32px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* No native touch/pen pan on the strip — the reorder drag owns the horizontal
-     gesture (mirrors .stab). Wheel scroll is unaffected. */
-  touch-action: none;
-}
-.stabs-scroll::-webkit-scrollbar {
-  display: none;
-}
-/* One tab: proto pill — h-7, rounded-md, xs type. Flat by default; the active tab
-   is a NEUTRAL wash (bg-accent = --accent-wash), not the old accentDim + underline. */
-.stab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  height: 28px;
-  max-width: 200px;
-  padding: 0 10px;
-  cursor: pointer;
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  user-select: none;
-  touch-action: none;
-}
-/* Hover only on inactive tabs — the active tab keeps its wash (no fill swap). */
-.stab:hover:not(.on) {
-  background: color-mix(in srgb, var(--accent-wash) 55%, transparent);
-  color: var(--foreground);
-}
-/* Active tab: the flat accent-wash surface + brighter text — the shadcn
-   `data-[state=active]:bg-accent` idiom. */
-.stab.on {
-  color: var(--foreground);
-  background: var(--accent-wash);
-}
-/* Keyboard focus ring (a11y) — never removed; the click :hover/:active states are
-   separate. --ring is the standard shadcn focus var (alias of --accentBorder). */
-.stab:focus-visible,
-.stab-x:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-  border-radius: var(--r-xs);
-}
-/* The lifted tab during a drag-reorder: dimmed so the insertion indicator reads. */
-.stab.dragging {
-  opacity: 0.4;
-}
-/* Insertion indicator — a thin accent bar at the drop slot (before / after a tab). */
-.stab.drop-before::before,
-.stab.drop-after::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  border-radius: var(--r-xs);
-  background: var(--primary);
-  z-index: 1;
-}
-.stab.drop-before::before {
-  left: -2px;
-}
-.stab.drop-after::after {
-  right: -2px;
-}
-.stab-dot {
-  position: relative;
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-pill);
-  flex: 0 0 auto;
-}
-/* ── Tab status: running beam + state tints ──────────────────────────────────
-   Two live states, both expressed the way the rest of the app expresses state —
-   background + border — rather than an extra decorative rule:
-
-     running     → the tab's background takes a wash of the PROJECT's own colour and a
-                   beam chases its border. A project working in the background is then
-                   obvious from across the strip, and the colour says WHICH project.
-     done-unread → a static amber chip: a result landed while you were elsewhere. Amber
-                   is already this app's "needs your eyes" colour (the unread badge
-                   beside it, .bdg.wait, .acard.hot), so no sixth hue is introduced.
-
-   The beam is a conic gradient on a rotating child, with the middle masked out so only
-   a 2px ring paints. Rotation (a transform) drives it — NOT an animated custom
-   property — so it needs no @property registration and only the compositor works. */
+/* style-ok: tia "đang chạy" quét quanh viền tab — conic-gradient trên một con xoay,
+   khoét ruột bằng mask-composite chỉ để lại vòng 2px (Tailwind không diễn đạt mask
+   composite), cộng keyframe xoay riêng; và nền cầu vồng của ô "màu tuỳ chọn".
+   Xoay bằng transform (không animate custom property) nên không cần @property và
+   chỉ compositor làm việc. */
 .stab-run {
   position: absolute;
   inset: -1px;
@@ -772,12 +748,12 @@ async function pDeleteAll() {
   pointer-events: none;
   /* Knock out the centre: full box minus content-box leaves the padding ring. */
   -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
+    linear-gradient(black 0 0) content-box,
+    linear-gradient(black 0 0);
   -webkit-mask-composite: xor;
   mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
+    linear-gradient(black 0 0) content-box,
+    linear-gradient(black 0 0);
   mask-composite: exclude;
 }
 .stab-run::after {
@@ -801,22 +777,6 @@ async function pDeleteAll() {
     rotate: 360deg;
   }
 }
-/* Running background wash, in the project's colour. Skipped on the ACTIVE tab, which
-   keeps its own accent fill — the beam alone carries "running" there. */
-.stab.running:not(.on) {
-  background: color-mix(in srgb, var(--stab-color, var(--primary)) 11%, transparent);
-  border-color: color-mix(in srgb, var(--stab-color, var(--primary)) 30%, transparent);
-}
-/* "A result is waiting" — whole-chip amber, so it reads without hunting for a badge.
-   Gated off the active tab: you are looking at it, so nothing there is unread. */
-.stab.done-unread:not(.on):not(.running) {
-  background: color-mix(in srgb, var(--warning) 12%, transparent);
-  border-color: color-mix(in srgb, var(--warning) 34%, transparent);
-}
-.stab.done-unread:not(.on):not(.running) .stab-nm {
-  color: var(--warning);
-  font-weight: 600;
-}
 @media (prefers-reduced-motion: reduce) {
   /* Keep a full ring so "running" is still stated, just without the chase. */
   .stab-run::after {
@@ -825,254 +785,18 @@ async function pDeleteAll() {
     opacity: 0.55;
   }
 }
-
-.stab-nm {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-}
-.stab.on .stab-nm {
-  font-weight: 600;
-}
-/* Unread / attention count — amber pill, same semantic + look as the NavRail
-   sessions badge (.bdg.wait). Only rendered when > 0. */
-.stab-unread {
-  display: grid;
-  place-items: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--r-xs);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 12px;
-  font-variant-numeric: tabular-nums;
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-  color: var(--warning);
-  border: 1px solid color-mix(in srgb, var(--warning) 36%, transparent);
-}
-.stab-x {
-  display: grid;
-  place-items: center;
-  /* proto `ml-0.5 size-3.5` — a 14px hit box nudged 2px off the label. */
-  width: 14px;
-  height: 14px;
-  margin-left: 2px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  /* No layout jump: the button always exists, visibility fades in on hover /
-     active tab (proto `opacity-0 group-hover:opacity-100`). */
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.stab:hover .stab-x,
-.stab.on .stab-x,
-.stab:focus-within .stab-x {
-  opacity: 1;
-}
-.stab-x:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--accent-foreground) 10%, transparent);
-}
-/* "+" / overflow / list-toggle buttons — ui <Button variant="ghost" size="iconSm">
-   (h-7 w-7, accent-wash hover); `.stab-btn` only pins flex + the lit "on" tint. */
-.stab-btn {
-  flex: 0 0 auto;
-}
-/* Proto's `<Separator class="mx-1 h-4">` between the list toggle and the tab lane —
-   the strip's own gap-1 gives 4px, so widen the slot to ~17px and centre a 1px
-   hairline there. Only when the toggle renders (compact mode has none, and then
-   .stabs-scroll is first-child so this never matches anything else). */
-.stabs > .stab-btn:first-child {
-  position: relative;
-  margin-right: 13px;
-}
-.stabs > .stab-btn:first-child::after {
-  content: '';
-  position: absolute;
-  right: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-}
-/* List collapsed → the toggle reads as "on" (primary tint — a lit button explains
-   the missing column better than looking like a broken layout). */
-.stab-btn.on {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-}
-/* Dropdowns under the strip (add picker / overflow). Mirrors SessionList's inline
-   `.smenu` dropdowns: absolutely placed, above the page body. */
-.stabs-drop {
-  position: absolute;
-  top: 100%;
-  right: 8px;
-  z-index: 50;
-  min-width: 220px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-.stabs-drop .stab-dot {
-  margin-right: 2px;
-}
-/* Sticky search field pinned to the top of the "+" picker (list scrolls under it).
-   `<Input>` shadcn mang `--ctrl-h` (36–40px) — popover đã chật nên giảm xuống 30px,
-   bỏ padding/border-radius của nó để đọc như một dòng sticky thay vì field đầy đủ. */
-.stabs-search {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  width: 100%;
-  height: 30px;
-  min-height: 0;
-  padding: 5px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--popover);
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-/* Ring focus của shadcn Input lộn thành border mint bao quanh — popover này đã có
-   hairline `border-bottom` làm indicator, gỡ hẳn shadow ring. */
-.stabs-search:focus-visible {
-  box-shadow: none;
-}
-.stabs-search::placeholder {
-  color: var(--muted-foreground);
-}
-.stabs-droplist {
-  padding: 2px 0;
-}
-.stabs-droplist .mi {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-}
-.stabs-nm {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-/* Secondary path line, only shown to disambiguate same-named projects (OQ 1.a). */
-.stabs-path {
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.stabs-empty {
-  padding: 8px 12px;
-  color: var(--muted-foreground);
-}
-/* Context menu chrome (copied from SessionList — the project actions moved here). */
-.ctxbackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-}
-.ctxmenu {
-  position: fixed;
-  z-index: 61;
-  min-width: 178px;
-}
-.ctxsep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border);
-}
-.ctxcolor {
-  padding: 4px 10px 6px;
-}
-.ctxcolorlbl {
-  display: block;
-  margin-bottom: 6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.ctxsw {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-.ctxsw .swatch {
-  display: grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  color: var(--muted-foreground);
-  box-shadow: 0 0 0 1px var(--border);
-  transition:
-    transform 0.1s,
-    box-shadow 0.1s;
-}
-.ctxsw .swatch:hover {
-  transform: scale(1.12);
-}
-.ctxsw .swatch.on {
-  box-shadow:
-    0 0 0 2px var(--popover),
-    0 0 0 4px var(--primary);
-}
-.ctxsw .swatch.clear {
-  background: transparent;
-}
-/* Custom-color swatch: a rainbow hint when no custom hex is picked, else it wears
-   the chosen color (background set inline). Relative so the native input overlays it. */
-.ctxsw .swatch.custom {
-  position: relative;
-  overflow: hidden;
-  color: var(--foreground);
+/* Ô "chọn màu riêng": gợi ý cầu vồng khi chưa có màu tuỳ chọn (có rồi thì nền inline
+   mang màu đó đè lên). Đây là hình minh hoạ "bất kỳ màu nào", không phải màu theme. */
+.swatch-rainbow {
   background: conic-gradient(
     from 0deg,
-    #f87171,
-    #fbbf24,
-    #34d399,
-    #60a5fa,
-    #a78bfa,
-    #f472b6,
-    #f87171
+    rgb(248 113 113),
+    rgb(251 191 36),
+    rgb(52 211 153),
+    rgb(96 165 250),
+    rgb(167 139 250),
+    rgb(244 114 182),
+    rgb(248 113 113)
   );
-}
-/* The native color input fills the swatch, fully transparent — clicking the swatch
-   opens the OS picker anchored here. */
-.ctxsw .swatch.custom .ctxcolorinput {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-.ctxmenu .mi.danger {
-  color: var(--destructive);
-}
-.ctxmenu .mi.danger:hover {
-  background: color-mix(in srgb, var(--destructive) 14%, transparent);
-}
-@media (prefers-reduced-motion: reduce) {
-  .stab-x,
-  .ctxsw .swatch {
-    transition: none;
-  }
 }
 </style>

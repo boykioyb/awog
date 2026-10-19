@@ -1,6 +1,14 @@
 <template>
-  <div class="slk-fcard" :class="{ off: !!file.unavailable && !isExternal }">
-    <span class="slk-fic"><Icon :name="icon" /></span>
+  <div
+    class="flex max-w-105 items-center gap-2.5 rounded-md border px-2.5 py-2"
+    :class="isOff ? 'bg-muted text-dim' : 'bg-sidebar'"
+  >
+    <span
+      class="grid size-8 place-items-center rounded-sm"
+      :class="isOff ? 'bg-accent text-faint' : 'bg-selected text-primary'"
+    >
+      <Icon :name="icon" />
+    </span>
     <div class="min-w-0 flex-1">
       <div class="truncate text-sm font-medium" :title="file.name">
         {{ file.title || file.name }}
@@ -80,6 +88,8 @@ const { t } = useI18n()
 const files = useSlackFiles()
 const canPreview = computed(() => canPreviewSlackFile(props.file))
 const isExternal = computed(() => props.file.unavailable === 'external')
+// Thẻ xám: file không còn dùng được (trừ file bên ngoài — vẫn mở link được).
+const isOff = computed(() => !!props.file.unavailable && !isExternal.value)
 // Chỉ http(s) mới có host để hiện + nút mở; scheme khác coi như không có link.
 const externalHost = computed(() => {
   const url = isExternal.value ? props.file.externalUrl : null
@@ -98,33 +108,3 @@ const meta = computed(() =>
   [props.file.filetype.toUpperCase(), formatBytes(props.file.size)].filter(Boolean).join(' · '),
 )
 </script>
-
-<style scoped>
-.slk-fcard {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 420px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-}
-.slk-fcard.off {
-  background: var(--bgSubtle);
-  color: var(--textDim);
-}
-.slk-fic {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-xs);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.slk-fcard.off .slk-fic {
-  background: var(--bgHover);
-  color: var(--textFaint);
-}
-</style>

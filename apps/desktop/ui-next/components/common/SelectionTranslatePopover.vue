@@ -9,42 +9,75 @@
          đúng việc người dùng đang làm (đối chiếu bản dịch với trang). Bề mặt đó
          render kết quả trong chrome của chính nó — BrowserTranslateStrip. -->
     <template v-if="active && active.surface !== 'browser'">
-      <div class="sttbackdrop" @mousedown="close" />
-      <div class="sttpop" :style="popStyle" @mousedown.stop>
-        <div class="stthead">
-          <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="stttitle">{{ t('translate.title') }}</span>
-          <div class="sttlangs">
-            <button
+      <!-- Band "trên-modal": bôi đen text trong board item (`.wsed-ovl` 160), peek full
+           (`.apeek.full` 400), lượt-fullscreen (`.ftovl` 470) hay preview (`.pvovl` 480)
+           đều phải nổi popover lên trên — vượt 480. -->
+      <div class="fixed inset-0 z-490" @mousedown="close" />
+      <!-- `sttpop` là hook JS: OVERLAYS (useEmbeddedBrowser.ts) dò `.sttpop`. -->
+      <div
+        class="sttpop fixed z-491 flex max-h-[44vh] flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-md"
+        :style="popStyle"
+        @mousedown.stop
+      >
+        <div class="flex items-center gap-2 border-b px-2.5 py-2 text-muted-foreground">
+          <Icon name="book" class="size-3.5" />
+          <span class="text-sm font-medium text-foreground">{{ t('translate.title') }}</span>
+          <!-- Pill ngôn ngữ — chip tròn nhạt, mục đang chọn mang wash accent. -->
+          <ToggleGroup
+            type="single"
+            :spacing="1"
+            class="ml-auto gap-0.5"
+            :model-value="lang"
+            @update:model-value="onLang"
+          >
+            <ToggleGroupItem
               v-for="l in TRANSLATE_LANGS"
               :key="l"
-              class="sttlang"
-              :class="{ on: lang === l }"
+              :value="l"
               :title="LANG_LABEL[l]"
-              @click="setLang(l)"
+              class="h-auto min-w-0 rounded-full bg-muted px-2 py-0.5 font-mono text-sm font-normal text-muted-foreground hover:bg-muted hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
             >
+              <!-- mono: mã ngôn ngữ (EN/VI/JA) — cột chữ đều -->
               {{ l.toUpperCase() }}
-            </button>
-          </div>
-          <button class="sttx" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="size-6 text-muted-foreground"
+            :title="t('common.close')"
+            @click="close"
+          >
+            <Icon name="x" />
+          </Button>
         </div>
 
-        <div class="sttbody">
-          <div v-if="loading" class="sttstatus">
-            <span class="sttspin" />
+        <div class="overflow-y-auto px-3 py-2.5">
+          <div v-if="loading" class="flex items-center gap-2 text-base text-dim">
+            <span
+              class="size-3.5 animate-spin rounded-full border-2 border-border border-t-primary"
+            />
             {{ t('translate.loading') }}
           </div>
-          <div v-else-if="error" class="sttstatus err">
+          <div v-else-if="error" class="flex items-center gap-2 text-base text-destructive">
             <span>{{ t('translate.error') }}</span>
-            <button class="sttbtn" @click="retry">{{ t('translate.retry') }}</button>
+            <Button variant="outline" size="xs" class="font-normal" @click="retry">
+              {{ t('translate.retry') }}
+            </Button>
           </div>
           <!-- Translated prose can carry the source's links; a workspace path must open in
                the shared preview, never navigate the SPA (dead route → 404). -->
-          <div v-else class="sttresult" @click="onMdLinkClick">
+          <div
+            v-else
+            class="text-base break-words text-foreground select-text"
+            @click="onMdLinkClick"
+          >
             <template v-for="(seg, i) in resultSegments" :key="i">
-              <pre v-if="seg.type === 'mermaid'" class="sttcode"><code>{{ seg.code }}</code></pre>
+              <!-- mono: khối code mermaid giữ nguyên nguồn -->
+              <pre
+                v-if="seg.type === 'mermaid'"
+                class="m-0 overflow-x-auto rounded-sm bg-muted px-2.5 py-2 font-mono text-[0.92em]"
+              ><code>{{ seg.code }}</code></pre>
               <pre v-else-if="seg.type === 'widget'"><code>{{ seg.code }}</code></pre>
               <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
               <div v-else class="sttmd" v-html="seg.html" />
@@ -52,14 +85,16 @@
           </div>
         </div>
 
-        <div v-if="!loading && !error && result" class="sttfoot">
-          <button class="sttbtn" @click="copyResult">
-            <Icon
-              :name="copied ? 'check' : 'copy'"
-              style="width: var(--icon-xs); height: var(--icon-xs)"
-            />
+        <div v-if="!loading && !error && result" class="flex justify-end border-t px-2.5 py-2">
+          <Button
+            variant="outline"
+            size="xs"
+            class="font-normal text-muted-foreground [&_svg]:size-3"
+            @click="copyResult"
+          >
+            <Icon :name="copied ? 'check' : 'copy'" />
             {{ copied ? t('translate.copied') : t('translate.copy') }}
-          </button>
+          </Button>
         </div>
       </div>
     </template>
@@ -96,6 +131,11 @@ const {
 // sanitized by useMarkdown (raw HTML dropped, hrefs sanitized) → v-html-safe.
 const resultSegments = computed(() => (result.value ? renderMarkdown(result.value) : []))
 
+// ToggleGroup single phát rỗng khi bấm lại pill đang bật — bỏ qua.
+function onLang(v: unknown) {
+  if (typeof v === 'string' && v) setLang(v as (typeof TRANSLATE_LANGS)[number])
+}
+
 const POP_WIDTH = 340
 
 // Anchor near the selection: below by default, flip above when the selection sits
@@ -123,96 +163,8 @@ useEscToClose(
 </script>
 
 <style scoped>
-/* Band "trên-modal": bôi đen text trong board item (`.wsed-ovl` 160), peek full
-   (`.apeek.full` 400), lượt-fullscreen (`.ftovl` 470) hay preview (`.pvovl`
-   480) đều phải nổi popover lên trên — vượt 480. */
-.sttbackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 490;
-}
-.sttpop {
-  position: fixed;
-  z-index: 491;
-  display: flex;
-  flex-direction: column;
-  max-height: 44vh;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-}
-.stthead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted-foreground);
-}
-.stttitle {
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 500;
-  color: var(--foreground);
-}
-.sttlangs {
-  display: flex;
-  gap: 3px;
-  margin-left: auto;
-}
-/* Lang pills — rounded-full muted chips, active rides the accent wash. */
-.sttlang {
-  padding: 2px 9px;
-  font-size: 12px;
-  font-family: var(--code, ui-monospace, monospace);
-  line-height: 18px;
-  border-radius: var(--r-pill); /* rounded-full */
-  border: 0;
-  background: var(--muted);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-.sttlang:hover {
-  color: var(--foreground);
-}
-.sttlang.on {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.sttx {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-.sttx:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.sttbody {
-  padding: 10px 12px;
-  overflow-y: auto;
-}
-.sttresult {
-  font-size: 1em;
-  line-height: var(--lh-md);
-  color: var(--foreground);
-  word-break: break-word;
-  user-select: text;
-}
-/* Rendered-markdown prose inside the popover (sanitized HTML from useMarkdown). */
+/* style-ok: HTML markdown render ra (v-html từ useMarkdown) — class không chạm tới được,
+   chỉ :deep. */
 .sttmd :deep(p) {
   margin: 0 0 8px;
 }
@@ -269,64 +221,5 @@ useEscToClose(
 .sttmd :deep(> *:last-child),
 .sttmd :deep(li > *:last-child) {
   margin-bottom: 0;
-}
-.sttcode {
-  margin: 0;
-  padding: 8px 10px;
-  background: var(--muted);
-  border-radius: var(--r-xs); /* rounded-sm */
-  overflow-x: auto;
-  font-family: var(--code, ui-monospace, monospace);
-  font-size: 0.92em;
-}
-.sttstatus {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1em;
-  color: var(--textDim);
-}
-.sttstatus.err {
-  color: var(--destructive);
-}
-.sttspin {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: sttspin 0.7s linear infinite;
-}
-@keyframes sttspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.sttfoot {
-  display: flex;
-  justify-content: flex-end;
-  padding: 7px 10px;
-  border-top: 1px solid var(--border);
-}
-.sttbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  font-size: 1em;
-  border-radius: var(--r-xs); /* rounded-sm */
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    border-color 0.12s,
-    background 0.12s;
-}
-.sttbtn:hover {
-  color: var(--accent-foreground);
-  border-color: var(--border);
-  background: var(--accent-wash);
 }
 </style>

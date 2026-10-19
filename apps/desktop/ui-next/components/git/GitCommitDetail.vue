@@ -1,94 +1,115 @@
 <template>
-  <div class="ctabs">
-    <span class="ctab" :class="{ on: tab === 'commit' }" @click="emit('set-tab', 'commit')">
-      {{ t('git.detail.tabCommit') }}
-    </span>
-    <span class="ctab" :class="{ on: tab === 'changes' }" @click="emit('set-tab', 'changes')">
-      {{ t('git.detail.tabChanges') }}
-    </span>
-    <span class="ctab" :class="{ on: tab === 'tree' }" @click="emit('set-tab', 'tree')">
-      {{ t('git.detail.tabTree') }}
-    </span>
-    <span style="flex: 1" />
-    <span class="mono" style="color: var(--primary); font-size: var(--fs-xs)">{{ commit.h }}</span>
+  <div class="flex flex-none items-center gap-0.5 border-b px-3.5 py-1.5">
+    <Tabs :model-value="tab" @update:model-value="(v) => emit('set-tab', v as CommitTab)">
+      <TabsList class="h-auto gap-0.5 bg-transparent p-0">
+        <TabsTrigger value="commit" :class="TAB">{{ t('git.detail.tabCommit') }}</TabsTrigger>
+        <TabsTrigger value="changes" :class="TAB">{{ t('git.detail.tabChanges') }}</TabsTrigger>
+        <TabsTrigger value="tree" :class="TAB">{{ t('git.detail.tabTree') }}</TabsTrigger>
+      </TabsList>
+    </Tabs>
+    <span class="flex-1" />
+    <!-- mono-ok: SHA rút gọn -->
+    <span class="font-mono text-xs text-primary">{{ commit.h }}</span>
   </div>
 
-  <div v-if="tab === 'commit'" class="cdbody">
+  <div v-if="tab === 'commit'" class="flex-1 overflow-y-auto p-4">
     <!-- Message first, metadata under it. The subject is what the reader opened
          the commit for; author/SHA/parent are the inspector, not the headline. -->
-    <div class="cdtitle">{{ commit.m }}</div>
-    <div v-if="commit.body" class="cdmsg">{{ commit.body }}</div>
-    <div class="cdmeta">
-      <div class="kvrow">
-        <span class="kvk">{{ t('git.detail.author') }}</span>
-        <span class="authrow">
-          <span class="pav2">{{ avatarOf(commit.a) }}</span>
-          <span class="authn">{{ commit.a }}</span>
-          <span v-if="commit.email" class="authmail mono">{{ commit.email }}</span>
-          <span style="flex: 1" />
-          <span class="authdate">{{ commit.w }}</span>
+    <div class="mb-2 text-lg font-semibold text-foreground">{{ commit.m }}</div>
+    <div v-if="commit.body" class="max-w-190 text-base whitespace-pre-wrap text-muted-foreground">
+      {{ commit.body }}
+    </div>
+    <!-- Khối inspector: không khung card — chỉ một hairline phía trên. -->
+    <div class="mt-4.5 max-w-190 border-t pt-3.5">
+      <div :class="KV_ROW">
+        <span :class="KV_K">{{ t('git.detail.author') }}</span>
+        <span class="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            class="grid size-4.5 flex-none place-items-center rounded-full bg-selected text-xs font-semibold text-primary"
+          >
+            {{ avatarOf(commit.a) }}
+          </span>
+          <span class="text-sm font-semibold text-foreground">{{ commit.a }}</span>
+          <!-- mono-ok: địa chỉ email -->
+          <span v-if="commit.email" class="truncate font-mono text-xs text-dim">
+            {{ commit.email }}
+          </span>
+          <span class="flex-1" />
+          <span class="flex-none text-xs text-dim">{{ commit.w }}</span>
         </span>
       </div>
-      <div class="kvrow">
-        <span class="kvk">{{ t('git.detail.sha') }}</span>
-        <span class="shabox mono">{{ commit.sha || commit.h }}</span>
+      <div :class="KV_ROW">
+        <span :class="KV_K">{{ t('git.detail.sha') }}</span>
+        <!-- mono-ok: SHA đầy đủ (select-all để copy) -->
+        <span class="font-mono text-sm text-muted-foreground select-all">
+          {{ commit.sha || commit.h }}
+        </span>
       </div>
-      <div class="kvrow">
-        <span class="kvk">{{ t('git.detail.parent') }}</span>
-        <span
+      <div :class="KV_ROW">
+        <span :class="KV_K">{{ t('git.detail.parent') }}</span>
+        <!-- mono-ok: SHA commit cha -->
+        <Button
           v-if="parent"
-          class="mono cursor-pointer rounded-sm border border-input bg-transparent px-1.5 py-0.5 text-xs text-primary transition-colors hover:border-ring hover:bg-accent-wash"
+          variant="outline"
+          size="xs"
+          class="h-auto rounded-sm px-1.5 py-0.5 font-mono font-normal text-primary hover:border-ring hover:text-primary"
           @click="emit('select-commit', parent)"
         >
           {{ parent }}
-        </span>
-        <span v-else class="kvv" style="color: var(--muted-foreground)">
+        </Button>
+        <span v-else class="min-w-0 flex-1 text-muted-foreground">
           {{ t('git.detail.root') }}
         </span>
       </div>
     </div>
   </div>
 
-  <!-- 2-pane: changed-files list (left) ↔ selected file's diff (right). -->
-  <div v-else-if="tab === 'changes'" class="cdchanges">
-    <div class="cdflist">
-      <div class="sech">{{ t('git.detail.filesChanged', { n: files.length }) }}</div>
+  <!-- 2-pane: changed-files list (left) ↔ selected file's diff (right), mỗi cột tự cuộn. -->
+  <div v-else-if="tab === 'changes'" class="flex min-h-0 flex-1 overflow-hidden">
+    <div class="w-62 min-w-42 flex-none overflow-y-auto border-r px-2.5 py-3">
+      <div class="mb-2 text-xs font-semibold text-dim">
+        {{ t('git.detail.filesChanged', { n: files.length }) }}
+      </div>
       <div
         v-for="f in files"
         :key="f.f"
-        class="gfile"
-        :class="{ on: activeFile === f.f }"
+        :class="[FILE_ROW, { [FILE_ROW_ON]: activeFile === f.f }]"
         @click="picked = f.f"
         @contextmenu.prevent="emit('context-file', $event, f.f)"
       >
         <span
-          class="gsti"
-          :style="{ color: statusVisual(f.st).color }"
+          :class="[STATUS_LETTER, statusVisual(f.st).cls]"
           :title="t(`git.fileStatus.${statusVisual(f.st).key}`)"
         >
           {{ statusVisual(f.st).letter }}
         </span>
-        <span class="gnm2">
-          <span class="gp">{{ dir(f.f) }}</span>
-          <span class="gn">{{ base(f.f) }}</span>
+        <span :class="FILE_NAME">
+          <!-- mono-ok: phần thư mục của path -->
+          <span :class="FILE_DIR">{{ dir(f.f) }}</span>
+          <span :class="[FILE_BASE, { 'text-foreground': activeFile === f.f }]">
+            {{ base(f.f) }}
+          </span>
         </span>
       </div>
     </div>
-    <div class="cddiff">
-      <div v-if="activeFile && activeDiffRows.length" class="codeview">
-        <div class="cvdiff">
-          <GitDiffLine v-for="(l, i) in activeDiffRows" :key="i" :line="l" />
-        </div>
+    <!-- Diff tràn viền (giống viewer Local Changes): không khung card. -->
+    <div class="min-w-0 flex-1 overflow-auto">
+      <!-- mono-ok: nội dung diff -->
+      <div v-if="activeFile && activeDiffRows.length" class="overflow-x-hidden font-mono text-sm">
+        <GitDiffLine v-for="(l, i) in activeDiffRows" :key="i" :line="l" />
       </div>
-      <div v-else class="cddiffempty">{{ t('git.detail.noDiff') }}</div>
+      <div v-else class="px-1 py-2 text-sm text-muted-foreground">
+        {{ t('git.detail.noDiff') }}
+      </div>
     </div>
   </div>
 
-  <div v-else class="cdbody">
-    <div class="ftree" style="line-height: var(--lh-xl)">
+  <div v-else class="flex-1 overflow-y-auto p-4">
+    <!-- mono-ok: cây file của commit -->
+    <div class="font-mono text-sm leading-(--lh-xl)">
       <div v-for="f in files" :key="f.f" @contextmenu.prevent="emit('context-file', $event, f.f)">
-        <span v-if="f.st === 'A'" class="a2">A</span>
-        <span v-else class="m">M</span>
+        <span v-if="f.st === 'A'" class="text-diff-add">A</span>
+        <span v-else class="text-diff-mod">M</span>
         {{ f.f }}
       </div>
     </div>
@@ -100,6 +121,11 @@
 // Ported from commitDetail in awog-prototype.html.
 import type { Commit, CommitTab, DiffLine, DiffRow, GitFile } from './git-types'
 import { avatarOf, baseNameOf, shortPath, statusVisual } from './git-types'
+import { FILE_BASE, FILE_DIR, FILE_NAME, FILE_ROW, FILE_ROW_ON, STATUS_LETTER } from './git-ui'
+import Button from '~/components/ui/button/Button.vue'
+import Tabs from '~/components/ui/tabs/Tabs.vue'
+import TabsList from '~/components/ui/tabs/TabsList.vue'
+import TabsTrigger from '~/components/ui/tabs/TabsTrigger.vue'
 
 const props = defineProps<{
   commit: Commit
@@ -117,6 +143,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Tab COMMIT / CHANGES / FILE TREE: đang chọn = accent-tint.
+const TAB =
+  'rounded-sm px-3 py-1 text-xs font-semibold text-dim shadow-none hover:bg-accent hover:text-foreground data-[state=active]:bg-selected data-[state=active]:text-primary data-[state=active]:shadow-none'
+const KV_ROW = 'mb-2.5 flex items-center gap-3'
+const KV_K = 'w-16 flex-none text-xs text-dim'
 
 // Diff lines render as plain text colored by line type only (no syntax
 // tokenizing — see GitDiffViewer: per-token colors looked noisy over add/del).
@@ -151,41 +183,3 @@ const activeDiffRows = computed<DiffRow[]>(() =>
 const base = (f: string) => baseNameOf(f)
 const dir = (f: string) => shortPath(f)[0]
 </script>
-
-<style scoped>
-/* CHANGES tab: file list (left) ↔ selected file's diff (right), each scrolls
-   independently inside the commit-detail pane. */
-.cdchanges {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-.cdflist {
-  flex: 0 0 248px;
-  min-width: 168px;
-  overflow-y: auto;
-  padding: 12px 10px;
-  border-right: 1px solid var(--border);
-}
-.cddiff {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  padding: 0;
-}
-/* Full-bleed diff (matches the Local Changes viewer): drop the .codeview card
-   chrome so the diff fills the pane instead of sitting in an inset box. */
-.cddiff .codeview {
-  border: none;
-  border-radius: 0;
-  margin: 0;
-  background: transparent;
-}
-.cddiffempty {
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  padding: 8px 4px;
-}
-</style>

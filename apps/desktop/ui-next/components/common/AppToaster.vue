@@ -8,77 +8,114 @@
        is what buys pause-on-hover, pause-on-window-blur, swipe-to-dismiss and the
        F8 "jump to notifications" landmark. -->
   <ToastProvider :duration="DEFAULT_DURATION" :swipe-direction="swipeDirection">
+    <!-- `tst` là hook JS: OVERLAYS (useEmbeddedBrowser.ts) dò `.tst` để trình duyệt nhúng
+         nhường chỗ khi toast bay qua. Không mang style. -->
     <ToastRoot
       v-for="tt in toasts"
       :key="tt.id"
       v-model:open="tt.open"
       :duration="tt.duration"
       :type="tt.type ?? 'foreground'"
-      class="tst"
-      :class="[`tst-${tt.color ?? 'neutral'}`, { 'tst-click': !!tt.onClick }]"
+      class="tst pointer-events-auto relative flex w-max max-w-full items-start gap-2.5 overflow-hidden rounded-lg border bg-popover p-3 text-sm text-popover-foreground shadow-md data-[state=closed]:animate-out data-[state=closed]:duration-120 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-bottom-1.5 data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:translate-y-0 data-[swipe=cancel]:transition-transform data-[swipe=move]:translate-x-(--reka-toast-swipe-move-x) data-[swipe=move]:translate-y-(--reka-toast-swipe-move-y) motion-reduce:animate-none motion-reduce:transition-none"
+      :class="{ 'cursor-pointer hover:border-input': !!tt.onClick }"
       @update:open="(open: boolean) => !open && retire(tt.id)"
       @click="onRootClick(tt)"
     >
       <template #default="{ remaining, duration }">
-        <Icon :name="tt.icon ?? iconFor(tt.color)" class="tsticn" />
+        <!-- Màu ngữ nghĩa nằm ở ICON (và thanh thời gian), không ở viền: một vòng viền
+             sáng quanh cả thẻ là thứ ồn nhất màn hình cho một thông báo thường chỉ là
+             xác nhận. Optical: mt-px để icon thẳng hàng chữ hoa của tiêu đề. -->
+        <Icon
+          :name="tt.icon ?? iconFor(tt.color)"
+          class="mt-px size-4 shrink-0"
+          :class="ACCENT[tt.color ?? 'neutral'].icon"
+        />
 
-        <div class="tstbody">
-          <ToastTitle class="tsttl">{{ tt.title }}</ToastTitle>
+        <div class="flex min-w-0 flex-auto flex-col gap-0.5">
+          <!-- Một dòng, cắt bớt — tiêu đề giữ dễ lướt; chi tiết ở description. -->
+          <ToastTitle class="truncate font-medium">{{ tt.title }}</ToastTitle>
           <!-- Wraps, unlike the title: a git error is several lines and the old
-               single-line ellipsis cut it off mid-message. -->
-          <ToastDescription v-if="tt.description" class="tstdesc">
+               single-line ellipsis cut it off mid-message. `pre-wrap` giữ xuống dòng
+               gốc (stderr git là từng dòng "error: …" / "hint: …"), `anywhere` bẻ token
+               dài (path, SHA); trần chiều cao để chi tiết dài không phình toast. -->
+          <ToastDescription
+            v-if="tt.description"
+            class="max-h-30 overflow-y-auto text-xs whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]"
+          >
             {{ tt.description }}
           </ToastDescription>
 
-          <div v-if="tt.actions?.length" class="tstacts">
-            <ToastAction
-              v-for="(act, i) in tt.actions"
-              :key="i"
-              :alt-text="act.label"
-              class="tstact"
-              @click.stop="act.onClick?.($event)"
-            >
-              <Icon v-if="act.icon" :name="act.icon" class="tstacticn" />
-              {{ act.label }}
+          <div v-if="tt.actions?.length" class="mt-1 flex flex-wrap gap-1.5">
+            <ToastAction v-for="(act, i) in tt.actions" :key="i" :alt-text="act.label" as-child>
+              <Button
+                variant="outline"
+                size="xs"
+                class="font-normal shadow-none [&_svg]:size-3"
+                @click.stop="act.onClick?.($event)"
+              >
+                <Icon v-if="act.icon" :name="act.icon" />
+                {{ act.label }}
+              </Button>
             </ToastAction>
           </div>
         </div>
 
         <!-- Affordance for the whole-toast click-through (GitHub notification). -->
-        <Icon v-if="tt.onClick" name="chev-right" class="tstgo" />
+        <Icon
+          v-if="tt.onClick"
+          name="chev-right"
+          class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+        />
 
         <!-- Copy: lỗi / cảnh báo / toast có phần chi tiết — thứ người dùng hay cần dán
              đi đâu đó (issue, chat). Chép cả tiêu đề lẫn chi tiết. `.stop` để không
              kích hoạt click-through của cả toast. -->
-        <button
+        <Button
           v-if="copyable(tt)"
-          type="button"
-          class="tstx"
+          variant="ghost"
+          size="iconSm"
+          class="size-6 shrink-0 text-muted-foreground"
           :title="copyFb.labelFor(tt.id, t('common.copy'))"
           :aria-label="copyFb.labelFor(tt.id, t('common.copy'))"
           @click.stop="copyFb.copy(tt.id, copyTextOf(tt))"
         >
-          <Icon :name="copyFb.iconFor(tt.id)" class="tstxicn" />
-        </button>
+          <Icon :name="copyFb.iconFor(tt.id)" />
+        </Button>
         <!-- Đóng: MỌI toast (người dùng chốt 2026-10-15) — không phải chờ hết giờ hay
              vuốt mới tắt được một toast đang che chỗ cần bấm. -->
-        <ToastClose class="tstx" :aria-label="t('common.close')" @click.stop>
-          <Icon name="x" class="tstxicn" />
+        <ToastClose as-child>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="size-6 shrink-0 text-muted-foreground"
+            :aria-label="t('common.close')"
+            @click.stop
+          >
+            <Icon name="x" />
+          </Button>
         </ToastClose>
 
-        <!-- Time left, in the semantic colour — this is where the colour lives now
-             that the card itself is neutral. ToastRoot computes `remaining` and
+        <!-- Time left, in the semantic colour. ToastRoot computes `remaining` and
              freezes it while the timer is paused (hover / window blur), so the bar
              stops with it. A toast with no timer (duration 0) has no bar. -->
         <div
           v-if="duration > 0"
-          class="tstbar"
+          class="absolute inset-x-0 bottom-0 h-0.5 origin-left opacity-70"
+          :class="ACCENT[tt.color ?? 'neutral'].bar"
           :style="{ transform: `scaleX(${remaining / duration})` }"
         />
       </template>
     </ToastRoot>
 
-    <ToastViewport class="tstvp" :style="viewportStyle" :label="t('common.toast.landmark')" />
+    <!-- Viewport luôn mount và rộng bằng toast rộng nhất có thể ⇒ không được nuốt click
+         ở góc đó khi trống (pointer-events-none; chỉ thẻ toast nhận click). z-141: trên
+         overlay (.ovl 100) và menu cũ (.smenu/.pop 130), như `.toast` cũ. Góc neo + chiều
+         xếp đến từ viewportStyle (cài đặt của người dùng). -->
+    <ToastViewport
+      class="pointer-events-none fixed z-141 m-0 flex w-[min(28.75rem,90vw)] list-none gap-2.5 p-0 outline-none"
+      :style="viewportStyle"
+      :label="t('common.toast.landmark')"
+    />
   </ToastProvider>
 </template>
 
@@ -108,6 +145,16 @@ const copyTextOf = (tt: CopyableToast): string =>
 const settings = useSettingsStore()
 
 const DEFAULT_DURATION = 5000
+
+// Màu ngữ nghĩa → class của icon + thanh thời gian. Thẻ toast giữ nền trung tính.
+const ACCENT: Record<ToastColor, { icon: string; bar: string }> = {
+  success: { icon: 'text-success', bar: 'bg-success' },
+  error: { icon: 'text-destructive', bar: 'bg-destructive' },
+  warning: { icon: 'text-warning', bar: 'bg-warning' },
+  primary: { icon: 'text-primary', bar: 'bg-primary' },
+  info: { icon: 'text-info', bar: 'bg-info' },
+  neutral: { icon: 'text-input', bar: 'bg-input' },
+}
 
 // Default glyph per semantic color. Callers override with `icon`.
 function iconFor(color: ToastColor | undefined): string {
@@ -166,257 +213,9 @@ function onRootClick(tt: { id: string; onClick?: () => void }): void {
 
 // `open` is already false by the time we get here (v-model wrote it), so ToastRoot
 // is playing its exit. Dropping the row from the queue NOW would unmount the
-// v-for item mid-animation, so hold it for the length of `tst-out` first.
+// v-for item mid-animation, so hold it for the length of the exit animation (`duration-120`) first.
 const EXIT_MS = 140
 function retire(id: string): void {
   setTimeout(() => remove(id), EXIT_MS)
 }
 </script>
-
-<style>
-/* NOT scoped. Reka UI's ToastViewport/ToastRoot render through `Primitive`, whose
-   root is a fragment at compile time, so Vue cannot stamp this component's scope id
-   onto them — a `<style scoped>` block here matches nothing and the toaster renders
-   as an unstyled <ol> at the bottom of the document (measured). The class names are
-   unique to the toaster, and theme-cute.css already targets `.tst` from a global
-   sheet, so global is also the consistent choice.
-
-   Anchor + direction come from viewportStyle (the user's corner); everything here
-   is corner-agnostic. z 141 keeps toasts above overlays (.ovl, z 100) and menus
-   (.smenu/.pop, z 130), matching where the old `.toast` sat. */
-.tstvp {
-  position: fixed;
-  display: flex;
-  gap: 10px;
-  z-index: 141;
-  width: min(460px, 90vw);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  outline: none;
-  /* The viewport is always mounted and is as wide as its widest toast could be, so
-     it must not eat clicks in that corner when empty (or beside a narrow toast).
-     Only the toasts themselves are interactive. */
-  pointer-events: none;
-}
-
-.tst {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  /* Shrink to content (so a short toast doesn't render as a 460px slab) but never
-     past the viewport's width. */
-  width: max-content;
-  max-width: 100%;
-  pointer-events: auto;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  /* Neutral surface. The semantic colour rides the ICON (and the progress bar),
-     not the border: a full bright ring around the whole card is the loudest thing
-     on screen for a message that is usually just an acknowledgement. This is also
-     what Nuxt UI's toast does — the old `.toast` tinted its border per kind and it
-     read as an alert box every time something succeeded. */
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  padding: 11px 13px;
-  /* Containing block + clip for .tstbar, which rides the bottom edge. */
-  position: relative;
-  overflow: hidden;
-  /* The shared elevation ramp, not the prototype's dark-only rgba(0,0,0,.5) —
-     that one reads as a heavy grey slab on the light theme (app-shell.css §ramp). */
-  box-shadow: var(--shadow-md);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* Semantic color → standard theme token. Never a hex, so theme-cute.css can restyle
-   the whole family by redefining the tokens. Consumed by the icon + progress bar. */
-.tst-success {
-  --tstAccent: var(--success);
-}
-.tst-error {
-  --tstAccent: var(--destructive);
-}
-.tst-warning {
-  --tstAccent: var(--warning);
-}
-.tst-primary {
-  --tstAccent: var(--primary);
-}
-.tst-info {
-  --tstAccent: var(--info);
-}
-.tst-neutral {
-  --tstAccent: var(--input);
-}
-
-.tst-click {
-  cursor: pointer;
-}
-.tst-click:hover {
-  border-color: var(--input);
-}
-
-.tsticn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex-shrink: 0;
-  color: var(--tstAccent, var(--muted-foreground));
-  /* Optical: line up with the title's cap height rather than its line box top. */
-  margin-top: 1px;
-}
-
-.tstbody {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-/* One line, truncated — the headline stays scannable. Detail belongs in
-   .tstdesc, which wraps. */
-.tsttl {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.tstdesc {
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  /* Wraps, and breaks long unbroken tokens (a path, a SHA) instead of forcing the
-     toast wider than its max-width. `pre-wrap` keeps the source's own line breaks:
-     git's stderr is written as lines ("error: …" / "hint: …") and collapsing them
-     into one paragraph is what made it unreadable. */
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  /* Cap runaway detail; the full text stays available in the source surface. */
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.tstacts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.tstact {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs); /* rounded-sm */
-  padding: 3px 9px;
-  color: var(--popover-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    border-color 0.12s;
-}
-.tstact:hover {
-  background: var(--accent-wash);
-  border-color: var(--ring);
-}
-.tstacticn {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-/* Drains left-to-right with the dismiss timer. 2px so it reads as a hairline of
-   colour, not a second border. */
-.tstbar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--tstAccent, var(--input));
-  transform-origin: left;
-  opacity: 0.7;
-}
-
-.tstgo {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex-shrink: 0;
-  color: var(--muted-foreground);
-  margin-top: 2px;
-}
-
-.tstx {
-  flex-shrink: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-xs); /* rounded-sm */
-  padding: 2px;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.tstx:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.tstxicn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  display: block;
-}
-
-/* Swipe feedback: follow the pointer while swiping, snap back on cancel, slide
-   out on end. Reka UI sets --reka-toast-swipe-move-x/y and the data-swipe state. */
-.tst[data-swipe='move'] {
-  transform: translate(var(--reka-toast-swipe-move-x, 0), var(--reka-toast-swipe-move-y, 0));
-}
-.tst[data-swipe='cancel'] {
-  transform: translate(0, 0);
-  transition: transform 0.16s ease-out;
-}
-
-.tst[data-state='open'] {
-  animation: tst-in 0.16s ease-out;
-}
-.tst[data-state='closed'] {
-  animation: tst-out 0.12s ease-in;
-}
-
-@keyframes tst-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-@keyframes tst-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.97);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tst[data-state='open'],
-  .tst[data-state='closed'] {
-    animation: none;
-  }
-  .tst[data-swipe='cancel'] {
-    transition: none;
-  }
-}
-</style>

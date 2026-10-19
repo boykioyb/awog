@@ -1,22 +1,36 @@
 <template>
-  <div class="lrs" :class="{ fill }">
+  <!-- Khối neo (`relative`) cho cụm nút lên/xuống nổi ở góc. `fill` = layout Kibana
+       3/9: bảng lấp đầy cột chính thay vì cao cố định. -->
+  <div class="relative flex min-h-0 flex-col gap-1.5" :class="{ 'flex-auto': fill }">
     <!-- ĐANG TẢI đứng TRƯỚC RỖNG. Cùng là "không có hàng nào", nhưng một cái là
          "chờ chút" còn cái kia là "tìm rồi, không có gì" — hiện nhầm thì người dùng
          kết luận sai về chính dữ liệu của họ ngay trước khi dữ liệu kịp về. -->
-    <div v-if="loading && rows.length === 0" class="lrs-empty">
-      <Icon name="clock" class="lrs-empty-ic" />
-      <p class="lrs-empty-txt">{{ t('infra.logs.results.loading') }}</p>
+    <div
+      v-if="loading && rows.length === 0"
+      class="flex flex-col items-center gap-1.5 px-3 py-6 text-dim"
+      :class="{ 'flex-auto justify-center': fill }"
+    >
+      <Icon name="clock" class="size-5" />
+      <p class="text-sm">{{ t('infra.logs.results.loading') }}</p>
     </div>
 
-    <div v-else-if="rows.length === 0" class="lrs-empty">
-      <Icon name="search" class="lrs-empty-ic" />
-      <p class="lrs-empty-txt">{{ emptyText || t('infra.logs.results.empty') }}</p>
+    <div
+      v-else-if="rows.length === 0"
+      class="flex flex-col items-center gap-1.5 px-3 py-6 text-dim"
+      :class="{ 'flex-auto justify-center': fill }"
+    >
+      <Icon name="search" class="size-5" />
+      <p class="text-sm">{{ emptyText || t('infra.logs.results.empty') }}</p>
     </div>
 
     <template v-else>
-      <div class="lrs-bar">
-        <span class="lrs-count">{{ t('infra.logs.results.rows', { n: rows.length }) }}</span>
-        <span class="lrs-gap" />
+      <!-- Thanh công cụ KHÔNG phụ thuộc `fill` — số dòng và nút tuỳ chọn phải nằm hai
+           đầu ở mọi chỗ dùng bảng; `shrink-0` để nó không bị bảng ép bẹp. -->
+      <div class="flex shrink-0 items-center gap-2">
+        <span class="text-xs text-dim tabular-nums">
+          {{ t('infra.logs.results.rows', { n: rows.length }) }}
+        </span>
+        <span class="flex-auto" />
         <Button
           type="button"
           :title="t('infra.logs.prefs.hint')"
@@ -24,42 +38,76 @@
           size="sm"
           @click="prefsOpen = true"
         >
-          <Icon name="settings" class="lrs-bar-ic" />
+          <Icon name="settings" />
           {{ t('infra.logs.prefs.button') }}
         </Button>
       </div>
 
-      <div ref="scrollerRef" class="lrs-tablewrap tblcard" @scroll.passive="onScroll">
-        <table class="lrs-table">
-          <thead>
-            <tr>
-              <th class="lrs-th-ix">#</th>
-              <th v-for="c in visibleColumns" :key="c" class="lrs-th" :title="c">{{ c }}</th>
-            </tr>
-          </thead>
-          <tbody>
+      <!-- Khung cuộn RIÊNG của bảng (ref `scrollerRef` đo vị trí cuộn). Bảng luôn nằm
+           trong cột chính đã là một Card nên không tự mang khung — card trong card.
+           Một luật `max-height` duy nhất: 340px khi không `fill`, bỏ hẳn khi `fill`
+           (trước đây hai luật ngang cơ nên bảng `fill` bị ghim 340px). -->
+      <div
+        ref="scrollerRef"
+        class="flex-auto overflow-auto"
+        :class="{ 'max-h-85': !fill }"
+        @scroll.passive="onScroll"
+      >
+        <!-- `<table>` trần thay cho `Table` shadcn: `Table` tự bọc một khung
+             `overflow-auto` thứ hai, làm header `sticky` bám vào khung đó (không cao
+             giới hạn) thay vì khung cuộn ở trên — header trôi mất khi cuộn. Các phần
+             bên trong vẫn là TableHeader/TableRow/TableHead/TableCell. -->
+        <table class="w-full border-collapse">
+          <TableHeader>
+            <TableRow class="hover:bg-transparent">
+              <TableHead
+                class="sticky top-0 z-1 h-auto w-10 bg-muted px-2 py-1 text-right text-xs font-normal text-faint"
+              >
+                #
+              </TableHead>
+              <TableHead
+                v-for="c in visibleColumns"
+                :key="c"
+                class="sticky top-0 z-1 h-auto max-w-55 truncate bg-muted px-2 py-1 text-xs font-semibold text-dim"
+                :title="c"
+              >
+                {{ c }}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             <template v-for="(row, i) in rows" :key="i">
-              <tr
-                class="lrs-tr"
-                :class="{ on: isOpen(i) }"
+              <TableRow
+                class="cursor-pointer"
+                :class="{ 'bg-selected hover:bg-selected': isOpen(i) }"
                 :title="t('infra.logs.results.openRow')"
                 @click="select(i)"
               >
-                <td class="lrs-td-ix">{{ i + 1 }}</td>
-                <td
+                <TableCell class="px-2 py-1 text-right text-xs text-faint tabular-nums">
+                  {{ i + 1 }}
+                </TableCell>
+                <!-- mono-ok: bảng kết quả là bản ghi log thô, cột phải thẳng hàng.
+                     Ô nội dung mặc định KHÔNG xuống dòng: một dòng log JSON 2.4KB khi
+                     xuống dòng cao hơn cả khung bảng và đẩy 32 hàng khác ra khỏi tầm
+                     nhìn; `<td>` thì `max-height` vô tác dụng. Ai cần đọc nguyên dòng
+                     thì mở chi tiết, hoặc bật "Xuống dòng" trong hộp Tuỳ chọn. -->
+                <TableCell
                   v-for="c in visibleColumns"
                   :key="c"
-                  class="lrs-td"
-                  :class="{ msg: c === '@message' || c === 'message', wrap: prefs.wrapLines }"
+                  class="overflow-hidden px-2 py-1 font-mono text-xs text-ellipsis text-muted-foreground"
+                  :class="[
+                    c === '@message' || c === 'message' ? 'max-w-140' : 'max-w-80',
+                    prefs.wrapLines ? 'break-words whitespace-pre-wrap' : 'whitespace-nowrap',
+                  ]"
                 >
                   {{ row[c] ?? '' }}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
 
               <!-- Chi tiết NGAY TRONG bảng — tuỳ chọn `inline`, nhiều dòng mở cùng
                    lúc được. Ô trải hết bề ngang để chi tiết không bị bó vào một cột. -->
-              <tr v-if="prefs.rowMode === 'inline' && isOpen(i)" class="lrs-xr">
-                <td class="lrs-xtd" :colspan="visibleColumns.length + 1">
+              <TableRow v-if="prefs.rowMode === 'inline' && isOpen(i)" class="hover:bg-transparent">
+                <TableCell class="bg-muted px-3 pt-2.5 pb-3" :colspan="visibleColumns.length + 1">
                   <InfraLogRowDetail
                     :row="row"
                     :copied="copied"
@@ -67,38 +115,41 @@
                     @send-to-chat="emit('send-to-chat', $event)"
                     @trace="emit('trace', $event)"
                   />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             </template>
-          </tbody>
+          </TableBody>
         </table>
       </div>
 
-      <!-- Lên đầu / xuống cuối: NỔI ở góc, không chiếm một hàng nào của bảng, cùng
-           khuôn mờ-khi-rảnh với nút đọc thêm. Chỉ hiện khi bảng THỰC SỰ cuộn được và
-           chỉ hiện hướng còn đi được — một nút "lên đầu" khi đang ở đầu là một nút
-           không làm gì. -->
-      <div v-if="canScroll" class="lrs-nav">
-        <button
+      <!-- Lên đầu / xuống cuối: NỔI ở góc dưới phải, không chiếm một hàng nào của
+           bảng, cùng khuôn mờ-khi-rảnh với nút đọc thêm (đặt bên PHẢI để không đụng
+           nút đó ở giữa). Chỉ hiện khi bảng THỰC SỰ cuộn được và chỉ hiện hướng còn
+           đi được — một nút "lên đầu" khi đang ở đầu là một nút không làm gì. -->
+      <div v-if="canScroll" class="absolute right-3.5 bottom-2.5 z-2 flex flex-col gap-1.5">
+        <Button
           v-if="!atTop"
-          class="lrs-navbtn"
-          type="button"
+          variant="outline"
+          size="iconSm"
+          class="rounded-full bg-card text-dim opacity-40 shadow-md hover:bg-card hover:text-foreground hover:opacity-100 [&_svg]:size-3"
           :title="t('infra.logs.results.toTop')"
           :aria-label="t('infra.logs.results.toTop')"
           @click="jump('top')"
         >
-          <Icon name="chev" class="lrs-navic up" />
-        </button>
-        <button
+          <!-- Sprite không có mũi tên LÊN — xoay mũi tên xuống. -->
+          <Icon name="chev" class="rotate-180" />
+        </Button>
+        <Button
           v-if="!atBottom"
-          class="lrs-navbtn"
-          type="button"
+          variant="outline"
+          size="iconSm"
+          class="rounded-full bg-card text-dim opacity-40 shadow-md hover:bg-card hover:text-foreground hover:opacity-100 [&_svg]:size-3"
           :title="t('infra.logs.results.toBottom')"
           :aria-label="t('infra.logs.results.toBottom')"
           @click="jump('bottom')"
         >
-          <Icon name="chev" class="lrs-navic" />
-        </button>
+          <Icon name="chev" />
+        </Button>
       </div>
     </template>
 
@@ -178,7 +229,7 @@ const paneRow = computed<AwsInsightsRow | null>(() => {
 })
 
 // ── Lên đầu / xuống cuối ────────────────────────────────────────────────────
-// Bảng có khung cuộn RIÊNG (`.lrs-tablewrap`), không cuộn theo trang — nên phím
+// Bảng có khung cuộn RIÊNG (`scrollerRef`), không cuộn theo trang — nên phím
 // Home/End của trình duyệt không tới được nó, và hai nút này là đường duy nhất.
 const scrollerRef = useTemplateRef<HTMLElement>('scrollerRef')
 const canScroll = ref(false)
@@ -247,222 +298,3 @@ watch(() => props.rows, reseed)
 watch(() => [prefs.value.rowMode, prefs.value.expandByDefault], reseed)
 onMounted(reseed)
 </script>
-
-<style scoped>
-.lrs {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 6px;
-  /* Khối neo cho cụm nút lên/xuống nổi ở góc. */
-  position: relative;
-}
-
-/* Layout Kibana 3/9: bảng lấp đầy cột chính thay vì cao cố định 340px. */
-.lrs.fill {
-  flex: 1 1 auto;
-}
-
-/* Thanh công cụ KHÔNG phụ thuộc `fill` — số dòng và nút tuỳ chọn phải nằm hai đầu
-   ở mọi chỗ dùng bảng. `flex: 0 0 auto` để nó không bị bảng ép bẹp. */
-.lrs-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.lrs-bar-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.lrs-count {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.lrs-gap {
-  flex: 1 1 auto;
-}
-
-.lrs.fill .lrs-empty {
-  flex: 1 1 auto;
-  justify-content: center;
-}
-
-.lrs-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 22px 12px;
-  color: var(--textDim);
-}
-
-.lrs-empty-ic {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-}
-
-.lrs-empty-txt {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* Skin card ở `.tblcard` toàn cục (app-shell.css); đây chỉ còn bố cục.
-   Trước đây khai tại chỗ với `--r-sm` + `--bgEl` — lệch khuôn so với ba bảng card
-   còn lại của app (--r-card + --bgPanel) mà không có lý do nào. */
-.lrs-tablewrap {
-  flex: 1 1 auto;
-  overflow: auto;
-  max-height: 340px;
-}
-
-/* MỘT luật duy nhất cho `max-height`, và bản nới ra phải THẮNG về độ đặc hiệu.
-   Trước đây bản nới viết là `.lrs-tablewrap` trơn, ngang cơ với luật 340px ở trên
-   nên luật đứng sau thắng: bảng ở chế độ `fill` bị ghim 340px và bỏ phí phần còn
-   lại của cột chính (đo được 318px trống dưới bảng ở cửa sổ cao 695px). */
-.lrs.fill .lrs-tablewrap {
-  max-height: none;
-}
-
-.lrs-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.lrs-th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 5px 8px;
-  background: var(--bgEl);
-  border-bottom: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lrs-th-ix {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 5px 8px;
-  background: var(--bgEl);
-  border-bottom: 1px solid var(--border);
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  text-align: right;
-  width: 40px;
-}
-
-.lrs-tr {
-  cursor: pointer;
-}
-
-.lrs-tr.on {
-  background: var(--bgHover);
-}
-
-.lrs-td {
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  white-space: nowrap;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* mono-ok: bảng kết quả là bản ghi log thô, cột phải thẳng hàng */
-  font-family: var(--code);
-}
-
-/* Ô nội dung mặc định KHÔNG xuống dòng.
-   Đo được: một dòng log JSON 2.4KB khi xuống dòng chiếm 883px — cao hơn cả khung
-   bảng (646px) — và một mình nó đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>` thì
-   `max-height` vô tác dụng (ô bảng coi height là chiều cao TỐI THIỂU), nên cách duy
-   nhất giữ hàng đều là không cho chữ xuống dòng. Ai cần đọc nguyên dòng thì mở chi
-   tiết; ai chấp nhận đánh đổi thì bật "Xuống dòng" trong hộp Tuỳ chọn. */
-.lrs-td.msg {
-  max-width: 560px;
-}
-
-.lrs-td.wrap {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.lrs-td-ix {
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Cụm nút điều hướng NỔI ở góc dưới phải khung bảng. Cùng luật với nút đọc thêm:
-   `absolute` nên không chiếm ô layout, mờ khi rảnh để không tranh chỗ với chính
-   những dòng log nó giúp đi tới. Đặt bên PHẢI để không đụng nút đọc thêm ở giữa. */
-.lrs-nav {
-  position: absolute;
-  right: 14px;
-  bottom: 10px;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.lrs-navbtn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bgEl);
-  color: var(--textDim);
-  box-shadow: var(--shadow-md);
-  opacity: 0.4;
-  cursor: pointer;
-  transition:
-    opacity 0.15s,
-    color 0.15s;
-}
-
-.lrs-navbtn:hover {
-  opacity: 1;
-  color: var(--text);
-}
-
-.lrs-navic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-/* Sprite không có mũi tên LÊN — xoay mũi tên xuống. */
-.lrs-navic.up {
-  transform: rotate(180deg);
-}
-
-.lrs-xtd {
-  padding: 10px 12px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bgInput);
-}
-</style>

@@ -1,9 +1,12 @@
 <template>
-  <section class="page on sessions-page" data-page="sessions">
+  <section class="flex min-w-0 flex-1 flex-col overflow-hidden" data-page="sessions">
     <!-- VSCode-style project tab strip: one tab per opened project; selecting a tab
          filters the list below (store.tabSessions) + restores its last-viewed session. -->
-    <SessionTabBar />
-    <div class="md">
+    <SessionTabBar class="flex-none" />
+    <!-- `.md`: app-shell.css đọc `[data-page='sessions'] .md > .detail` để chừa chỗ dock
+         terminal dưới SessionDetail — giữ class tới khi layout chuyển rule đó.
+         hook-ok: app-shell.css `[data-page='sessions'] .md > .detail` -->
+    <div class="md relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <!-- Collapsed → hidden with v-show, not v-if: the list keeps its transient state
            (search text, per-group page) and its cross-session search results across a
            collapse, and expanding is instant. In compact mode the list is an off-canvas
@@ -20,7 +23,10 @@
            active tab reachable — expand button on top, then one status icon per
            session; tooltip carries the title, click selects. Rendered only in the
            wide layout — compact mode uses the off-canvas drawer instead. -->
-      <div v-if="listHidden" class="listrail">
+      <div
+        v-if="listHidden"
+        class="flex w-10 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r bg-background py-2 [scrollbar-width:none]"
+      >
         <Tooltip>
           <TooltipTrigger as-child>
             <Button
@@ -38,25 +44,26 @@
         <Separator class="my-1" />
         <Tooltip v-for="s in store.tabSessions.slice(0, 6)" :key="s.id">
           <TooltipTrigger as-child>
-            <button
-              class="lritem"
-              :class="{ on: s.id === store.activeId }"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="shrink-0 text-muted-foreground"
+              :class="{ 'bg-selected text-foreground': s.id === store.activeId }"
               :aria-label="s.title"
               @click="store.setActive(s.id)"
             >
-              <component
-                :is="RAIL_META[s.status].icon"
-                :class="['lrico', RAIL_META[s.status].cls]"
-              />
-            </button>
+              <component :is="RAIL_META[s.status].icon" :class="RAIL_META[s.status].cls" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="right">{{ s.title }}</TooltipContent>
         </Tooltip>
       </div>
+      <!-- Grip kéo đổi bề rộng list; ở chế độ hẹp list là drawer nên ẩn grip. -->
       <div
         v-if="!listHidden"
-        class="rsz"
-        :class="{ drag: listDragging }"
+        role="separator"
+        class="relative w-1.5 shrink-0 cursor-col-resize self-stretch after:absolute after:inset-y-0 after:left-0.5 after:w-px after:bg-border hover:after:w-0.5 hover:after:bg-ring"
+        :class="{ hidden: compact, 'after:w-0.5 after:bg-ring': listDragging }"
         :title="t('sessions.resizeList')"
         @pointerdown="onListResize"
       />
@@ -84,10 +91,14 @@
           :session="store.active"
         />
         <SessionDetail v-else-if="store.active" :key="store.active.id" :session="store.active" />
-        <div v-else class="detail">
-          <div class="empty">
-            <span class="ei"><Icon name="sessions" style="width: 22px; height: 22px" /></span>
-            <div class="et">
+        <div v-else class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          <div
+            class="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"
+          >
+            <span class="grid size-12 place-items-center rounded-xl border bg-card">
+              <Icon name="sessions" class="size-5" />
+            </span>
+            <div class="text-lg">
               {{ t('sessions.empty.title') }}
               <br />
               {{ t('sessions.empty.subtitle') }}
@@ -141,7 +152,7 @@ const listHidden = computed(() => listCollapsed.value && !compact.value)
 // Status→icon cho rail — cùng map STATUS_META của SessionListItem (giữ đồng bộ).
 const RAIL_META: Record<SessionStatus, { icon: typeof CircleCheck; cls: string }> = {
   idle: { icon: FileText, cls: 'text-muted-foreground' },
-  streaming: { icon: Loader2, cls: 'text-primary lrspin' },
+  streaming: { icon: Loader2, cls: 'text-primary animate-spin' },
   awaiting: { icon: CircleHelp, cls: 'text-warning' },
   done: { icon: CircleCheck, cls: 'text-success' },
   error: { icon: CircleX, cls: 'text-destructive' },
@@ -156,80 +167,3 @@ onActivated(publishInset)
 onDeactivated(clearInset)
 onUnmounted(clearInset)
 </script>
-
-<style scoped>
-/* The global `.page.on` is a flex ROW; this page stacks the tab strip above the
-   list+detail row, so make its own page a column. The tab strip is fixed-height
-   (flex:0 0 auto, set in SessionTabBar); `.md` fills the rest. */
-.sessions-page.page {
-  flex-direction: column;
-}
-
-/* shadcn token pass (alias bridge): the empty-state tile reads as a raised card,
-   copy in muted-foreground; the resize handle's active/hover line uses --ring
-   (the emerald-42% accent border) instead of a solid accent stripe. */
-.sessions-page .empty .ei {
-  background: var(--card);
-  border-color: var(--border);
-  color: var(--muted-foreground);
-}
-.sessions-page .empty .et {
-  color: var(--muted-foreground);
-}
-.sessions-page .rsz:hover::after,
-.sessions-page .rsz.drag::after {
-  background: var(--ring);
-}
-
-/* Collapsed list → icon rail (proto: w-10 flex-col items-center gap-1 border-r
-   bg-background py-2). Sessions can exceed the rail's height — scroll the item
-   column, scrollbar hidden since it would eat most of a 40px strip. */
-.listrail {
-  width: 40px;
-  flex: 0 0 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0;
-  border-right: 1px solid var(--border);
-  background: var(--background);
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.lritem {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease);
-}
-.lritem:hover {
-  background: var(--accent-wash);
-}
-.lritem.on {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.lritem .lrico {
-  width: 14px;
-  height: 14px;
-}
-/* Loader2 spin — animate-spin của proto; giữ keyframes cục bộ để không phụ thuộc
-   tailwind utility trong trang không-dùng-tailwind này. */
-.lritem .lrspin {
-  animation: lrspin 1s linear infinite;
-}
-@keyframes lrspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

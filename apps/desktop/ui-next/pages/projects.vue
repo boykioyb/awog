@@ -1,6 +1,7 @@
 <template>
-  <section class="page on" data-page="projects">
-    <div class="md libwrap">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="projects">
+    <!-- relative: neo drawer list (ProjectList) ở chế độ hẹp. -->
+    <div class="relative flex min-w-0 flex-1 overflow-hidden">
       <ProjectList
         :projects="projects"
         :selected-id="selected?.id ?? null"
@@ -20,12 +21,14 @@
         @install-template="openInstallTemplate"
         @imported="onImported"
       />
-      <div v-else class="detail">
-        <div class="empty">
-          <span class="ei">
-            <Icon name="projects" style="width: var(--icon-lg); height: var(--icon-lg)" />
+      <div v-else class="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <div
+          class="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center text-muted-foreground"
+        >
+          <span class="grid size-12 place-items-center rounded-xl border bg-card">
+            <Icon name="projects" class="size-5" />
           </span>
-          <div class="et">{{ t('projects.empty') }}</div>
+          <div class="text-lg">{{ t('projects.empty') }}</div>
           <Button variant="default" size="sm" @click="openCreate">
             <Icon name="plus" />
             {{ t('projects.list.new') }}

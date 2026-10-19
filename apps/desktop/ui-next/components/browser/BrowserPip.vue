@@ -9,16 +9,29 @@
        MutationObserver + ResizeObserver sẵn có của useEmbeddedBrowser nudge →
        sync → setBounds. PiP không cần đường geometry riêng nào. -->
   <Teleport to="body">
+    <!-- Khung DOM 5px ở mép phải + dưới (pr-1.25 pb-1.25): vùng view dừng trước mép
+         card nên dải resize đặt ở đó không bao giờ nằm dưới view native (view vẽ trên
+         DOM). Bonus: view vuông góc không còn đè lên bo góc dưới của card.
+         Kéo/resize sửa style mỗi pointermove — transition trên geometry sẽ làm card
+         chạy sau con trỏ, nên chỉ animate màu/bóng.
+         Thu nhỏ = chip neo góc: không còn view nên bỏ khung 5px, giới hạn bề ngang
+         để title dài không kéo chip thành thanh. -->
     <div
       v-if="open"
-      class="bpip"
-      :class="{ dragging, min: minimized }"
+      class="fixed z-96 flex flex-col overflow-hidden rounded-xl border bg-card shadow-lg transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none"
+      :class="[
+        dragging && 'border-selected-border select-none',
+        minimized ? 'max-w-60 p-0' : 'pr-1.25 pb-1.25',
+      ]"
       :style="cardStyle"
       role="dialog"
       :aria-label="t('browser.pip.title')"
     >
       <header
-        class="bpip-bar"
+        class="flex shrink-0 touch-none items-center gap-1.5 bg-background px-2 py-1.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+        :class="
+          minimized ? 'cursor-default' : ['border-b', dragging ? 'cursor-grabbing' : 'cursor-grab']
+        "
         tabindex="0"
         role="group"
         :aria-label="t('browser.pip.move')"
@@ -28,83 +41,101 @@
         @dblclick="onBarDblclick"
       >
         <div
-          class="bpip-lead"
-          :class="{ clickable: minimized }"
+          class="flex min-w-0 flex-1 items-center gap-1.5"
+          :class="minimized && 'cursor-pointer'"
           :title="minimized ? t('browser.pip.restore') : undefined"
           @click="onLeadClick"
         >
           <Icon
             v-if="activeTab?.loading"
             name="refresh"
-            class="bpip-spin"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
+            class="size-3 shrink-0 animate-spin text-faint motion-reduce:animate-none"
           />
           <img
             v-else-if="favicon"
-            class="bpip-fav"
+            class="size-3 shrink-0 rounded-sm"
             :src="favicon"
             alt=""
             draggable="false"
             @error="favBroken = true"
           />
-          <Icon
-            v-else
-            name="globe"
-            class="bpip-favicon"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-          <span class="bpip-title" :title="activeTab?.url">{{ title }}</span>
+          <Icon v-else name="globe" class="size-3 shrink-0 text-faint" />
+          <span
+            class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+            :class="minimized && 'max-w-32.5'"
+            :title="activeTab?.url"
+          >
+            {{ title }}
+          </span>
         </div>
-        <button
-          type="button"
-          class="bpip-btn"
+        <!-- hook-ok: `.bpip-btn` được onBarDblclick đọc qua closest() để bấm đúp nút
+             không bị hiểu là bấm đúp thanh tiêu đề. -->
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="bpip-btn size-6 shrink-0 text-muted-foreground"
           :title="t(minimized ? 'browser.pip.restore' : 'browser.pip.minimize')"
           :aria-label="t(minimized ? 'browser.pip.restore' : 'browser.pip.minimize')"
           @pointerdown.stop
           @click="toggleMinimize"
         >
-          <Icon
-            :name="minimized ? 'maximize' : 'minimize'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-        <button
+          <Icon :name="minimized ? 'maximize' : 'minimize'" />
+        </Button>
+        <!-- hook-ok: closest('.bpip-btn') trong onBarDblclick. -->
+        <Button
           v-if="!minimized"
-          type="button"
-          class="bpip-btn"
+          variant="ghost"
+          size="iconSm"
+          class="bpip-btn size-6 shrink-0 text-muted-foreground"
           :title="t('browser.pip.actions')"
           :aria-label="t('browser.pip.actions')"
           @pointerdown.stop
           @click.stop="openMenu"
         >
-          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          type="button"
-          class="bpip-btn"
+          <Icon name="dots" />
+        </Button>
+        <!-- hook-ok: closest('.bpip-btn') trong onBarDblclick. -->
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="bpip-btn size-6 shrink-0 text-muted-foreground"
           :title="t('browser.pip.close')"
           :aria-label="t('browser.pip.close')"
           @pointerdown.stop
           @click="dismissPip"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </header>
-      <div v-if="error && !minimized" class="bpip-err">{{ error }}</div>
-      <div v-if="!minimized" ref="viewportEl" class="bpip-view">
-        <img v-if="frozen" class="bpip-frozen" :src="frozen" alt="" />
-        <div v-if="!available" class="bpip-empty">
+      <div
+        v-if="error && !minimized"
+        class="shrink-0 border-b bg-destructive/10 px-2.5 py-1 text-xs text-destructive"
+      >
+        {{ error }}
+      </div>
+      <div v-if="!minimized" ref="viewportEl" class="relative flex-1 overflow-hidden bg-background">
+        <!-- Frame đông cứng trong lúc một overlay DOM bắt view native ẩn (menu ⋯/⋮ của
+             chính card, dialog import…) — cùng cơ chế `frozen` của useEmbeddedBrowser. -->
+        <img
+          v-if="frozen"
+          class="pointer-events-none absolute inset-0 size-full object-fill"
+          :src="frozen"
+          alt=""
+        />
+        <div
+          v-if="!available"
+          class="flex h-full flex-col items-center justify-center gap-1.5 p-4 text-center text-sm text-faint"
+        >
           {{ t('sessions.workspace.browser.unavailable') }}
         </div>
         <!-- Tab trắng → empty-state thắng: "hiện ở chỗ khác" vô nghĩa khi tab
              chưa có trang nào. -->
-        <div v-else-if="empty" class="bpip-empty">
-          <Icon
-            name="globe"
-            class="bpip-emptyicn"
-            style="width: var(--icon-lg); height: var(--icon-lg)"
-          />
-          <div class="bpip-emptytext">{{ t('browser.pip.empty') }}</div>
+        <div
+          v-else-if="empty"
+          class="flex h-full flex-col items-center justify-center gap-1.5 p-4 text-center text-sm text-faint"
+        >
+          <Icon name="globe" class="size-5" />
+          <div>{{ t('browser.pip.empty') }}</div>
         </div>
         <BrowserElsewhere
           v-else-if="elsewhere"
@@ -113,27 +144,33 @@
         />
       </div>
       <!-- Tay resize nằm TRÊN khung DOM 5px của card (padding phải/dưới), không
-           chồng lên .bpip-view — view native vẽ trên DOM nên bất kỳ handle nào
+           chồng lên vùng view — view native vẽ trên DOM nên bất kỳ handle nào
            đặt lên rect của nó đều vừa vô hình vừa chết click. Mép phải = ngang,
            mép dưới = dọc, góc = cả hai (giống border-resize của cửa sổ frameless).
            Góc giữ keyboard cho người không kéo được chuột; hai mép là pointer-only
-           (aria-hidden) vì lặp chức năng. -->
+           (aria-hidden) vì lặp chức năng.
+           Mép phải bắt đầu DƯỚI thanh tiêu đề (cao ~37px: py-1.5 + nút 24px + hairline) để
+           không ăn hit-area của thanh / nút ×. -->
       <div
         v-if="!minimized"
-        class="bpip-rsz e"
+        class="absolute top-9.5 right-0 bottom-1.25 w-1.25 cursor-ew-resize touch-none"
         aria-hidden="true"
         @pointerdown="(ev) => onResizeStart(ev, 'e')"
       />
       <div
         v-if="!minimized"
-        class="bpip-rsz s"
+        class="absolute right-1.25 bottom-0 left-0 h-1.25 cursor-ns-resize touch-none"
         aria-hidden="true"
         @pointerdown="(ev) => onResizeStart(ev, 's')"
       />
+      <!-- Grip góc 14px: 9px trên-trái chồng lên view là vùng chết, phần "sống" là chữ L
+           trong khung 5px. Hai gạch chéo gợi ý kéo vẽ bằng viền của before/after hug
+           góc — chỉ pixel trong khung 5px mới hiện. -->
+      <!-- raw-ok: grip kéo resize góc -->
       <button
         v-if="!minimized"
         type="button"
-        class="bpip-rsz se"
+        class="absolute right-0 bottom-0 size-3.5 cursor-nwse-resize touch-none border-0 bg-transparent p-0 before:absolute before:right-0 before:bottom-0 before:size-1 before:border-r-[1.5px] before:border-b-[1.5px] before:border-input after:absolute after:right-0 after:bottom-0 after:size-2 after:border-r-[1.5px] after:border-b-[1.5px] after:border-input after:opacity-55 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
         :aria-label="t('browser.pip.resize')"
         :title="t('browser.pip.resize')"
         @pointerdown="(ev) => onResizeStart(ev, 'se')"
@@ -398,225 +435,3 @@ const onResizeKeydown = (ev: KeyboardEvent): void => {
   }
 }
 </script>
-
-<style scoped>
-.bpip {
-  position: fixed;
-  z-index: 96;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--r-card);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  /* Khung DOM 5px ở mép phải + dưới: .bpip-view dừng trước mép card nên dải
-     resize đặt ở đó không bao giờ nằm dưới view native (view vẽ trên DOM).
-     Bonus: view vuông góc không còn đè lên bo góc dưới của card. */
-  padding-right: 5px;
-  padding-bottom: 5px;
-  /* Kéo/resize sửa style mỗi pointermove — transition trên geometry sẽ làm card
-     chạy sau con trỏ, nên chỉ animate màu/bóng. */
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-.bpip.dragging {
-  user-select: none;
-  border-color: var(--accentBorder);
-}
-/* Thu nhỏ = chip neo góc: không còn view nên bỏ luôn khung 5px hai cạnh, header
-   khép kín, giới hạn bề ngang để title dài không kéo chip thành thanh. */
-.bpip.min {
-  padding: 0;
-  max-width: 240px;
-}
-.bpip.min .bpip-bar {
-  border-bottom: none;
-  cursor: default;
-}
-.bpip-lead {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-.bpip-lead.clickable {
-  cursor: pointer;
-}
-.bpip.min .bpip-title {
-  max-width: 130px;
-}
-.bpip-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-  cursor: grab;
-  flex-shrink: 0;
-  touch-action: none;
-}
-.bpip.dragging .bpip-bar {
-  cursor: grabbing;
-}
-.bpip-bar:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.bpip-fav {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  border-radius: var(--r-xs);
-  flex-shrink: 0;
-}
-.bpip-favicon,
-.bpip-spin {
-  color: var(--textFaint);
-  flex-shrink: 0;
-}
-.bpip-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.bpip-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: var(--r-xs);
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.bpip-btn:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.bpip-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.bpip-err {
-  padding: 4px 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--danger);
-  background: var(--dangerBg);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.bpip-view {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background: var(--bg);
-}
-/* Frame đông cứng trong lúc một overlay DOM bắt view native ẩn (menu ⋯/⋮ của
-   chính card, dialog import…) — cùng cơ chế `frozen` của useEmbeddedBrowser. */
-.bpip-frozen {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  pointer-events: none;
-}
-.bpip-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 100%;
-  padding: 16px;
-  text-align: center;
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.bpip-emptyicn {
-  color: var(--textFaint);
-}
-.bpip-rsz {
-  position: absolute;
-  padding: 0;
-  border: none;
-  background: transparent;
-  touch-action: none;
-}
-/* Mép phải bắt đầu DƯỚI thanh tiêu đề để không ăn hit-area của nút ×. */
-.bpip-rsz.e {
-  top: 30px;
-  right: 0;
-  bottom: 5px;
-  width: 5px;
-  cursor: ew-resize;
-}
-.bpip-rsz.s {
-  left: 0;
-  right: 5px;
-  bottom: 0;
-  height: 5px;
-  cursor: ns-resize;
-}
-/* Góc 14px: 9px phía trên-trái chồng lên view (vùng chết), phần "sống" là chữ L
-   trong khung 5px — đủ cho kéo chéo, và là chỗ duy nhất vẽ được affordance. */
-.bpip-rsz.se {
-  right: 0;
-  bottom: 0;
-  width: 14px;
-  height: 14px;
-  cursor: nwse-resize;
-}
-/* Hai gạch chéo gợi ý kéo, vẽ bằng border trên pseudo-element hug góc — chỉ
-   những pixel nằm trong khung DOM 5px mới hiện, nên gạch phải nằm sát mép. */
-.bpip-rsz.se::before,
-.bpip-rsz.se::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-right: 1.5px solid var(--borderStrong);
-  border-bottom: 1.5px solid var(--borderStrong);
-}
-.bpip-rsz.se::before {
-  width: 4px;
-  height: 4px;
-}
-.bpip-rsz.se::after {
-  width: 8px;
-  height: 8px;
-  opacity: 0.55;
-}
-.bpip-rsz.se:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.bpip-spin {
-  animation: bpip-spin 1s linear infinite;
-}
-@keyframes bpip-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bpip {
-    transition: none;
-  }
-  .bpip-spin {
-    animation: none;
-  }
-}
-</style>

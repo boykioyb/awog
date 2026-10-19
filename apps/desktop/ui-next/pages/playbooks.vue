@@ -2,7 +2,7 @@
   <!-- Route cũ, giữ lại để deep-link và bookmark không chết.
        Màn Kế hoạch đã chuyển vào `/infra` (nhóm "Thay đổi") ngày 2026-09-15 — xem
        `components/infra/playbook/InfraPlaybooks.vue`. -->
-  <section class="page on" data-page="playbooks" />
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="playbooks" />
 </template>
 
 <script setup lang="ts">

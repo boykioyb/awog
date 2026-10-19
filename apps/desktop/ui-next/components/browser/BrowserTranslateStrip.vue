@@ -1,43 +1,62 @@
 <template>
-  <div v-if="show" class="btstrip">
-    <div class="bthead">
-      <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="bttitle">{{ t('translate.title') }}</span>
-      <div class="btlangs">
-        <button
+  <div v-if="show" class="shrink-0 bg-card shadow-[inset_0_-1px_0_var(--color-border)]">
+    <div class="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+      <Icon name="book" class="size-3.5" />
+      <span class="min-w-0 flex-1 truncate">{{ t('translate.title') }}</span>
+      <!-- Accent-tint cho bậc đang chọn (không fill xám — quy ước segmented control).
+           Đổi ngôn ngữ đi qua @click của từng mục: `setLang` là nguồn duy nhất của
+           `lang`, ToggleGroup chỉ phản chiếu (bấm lại mục đang chọn không bỏ chọn). -->
+      <ToggleGroup type="single" :model-value="lang" :spacing="0.5" class="flex-none">
+        <ToggleGroupItem
           v-for="l in TRANSLATE_LANGS"
           :key="l"
-          type="button"
-          class="btlang"
-          :class="{ on: lang === l }"
+          :value="l"
+          class="h-auto min-w-0 border border-transparent px-1.5 py-0.5 text-xs font-normal text-muted-foreground hover:bg-accent hover:text-foreground data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:text-foreground"
           :title="LANG_LABEL[l]"
           @click="setLang(l)"
         >
           {{ l.toUpperCase() }}
-        </button>
-      </div>
-      <button type="button" class="btx" :title="t('common.close')" @click="close">
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-6 flex-none text-muted-foreground"
+        :title="t('common.close')"
+        :aria-label="t('common.close')"
+        @click="close"
+      >
+        <Icon name="x" />
+      </Button>
     </div>
 
-    <div class="btbody">
-      <div v-if="loading" class="btstatus">{{ t('translate.loading') }}</div>
-      <div v-else-if="error" class="btstatus err">
+    <!-- Dải, không phải khung đọc: cao vừa vài dòng rồi cuộn. -->
+    <div class="max-h-33 overflow-y-auto px-2.5 pb-2">
+      <div v-if="loading" class="flex items-center gap-2 text-sm text-muted-foreground">
+        {{ t('translate.loading') }}
+      </div>
+      <div v-else-if="error" class="flex items-center gap-2 text-sm text-destructive">
         <span>{{ t('translate.error') }}</span>
-        <button type="button" class="btbtn" @click="retry">{{ t('translate.retry') }}</button>
+        <Button variant="outline" size="xs" @click="retry">{{ t('translate.retry') }}</Button>
       </div>
-      <div v-else class="btresult">{{ result }}</div>
+      <div
+        v-else
+        class="text-sm leading-relaxed break-words whitespace-pre-wrap text-foreground select-text"
+      >
+        {{ result }}
+      </div>
     </div>
 
-    <div v-if="!loading && !error && result" class="btfoot">
-      <button type="button" class="btbtn" @click="copyResult">
-        <Icon
-          :name="copied ? 'check' : 'copy'"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
-        />
+    <div v-if="!loading && !error && result" class="flex justify-end px-2 pb-2">
+      <Button
+        variant="outline"
+        size="xs"
+        class="gap-1 text-muted-foreground [&_svg]:size-3"
+        @click="copyResult"
+      >
+        <Icon :name="copied ? 'check' : 'copy'" />
         {{ copied ? t('translate.copied') : t('translate.copy') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -82,113 +101,3 @@ const {
 // Chỉ hiện cho nguồn 'browser' — selection trong DOM vẫn là việc của popover.
 const show = computed(() => active.value?.surface === 'browser')
 </script>
-
-<style scoped>
-.btstrip {
-  flex-shrink: 0;
-  box-shadow: inset 0 -1px 0 var(--border);
-  background: var(--bgEl);
-}
-.bthead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.bttitle {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.btlangs {
-  display: flex;
-  gap: 2px;
-  flex: 0 0 auto;
-}
-/* Accent-tint cho bậc đang chọn (không fill xám — quy ước segmented control). */
-.btlang {
-  padding: 2px 7px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.btlang:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.btlang.on {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-.btx {
-  flex: 0 0 auto;
-  display: flex;
-  padding: 3px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.btx:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.btbody {
-  padding: 0 10px 8px;
-  /* Dải, không phải khung đọc: cao vừa vài dòng rồi cuộn. */
-  max-height: 132px;
-  overflow-y: auto;
-}
-.btresult {
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  word-break: break-word;
-  user-select: text;
-  white-space: pre-wrap;
-}
-.btstatus {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.btstatus.err {
-  color: var(--danger);
-}
-.btfoot {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 8px 7px;
-}
-.btbtn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: var(--r-btn);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.btbtn:hover {
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-</style>

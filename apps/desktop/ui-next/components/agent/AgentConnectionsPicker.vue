@@ -1,21 +1,26 @@
 <template>
   <!-- Connections (MCP) whitelist — checkbox list + search (auto when >8
-       rows), styles global (.awp-*). undefined model = inherit session MCP (no
+       rows), khung dùng chung AgentPickList / AgentPickRow. undefined model = inherit session MCP (no
        per-agent filter). Any toggle switches the agent into explicit-whitelist
        mode; emptying it returns to inherit (the serializer drops empty arrays
        anyway). -->
   <div>
-    <Input v-if="searchable" v-model="q" :placeholder="t('common.search')" class="awp-search" />
-    <div class="awp-list">
-      <label v-for="s in filteredServers" :key="s.id" class="awp-row" :class="{ on: isOn(s.id) }">
-        <input type="checkbox" :checked="isOn(s.id)" class="awp-cbx" @change="toggle(s.id)" />
-        <span class="awp-name mono">{{ s.name }}</span>
-      </label>
-      <div v-if="filteredServers.length === 0" class="awp-empty">
-        {{ t('agents.editor.connectionsEmpty') }}
-      </div>
-    </div>
-    <div class="awp-hint">{{ t('agents.editor.connectionsHint') }}</div>
+    <Input v-if="searchable" v-model="q" :placeholder="t('common.search')" class="mb-2" />
+    <AgentPickList
+      :is-empty="filteredServers.length === 0"
+      :empty-text="t('agents.editor.connectionsEmpty')"
+    >
+      <AgentPickRow
+        v-for="s in filteredServers"
+        :key="s.id"
+        :checked="isOn(s.id)"
+        @toggle="toggle(s.id)"
+      >
+        <!-- mono-ok: id server MCP -->
+        <span class="font-mono text-sm font-medium text-foreground">{{ s.name }}</span>
+      </AgentPickRow>
+    </AgentPickList>
+    <div class="text-xs text-dim">{{ t('agents.editor.connectionsHint') }}</div>
   </div>
 </template>
 

@@ -153,14 +153,32 @@ splitter để chỉnh tỉ lệ.
 
 ### Snippets theo project (rail cạnh terminal)
 
-Thư viện lệnh tái dùng cho terminal global, **tách riêng** khỏi SSH snippets (quyết định
-sản phẩm: 2 thư viện, không lẫn). Store [terminalSnippets.ts](../../apps/desktop/ui-next/stores/terminalSnippets.ts)
-— renderer-only (localStorage `awog-terminal-snippets`, không qua IPC, không secret). Mỗi
+Thư viện lệnh tái dùng cho terminal (dock toàn cục **và** dock Terminal của Workbench),
+**tách riêng** khỏi SSH snippets (quyết định sản phẩm: 2 thư viện, không lẫn). Mỗi
 `TerminalSnippet { id, name, command, project }` với `project: string | null` (null = tầng
-**Global** dùng chung; else khóa project).
+**Global** dùng chung; else id project).
+
+- **Nguồn dữ liệu = sidecar** (2026-10-19): file `~/.awog/terminal-snippets.json`
+  ([terminal/snippets.ts](../../apps/desktop/sidecar/src/terminal/snippets.ts)), RPC
+  `terminalSnippets.list/upsert/delete/import`. Mỗi lần ghi phát `terminalSnippets.changed`;
+  store [terminalSnippets.ts](../../apps/desktop/ui-next/stores/terminalSnippets.ts) tải lại.
+  Không ghi vào `{project}/.awog` vì snippet là tiện ích của máy, không thuộc repo.
+- **Chuyển dữ liệu cũ:** lần đầu chạy bản mới, thư viện trong localStorage
+  (`awog-terminal-snippets`) được gửi qua `terminalSnippets.import` — sidecar chỉ nhận khi
+  file còn rỗng (reload / hai cửa sổ không nhân đôi) — rồi mới xoá khỏi localStorage.
+  Ngoài Electron (dev trên trình duyệt) không có sidecar ⇒ store dùng localStorage như cũ.
+- **Tool cho agent** ([terminal-snippet-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/terminal-snippet-tools.ts)):
+  `terminal_snippet_list` · `_save` · `_delete` · `_run`, chỉ cấp cho chat session, đi
+  chung server `awogterm` với `read_terminal` trên nhánh Claude SDK (Codex nhận qua cầu
+  `dynamicTools`). Phạm vi: project của phiên + Global — không thấy / không đụng snippet
+  của project khác. Cổng quyền: `save`/`delete` gate như `wiki_write`, `run` gate như
+  `Bash` (gõ lệnh vào shell người dùng đang mở, ghi thẳng PTY qua terminal manager vào
+  terminal mở gần nhất của workspace hoặc `terminalId`); plan mode chặn cả ba; `list` không
+  gate. Output của lệnh vừa chạy đọc lại bằng `read_terminal`.
 
 - **Rail** [TerminalSnippetsRail.vue](../../apps/desktop/ui-next/components/shell/TerminalSnippetsRail.vue):
-  panel dọc cạnh terminal body (mở/đóng bằng nút Snippets ở header dock, state
+  panel dọc cạnh terminal body — ở dock toàn cục và ở `DockTerminal` của Workbench (nút
+  Snippets trên `DockBar`, chỉ hiện ở view Terminal). Mở/đóng bằng nút Snippets, state
   `useGlobalTerminal.snippetsOpen` persist localStorage). Hiện snippet của project hiện tại
   **+** tầng Global (project-first, badge "Global"). Mỗi row: Run / Copy / Edit / Delete.
 - **Chạy:** rail emit `run(command)` → `GlobalTerminalHost` gọi `WorkspaceTerminal.runText(command + '\n')`

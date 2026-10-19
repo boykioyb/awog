@@ -2,22 +2,30 @@
   <div v-if="thread" class="flex min-h-0 min-w-0 flex-1 flex-col">
     <SlackThreadHeader :thread="thread" />
 
-    <div v-if="thread.error" class="slk-err">
+    <div
+      v-if="thread.error"
+      class="flex items-center gap-2 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+    >
       <Icon name="alert" />
       {{ t(`slack.thread.error.${thread.error}`) }}
     </div>
 
     <div class="relative flex min-h-0 flex-1 flex-col">
-      <div ref="bodyRef" class="slk-body" @scroll.passive="onScroll">
-        <div v-if="!detail" class="slk-empty">
+      <div
+        ref="bodyRef"
+        class="min-h-0 flex-1 overflow-y-auto pb-2 pt-4"
+        @scroll.passive="onScroll"
+      >
+        <div v-if="!detail" :class="EMPTY">
           {{ ctx.store.detailLoading ? t('slack.thread.loading') : t('slack.thread.notLoaded') }}
         </div>
         <template v-else>
           <template v-for="row in ctx.rows.value" :key="row.m.ts">
             <SlackMessage :row="row" :team-id="thread.teamId" :project-id="thread.projectId" />
             <template v-if="row.m.isParent">
-              <div class="slk-divider">
+              <div class="mx-5 my-2 flex items-center gap-2.5 text-xs text-dim">
                 <span>{{ t('slack.thread.replies', { n: thread.replyCount }) }}</span>
+                <Separator class="flex-1" />
               </div>
               <div v-if="ctx.store.olderCursor" class="flex justify-center pb-2">
                 <Button
@@ -35,13 +43,17 @@
           </template>
         </template>
       </div>
-      <!-- Nhảy nhanh: chỉ hiện nút khi KHÔNG đang ở đúng mép đó. -->
-      <div v-if="detail && (!atTop || !atBottom)" class="slk-jump">
+      <!-- Nhảy nhanh: chỉ hiện nút khi KHÔNG đang ở đúng mép đó. Nổi góc dưới phải khung
+           đọc, trên ô soạn. -->
+      <div
+        v-if="detail && (!atTop || !atBottom)"
+        class="absolute bottom-3 right-4 flex flex-col gap-1.5"
+      >
         <Button
           v-if="!atTop"
           variant="outline"
           size="iconMd"
-          class="slk-jump-btn"
+          class="bg-sidebar shadow-md"
           :title="t('slack.thread.jumpOldest')"
           :aria-label="t('slack.thread.jumpOldest')"
           @click="jumpTo('top')"
@@ -52,7 +64,7 @@
           v-if="!atBottom"
           variant="outline"
           size="iconMd"
-          class="slk-jump-btn"
+          class="bg-sidebar shadow-md"
           :title="t('slack.thread.jumpLatest')"
           :aria-label="t('slack.thread.jumpLatest')"
           @click="jumpTo('bottom')"
@@ -64,8 +76,8 @@
 
     <SlackComposer v-if="!thread.error" :thread="thread" />
   </div>
-  <div v-else class="slk-empty flex-1">
-    <Icon name="message" class="slk-empty-ic" />
+  <div v-else :class="[EMPTY, 'flex-1']">
+    <Icon name="message" class="size-6 text-faint" />
     <div>{{ t('slack.thread.pick') }}</div>
   </div>
 </template>
@@ -84,6 +96,8 @@ import { useSlackCtx } from '~/composables/useSlackManager'
 
 // Cách mép bao nhiêu px thì coi là "ở đầu" (nạp cũ hơn) / "ở đáy" (bám reply mới).
 const EDGE_PX = 120
+
+const EMPTY = 'flex flex-col items-center justify-center gap-2 px-4 py-10 text-sm text-dim'
 
 const { t } = useI18n()
 const ctx = useSlackCtx()
@@ -144,66 +158,3 @@ watch(
   { flush: 'pre' },
 )
 </script>
-
-<style scoped>
-.slk-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px 0 8px;
-}
-/* Nút nhảy nổi góc dưới phải khung đọc, trên ô soạn. */
-.slk-jump {
-  position: absolute;
-  right: 16px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.slk-jump-btn {
-  background: var(--bgPanel);
-  box-shadow: var(--shadow-md);
-}
-.slk-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 8px 20px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.slk-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-.slk-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 40px 16px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.slk-empty-ic {
-  width: var(--icon-xl);
-  height: var(--icon-xl);
-  color: var(--textFaint);
-}
-.slk-err {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--dangerBg);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

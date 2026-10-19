@@ -1,23 +1,22 @@
 <template>
-  <div class="ghtree">
+  <div>
     <template v-for="node in nodes" :key="node.path">
       <!-- Folder: collapsible (default open). -->
       <template v-if="node.type === 'dir'">
-        <button
-          type="button"
-          class="ghtrow ghtdir"
+        <Button
+          variant="ghost"
+          :class="ROW"
           :style="{ paddingLeft: pad }"
           @click="toggle(node.path)"
         >
           <Icon
             name="chev"
-            class="ghtchev"
-            :class="{ open: !collapsed.has(node.path) }"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
+            class="size-3 flex-none text-dim transition-transform"
+            :class="{ 'rotate-90': !collapsed.has(node.path) }"
           />
-          <Icon name="folder" class="ghtic" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="ghtname">{{ node.name }}</span>
-        </button>
+          <Icon name="folder" class="size-3.5 flex-none text-dim" />
+          <span class="min-w-0 flex-1 truncate font-medium">{{ node.name }}</span>
+        </Button>
         <ProjectGhFileTree
           v-if="!collapsed.has(node.path)"
           :nodes="node.children"
@@ -33,24 +32,26 @@
 
       <!-- File: click to reveal its inline diff. -->
       <template v-else>
-        <button
-          type="button"
-          class="ghtrow ghtfile"
-          :class="{ on: expanded === node.path }"
+        <Button
+          variant="ghost"
+          :class="[ROW, expanded === node.path && 'bg-selected hover:bg-selected']"
           :style="{ paddingLeft: filePad }"
           :title="node.path"
           @click="emit('toggle-file', node.path)"
           @contextmenu.prevent="emit('context-file', $event, node.path)"
         >
-          <Icon name="file" class="ghtic" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="ghtname">{{ node.name }}</span>
-          <span class="ghtstat">
-            <span v-if="node.additions" style="color: var(--add)">+{{ node.additions }}</span>
-            <span v-if="node.deletions" style="color: var(--del)">−{{ node.deletions }}</span>
+          <Icon name="file" class="size-3.5 flex-none text-dim" />
+          <span class="min-w-0 flex-1 truncate">{{ node.name }}</span>
+          <span class="flex flex-none gap-2 text-sm tabular-nums">
+            <span v-if="node.additions" class="text-diff-add">+{{ node.additions }}</span>
+            <span v-if="node.deletions" class="text-diff-del">−{{ node.deletions }}</span>
           </span>
-        </button>
-        <div v-if="inlineDiff && expanded === node.path" class="ghtdiff">
-          <div v-if="diffLoading" class="fd ghtdiff-loading">
+        </Button>
+        <div
+          v-if="inlineDiff && expanded === node.path"
+          class="mt-0.5 mb-1.5 overflow-hidden rounded-md border"
+        >
+          <div v-if="diffLoading" class="px-3 py-2.5 text-sm text-dim">
             {{ t('projects.drawer.diffLoading') }}
           </div>
           <ProjectGhFileDiff v-else :patch="patchFor(node.path)" />
@@ -68,6 +69,7 @@
 // collapse is local per level.
 import { computed, ref } from 'vue'
 import ProjectGhFileDiff from './ProjectGhFileDiff.vue'
+import Button from '~/components/ui/button/Button.vue'
 import type { GhTreeNode } from '~/utils/gh-file-tree'
 import type { GhDiffFile } from '~/composables/useProjectGh'
 
@@ -108,69 +110,11 @@ const pad = computed(() => `${props.depth * 14 + 9}px`)
 // the file icon lines up under its folder's name.
 const filePad = computed(() => `${props.depth * 14 + 9 + 19}px`)
 
+// Hàng cây = cả dòng là một vùng bấm (Button ghost căn trái).
+const ROW =
+  'h-auto w-full justify-start gap-2 rounded-sm py-1 pr-2.5 text-base font-normal text-foreground'
+
 function patchFor(path: string): string {
   return props.diffFiles.find((f) => f.path === path)?.patch ?? ''
 }
 </script>
-
-<style scoped>
-.ghtrow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 5px 10px 5px 9px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  font-size: 1em;
-  border-radius: var(--r-xs);
-}
-.ghtrow:hover {
-  background: var(--bgHover);
-}
-.ghtfile.on {
-  background: var(--bgActive);
-}
-.ghtchev {
-  flex: 0 0 auto;
-  color: var(--textDim);
-  transition: transform 0.12s ease;
-}
-.ghtchev.open {
-  transform: rotate(90deg);
-}
-.ghtic {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.ghtdir .ghtname {
-  font-weight: 550;
-}
-.ghtname {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ghtstat {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 7px;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-}
-.ghtdiff {
-  margin: 2px 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-.ghtdiff-loading {
-  padding: 10px 12px;
-}
-</style>

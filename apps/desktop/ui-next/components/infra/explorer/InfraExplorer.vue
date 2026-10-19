@@ -1,5 +1,7 @@
 <template>
-  <div class="ixe">
+  <!-- Flex chứ không grid: bề rộng cột trái do người dùng kéo, mà grid thì mọi
+       track phải khai báo trước. Tay kéo là một cột thật ở giữa. -->
+  <div class="flex h-full min-h-0 items-stretch overflow-hidden px-4 pt-3 pb-3.5">
     <!-- ── Cột trái: TOÀN BỘ danh mục, theo nhóm việc (2026-09-14) ───────────
          Trước đây cột này chỉ liệt kê dịch vụ ĐÃ GHIM (task 3.8). Yêu cầu mới:
          "đang chỉ hiển thị danh sách pin, tôi muốn hiển thị full danh sách, hiện
@@ -14,18 +16,24 @@
          THU GỌN = KHÔNG VẼ CỘT, không phải "còn thanh ray 44px". Bản trước giữ
          một dải rỗng suốt chiều cao pane để đặt nút mở lại, và người dùng gọi
          đúng tên nó: "1 gap lớn" (ảnh chụp 2026-09-14). Nút mở lại nay nằm ở đầu
-         cột phải (`.ixe-expand`), nơi nó không chiếm chỗ của bảng. -->
-    <aside v-if="!sidebarCollapsed" class="ixe-side" :style="{ width: `${sideW}px` }">
-      <div class="ixe-side-hd">
-        <span class="ixe-side-ttl">{{ t('infra.explorer.side.title') }}</span>
+         cột phải, nơi nó không chiếm chỗ của bảng. -->
+    <aside
+      v-if="!sidebarCollapsed"
+      class="flex min-h-0 shrink-0 flex-col"
+      :style="{ width: `${sideW}px` }"
+    >
+      <div class="flex items-center gap-1.5 pb-1.5">
+        <span class="min-w-0 flex-1 truncate text-xs font-semibold text-dim">
+          {{ t('infra.explorer.side.title') }}
+        </span>
         <Button
           type="button"
           :title="t('infra.explorer.pinned.collapse')"
           :aria-label="t('infra.explorer.pinned.collapse')"
           aria-expanded="true"
-          class="ixe-side-toggle"
+          class="size-6 shrink-0"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="setSidebarCollapsed(true)"
         >
           <Icon name="panel" />
@@ -33,7 +41,7 @@
       </div>
       <!-- Phần cuộn được tách khỏi hàng tiêu đề: danh mục đầy đủ dài hơn một
            màn, mà tiêu đề + nút "Tất cả dịch vụ" thì phải luôn ở trên. -->
-      <div class="ixe-side-body">
+      <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         <!-- Danh mục là một PANE của CHÍNH tab này, không phải tab riêng (2026-09-14:
              "khám phá là page con trong dịch vụ thôi chứ?"). Hai tab ngang hàng —
              một cái là danh mục, một cái là bảng — là hai tab nói về cùng một việc,
@@ -44,7 +52,7 @@
              tiêu đề sẽ là thứ bị cắt chữ. -->
         <Button
           type="button"
-          class="ixe-catalog"
+          class="w-full justify-center"
           variant="outline"
           size="sm"
           @click="emit('open-catalog')"
@@ -53,31 +61,36 @@
           {{ t('infra.explorer.services.open') }}
         </Button>
 
-        <section class="ixe-grp">
-          <button
-            class="ixe-grp-hd"
+        <!-- Một nhóm việc ("Máy chủ & tính toán"). Nhóm ghim cũng dùng đúng khuôn
+             này — nó chỉ khác ở chỗ đứng đầu và lấy dữ liệu từ `pinned`. -->
+        <section class="mt-1.5 flex flex-col gap-px">
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
+            :class="GROUP_HEAD"
             :aria-expanded="!isFolded(PINNED_GROUP)"
             @click="toggleGroup(PINNED_GROUP)"
           >
-            <Icon name="chev" class="ixe-grp-chev" :class="{ open: !isFolded(PINNED_GROUP) }" />
-            <span class="ixe-grp-ttl">{{ t('infra.explorer.pinned.title') }}</span>
-          </button>
+            <Icon name="chev" :class="[CHEV, isFolded(PINNED_GROUP) && '-rotate-90']" />
+            <span class="min-w-0 truncate">{{ t('infra.explorer.pinned.title') }}</span>
+          </Button>
           <template v-if="!isFolded(PINNED_GROUP)">
-            <button
+            <Button
               v-for="s in pinnedEntries"
               :key="`pin:${s.id}`"
-              class="ixe-nav"
-              :class="{ on: entryActive(s) }"
+              variant="ghost"
+              size="sm"
+              :class="[NAV_ROW, entryActive(s) && NAV_ON]"
               :title="isConsoleEntry(s) ? t('infra.explorer.support.hint.console') : t(s.about)"
               type="button"
               @click="onEntry(s)"
             >
-              <span class="ixe-nav-txt">{{ entryLabel(s) }}</span>
-              <Icon v-if="isConsoleEntry(s)" name="external" class="ixe-nav-ic" />
-              <Icon v-else name="pin" class="ixe-nav-pin" />
-            </button>
-            <p v-if="!pinnedEntries.length" class="ixe-side-empty">
+              <span class="min-w-0 flex-1 truncate text-left">{{ entryLabel(s) }}</span>
+              <Icon v-if="isConsoleEntry(s)" name="external" class="text-faint" />
+              <Icon v-else name="pin" class="text-primary" />
+            </Button>
+            <p v-if="!pinnedEntries.length" class="mx-0.5 my-1.5 text-xs text-faint">
               {{ t('infra.explorer.pinned.empty') }}
             </p>
           </template>
@@ -85,46 +98,49 @@
 
         <!-- Cả danh mục, đúng thứ tự nhóm của sidecar ("Máy chủ & tính toán" …
              "Hạ tầng dạng mã"), không xếp lại theo bảng chữ cái. -->
-        <section v-for="g in serviceGroups" :key="g.id" class="ixe-grp">
-          <button
-            class="ixe-grp-hd"
+        <section v-for="g in serviceGroups" :key="g.id" class="mt-1.5 flex flex-col gap-px">
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
+            :class="GROUP_HEAD"
             :aria-expanded="!isFolded(g.id)"
             @click="toggleGroup(g.id)"
           >
-            <Icon name="chev" class="ixe-grp-chev" :class="{ open: !isFolded(g.id) }" />
-            <span class="ixe-grp-ttl">{{ t(`infra.explorer.group.${g.id}`) }}</span>
-          </button>
+            <Icon name="chev" :class="[CHEV, isFolded(g.id) && '-rotate-90']" />
+            <span class="min-w-0 truncate">{{ t(`infra.explorer.group.${g.id}`) }}</span>
+          </Button>
           <template v-if="!isFolded(g.id)">
-            <button
+            <Button
               v-for="s in g.services"
               :key="s.id"
-              class="ixe-nav"
-              :class="{ on: entryActive(s) }"
+              variant="ghost"
+              size="sm"
+              :class="[NAV_ROW, entryActive(s) && NAV_ON]"
               :title="isConsoleEntry(s) ? t('infra.explorer.support.hint.console') : t(s.about)"
               type="button"
               @click="onEntry(s)"
             >
-              <span class="ixe-nav-txt">{{ entryLabel(s) }}</span>
-              <Icon v-if="isConsoleEntry(s)" name="external" class="ixe-nav-ic" />
-              <Icon v-else-if="pinnedServices.includes(s.id)" name="pin" class="ixe-nav-pin" />
-            </button>
+              <span class="min-w-0 flex-1 truncate text-left">{{ entryLabel(s) }}</span>
+              <Icon v-if="isConsoleEntry(s)" name="external" class="text-faint" />
+              <Icon v-else-if="pinnedServices.includes(s.id)" name="pin" class="text-primary" />
+            </Button>
           </template>
         </section>
       </div>
     </aside>
 
-    <!-- Tay kéo giữa cột trái và bảng. Dùng lại `.grsz` của app (cùng tay kéo của
-         Git/Wiki) chứ không vẽ tay cái thứ hai. Ẩn khi thu gọn: kéo một cột đang
-         không hiện thì không có gì để kéo.
+    <!-- Tay kéo giữa cột trái và bảng — cùng hình với tay kéo của Git/Wiki (vạch 1px,
+         hover/kéo thành vạch accent 2px). Ẩn khi thu gọn: kéo một cột đang không
+         hiện thì không có gì để kéo.
 
          `role="separator"` + `tabindex` + mũi tên: tay kéo của app vốn chỉ dùng
          được bằng chuột; ở đây thêm đường bàn phím vì bề rộng này quyết định bảng
          có đọc được hay không, mà không có cách chỉnh nào khác. -->
     <div
       v-if="!sidebarCollapsed"
-      class="grsz ixe-rsz"
-      :class="{ drag: rszDragging }"
+      class="relative mx-1 w-1.5 shrink-0 cursor-col-resize self-stretch after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border hover:after:w-0.5 hover:after:bg-primary focus-visible:outline-hidden focus-visible:after:w-0.5 focus-visible:after:bg-primary"
+      :class="rszDragging && 'after:w-0.5 after:bg-primary'"
       role="separator"
       aria-orientation="vertical"
       :aria-label="t('infra.explorer.pinned.resize')"
@@ -137,16 +153,17 @@
     />
 
     <!-- ── Cột phải: một view ─────────────────────────────────────────────── -->
-    <main class="ixe-main">
+    <main class="flex min-h-0 min-w-0 flex-1 flex-col">
       <!-- Đường mở lại cột dịch vụ sau khi thu gọn. Nằm ở ĐÂY, không nằm trong
            một thanh ray rỗng bên trái: nút này không chiếm chỗ của bảng, và nó
-           vẫn hiện khi chưa chọn view nào (nhánh dưới). -->
+           vẫn hiện khi chưa chọn view nào (nhánh dưới). `self-start` để nút
+           không kéo giãn hết chiều ngang. -->
       <Button
         v-if="sidebarCollapsed"
         type="button"
         :title="t('infra.explorer.pinned.expand')"
         :aria-label="t('infra.explorer.pinned.expand')"
-        class="ixe-expand"
+        class="mb-2 shrink-0 self-start"
         variant="outline"
         size="sm"
         @click="setSidebarCollapsed(false)"
@@ -155,12 +172,12 @@
         {{ t('infra.explorer.side.title') }}
       </Button>
       <template v-if="activeView">
-        <header class="ixe-hd">
-          <div class="ixe-hd-txt">
-            <h2 class="ixe-ttl">{{ t(activeView.label) }}</h2>
-            <p class="ixe-about">{{ t(activeView.about) }}</p>
+        <header class="flex flex-wrap items-start gap-2.5 pb-2">
+          <div class="min-w-50 flex-1">
+            <h2 class="text-lg font-semibold text-foreground">{{ t(activeView.label) }}</h2>
+            <p class="mt-0.5 text-xs text-dim">{{ t(activeView.about) }}</p>
           </div>
-          <div class="itoolgrp ixe-hd-acts">
+          <div class="flex shrink-0 flex-wrap items-center gap-1.5">
             <!-- Form nhỏ của view (task 3.6): tạo bucket/thư mục, tải lên, presign.
                  Nút cũng bị ẩn khi dò quyền từ chối (task 3.3) — lý do giống nút
                  ghi trên dòng. -->
@@ -207,14 +224,17 @@
         </header>
 
         <!-- View cần tham số (vd s3.objects cần bucket) thì hỏi TRƯỚC khi gọi —
-             không đoán một cái tên bucket rồi để AWS trả lỗi. -->
+             không đoán một cái tên bucket rồi để AWS trả lỗi. Thanh là một card:
+             ở theme sáng nền trang và nền panel gần như trùng nhau, một hàng ô trôi
+             thẳng trên nền trang đọc ra thành các ô rời rạc. Căn ĐÁY vì nhãn nằm
+             trên control. -->
         <form
           v-if="activeView.required.length"
-          class="itoolbar ifields ixe-params"
+          class="mb-2 flex shrink-0 flex-wrap items-end gap-2.5 rounded-xl border bg-card px-2.5 py-2 shadow-sm"
           @submit.prevent="reload()"
         >
-          <label v-for="f in activeView.required" :key="f.key" class="ixe-param">
-            <span class="ixe-param-lbl">{{ t(f.label) }}</span>
+          <label v-for="f in activeView.required" :key="f.key" class="flex flex-col gap-1">
+            <span class="text-xs text-dim">{{ t(f.label) }}</span>
             <Input
               :model-value="viewValues[f.key] ?? ''"
               :placeholder="f.placeholder ?? ''"
@@ -234,23 +254,29 @@
 
         <!-- Cảnh báo của VIEW (Mốc 4, task 4.1): khác tooltip `about` ở chỗ nó
              phải đọc được TRƯỚC khi tin vào bảng — ACM bắt buộc `us-east-1` cho
-             CloudFront, nên "bảng trống" ở region khác là câu trả lời sai. -->
-        <div v-if="activeView.notice" class="ixe-warn notice">
+             CloudFront, nên "bảng trống" ở region khác là câu trả lời sai. Màu cảnh
+             báo chứ không phải màu lỗi: nó nói "bảng này có thể đang trả lời thiếu",
+             không nói "vừa có gì hỏng". -->
+        <Alert v-if="activeView.notice" :class="[NOTE, 'border-warning/40 bg-warning/10']">
           <Icon name="info" />
-          {{ t(activeView.notice) }}
-        </div>
+          <AlertDescription class="text-xs text-foreground">
+            {{ t(activeView.notice) }}
+          </AlertDescription>
+        </Alert>
 
-        <div v-if="probeVerdict === 'denied'" class="ixe-warn">
+        <Alert v-if="probeVerdict === 'denied'" :class="NOTE">
           <Icon name="shield" />
-          {{ t('infra.explorer.deniedNote') }}
-        </div>
-        <div v-if="lastDownload" class="ixe-warn ok">
+          <AlertDescription class="text-xs">{{ t('infra.explorer.deniedNote') }}</AlertDescription>
+        </Alert>
+        <Alert v-if="lastDownload" :class="[NOTE, 'border-selected-border']">
           <Icon name="download" />
-          {{ t('infra.explorer.downloaded') }}
-          <Button type="button" variant="outline" size="sm" @click="previewDownload">
-            {{ t('infra.explorer.preview') }}
-          </Button>
-        </div>
+          <AlertDescription class="flex flex-wrap items-center gap-1.5 text-xs">
+            {{ t('infra.explorer.downloaded') }}
+            <Button type="button" variant="outline" size="sm" @click="previewDownload">
+              {{ t('infra.explorer.preview') }}
+            </Button>
+          </AlertDescription>
+        </Alert>
 
         <InfraResourceTable
           :columns="columns"
@@ -286,7 +312,7 @@
         />
       </template>
 
-      <p v-else class="ixe-empty">{{ t('infra.explorer.pick') }}</p>
+      <p v-else class="m-auto text-sm text-dim">{{ t('infra.explorer.pick') }}</p>
     </main>
 
     <InfraViewForm
@@ -377,6 +403,22 @@ const sideW = computed(() => sidebarWidth.value)
 
 /** Khoá nhóm "đã ghim" ở cột trái — không phải id nhóm nào của danh mục. */
 const PINNED_GROUP = 'pinned'
+
+// Class lặp lại giữa nhóm ghim và các nhóm danh mục — gom một chỗ để hai bản không lệch.
+/** Hàng tiêu đề nhóm: chữ nhỏ đậm, không nền khi hover (chỉ đổi màu chữ). */
+const GROUP_HEAD =
+  'h-auto justify-start gap-1 px-0.5 py-1 text-xs font-semibold text-dim hover:bg-transparent hover:text-foreground'
+/** Mũi tên chỉ HƯỚNG của nhóm: `chev` của app là mũi tên xuống, nên trạng thái gập
+ *  là xoay -90°. */
+const CHEV = 'shrink-0 transition-transform duration-150'
+/** Một mục dịch vụ. Nhãn tự cắt đuôi: tên view ("Certificate Manager") dài hơn cột
+ *  180px, mà đẩy cột rộng ra chỉ vì một cái tên là lấy chỗ của bảng. */
+const NAV_ROW =
+  'h-auto w-full justify-start gap-1.5 border border-transparent px-2 py-1.5 font-normal text-muted-foreground hover:text-foreground'
+/** Mục đang mở — accent-tint, không nền xám. */
+const NAV_ON = 'border-selected-border bg-selected text-foreground hover:bg-selected'
+/** Khuôn chung của các dải ghi chú phía trên bảng. */
+const NOTE = 'mb-1.5 shrink-0 bg-muted px-2.5 py-1.5 text-xs'
 
 /**
  * Bấm một mục ở cột trái. Đích `tab` (Logs · Tổng quan · Kubernetes) do TRANG
@@ -580,288 +622,3 @@ const emit = defineEmits<{
 // `openView()` (đặt giá trị, dò quyền, nạp trang đầu).
 defineExpose({ openView })
 </script>
-
-<style scoped>
-.ixe {
-  /* Flex chứ không grid: bề rộng cột trái do người dùng kéo, mà grid thì mọi
-     track phải khai báo trước trong CSS. Tay kéo là một cột thật ở giữa. */
-  display: flex;
-  align-items: stretch;
-  padding: 12px 16px 14px;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.ixe-side {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* Hàng tiêu đề đứng yên, chỉ phần danh mục cuộn: danh mục đầy đủ dài hơn một
-   màn, còn nút "Tất cả dịch vụ" và nút thu gọn thì phải luôn với tới được. */
-.ixe-side-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* Tay kéo `.grsz` đã có CSS chung; ở đây chỉ thêm lề ngang để tổng khoảng hở vẫn
-   là 14px như bản grid cũ (6px tay kéo + 4px mỗi bên). */
-.ixe-rsz {
-  margin: 0 4px;
-}
-
-.ixe-side-toggle {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-}
-
-.ixe-side-hd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 6px;
-}
-
-.ixe-side-ttl {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-}
-
-.ixe-catalog {
-  width: 100%;
-  justify-content: center;
-}
-
-/* Một nhóm việc ("Máy chủ & tính toán"). Nhóm ghim cũng dùng đúng khuôn này —
-   nó chỉ khác ở chỗ đứng đầu và lấy dữ liệu từ `pinned`, không phải từ danh mục. */
-.ixe-grp {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin-top: 6px;
-}
-
-.ixe-grp-hd {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 2px;
-  border: 0;
-  background: transparent;
-  color: var(--textDim);
-  font-family: var(--sans);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.ixe-grp-hd:hover {
-  color: var(--text);
-}
-
-.ixe-grp-ttl {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Mũi tên chỉ HƯỚNG của nhóm: quay phải khi gập, quay xuống khi mở. `chev` của
-   app là mũi tên xuống, nên trạng thái gập là `rotate(-90deg)`. */
-.ixe-grp-chev {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  transform: rotate(-90deg);
-  transition: transform 0.12s ease;
-}
-
-.ixe-grp-chev.open {
-  transform: none;
-}
-
-.ixe-nav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textMuted);
-  font-family: var(--sans);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-/* Nhãn chiếm hết chỗ còn lại và tự cắt đuôi: tên view ("Certificate Manager") dài
-   hơn cột 180px, mà đẩy cột rộng ra chỉ vì một cái tên là lấy chỗ của bảng. */
-.ixe-nav-txt {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Dấu cho biết mục này mở ra Console AWS (không có màn riêng trong app). */
-.ixe-nav-ic {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textFaint);
-}
-
-/* Dấu GHIM trên mục nằm trong nhóm của nó — không phải nút bấm: ghim/bỏ ghim vẫn
-   là việc của mặt danh mục, nơi có chỗ nói rõ nó sẽ đi đâu. */
-.ixe-nav-pin {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--accent);
-}
-
-.ixe-nav:hover {
-  color: var(--text);
-}
-
-.ixe-nav.on {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-
-.ixe-side-empty {
-  margin: 6px 2px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.ixe-main {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-}
-
-/* Nút mở lại cột dịch vụ (chỉ có khi cột đang thu gọn). `align-self` để nó không
-   kéo giãn hết chiều ngang của bảng. */
-.ixe-expand {
-  align-self: flex-start;
-  flex: 0 0 auto;
-  margin-bottom: 8px;
-}
-
-.ixe-hd {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-bottom: 8px;
-}
-
-.ixe-hd-txt {
-  flex: 1;
-  min-width: 200px;
-}
-
-.ixe-ttl {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-}
-
-.ixe-about {
-  margin: 2px 0 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-/* Bố cục + da ở `.itoolbar` (app-shell.css); `margin-bottom` là lề riêng của màn. */
-.ixe-params {
-  margin-bottom: 8px;
-}
-
-.ixe-param {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.ixe-param-lbl {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ixe-param-input {
-  min-width: 220px;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-
-.ixe-warn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.ixe-warn.ok {
-  border-color: var(--accentBorder);
-}
-
-/* Cảnh báo của view (Mốc 4): đọc được, nhưng không phải màu của lỗi — nó nói
-   "bảng này có thể đang trả lời thiếu", không nói "vừa có gì hỏng". */
-.ixe-warn.notice {
-  align-items: flex-start;
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
-  color: var(--text);
-}
-
-.ixe-empty {
-  margin: auto;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

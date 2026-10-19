@@ -5,7 +5,7 @@
     <!-- App identity + version. When an update is actionable, the primary action
          (Download / Open download page / Restart) sits next to "Check now". -->
     <SettingsField :name="t('settings.about.appName')" :desc="versionLine">
-      <div class="keyrow justify-end">
+      <div class="flex items-center justify-end gap-2">
         <Button
           v-if="action"
           :disabled="update.actionBusy"
@@ -13,7 +13,10 @@
           size="sm"
           @click="update.runPrimaryAction()"
         >
-          <Icon :name="action.icon" :class="{ uaspin: update.actionBusy }" />
+          <Icon
+            :name="action.icon"
+            :class="{ 'animate-spin motion-reduce:animate-none': update.actionBusy }"
+          />
           {{ action.label }}
         </Button>
         <Button :disabled="!available || checking" variant="outline" size="sm" @click="onCheckNow">
@@ -33,7 +36,7 @@
     <!-- Onboarding — re-run the setup wizard / replay the interface tour. Closes
          this modal first so the wizard + spotlight render over the shell. -->
     <SettingsField :name="t('onboarding.settings.name')" :desc="t('onboarding.settings.desc')">
-      <div class="keyrow justify-end">
+      <div class="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" @click="onRerunSetup">
           <Icon name="sparkles" />
           {{ t('onboarding.settings.rerunSetup') }}
@@ -57,18 +60,18 @@
       :name="t('settings.about.lastChecked.name')"
       :desc="t('settings.about.lastChecked.desc')"
     >
-      <span style="color: var(--textDim); font-size: var(--fs-sm)">{{ lastCheckedLabel }}</span>
+      <span class="text-sm text-dim">{{ lastCheckedLabel }}</span>
     </SettingsField>
 
     <!-- Live status line (reflects the shared update store). -->
-    <div v-if="statusLine" class="fd" :style="statusStyle">{{ statusLine }}</div>
+    <div v-if="statusLine" class="mt-2 text-sm" :class="statusClass">{{ statusLine }}</div>
 
-    <div class="fd" style="margin-top: 8px">
+    <div class="mt-2 text-sm text-dim">
       {{ t('settings.about.tagline') }} · {{ t('settings.about.tagline2') }}
     </div>
 
     <!-- Platform manual-install note (installed app on notify-only platforms). -->
-    <div v-if="needsManualInstall" class="fd" style="margin-top: 8px; color: var(--amber)">
+    <div v-if="needsManualInstall" class="mt-2 text-sm text-warning">
       {{ t('settings.about.manualInstallNote') }}
     </div>
   </div>
@@ -79,7 +82,6 @@ import { computed } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useUpdateStore } from '~/stores/update'
 import { useSidecar } from '~/composables/useSidecar'
-import Button from '~/components/ui/button/Button.vue'
 
 // About panel — reads the shared update store (state machine + app info live
 // there; the auto-update plugin owns the single app-lifetime subscription). The
@@ -154,10 +156,7 @@ const statusLine = computed(() => {
       return available && !update.isPackaged ? t('settings.about.status.devOnly') : ''
   }
 })
-const statusStyle = computed(() => ({
-  marginTop: '8px',
-  color: update.status === 'error' ? 'var(--amber)' : 'var(--accent)',
-}))
+const statusClass = computed(() => (update.status === 'error' ? 'text-warning' : 'text-primary'))
 
 // The repo — through the shared chooser (in-app browser or OS browser), which
 // owns the browser-dev fallback.
@@ -165,21 +164,3 @@ const onOpenRepo = () => {
   void useLinkOpen().openLink(REPO_URL)
 }
 </script>
-
-<style scoped>
-/* Spinner for the in-flight update primary action (restart/open-releases don't
-   flip the status synchronously). No rotate keyframe in the shared prototype.css. */
-.uaspin {
-  animation: uaspin 0.8s linear infinite;
-}
-@keyframes uaspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .uaspin {
-    animation: none;
-  }
-}
-</style>

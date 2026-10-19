@@ -13,12 +13,15 @@
 
        SFC này chỉ ghép khối + giữ controller. Mọi state/lời gọi RPC nằm ở
        `useInfraKube()` (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
-  <div class="ik">
-    <!-- Thanh ngữ cảnh là một CARD (`.itoolbar`, app-shell.css), và ba nút bên phải
-         là MỘT cụm nên chúng không bị tách rời nhau khi hàng xuống dòng. -->
-    <div class="itoolbar ifields iktool">
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.kube.col.cluster') }}</div>
+  <div class="flex size-full min-h-0 flex-col gap-2.5 overflow-hidden px-4 pt-2.5 pb-3.5">
+    <!-- Thanh ngữ cảnh là một CARD, và ba nút bên phải là MỘT cụm nên chúng không
+         bị tách rời nhau khi hàng xuống dòng. Nhãn-trên-control ⇒ căn theo ĐÁY để
+         các ô không lệch nhau theo trục dọc. -->
+    <div
+      class="flex flex-none flex-wrap items-end gap-2.5 rounded-xl border bg-card px-2.5 py-2 shadow-sm"
+    >
+      <div class="flex min-w-35 flex-initial basis-65 flex-col gap-1">
+        <div class="text-xs text-muted-foreground">{{ t('infra.kube.col.cluster') }}</div>
         <!-- Khoá trong lúc bảng đang nạp: đổi cluster giữa chừng là cảnh race thật
              (dữ liệu cluster cũ về muộn). Controller cũng chặn ở tầng logic bằng
              "thế hệ" ngữ cảnh, đây là lớp thứ hai để người dùng không rơi vào đó. -->
@@ -32,8 +35,8 @@
         />
       </div>
 
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.kube.col.namespace') }}</div>
+      <div class="flex min-w-35 flex-initial basis-65 flex-col gap-1">
+        <div class="text-xs text-muted-foreground">{{ t('infra.kube.col.namespace') }}</div>
         <AppSelect
           :model-value="pinnedNamespace"
           :options="namespaceOptions"
@@ -44,13 +47,19 @@
         />
       </div>
 
-      <div class="itoolgrp iend">
+      <div class="ml-auto flex flex-none flex-wrap items-center gap-1.5">
         <!-- Bảng context + đường thêm cluster: việc thỉnh thoảng mới làm, nên nằm
              trong modal. Số bên cạnh là số context máy này đọc được. -->
         <Button type="button" :title="pathsLabel" variant="outline" @click="kube.openClusters()">
-          <Icon name="k8s" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="k8s" class="size-3.5" />
           {{ t('infra.kube.manage.open') }}
-          <span v-if="contexts.length" class="ikcount">{{ contexts.length }}</span>
+          <Badge
+            v-if="contexts.length"
+            variant="secondary"
+            class="bg-selected px-1.5 py-0 font-normal text-muted-foreground tabular-nums"
+          >
+            {{ contexts.length }}
+          </Badge>
         </Button>
 
         <!-- Icon quay theo `busy`: nút vô hiệu mà đứng im thì người dùng không phân
@@ -60,32 +69,36 @@
           :disabled="!pinnedCluster || busy"
           :aria-busy="busy"
           :title="t('infra.kube.refresh')"
+          :aria-label="t('infra.kube.refresh')"
           variant="outline"
+          size="icon"
           @click="kube.refreshWorkload()"
         >
-          <Icon
-            name="refresh"
-            :class="{ ikspin: busy }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon name="refresh" class="size-3.5" :class="{ 'animate-spin': busy }" />
         </Button>
 
         <!-- Chú thích dài (danh tính kubectl dùng, nhật ký hoạt động) không chiếm
-             chỗ trên màn: một cú bấm là thấy, bấm ra ngoài là gập. -->
-        <div ref="noteWrapRef" class="iknotewrap">
-          <Button
-            type="button"
-            :title="t('infra.kube.footnote.title')"
-            :aria-expanded="noteOpen"
-            variant="outline"
-            @click="noteOpen = !noteOpen"
-          >
-            <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </Button>
-          <div v-if="noteOpen" class="smenu iknote" role="note">
-            <p class="iknotetxt">{{ t('infra.kube.footnote') }}</p>
-          </div>
-        </div>
+             chỗ trên màn: một cú bấm là thấy, bấm ra ngoài hoặc Esc là gập. -->
+        <Popover v-model:open="noteOpen">
+          <PopoverTrigger as-child>
+            <Button
+              type="button"
+              :title="t('infra.kube.footnote.title')"
+              :aria-label="t('infra.kube.footnote.title')"
+              variant="outline"
+              size="icon"
+            >
+              <Icon name="info" class="size-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <!-- Giữ role="dialog" mặc định của reka: OVERLAYS (useEmbeddedBrowser.ts) bắt
+               `[role="dialog"][data-state="open"]` để trình duyệt nhúng nhường chỗ. -->
+          <PopoverContent align="end" class="w-85 max-w-[84vw] px-3 py-2.5">
+            <p class="m-0 text-xs leading-relaxed whitespace-normal text-muted-foreground">
+              {{ t('infra.kube.footnote') }}
+            </p>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
 
@@ -148,25 +161,6 @@ const pathsLabel = computed(() =>
 const busy = kube.workloadBusy
 
 // Popover ⓘ: đóng khi bấm ra ngoài hoặc Esc — người dùng không phải đoán rằng nó
-// là một widget riêng phải tự tắt.
+// là một widget riêng phải tự tắt. `Popover` (reka) tự lo cả hai việc đó.
 const noteOpen = ref(false)
-const noteWrapRef = useTemplateRef<HTMLElement>('noteWrapRef')
-
-function onWindowMousedown(e: MouseEvent): void {
-  const target = e.target
-  if (!(target instanceof Node)) return
-  if (noteOpen.value && !noteWrapRef.value?.contains(target)) noteOpen.value = false
-}
-function onWindowKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') noteOpen.value = false
-}
-
-onMounted(() => {
-  window.addEventListener('mousedown', onWindowMousedown)
-  window.addEventListener('keydown', onWindowKeydown)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('mousedown', onWindowMousedown)
-  window.removeEventListener('keydown', onWindowKeydown)
-})
 </script>

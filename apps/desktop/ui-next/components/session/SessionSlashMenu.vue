@@ -1,23 +1,39 @@
 <template>
-  <div class="slashint">
-    <div class="silabel">{{ t('sessions.composer.slashCommands') }}</div>
-    <div class="silist">
+  <!-- Khung popover: bề mặt popover + hairline + bóng vừa, item dày p-1. Nhãn đầu +
+       gợi ý cuối ghim ngoài vùng cuộn; danh sách tự cuộn (gõ `/` trơn có thể > 80 hàng). -->
+  <div
+    class="mb-2 flex max-h-[min(340px,42vh)] flex-col overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
+  >
+    <div class="flex-none px-2 pt-1 pb-1 text-xs font-medium text-muted-foreground">
+      {{ t('sessions.composer.slashCommands') }}
+    </div>
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <!-- Lưới 3 cột để tên / mô tả / tag thẳng cột qua mọi hàng. Cột 1 rộng cố định
+           theo rem (scale theo cỡ chữ Appearance) nên mô tả bắt đầu cùng một x; tên dài
+           thì cắt (tên đủ ở tooltip). -->
       <div
         v-for="(c, i) in items"
         :key="c.key"
-        class="si2"
-        :class="{ on: i === active }"
+        class="grid cursor-pointer grid-cols-[10.5rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-sm px-2 py-1 text-sm"
+        :class="{ 'bg-accent text-accent-foreground': i === active }"
         @mousedown.prevent="emit('select', i)"
         @mouseenter="emit('hover', i)"
       >
-        <span class="sc" :title="`/${c.label}`">/{{ c.label }}</span>
-        <span class="sd" :title="c.desc">{{ c.desc }}</span>
-        <span class="sd sitag" :style="tagStyle(c.kind)">
+        <!-- mono-ok: slash command là chuỗi người dùng gõ nguyên văn -->
+        <span class="truncate font-mono text-primary" :title="`/${c.label}`">/{{ c.label }}</span>
+        <span class="min-w-0 truncate text-muted-foreground" :title="c.desc">{{ c.desc }}</span>
+        <Badge
+          variant="outline"
+          class="justify-self-end rounded-sm border-transparent px-1.5 uppercase tracking-wide"
+          :class="TAG_CLASS[c.kind]"
+        >
           {{ t(`sessions.composer.kind.${c.kind}`) }}
-        </span>
+        </Badge>
       </div>
     </div>
-    <div class="sifoot">{{ t('sessions.composer.slashHint') }}</div>
+    <div class="mt-0.5 flex-none border-t px-2 pt-1 pb-0.5 text-xs text-faint">
+      {{ t('sessions.composer.slashHint') }}
+    </div>
   </div>
 </template>
 
@@ -37,103 +53,12 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-// Tag accent per kind: builtin = primary, command = info, skill = violet, Claude
-// CLI = warning. Exposed as a `--tagc` custom property so the pill derives both
-// text + tinted background from one color (the CSS uses color-mix on it).
-const TAG_COLOR: Record<SlashItem['kind'], string> = {
-  builtin: 'var(--primary)',
-  command: 'var(--info)',
-  skill: 'var(--violet)',
-  cli: 'var(--warning)',
-}
-function tagStyle(kind: SlashItem['kind']) {
-  return { '--tagc': TAG_COLOR[kind] }
+// Màu tag theo loại: builtin = primary, command = info, skill = lavender, Claude
+// CLI = warning. Chữ + nền nhạt cùng một màu.
+const TAG_CLASS: Record<SlashItem['kind'], string> = {
+  builtin: 'bg-primary/15 text-primary',
+  command: 'bg-info/15 text-info',
+  skill: 'bg-lavender/15 text-lavender',
+  cli: 'bg-warning/15 text-warning',
 }
 </script>
-
-<style scoped>
-/* Popover chrome — shadcn tokens: popover surface + hairline border + --radius +
-   mid shadow, dense p-1 item padding. Label + footer hint pin outside the scroll
-   region; the list itself scrolls (a bare `/` query can run past 80 rows). */
-.slashint {
-  display: flex;
-  flex-direction: column;
-  max-height: min(340px, 42vh);
-  padding: 4px;
-  background: var(--popover);
-  border-color: var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-}
-.silist {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-/* Header label (DropdownMenuLabel tone) + footer hint strip. */
-.silabel {
-  flex: 0 0 auto;
-  padding: 5px 8px 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.sifoot {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  padding: 5px 8px 3px;
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-/* Three-column grid so name / description / tag align into clean vertical columns
-   across every row (the prototype's flex let long names + descriptions wrap, which
-   read as ragged). Column 1 is a fixed rem width — scales with the Appearance font
-   size — so descriptions start at the same x; longer names truncate (full name in
-   the title tooltip). Overrides the prototype .si2 flex. */
-.silist .si2 {
-  display: grid;
-  grid-template-columns: 10.5rem minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 12px;
-  padding: 5px 8px;
-  border-radius: var(--r-xs);
-}
-.silist .si2.on {
-  background: var(--accent-wash);
-}
-/* Command name (col 1): single line, truncate with ellipsis past the column. */
-.sc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-/* Description (col 2): single line, truncate; matches the name's size so baselines
-   line up — hierarchy comes from the muted color, not a smaller font. */
-.silist .si2 .sd:not(.sitag) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-/* Kind tag (col 3): right-aligned pill, text + faint tint from --tagc (set inline).
-   Nested under .si2 so the scoped rule beats the global `.slashint .sd` color. */
-.silist .si2 .sitag {
-  justify-self: end;
-  font-size: 12px;
-  line-height: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 3px 7px;
-  border-radius: var(--r-xs);
-  color: var(--tagc);
-  background: color-mix(in srgb, var(--tagc) 13%, transparent);
-}
-</style>

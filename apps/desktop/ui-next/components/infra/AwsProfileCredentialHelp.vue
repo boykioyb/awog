@@ -1,23 +1,22 @@
 <template>
-  <div class="ach">
-    <div class="ach-head">
-      <Icon
-        name="help"
-        style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-      />
-      <span class="ach-title">{{ t('infra.help.title') }}</span>
+  <div class="flex flex-col gap-2.5 rounded-lg border bg-muted p-3">
+    <div class="flex items-center gap-2">
+      <Icon name="help" class="size-3.5 text-primary" />
+      <span class="text-sm font-semibold text-foreground">{{ t('infra.help.title') }}</span>
     </div>
 
-    <p class="ach-intro">{{ t('infra.help.intro') }}</p>
+    <p class="m-0 text-xs text-dim">{{ t('infra.help.intro') }}</p>
 
-    <div class="ach-route">
-      <div class="ach-route-title">{{ t('infra.help.consoleTitle') }}</div>
-      <p class="ach-route-body">{{ t('infra.help.consoleBody') }}</p>
+    <div class="flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2">
+      <div class="text-xs font-semibold text-muted-foreground">
+        {{ t('infra.help.consoleTitle') }}
+      </div>
+      <p class="m-0 text-xs text-muted-foreground">{{ t('infra.help.consoleBody') }}</p>
     </div>
 
-    <div class="ach-route">
-      <div class="ach-route-title">{{ t('infra.help.keyTitle') }}</div>
-      <ol class="ach-steps">
+    <div class="flex flex-col gap-1.5 rounded-lg border bg-card px-3 py-2">
+      <div class="text-xs font-semibold text-muted-foreground">{{ t('infra.help.keyTitle') }}</div>
+      <ol class="m-0 flex list-decimal flex-col gap-1 pl-4.5 text-xs text-muted-foreground">
         <li>{{ t('infra.help.step1') }}</li>
         <li>{{ t('infra.help.step2') }}</li>
         <li>{{ t('infra.help.step3') }}</li>
@@ -30,24 +29,24 @@
            AWS vào Chromium của app. Hai link dưới đây luôn ra browser hệ điều hành,
            và đi thẳng qua openExternally() nên không bao giờ hiện popover.
            (Cùng lý do + cùng khuôn với SettingsDevices.vue → openNetbird.) -->
-      <div class="ach-links">
-        <button type="button" class="ach-link" @click="openSignIn">
-          <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <div class="mt-0.5 flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="xs" class="text-primary" @click="openSignIn">
+          <Icon name="external" class="size-3" />
           {{ t('infra.help.openSignIn') }}
-        </button>
-        <button type="button" class="ach-link" @click="openDocs">
-          <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        </Button>
+        <Button type="button" variant="outline" size="xs" class="text-primary" @click="openDocs">
+          <Icon name="external" class="size-3" />
           {{ t('infra.help.openDocs') }}
-        </button>
+        </Button>
       </div>
     </div>
 
-    <div class="ach-blocked">
-      <div class="ach-blocked-title">{{ t('infra.help.blockedTitle') }}</div>
-      <p class="ach-blocked-body">{{ t('infra.help.blockedBody') }}</p>
+    <div class="flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2">
+      <div class="text-xs font-semibold text-warning">{{ t('infra.help.blockedTitle') }}</div>
+      <p class="m-0 text-xs text-muted-foreground">{{ t('infra.help.blockedBody') }}</p>
     </div>
 
-    <p class="ach-note">{{ t('infra.help.passwordNote') }}</p>
+    <p class="m-0 text-xs text-dim">{{ t('infra.help.passwordNote') }}</p>
   </div>
 </template>
 
@@ -96,113 +95,3 @@ function openDocs(): void {
   void openExternally(DOCS_URL)
 }
 </script>
-
-<style scoped>
-.ach {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--bgSubtle);
-  border: 1px solid var(--border);
-}
-.ach-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.ach-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.ach-intro {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ach-route {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-}
-.ach-route-title {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textMuted);
-}
-.ach-route-body {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-}
-.ach-steps {
-  margin: 0;
-  padding-left: 18px;
-  list-style: decimal;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-}
-.ach-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
-}
-.ach-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.ach-link:hover {
-  background: var(--bgHover);
-}
-.ach-blocked {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-}
-.ach-blocked-title {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--amber);
-}
-.ach-blocked-body {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-}
-.ach-note {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

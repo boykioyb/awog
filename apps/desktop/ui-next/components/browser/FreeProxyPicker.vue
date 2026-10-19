@@ -1,11 +1,14 @@
 <template>
-  <div class="fpp">
-    <p class="fpp-warn" role="note">
-      <Icon name="warn" class="fpp-warnic" />
+  <div class="flex flex-col gap-2">
+    <p
+      class="m-0 flex items-start gap-2 rounded-md border border-warning px-2.5 py-2 text-sm text-foreground"
+      role="note"
+    >
+      <Icon name="warn" class="mt-0.5 size-3.5 flex-none text-warning" />
       <span>{{ t('browser.profiles.free.warning') }}</span>
     </p>
 
-    <div class="fpp-filters">
+    <div class="flex flex-wrap items-center gap-1.5">
       <AppSelect
         v-model="country"
         :options="countryOptions"
@@ -23,27 +26,33 @@
       <Button
         size="sm"
         variant="outline"
+        class="[&_svg]:size-3.5"
         :disabled="busy"
         :title="t('browser.profiles.free.refresh')"
         :aria-label="t('browser.profiles.free.refresh')"
         @click="search(true)"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="refresh" />
       </Button>
     </div>
-    <p v-if="!searched && !loading" class="fpp-hint">{{ t('browser.profiles.free.hint') }}</p>
+    <p v-if="!searched && !loading" class="m-0 text-xs text-muted-foreground">
+      {{ t('browser.profiles.free.hint') }}
+    </p>
 
-    <p v-if="error" class="fpp-err" role="alert">{{ error }}</p>
-    <p v-for="s in failedSources" :key="s.name" class="fpp-hint fpp-srcfail">
+    <p v-if="error" class="m-0 text-sm text-destructive" role="alert">{{ error }}</p>
+    <p v-for="s in failedSources" :key="s.name" class="m-0 text-xs text-warning">
       {{ t('browser.profiles.free.sourceFailed', { name: s.name, error: s.error ?? '' }) }}
     </p>
 
-    <p v-if="searched && !loading && !rows.length && !error" class="fpp-hint">
+    <p
+      v-if="searched && !loading && !rows.length && !error"
+      class="m-0 text-xs text-muted-foreground"
+    >
       {{ t('browser.profiles.free.empty') }}
     </p>
 
     <template v-if="rows.length">
-      <p class="fpp-progress" role="status">
+      <p class="m-0 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
         {{
           t('browser.profiles.free.progress', {
             done: doneCount,
@@ -51,90 +60,128 @@
             ok: okCount,
           })
         }}
-        <span v-if="probing" class="fpp-spin" aria-hidden="true" />
+        <span
+          v-if="probing"
+          class="size-2.5 animate-spin rounded-full border-2 border-border border-t-primary"
+          aria-hidden="true"
+        />
       </p>
 
-      <div class="fpp-scroll">
-        <div class="fpp-table" role="table">
-          <div class="fpp-row fpp-headrow" role="row">
-            <span role="columnheader">{{ t('browser.profiles.free.colCountry') }}</span>
-            <span role="columnheader">{{ t('browser.profiles.free.colType') }}</span>
-            <span role="columnheader">{{ t('browser.profiles.free.colHost') }}</span>
-            <span role="columnheader" class="fpp-num">
-              {{ t('browser.profiles.free.colLatency') }}
-            </span>
-            <span role="columnheader" class="fpp-num">
-              {{ t('browser.profiles.free.colUptime') }}
-            </span>
-            <span role="columnheader">{{ t('browser.profiles.free.colAnon') }}</span>
-            <span role="columnheader" />
-          </div>
-          <div
-            v-for="r in rows"
-            :key="r.proxy.id"
-            class="fpp-row"
-            :class="{ dead: r.probe.state === 'fail', current: isCurrent(r.proxy) }"
-            role="row"
-          >
-            <span class="fpp-country" role="cell" :title="countryTitle(r.proxy)">
-              <span class="fpp-flag" aria-hidden="true">{{ flagEmoji(r.proxy.country) }}</span>
-              <span class="fpp-ctext">
-                {{ r.proxy.countryName || r.proxy.country }}
-                <span v-if="r.proxy.city" class="fpp-city">{{ r.proxy.city }}</span>
-              </span>
-            </span>
-            <span role="cell">{{ r.proxy.type === 'socks5' ? 'SOCKS5' : 'HTTP' }}</span>
-            <span role="cell" class="fpp-host">
-              {{ r.proxy.host }}:{{ r.proxy.port }}
-              <span
-                v-if="r.probe.state === 'ok' && r.probe.blocked.includes('google')"
-                class="fpp-blocked"
-                :title="t('browser.profiles.free.blockedGoogleTitle')"
-              >
-                {{ t('browser.profiles.free.blockedGoogle') }}
-              </span>
-            </span>
-            <span
-              role="cell"
-              class="fpp-num fpp-lat"
-              :style="latencyStyle(r.probe)"
-              :title="r.probe.state === 'fail' ? failText(r.probe.error) : undefined"
+      <!-- Vùng cuộn ngoài giữ cả hai trục; container của Table bỏ overflow để header
+           sticky bám đúng vùng cuộn này (container tự cuộn thì sticky chết). -->
+      <div
+        class="max-h-85 overflow-auto rounded-md border [&_[data-slot=table-container]]:overflow-visible"
+      >
+        <Table class="min-w-140">
+          <TableHeader class="sticky top-0 z-1 bg-card">
+            <TableRow class="hover:bg-transparent">
+              <TableHead class="h-ctrl-xs text-xs">
+                {{ t('browser.profiles.free.colCountry') }}
+              </TableHead>
+              <TableHead class="h-ctrl-xs w-14.5 text-xs">
+                {{ t('browser.profiles.free.colType') }}
+              </TableHead>
+              <TableHead class="h-ctrl-xs text-xs">
+                {{ t('browser.profiles.free.colHost') }}
+              </TableHead>
+              <TableHead class="h-ctrl-xs w-16.5 text-right text-xs">
+                {{ t('browser.profiles.free.colLatency') }}
+              </TableHead>
+              <TableHead class="h-ctrl-xs w-12.5 text-right text-xs">
+                {{ t('browser.profiles.free.colUptime') }}
+              </TableHead>
+              <TableHead class="h-ctrl-xs w-18.5 text-xs">
+                {{ t('browser.profiles.free.colAnon') }}
+              </TableHead>
+              <TableHead class="h-ctrl-xs w-23 text-xs" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow
+              v-for="r in rows"
+              :key="r.proxy.id"
+              class="text-foreground"
+              :class="[
+                r.probe.state === 'fail' && 'opacity-50',
+                isCurrent(r.proxy) && 'bg-selected hover:bg-selected',
+              ]"
             >
-              {{ latencyText(r.probe) }}
-            </span>
-            <span role="cell" class="fpp-num">
-              {{ r.proxy.uptime != null ? `${Math.round(r.proxy.uptime)}%` : '—' }}
-            </span>
-            <span role="cell">{{ t(`browser.profiles.free.anon.${r.proxy.anonymity}`) }}</span>
-            <span role="cell" class="fpp-acts">
-              <template v-if="r.probe.state === 'ok'">
-                <Button
-                  size="sm"
+              <TableCell class="px-2 py-1" :title="countryTitle(r.proxy)">
+                <span class="flex min-w-0 items-center gap-1.5">
+                  <span class="flex-none" aria-hidden="true">{{ flagEmoji(r.proxy.country) }}</span>
+                  <span class="flex min-w-0 flex-col truncate">
+                    {{ r.proxy.countryName || r.proxy.country }}
+                    <span v-if="r.proxy.city" class="truncate text-xs text-muted-foreground">
+                      {{ r.proxy.city }}
+                    </span>
+                  </span>
+                </span>
+              </TableCell>
+              <TableCell class="px-2 py-1">
+                {{ r.proxy.type === 'socks5' ? 'SOCKS5' : 'HTTP' }}
+              </TableCell>
+              <!-- host:port người dùng có thể copy ⇒ mono. -->
+              <TableCell class="max-w-0 truncate px-2 py-1 font-mono">
+                {{ r.proxy.host }}:{{ r.proxy.port }}
+                <Badge
+                  v-if="r.probe.state === 'ok' && r.probe.blocked.includes('google')"
                   variant="outline"
-                  :disabled="applying"
-                  @click="onUse(r.proxy, false)"
+                  class="ml-1.5 border-warning px-1.5 py-0 font-sans font-normal text-warning"
+                  :title="t('browser.profiles.free.blockedGoogleTitle')"
                 >
-                  {{ t('browser.profiles.free.use') }}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  :disabled="applying"
-                  :title="t('browser.profiles.free.useNew')"
-                  :aria-label="t('browser.profiles.free.useNew')"
-                  @click="onUse(r.proxy, true)"
-                >
-                  <Icon name="users" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                </Button>
-              </template>
-            </span>
-          </div>
-        </div>
+                  {{ t('browser.profiles.free.blockedGoogle') }}
+                </Badge>
+              </TableCell>
+              <TableCell
+                class="tnum px-2 py-1 text-right"
+                :class="latencyClass(r.probe)"
+                :title="r.probe.state === 'fail' ? failText(r.probe.error) : undefined"
+              >
+                {{ latencyText(r.probe) }}
+              </TableCell>
+              <TableCell class="tnum px-2 py-1 text-right">
+                {{ r.proxy.uptime != null ? `${Math.round(r.proxy.uptime)}%` : '—' }}
+              </TableCell>
+              <TableCell class="px-2 py-1">
+                {{ t(`browser.profiles.free.anon.${r.proxy.anonymity}`) }}
+              </TableCell>
+              <TableCell class="px-2 py-1">
+                <div class="flex justify-end gap-1">
+                  <template v-if="r.probe.state === 'ok'">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      :disabled="applying"
+                      @click="onUse(r.proxy, false)"
+                    >
+                      {{ t('browser.profiles.free.use') }}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      class="[&_svg]:size-3.5"
+                      :disabled="applying"
+                      :title="t('browser.profiles.free.useNew')"
+                      :aria-label="t('browser.profiles.free.useNew')"
+                      @click="onUse(r.proxy, true)"
+                    >
+                      <Icon name="users" />
+                    </Button>
+                  </template>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
     </template>
 
-    <div v-if="applied" class="fpp-applied" role="status">
-      <span class="fpp-appliedtxt">{{ appliedText }}</span>
+    <div
+      v-if="applied"
+      class="flex flex-wrap items-center gap-1.5 rounded-md border px-2 py-1.5"
+      role="status"
+    >
+      <span class="flex-[1_1_12.5rem] text-sm text-foreground">{{ appliedText }}</span>
       <Button
         v-if="bridgeAvailable"
         size="sm"
@@ -144,11 +191,15 @@
       >
         {{ testing ? t('browser.profiles.proxy.testing') : t('browser.profiles.proxy.test') }}
       </Button>
-      <span v-if="testResult" class="fpp-test" :class="testResult.ok ? 'ok' : 'bad'">
+      <span
+        v-if="testResult"
+        class="text-sm wrap-anywhere"
+        :class="testResult.ok ? 'text-success' : 'text-destructive'"
+      >
         {{ testText }}
       </span>
     </div>
-    <p v-if="applyError" class="fpp-err" role="alert">{{ applyError }}</p>
+    <p v-if="applyError" class="m-0 text-sm text-destructive" role="alert">{{ applyError }}</p>
   </div>
 </template>
 
@@ -214,11 +265,13 @@ const KNOWN_FAILS = new Set(['tls-reset', 'tls-cert', 'tls-timeout', 'timeout'])
 const failText = (code?: string): string =>
   code && KNOWN_FAILS.has(code) ? t(`browser.profiles.free.err.${code}`) : (code ?? '')
 // Ngưỡng theo trải nghiệm duyệt web (không phải tải nặng): ≤ 400ms nhanh, ≤ 1200ms tạm được.
-const latencyStyle = (p: ProbeState): Record<string, string> => {
-  if (p.state !== 'ok') return {}
-  const color =
-    p.latencyMs <= 400 ? 'var(--green)' : p.latencyMs <= 1200 ? 'var(--amber)' : 'var(--danger)'
-  return { color }
+const latencyClass = (p: ProbeState): string => {
+  if (p.state !== 'ok') return ''
+  return p.latencyMs <= 400
+    ? 'text-success'
+    : p.latencyMs <= 1200
+      ? 'text-warning'
+      : 'text-destructive'
 }
 
 // ── Áp dụng ──
@@ -294,183 +347,3 @@ const testText = computed(() => {
   return [r.ip, r.loc].filter(Boolean).join(' · ') || t('browser.profiles.proxy.testOk')
 })
 </script>
-
-<style scoped>
-.fpp {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.fpp-warn {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--amber);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.fpp-warnic {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  margin-top: 2px;
-  color: var(--amber);
-}
-.fpp-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.fpp-hint,
-.fpp-progress {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.fpp-progress {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.fpp-srcfail {
-  color: var(--amber);
-}
-.fpp-err {
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.fpp-spin {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: fpp-rot 0.8s linear infinite;
-}
-@keyframes fpp-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.fpp-scroll {
-  max-height: 340px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-.fpp-table {
-  min-width: 560px;
-}
-.fpp-row {
-  display: grid;
-  grid-template-columns: minmax(110px, 1.3fr) 58px minmax(120px, 1.3fr) 66px 50px 74px 92px;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  min-height: 34px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.fpp-headrow {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  min-height: 28px;
-  background: var(--bgEl);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.fpp-row.dead {
-  opacity: 0.5;
-}
-.fpp-row.current {
-  background: var(--accentDim);
-}
-.fpp-num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.fpp-country {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.fpp-flag {
-  flex: 0 0 auto;
-}
-.fpp-ctext {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fpp-city {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.fpp-host {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--code); /* mono-ok: host:port người dùng có thể copy */
-}
-.fpp-blocked {
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: var(--r-pill);
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-  border: 1px solid var(--amber);
-}
-.fpp-acts {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-}
-.fpp-applied {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-.fpp-appliedtxt {
-  flex: 1 1 200px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.fpp-test {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  overflow-wrap: anywhere;
-}
-.fpp-test.ok {
-  color: var(--green);
-}
-.fpp-test.bad {
-  color: var(--danger);
-}
-</style>

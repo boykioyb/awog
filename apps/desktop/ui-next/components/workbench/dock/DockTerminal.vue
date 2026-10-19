@@ -4,14 +4,27 @@
        riêng `workbench:<projectId>`; tab strip zsh·pnpm dev·+ do widget tự vẽ.
        Tab được quản bên trong WorkspaceTerminal: store chỉ mirror `termActive`
        (id PTY đang sống của tab đang chọn) cho các view khác tham chiếu. -->
-  <div class="flex h-full min-h-0 flex-col">
-    <WorkspaceTerminal
-      ref="termEl"
-      :root="termRoot"
-      :ready="sc.available"
-      :pty-key="ptyKey"
-      :visible="visible"
-      @conn="onConn"
+  <div class="flex h-full min-h-0">
+    <div class="flex h-full min-w-0 flex-1 flex-col">
+      <WorkspaceTerminal
+        ref="termEl"
+        :root="termRoot"
+        :ready="sc.available"
+        :pty-key="ptyKey"
+        :visible="visible"
+        @conn="onConn"
+      />
+    </div>
+    <!-- Snippets (project đang mở + tầng Global) — CÙNG rail + store với dock terminal
+         toàn cục: Workbench ẩn dock toàn cục nên trước đây ở đây không có snippets.
+         Bật/tắt bằng nút trên DockBar; trạng thái mở dùng chung useGlobalTerminal. -->
+    <TerminalSnippetsRail
+      v-if="snippetsOpen"
+      :project="currentProject"
+      :project-label="currentProjectLabel"
+      :can-run="!!wb.termActive"
+      @run="onRunSnippet"
+      @close="setSnippetsOpen(false)"
     />
   </div>
 </template>
@@ -36,6 +49,9 @@ import { useWorkbenchDock } from '~/composables/useWorkbenchDock'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useSessionsStore } from '~/stores/sessions'
 import { useWorkbenchStore } from '~/stores/workbench'
+import TerminalSnippetsRail from '~/components/shell/TerminalSnippetsRail.vue'
+import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
+import { useProjects } from '~/composables/useProjects'
 
 const wb = useWorkbenchStore()
 const dock = useWorkbenchDock()
@@ -81,7 +97,22 @@ const cwdTransport = (cwd: string): TerminalTransport => ({
 
 const termEl = ref<{
   addTab?: (activate: boolean, label?: string | null, tr?: TerminalTransport) => string
+  runText?: (text: string) => void
 } | null>(null)
+
+// ── Snippets ───────────────────────────────────────────────────────────────
+const { snippetsOpen, setSnippetsOpen } = useGlobalTerminal()
+const { projectName } = useProjects()
+// Project thật để lọc snippet (null = tab Default → chỉ tầng Global).
+const currentProject = computed(() => sessions.activeTab || null)
+const currentProjectLabel = computed(() =>
+  currentProject.value ? projectName(currentProject.value) : '',
+)
+// Chạy snippet: thêm newline cho nó thực thi, ghi vào tab đang chọn qua transport
+// của chính tab đó (local hay SSH đều đúng) — y hệt GlobalTerminalHost.
+function onRunSnippet(command: string): void {
+  termEl.value?.runText?.(`${command}\n`)
+}
 
 const baseName = (p: string): string =>
   p

@@ -6,7 +6,7 @@
   <div class="relative flex min-h-0 flex-1 flex-col">
     <div class="flex h-11 flex-none items-center gap-1 px-2 shadow-[inset_0_-1px_0_var(--border)]">
       <span
-        class="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-[var(--r-xs)] border border-[color:var(--border)] bg-[color:var(--bgInput)] px-2.5 text-[color:var(--textFaint)]"
+        class="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-sm border border-border bg-muted px-2.5 text-faint"
       >
         <Icon name="search" class="size-4 flex-none" />
         <Input
@@ -31,14 +31,14 @@
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-1">
-      <div v-if="!groups.length" class="px-2 py-2.5 text-sm text-[var(--textFaint)]">
+      <div v-if="!groups.length" class="px-2 py-2.5 text-sm text-faint">
         {{ query.trim() ? t('sessions.list.noMatch') : t('wb.issues.empty') }}
       </div>
       <section v-for="g in groups" :key="g.status" class="mb-1">
         <!-- Header nhóm = hàng bấm thu/mở (không phải control form) — row raw được
              phép theo workbench-ui.md. -->
         <div
-          class="flex h-[26px] cursor-pointer select-none items-center gap-1.5 rounded-[var(--r-xs)] px-1.5 text-xs text-[var(--textDim)] hover:bg-[var(--bgHover)]"
+          class="flex h-6.5 cursor-pointer select-none items-center gap-1.5 rounded-sm px-1.5 text-xs text-dim hover:bg-accent"
           role="button"
           tabindex="0"
           :aria-expanded="!collapsed.has(g.status)"
@@ -50,15 +50,19 @@
             class="size-3 flex-none transition-transform"
             :class="{ '-rotate-90': collapsed.has(g.status) }"
           />
-          <span class="isv-dot" :style="{ background: statusColor(g.status) }" />
+          <!-- Chấm màu status — màu theo status do statusColor() trả (dữ liệu). -->
+          <span
+            class="size-2 flex-none rounded-full"
+            :style="{ background: statusColor(g.status) }"
+          />
           <span class="font-medium">{{ statusLabel(g.status) }}</span>
-          <span class="tabular-nums text-[var(--textFaint)]">{{ g.items.length }}</span>
+          <span class="tabular-nums text-faint">{{ g.items.length }}</span>
         </div>
         <template v-if="!collapsed.has(g.status)">
           <div
             v-for="it in g.items"
             :key="`${it.projectId}:${it.id}`"
-            class="flex h-[30px] cursor-pointer items-center gap-2 rounded-[var(--r-xs)] pl-6 pr-2 text-[var(--textMuted)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
+            class="flex h-7.5 cursor-pointer items-center gap-2 rounded-sm pl-6 pr-2 text-muted-foreground hover:bg-accent hover:text-foreground"
             :title="it.recap?.text ?? it.title"
             role="button"
             tabindex="0"
@@ -69,15 +73,12 @@
             <span class="min-w-0 flex-1 truncate">{{ it.title }}</span>
             <span
               v-if="isStale(it)"
-              class="flex-none text-xs text-[var(--warning)]"
+              class="flex-none text-xs text-warning"
               :title="t('wb.issues.staleTitle')"
             >
               {{ t('wb.issues.stale', { n: ageDays(it) }) }}
             </span>
-            <span
-              v-if="allProjects"
-              class="max-w-[40%] flex-none truncate text-xs text-[var(--textFaint)]"
-            >
+            <span v-if="allProjects" class="max-w-[40%] flex-none truncate text-xs text-faint">
               {{ projectName(it.projectId) }}
             </span>
           </div>
@@ -120,13 +121,3 @@ const {
   reload,
 } = useIssuesView()
 </script>
-
-<style scoped>
-/* Chấm màu status — hình dạng chính là thông tin; màu đến từ token qua inline style. */
-.isv-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-</style>

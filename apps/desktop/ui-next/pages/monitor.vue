@@ -1,42 +1,32 @@
 <template>
-  <section class="page on monpage" data-page="monitor">
+  <section
+    class="flex min-w-0 flex-1 flex-col gap-4 overflow-auto px-5 pt-4 pb-7"
+    data-page="monitor"
+  >
     <!-- Header: chỉ tiêu đề + nhịp đo. Control của từng màn nằm trong màn đó. -->
-    <div class="monhd">
-      <div class="monhdl">
-        <Icon name="cpu" class="monhdic" />
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex min-w-0 shrink-0 items-center gap-2.5">
+        <Icon name="cpu" class="size-5 text-primary" />
         <div>
-          <div class="monhdt">{{ t('monitor.title') }}</div>
-          <div class="fd">{{ subtitle }}</div>
+          <h1 class="text-lg font-semibold text-foreground">{{ t('monitor.title') }}</h1>
+          <p class="text-sm text-muted-foreground">{{ subtitle }}</p>
         </div>
       </div>
     </div>
 
-    <!-- Hai màn là hai TAB thật: thanh tab chạy hết bề ngang, tab đang mở có gạch
-         accent 2px dưới chân. Cố ý KHÔNG dùng `.ptab` sẵn có — tab active của nó
-         tô nền xám `--bgActive`, kiểu đã bị bác cho control chọn (xem quy ước
-         selection = accent-tint trong nuxt-vue.md). -->
-    <div class="montabs" role="tablist">
-      <button
-        class="montab"
-        :class="{ on: view === 'proc' }"
-        role="tab"
-        :aria-selected="view === 'proc'"
-        @click="view = 'proc'"
-      >
-        <Icon name="cpu" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('monitor.view.proc') }}
-      </button>
-      <button
-        class="montab"
-        :class="{ on: view === 'disk' }"
-        role="tab"
-        :aria-selected="view === 'disk'"
-        @click="openDisk()"
-      >
-        <Icon name="disk" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('monitor.view.disk') }}
-      </button>
-    </div>
+    <!-- Hai màn là hai TAB thật. Tab Đĩa nạp dữ liệu lần đầu qua openDisk(). -->
+    <Tabs :model-value="view" @update:model-value="onTab">
+      <TabsList>
+        <TabsTrigger value="proc">
+          <Icon name="cpu" />
+          {{ t('monitor.view.proc') }}
+        </TabsTrigger>
+        <TabsTrigger value="disk">
+          <Icon name="disk" />
+          {{ t('monitor.view.disk') }}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
 
     <MonitorDisk
       v-if="view === 'disk'"
@@ -103,58 +93,66 @@
     <template v-if="view === 'proc'">
       <!-- Toolbar của TAB, nên nằm DƯỚI thanh tab: control thuộc về nội dung tab
            mà đặt phía trên nó thì thứ tự đọc bị ngược. -->
-      <div class="monbar">
+      <!-- Bốn control (phạm vi · host · lọc · tạm dừng) không vừa một hàng ở bề rộng
+           panel thường gặp: cho cả hàng xuống dòng, để Ô LỌC là thứ co. -->
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
         <!-- Phạm vi đo. SSH chỉ hiện khi CÓ kết nối đang mở: mục chọn dẫn tới một
              bảng rỗng là mục chọn nói dối. -->
-        <div class="seg">
-          <span :class="{ on: scope === 'awog' }" role="button" @click="scope = 'awog'">
-            {{ t('monitor.scope.awog') }}
-          </span>
-          <span :class="{ on: scope === 'machine' }" role="button" @click="scope = 'machine'">
-            {{ t('monitor.scope.machine') }}
-          </span>
-          <span
-            v-if="sshTargets.length > 0"
-            :class="{ on: scope === 'ssh' }"
-            role="button"
-            @click="pickSsh()"
-          >
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          class="shrink-0"
+          :model-value="scope"
+          @update:model-value="onScope"
+        >
+          <ToggleGroupItem value="awog">{{ t('monitor.scope.awog') }}</ToggleGroupItem>
+          <ToggleGroupItem value="machine">{{ t('monitor.scope.machine') }}</ToggleGroupItem>
+          <ToggleGroupItem v-if="sshTargets.length > 0" value="ssh">
             {{ t('monitor.scope.ssh') }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
         <AppSelect
           v-if="scope === 'ssh' && sshTargets.length > 1"
           v-model="sshConnId"
           :options="sshOptions"
           width="150px"
         />
-        <div class="srch monsrch">
-          <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <Input v-model="search" unstyled :placeholder="t('monitor.search')" />
+        <!-- `ml-auto` nuốt hết khoảng trống còn lại ⇒ ô lọc + Tạm dừng dạt phải, còn
+             các bộ chọn bên trái đứng yên tại chỗ dù tab nào. -->
+        <div class="relative ml-auto w-56 min-w-0">
+          <Icon
+            name="search"
+            class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input v-model="search" class="pl-8" :placeholder="t('monitor.search')" />
         </div>
         <Button variant="outline" @click="paused = !paused">
-          <Icon
-            :name="paused ? 'play' : 'stop'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="paused ? 'play' : 'stop'" />
           {{ paused ? t('monitor.resume') : t('monitor.pause') }}
         </Button>
       </div>
 
-      <div v-if="error" class="monerr">
-        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('monitor.error', { msg: error }) }}
-      </div>
+      <Alert v-if="error" variant="destructive" class="border-destructive/40 bg-destructive/10">
+        <Icon name="alert" />
+        <AlertDescription>{{ t('monitor.error', { msg: error }) }}</AlertDescription>
+      </Alert>
 
       <!-- Tiến trình AWOG sót lại từ lần chạy trước: gần như luôn là rò rỉ, nên nó
          đứng TRÊN mọi thứ khác chứ không nằm lẫn trong bảng. -->
-      <div v-if="scope !== 'ssh' && orphans.length > 0" class="monorph">
-        <div class="monorphh">
-          <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div
+        v-if="scope !== 'ssh' && orphans.length > 0"
+        class="flex flex-col gap-2 rounded-xl border border-destructive bg-destructive/10 px-3.5 py-3"
+      >
+        <div class="flex items-center gap-2 text-base text-destructive">
+          <Icon name="alert" class="size-3.5" />
           <span>{{ t('monitor.orphans.title', { n: orphans.length }) }}</span>
         </div>
-        <div class="monorphd">{{ t('monitor.orphans.desc') }}</div>
+        <div class="text-sm text-muted-foreground">{{ t('monitor.orphans.desc') }}</div>
+        <!-- Bảng nằm TRONG banner đã là một card — khử khung của bảng (class rơi xuống
+             phần tử gốc của MonitorProcesses) để khỏi thành card lồng card. -->
         <MonitorProcesses
+          class="border-0 bg-transparent p-0 shadow-none"
           :title="''"
           :rows="orphans"
           :killing="killing"
@@ -188,7 +186,7 @@
         @open="openSession"
       />
 
-      <div v-if="truncated" class="moncap">{{ t('monitor.truncated') }}</div>
+      <div v-if="truncated" class="text-xs text-faint">{{ t('monitor.truncated') }}</div>
 
       <MonitorProcesses
         :title="t('monitor.processes.title')"
@@ -244,6 +242,11 @@ function openDisk(): void {
   if (!disk.loaded.value) void disk.load()
 }
 
+function onTab(v: string | number): void {
+  if (v === 'disk') openDisk()
+  else view.value = 'proc'
+}
+
 const {
   processes,
   sessions,
@@ -293,6 +296,13 @@ function pickSsh(): void {
   scope.value = 'ssh'
 }
 
+// ToggleGroup single trả `undefined` khi bấm lại mục đang chọn — bỏ qua để luôn
+// còn đúng một phạm vi (như segment cũ).
+function onScope(v: unknown): void {
+  if (v === 'ssh') pickSsh()
+  else if (v === 'awog' || v === 'machine') scope.value = v
+}
+
 const subtitle = computed(() => {
   if (paused.value) return t('monitor.paused')
   if (scope.value === 'ssh' && !sshConnId.value) return t('monitor.scope.noSsh')
@@ -304,140 +314,3 @@ function openSession(sessionId: string): void {
   void navigateTo(`/workbench?id=${encodeURIComponent(sessionId)}`)
 }
 </script>
-
-<style scoped>
-.monpage {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px 20px 28px;
-  overflow: auto;
-}
-/* ⚠ KHÔNG dùng `justify-content: space-between`: nó đẩy cả nhóm control sang sát
-   mép phải, nên bộ chọn "Tiến trình | Đĩa" TRÔI NGANG cả nghìn pixel khi đổi tab
-   (tab Đĩa không có bộ lọc/Tạm dừng nên nhóm ngắn lại). Người dùng phải dò chuột
-   đi tìm đúng cái nút vừa bấm. Nhóm control bám ngay sau tiêu đề; chỉ ô lọc và
-   nút Tạm dừng mới trôi sang phải. */
-.monhd {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.monhdl {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 0 0 auto;
-}
-.monhdic {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-  color: var(--accent);
-}
-.monhdt {
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  color: var(--text);
-}
-/* Bốn control (phạm vi · host · lọc · tạm dừng) không vừa một hàng ở bề rộng
-   panel thường gặp (611px đo được): nút "Tạm dừng" bị cắt mất một nửa. Cho cả
-   hàng xuống dòng được, ghim hai đầu ở kích thước thật và để Ô LỌC là thứ co —
-   nó là thứ duy nhất trong hàng chịu được việc hẹp đi. */
-.monbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.monbar > .seg {
-  flex: 0 0 auto;
-}
-.monsrch {
-  /* `margin-left: auto` nuốt hết khoảng trống còn lại ⇒ ô lọc + Tạm dừng dạt phải,
-     còn các bộ chọn bên trái đứng yên tại chỗ dù tab nào. */
-  margin-left: auto;
-  flex: 0 1 220px;
-  min-width: 0;
-}
-.moncap {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-/* Thanh tab. Gạch accent 2px dưới chân tab đang mở — quy ước selection của repo
-   (accent-tint + thanh accent), không phải nền xám đặc. */
-.montabs {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.montab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: none;
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition:
-    color 0.12s,
-    border-color 0.12s;
-}
-.montab:hover:not(.on) {
-  color: var(--text);
-}
-.montab.on {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-.monerr {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  background: var(--dangerBg);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.monorph {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--danger);
-  border-radius: var(--r-card);
-  background: var(--dangerBg);
-}
-.monorphh {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--danger);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-/* Bảng nhúng trong banner mồ côi đã nằm TRONG một card rồi — để nguyên skin
-   `.tile` là card lồng card (nền trắng nổi trên nền đỏ, hai lớp bo góc). Khử
-   khung con, giữ lại bố cục. */
-.monorph :deep(.monsec) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  padding: 0;
-}
-.monorphd {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-</style>

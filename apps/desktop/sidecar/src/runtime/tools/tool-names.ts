@@ -36,3 +36,19 @@ export const TEAM_TOOL_NAMES = [
   ...CHANNEL_TOOL_NAMES,
   ...MEMBER_TOOL_NAMES,
 ] as const;
+
+// Snippet của terminal (terminal-snippet-tools.ts) — module đó import sessions/store
+// (tra project của phiên), tức nằm TRONG đồ thị import của sessions; bridged.ts và
+// permission.ts phải lấy tên ở lá này, cùng lý do như hai nhóm trên.
+export const TERMINAL_SNIPPET_TOOL_NAMES = [
+  "terminal_snippet_list",
+  "terminal_snippet_save",
+  "terminal_snippet_delete",
+  "terminal_snippet_run",
+] as const;
+// Ghi vào thư viện của người dùng, hoặc gõ lệnh vào shell của họ — permission gate.
+export const TERMINAL_SNIPPET_MUTATING_TOOL_NAMES = [
+  "terminal_snippet_save",
+  "terminal_snippet_delete",
+  "terminal_snippet_run",
+] as const;

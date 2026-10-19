@@ -1,5 +1,5 @@
 <template>
-  <div class="projmain">
+  <div class="relative flex min-h-0 flex-1 overflow-hidden">
     <ProjectIssues
       :kind="kind"
       :items="gh.visibleItems.value"

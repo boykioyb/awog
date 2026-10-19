@@ -1,6 +1,10 @@
 <template>
-  <div v-if="problem" class="slk-banner" role="status">
-    <Icon name="warn" class="slk-banner-ic" />
+  <div
+    v-if="problem"
+    class="flex items-center gap-2.5 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm text-foreground"
+    role="status"
+  >
+    <Icon name="warn" class="flex-none text-warning" />
     <div class="min-w-0 flex-1">
       <div class="font-medium">{{ problem.title }}</div>
       <div class="text-xs">{{ problem.body }}</div>
@@ -51,21 +55,3 @@ const problem = computed<{ title: string; body: string } | null>(() => {
   return null
 })
 </script>
-
-<style scoped>
-.slk-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.slk-banner-ic {
-  color: var(--amber);
-  flex: none;
-}
-</style>

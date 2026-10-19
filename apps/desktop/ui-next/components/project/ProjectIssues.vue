@@ -1,6 +1,6 @@
 <template>
-  <div class="ghpane">
-    <div class="ghhead">
+  <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <div class="flex flex-none flex-wrap items-center gap-2 border-b px-3.5 py-2.5">
       <AppSelect
         v-if="repos.length > 1"
         :model-value="repoPath"
@@ -34,139 +34,159 @@
         width="150px"
         @update:model-value="onReviewer"
       />
-      <div class="srch" style="flex: 1; min-width: 120px; max-width: 220px">
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div class="relative max-w-55 min-w-30 flex-1">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
-          unstyled
+          class="h-ctrl-sm pl-8"
           :model-value="search"
           :placeholder="t('projects.gh.search')"
           @update:model-value="onSearch"
         />
       </div>
       <Button
-        :class="{ busy: loading || revalidating }"
         :title="t('projects.gh.refresh')"
-        style="width: 30px; height: 30px"
+        :aria-label="t('projects.gh.refresh')"
         :disabled="loading"
-        class="ghrefresh"
         variant="outline"
         size="iconMd"
         @click="emit('refresh')"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <!-- gh.list đang chạy → xoay icon refresh. -->
+        <Icon
+          name="refresh"
+          class="size-3.5"
+          :class="{ 'animate-spin motion-reduce:animate-none': loading || revalidating }"
+        />
       </Button>
     </div>
 
     <!-- Re-fetch over an already-loaded list: dim the rows (the spinning button
-         carries the "working" signal) instead of swapping them for a skeleton. -->
-    <div class="ghlist" :class="{ refetching: loading && items.length > 0 }">
+         carries the "working" signal) instead of swapping them for a skeleton.
+         Vẫn tương tác được: pointer-events-none sẽ giết luôn cuộn (đây là vùng cuộn). -->
+    <div
+      class="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3 transition-opacity duration-150 motion-reduce:transition-none"
+      :class="{ 'opacity-50': loading && items.length > 0 }"
+    >
       <ProjectGhListSkeleton v-if="loading && !items.length" />
       <template v-else>
+        <!-- Mỗi hàng là một card nổi (nền card + viền + bo góc); hover chỉ đậm viền.
+             Hàng mới mount thì fade + trượt lên, so le theo index (animation-delay inline).
+             Nút "phiên mới" chỉ hiện khi hover hàng / focus bàn phím. -->
         <div
           v-for="(it, i) in items"
           :key="it.number"
-          class="ghrow ghrow-in"
+          class="group/row cursor-pointer rounded-lg border bg-card px-3 py-2.5 animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-200 ease-out hover:border-input motion-reduce:animate-none"
           :style="{ animationDelay: rowDelay(i) }"
           @click="emit('open', it.number)"
           @mouseenter="onRowHover(it.number)"
           @mouseleave="cancelRowHover"
         >
-          <div class="ghr1">
-            <Icon
-              :name="kind === 'pr' ? 'fork' : 'alert'"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            <span class="ghnum">#{{ it.number }}</span>
-            <span class="ghtitle">{{ it.title }}</span>
-            <span
-              class="ghstate"
-              :style="{ color: stateColor(it.state), borderColor: stateColor(it.state) }"
-            >
+          <div class="flex items-center gap-2 text-base">
+            <Icon :name="kind === 'pr' ? 'fork' : 'alert'" class="size-3.5 flex-none text-dim" />
+            <span class="flex-none text-xs text-dim tabular-nums">#{{ it.number }}</span>
+            <span class="min-w-0 flex-1 truncate font-medium">{{ it.title }}</span>
+            <Badge variant="outline" :class="[STATE_CHIP, stateClass(it.state)]">
               {{ t('projects.gh.state.' + it.state.toLowerCase()) }}
-            </span>
-            <span
+            </Badge>
+            <Badge
               v-if="kind === 'pr' && it.isDraft"
-              class="ghstate"
-              style="color: var(--textDim); border-color: var(--border)"
+              variant="outline"
+              :class="[STATE_CHIP, 'border-border text-dim']"
             >
               {{ t('projects.gh.state.draft') }}
-            </span>
+            </Badge>
             <Button
-              style="width: 26px; height: 26px; flex: 0 0 auto"
               :title="t('projects.gh.newSession')"
               :aria-label="t('projects.gh.newSession')"
-              class="ghnewses"
+              class="size-6.5 flex-none opacity-0 transition-opacity group-hover/row:opacity-100 hover:border-selected-border hover:text-primary focus-visible:opacity-100"
               variant="outline"
-              size="iconMd"
+              size="iconSm"
               @click.stop="emit('new-session', it)"
             >
-              <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="sessions" class="size-3.5" />
             </Button>
           </div>
-          <div class="ghr2">
-            <span v-if="kind === 'pr' && it.baseRefName" class="mono">
+          <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+            <!-- mono-ok: tên nhánh git -->
+            <span v-if="kind === 'pr' && it.baseRefName" class="font-mono">
               {{ it.baseRefName }} ← {{ it.headRefName }}
             </span>
             <!-- Who is on the review: pending requests first, then verdicts. -->
-            <span
+            <Badge
               v-for="r in it.reviewers"
               :key="r.login"
-              class="ghrev"
-              :style="{
-                color: reviewerMeta(r.state).color,
-                borderColor: reviewerMeta(r.state).border,
-              }"
+              variant="outline"
+              :class="['rounded-sm px-1.5 py-0', reviewerMeta(r.state).cls]"
               :title="t('projects.gh.reviewState.' + reviewerMeta(r.state).key, { login: r.login })"
             >
-              <Icon
-                :name="reviewerMeta(r.state).icon"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
-              />
+              <Icon :name="reviewerMeta(r.state).icon" class="size-3" />
               {{ r.login }}
-            </span>
+            </Badge>
+            <!-- Màu nhãn là dữ liệu GitHub (hex của label), không phải token theme. -->
             <span
               v-for="l in it.labels"
               :key="l.name"
-              class="ghlabel"
+              class="rounded-sm border px-1.5 text-xs"
               :style="ghLabelStyle(l.color, isDark)"
             >
               {{ l.name }}
             </span>
-            <span class="tnum" style="margin-left: auto">
+            <span class="ml-auto tabular-nums">
               {{ it.author.login }} · {{ relativeWhen(it.createdAt) }}
             </span>
           </div>
         </div>
-        <div v-if="!items.length" class="empty" style="padding: 36px">
-          <span class="ei">
-            <Icon name="git" style="width: var(--icon-lg); height: var(--icon-lg)" />
+        <div
+          v-if="!items.length"
+          class="flex flex-col items-center justify-center gap-3.5 p-9 text-center text-dim"
+        >
+          <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+            <Icon name="git" class="size-5" />
           </span>
-          <div class="et">{{ emptyText }}</div>
+          <div class="text-lg text-muted-foreground">{{ emptyText }}</div>
 
           <!-- gh CLI not installed → install button + per-OS hint -->
-          <div v-if="errorCode === 'GH_NOT_FOUND'" class="ghcta">
+          <div
+            v-if="errorCode === 'GH_NOT_FOUND'"
+            class="mt-3.5 flex flex-wrap items-center justify-center gap-2"
+          >
             <Button variant="default" size="sm" @click="emit('install-gh')">
-              <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="globe" class="size-3.5" />
               {{ t('projects.gh.installBtn') }}
             </Button>
-            <code class="ghcmd">{{ installHint }}</code>
+            <!-- mono-ok: lệnh shell cài gh -->
+            <code class="rounded-sm border bg-muted px-2 py-1 font-mono text-sm text-dim">
+              {{ installHint }}
+            </code>
           </div>
 
           <!-- gh installed but not authenticated → copy login command + open guide -->
-          <div v-else-if="errorCode === 'GH_NOT_AUTH'" class="ghcta">
+          <div
+            v-else-if="errorCode === 'GH_NOT_AUTH'"
+            class="mt-3.5 flex flex-wrap items-center justify-center gap-2"
+          >
             <Button variant="outline" size="sm" @click="copyLoginCmd">
-              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="copy" class="size-3.5" />
               {{ copied ? t('projects.gh.copied') : t('projects.gh.copyLoginCmd') }}
             </Button>
             <Button variant="outline" size="sm" @click="emit('login-help')">
-              <Icon name="help" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="help" class="size-3.5" />
               {{ t('projects.gh.loginGuide') }}
             </Button>
           </div>
         </div>
-        <button v-if="canLoadMore" class="ghmore" :disabled="loading" @click="emit('load-more')">
+        <Button
+          v-if="canLoadMore"
+          variant="outline"
+          class="mt-1 w-full font-normal text-dim"
+          :disabled="loading"
+          @click="emit('load-more')"
+        >
           {{ loading ? t('projects.gh.loading') : t('projects.gh.loadMore') }}
-        </button>
+        </Button>
       </template>
     </div>
   </div>
@@ -189,9 +209,13 @@ import type {
   GhThreadSummary,
 } from '~/composables/useProjectGh'
 import { ghLabelStyle } from '~/utils/gh-label'
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
 
+// Chỉ đọc chế độ sáng/tối để chọn cách vẽ nhãn GitHub (màu nhãn là dữ liệu từ
+// GitHub, ghLabelStyle cần biết nền sáng hay tối) — không dùng để tô token theme.
+// theme-ok: isDark chọn cách vẽ nhãn GitHub (màu nhãn là dữ liệu)
 const { isDark } = useTheme()
 
 const props = defineProps<{
@@ -304,33 +328,28 @@ const emptyText = computed(() => {
   return t(key, { state: props.stateFilter })
 })
 
-// Per review-state chip look: icon + color + i18n key. Pending/commented/dismissed
+// Per review-state chip look: icon + class màu + i18n key. Pending/commented/dismissed
 // stay quiet (dim text, neutral border) so approved / changes-requested — the two
 // states that need action — are the ones that read at a glance.
-const REVIEWER_META: Record<
-  GhReviewerState,
-  { icon: string; color: string; border: string; key: string }
-> = {
-  PENDING: { icon: 'clock', color: 'var(--textDim)', border: 'var(--border)', key: 'pending' },
-  APPROVED: { icon: 'check', color: 'var(--green)', border: 'var(--green)', key: 'approved' },
+const QUIET = 'border-border text-dim'
+const REVIEWER_META: Record<GhReviewerState, { icon: string; cls: string; key: string }> = {
+  PENDING: { icon: 'clock', cls: QUIET, key: 'pending' },
+  APPROVED: { icon: 'check', cls: 'border-success text-success', key: 'approved' },
   CHANGES_REQUESTED: {
     icon: 'x',
-    color: 'var(--danger)',
-    border: 'var(--danger)',
+    cls: 'border-destructive text-destructive',
     key: 'changesRequested',
   },
-  COMMENTED: {
-    icon: 'message',
-    color: 'var(--textDim)',
-    border: 'var(--border)',
-    key: 'commented',
-  },
-  DISMISSED: { icon: 'minus', color: 'var(--textDim)', border: 'var(--border)', key: 'dismissed' },
+  COMMENTED: { icon: 'message', cls: QUIET, key: 'commented' },
+  DISMISSED: { icon: 'minus', cls: QUIET, key: 'dismissed' },
 }
 const reviewerMeta = (s: GhReviewerState) => REVIEWER_META[s]
 
-function stateColor(s: GhThreadState): string {
-  return s === 'OPEN' ? 'var(--green)' : s === 'MERGED' ? 'var(--violet)' : 'var(--textDim)'
+// Chip trạng thái thread: chữ + viền cùng một màu.
+const STATE_CHIP = 'flex-none rounded-sm px-1.5 py-0 capitalize'
+function stateClass(s: GhThreadState): string {
+  if (s === 'OPEN') return 'border-success text-success'
+  return s === 'MERGED' ? 'border-lavender text-lavender' : 'border-dim text-dim'
 }
 
 const onState = (v: string) => emit('set-state', v as GhListState)
@@ -396,101 +415,3 @@ function relativeWhen(iso: string): string {
   return new Date(ms).toLocaleDateString()
 }
 </script>
-
-<style scoped>
-/* In-flight gh.list → spin the refresh glyph (transform only: GPU, no reflow). */
-.ghrefresh.busy > .icn {
-  animation: ghrefresh-spin 0.7s linear infinite;
-}
-.ghrefresh:disabled {
-  cursor: default;
-}
-@keyframes ghrefresh-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* Re-fetch over existing rows: fade them back. Kept interactive on purpose —
-   pointer-events:none here would also kill scrolling (.ghlist IS the scroller). */
-.ghlist.refetching {
-  opacity: 0.5;
-}
-.ghlist {
-  transition: opacity 0.14s ease;
-}
-/* New rows fade + rise in, staggered by index (inline animation-delay). */
-.ghrow-in {
-  animation: ghrow-in 0.2s ease-out both;
-}
-@keyframes ghrow-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ghrefresh.busy > .icn,
-  .ghrow-in {
-    animation: none;
-  }
-  .ghlist {
-    transition: none;
-  }
-}
-
-/* Reviewer chip on a PR row — same pill vocabulary as .ghlabel (prototype.css),
-   plus the state icon. Color/border come from the state (inline :style). */
-.ghrev {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
-  border: 1px solid;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-.ghmore {
-  width: 100%;
-  margin-top: 4px;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  font-size: 1em;
-  cursor: pointer;
-}
-.ghmore:hover:not(:disabled) {
-  border-color: var(--borderStrong);
-  color: var(--text);
-  background: var(--bgHover);
-}
-.ghmore:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.ghcta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-.ghcmd {
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  color: var(--textDim);
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 18px;
-}
-</style>

@@ -7,6 +7,7 @@ import {
   isOfficeKind,
 } from '~/composables/usePreview'
 import { useOfficePreview } from '~/composables/useOfficePreview'
+import { parseCsv } from '~/utils/office-csv'
 import { base64ToBytes, type Bytes } from '~/utils/office-zip'
 import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
@@ -695,10 +696,30 @@ export function usePreviewModal(
   // markdown surfaces via utils/file-links.
   const resolveMdAsset = (src: string): string | null => normalizeWorkspacePath(src, mdDir())
 
+  const escapeHtml = (v: string): string =>
+    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
   // Capture groups: 1 = `<img … src="`, 2 = the src, 3 = the closing quote.
   const IMG_SRC_RE = /(<img\b[^>]*?\bsrc=")([^"]*)(")/gi
+  // File chỉ-xem do người ngoài gửi (readOnlyFile — vd file Slack): ảnh trỏ ra mạng
+  // (http/https/protocol-relative) KHÔNG được tải — chỉ cần mở xem là lộ IP và báo "đã mở"
+  // cho người gửi. Thay cả thẻ <img> bằng một nhãn chữ (alt đã được marked escape sẵn).
+  // HTML thô trong markdown vốn đã bị bỏ ở useMarkdown, nên ảnh là đường tải ngầm duy nhất.
+  const IMG_TAG_RE = /<img\b[^>]*>/gi
+  const REMOTE_SRC_RE = /\bsrc="(?:https?:)?\/\/[^"]*"/i
+  const ALT_RE = /\balt="([^"]*)"/i
+  function blockRemoteImages(html: string): string {
+    const label = escapeHtml(t('common.preview.remoteImageBlocked'))
+    return html.replace(IMG_TAG_RE, (tag) => {
+      if (!REMOTE_SRC_RE.test(tag)) return tag
+      const alt = ALT_RE.exec(tag)?.[1] ?? ''
+      return `<span class="pv-img-blocked">[${label}${alt ? `: ${alt}` : ''}]</span>`
+    })
+  }
+
   function rewriteImgSrc(html: string): string {
     if (!html.includes('<img')) return html
+    if (item.value?.readOnlyFile) html = blockRemoteImages(html)
     return html.replace(IMG_SRC_RE, (m, pre: string, src: string, post: string) => {
       if (!isRelativeAsset(src)) return m
       const data = mdImages[src]
@@ -1085,11 +1106,33 @@ export function usePreviewModal(
       item.value?.kind === 'doc' && !statusMessage.value && office.doc.value?.blocks.length === 0,
   )
 
-  // Monaco shows for plain text and for the raw view of markdown / html.
+  // CSV / TSV (kind 'text'): công tắc Bảng | Mã nguồn dùng chung `view` (render = Bảng).
+  // Bảng vẽ bằng lưới Excel dùng chung (OfficeSheetView) từ chữ ĐANG hiện — bản nháp khi
+  // đang sửa — nên sửa ở Mã nguồn rồi quay lại Bảng là thấy ngay.
+  const isCsv = computed(() => {
+    const it = item.value
+    return it?.kind === 'text' && /\.(csv|tsv)$/i.test(it.path ?? it.name)
+  })
+  const csvTable = useOfficePreview()
+  const showCsvTable = computed(
+    () => isCsv.value && view.value === 'render' && !statusMessage.value,
+  )
+  watch(
+    [showCsvTable, () => editorValue.value],
+    ([on]) => {
+      const it = item.value
+      if (!on || !it) return
+      const tsv = /\.tsv$/i.test(it.path ?? it.name)
+      csvTable.load(parseCsv(editorValue.value, it.name, tsv ? '\t' : undefined))
+    },
+    { immediate: true },
+  )
+
+  // Monaco shows for plain text and for the raw view of markdown / html (and CSV).
   const showCode = computed(() => {
     const it = item.value
     if (!it || statusMessage.value) return false
-    if (it.kind === 'text') return true
+    if (it.kind === 'text') return !isCsv.value || view.value === 'raw'
     return (it.kind === 'markdown' || it.kind === 'html') && view.value === 'raw'
   })
 
@@ -1110,7 +1153,8 @@ export function usePreviewModal(
           htmlRender.value ||
           showCode.value ||
           // The sheet grid owns its scroll (sticky headers + bottom tab strip).
-          showOfficeSheet.value),
+          showOfficeSheet.value ||
+          showCsvTable.value),
       mdrender: it.kind === 'markdown' && view.value === 'render' && !statusMessage.value,
       // Folder tree fills the body (left-aligned, own scroll) — not the centered prose layout.
       tree: it.kind === 'folder',
@@ -1335,6 +1379,9 @@ export function usePreviewModal(
     office,
     showOfficeDoc,
     showOfficeSheet,
+    isCsv,
+    csvTable,
+    showCsvTable,
     officeEmpty,
     // image transform
     scale,

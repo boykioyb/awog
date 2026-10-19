@@ -1,38 +1,47 @@
 <template>
-  <div class="slk-msg group" :class="{ compact: row.compact, editing }">
-    <div class="slk-gutter">
+  <div
+    class="group/msg relative flex gap-2.5 pl-4 pr-5"
+    :class="[row.compact ? 'py-px' : 'py-1.5', editing ? 'bg-selected' : 'hover:bg-accent']"
+  >
+    <div class="flex w-9.5 flex-none justify-end">
       <template v-if="!row.compact">
         <img
           v-if="author?.avatar"
           :src="author.avatar"
           :alt="name"
-          class="slk-avatar"
+          class="size-9.5 rounded-md object-cover"
           draggable="false"
         />
         <span
           v-else
-          class="slk-avatar slk-avatar-ph"
+          class="grid size-9.5 place-items-center rounded-md text-lg font-semibold text-primary-foreground"
           :style="{ background: avatarHue(m.userId ?? name) }"
         >
           {{ nameInitial(name) }}
         </span>
       </template>
-      <span v-else class="slk-hovertime tnum" :title="ctx.fullDateOf(m.ts)">
+      <span
+        v-else
+        class="tnum invisible text-xs leading-(--lh-prose) text-faint group-hover/msg:visible"
+        :title="ctx.fullDateOf(m.ts)"
+      >
         {{ ctx.timeOf(m.ts) }}
       </span>
     </div>
 
     <div class="min-w-0 flex-1">
       <div v-if="!row.compact" class="flex items-baseline gap-2">
-        <span class="slk-name">{{ name }}</span>
-        <span class="slk-time tnum" :title="ctx.fullDateOf(m.ts)">{{ ctx.timeOf(m.ts) }}</span>
+        <span class="text-base font-semibold text-foreground">{{ name }}</span>
+        <span class="tnum text-xs text-faint" :title="ctx.fullDateOf(m.ts)">
+          {{ ctx.timeOf(m.ts) }}
+        </span>
         <span v-if="m.subtype === 'thread_broadcast'" class="text-xs text-dim">
           {{ t('slack.message.broadcast') }}
         </span>
       </div>
 
       <div v-if="editing" class="mt-1 flex flex-col gap-1.5">
-        <Textarea ref="editRef" v-model="editText" class="slk-edit resize-y" @keydown="onEditKey" />
+        <Textarea ref="editRef" v-model="editText" class="min-h-18 resize-y" @keydown="onEditKey" />
         <div class="flex justify-end gap-1.5">
           <Button variant="outline" size="sm" @click="editing = false">
             {{ t('common.cancel') }}
@@ -73,7 +82,10 @@
       />
     </div>
 
-    <div v-if="!editing" class="slk-tools">
+    <div
+      v-if="!editing"
+      class="absolute -top-3 right-4 hidden gap-0.5 rounded-md border bg-sidebar p-0.5 shadow-sm group-hover/msg:flex has-[[data-state=open]]:flex"
+    >
       <Button
         v-if="m.text"
         variant="ghost"
@@ -193,80 +205,3 @@ function toggleOriginal(): void {
   }
 }
 </script>
-
-<style scoped>
-.slk-msg {
-  position: relative;
-  display: flex;
-  gap: 10px;
-  padding: 6px 20px 6px 16px;
-}
-.slk-msg.compact {
-  padding-top: 1px;
-  padding-bottom: 1px;
-}
-.slk-msg:hover {
-  background: var(--bgHover);
-}
-.slk-msg.editing {
-  background: var(--accentDim);
-}
-.slk-gutter {
-  flex: 0 0 38px;
-  display: flex;
-  justify-content: flex-end;
-}
-.slk-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--r-sm);
-  object-fit: cover;
-}
-.slk-avatar-ph {
-  display: grid;
-  place-items: center;
-  color: var(--accentText);
-  font-weight: 600;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-}
-.slk-hovertime {
-  visibility: hidden;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textFaint);
-}
-.slk-msg:hover .slk-hovertime {
-  visibility: visible;
-}
-.slk-name {
-  font-weight: 700;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-.slk-time {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.slk-edit {
-  min-height: 72px;
-}
-.slk-tools {
-  position: absolute;
-  top: -12px;
-  right: 16px;
-  display: none;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-  box-shadow: var(--shadow-sm);
-}
-.slk-msg:hover .slk-tools,
-.slk-tools:has([data-state='open']) {
-  display: flex;
-}
-</style>

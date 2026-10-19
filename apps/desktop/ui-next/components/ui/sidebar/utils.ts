@@ -1,23 +1,19 @@
-import type { ComputedRef, InjectionKey, Ref } from 'vue'
-import { inject } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
+import { createContext } from 'reka-ui'
 
-// Sidebar context — simplified port of the shadcn-vue sidebar contract for the
-// AWOG prototype: open flag, icon-collapse mode, toggle. Real migration keeps
-// this API surface 1:1 so call sites stay identical.
-export interface SidebarContext {
-  open: Ref<boolean>
-  collapsible: ComputedRef<'icon' | 'offcanvas' | 'none'>
+export const SIDEBAR_COOKIE_NAME = 'sidebar_state'
+export const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+export const SIDEBAR_WIDTH = '16rem'
+export const SIDEBAR_WIDTH_MOBILE = '18rem'
+export const SIDEBAR_WIDTH_ICON = '3rem'
+export const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
+
+export const [useSidebar, provideSidebarContext] = createContext<{
   state: ComputedRef<'expanded' | 'collapsed'>
-  toggle: () => void
-}
-
-export const sidebarKey: InjectionKey<SidebarContext> = Symbol('awog-sidebar')
-
-export function useSidebar(): SidebarContext {
-  const ctx = inject(sidebarKey)
-  if (!ctx) throw new Error('useSidebar must be used inside <SidebarProvider>')
-  return ctx
-}
-
-export const SIDEBAR_WIDTH = '216px'
-export const SIDEBAR_WIDTH_ICON = '52px'
+  open: Ref<boolean>
+  setOpen: (value: boolean) => void
+  isMobile: Ref<boolean>
+  openMobile: Ref<boolean>
+  setOpenMobile: (value: boolean) => void
+  toggleSidebar: () => void
+}>('Sidebar')

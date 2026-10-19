@@ -1,53 +1,62 @@
 <template>
-  <div class="md libwrap">
-    <div class="list" style="flex: 0 0 288px">
-      <div class="ltop">
+  <!-- `.md` + `.list`: app-shell.css `.app.compact .md/.list` biến cột list thành
+       drawer off-canvas (useResponsiveShell). Cột .list chỉ thêm utility KHÔNG đụng
+       position/width/transform để drawer compact vẫn thắng. -->
+  <!-- hook-ok: `.md` — app-shell.css compact drawer -->
+  <div class="md flex min-w-0 flex-1 overflow-hidden">
+    <!-- hook-ok: `.list` — app-shell.css compact drawer -->
+    <div class="list flex flex-none basis-72 flex-col overflow-hidden border-r bg-sidebar">
+      <div class="flex items-center gap-2 border-b p-3">
         <!-- Search: real shadcn Input (bordered, --ctrl-h, focus ring) with the
-             icon overlaid inside — replaces the hand-rolled .srch wrapper that
-             sized the box taller than every other control in the header. -->
+             icon overlaid inside. -->
         <div class="relative flex-1">
           <Icon
             name="search"
-            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
+            class="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
           />
           <Input v-model="q" class="pl-9" :placeholder="placeholder ?? t('common.search')" />
         </div>
         <Button
           v-if="groupBy"
           :title="t('library.filter.tooltip')"
-          style="width: 32px; height: 32px; position: relative"
+          :aria-label="t('library.filter.tooltip')"
+          class="relative"
           variant="outline"
           size="iconMd"
           @click="showFilters = !showFilters"
         >
-          <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span v-if="activeFilters" class="fbadge">{{ activeFilters }}</span>
+          <Icon name="filter" class="size-3.5" />
+          <Badge
+            v-if="activeFilters"
+            class="absolute -top-0.5 -right-0.5 h-3.5 min-w-3.5 rounded-full px-1 text-xs font-semibold tabular-nums"
+          >
+            {{ activeFilters }}
+          </Badge>
         </Button>
         <Button
           v-if="groupBy"
           :title="t('library.foldAll.tooltip')"
-          style="width: 32px; height: 32px"
+          :aria-label="t('library.foldAll.tooltip')"
           variant="outline"
           size="iconMd"
           @click="toggleFoldAll"
         >
-          <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="foldv" class="size-3.5" />
         </Button>
         <Button
           v-if="importKind"
           :title="t('library.import.tooltip')"
-          style="width: 32px; height: 32px"
+          :aria-label="t('library.import.tooltip')"
           variant="outline"
           size="iconMd"
           @click="importOpen = true"
         >
-          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="download" class="size-3.5" />
         </Button>
         <Button
           v-if="showNew"
           :title="t('common.add')"
-          style="width: 32px; height: 32px"
+          :aria-label="t('common.add')"
           variant="outline"
           size="iconMd"
           @click="emit('new')"
@@ -57,64 +66,38 @@
       </div>
 
       <!-- Filter drawer (grouped lists only) — project tier filter, mirrors Sessions. -->
-      <div v-if="groupBy && showFilters" class="sfdrawer">
-        <div class="csrow">
-          <span class="cslbl">{{ t('library.filter.project') }}</span>
-          <div class="csval" style="position: relative" @click.stop="projMenu = !projMenu">
-            {{ groupFilter === 'all' ? t('library.filter.all') : filterLabel }}
-            <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <div
-              v-if="projMenu"
-              class="smenu"
-              style="position: absolute; top: 116%; left: 0; right: 0; z-index: 50"
-              @click.stop
-            >
-              <div class="mi" @click="selectFilter('all')">
-                {{ t('library.filter.all') }}
-                <Icon
-                  v-if="groupFilter === 'all'"
-                  name="check"
-                  class="ck"
-                  style="width: var(--icon-sm); height: var(--icon-sm)"
-                />
-              </div>
-              <div v-for="o in groupOptions" :key="o.key" class="mi" @click="selectFilter(o.key)">
-                {{ o.label }}
-                <Icon
-                  v-if="o.key === groupFilter"
-                  name="check"
-                  class="ck"
-                  style="width: var(--icon-sm); height: var(--icon-sm)"
-                />
-              </div>
-            </div>
+      <div v-if="groupBy && showFilters" class="flex flex-col gap-2 border-b bg-muted p-3 pb-2">
+        <div class="flex items-center gap-2.5">
+          <span class="w-15.5 flex-none text-sm text-dim">{{ t('library.filter.project') }}</span>
+          <div class="min-w-0 flex-1">
+            <AppSelect v-model="groupFilter" :options="filterOptions" size="sm" width="100%" />
           </div>
         </div>
-        <span v-if="activeFilters" class="clearf" @click="groupFilter = 'all'">
+        <Button
+          v-if="activeFilters"
+          variant="link"
+          size="xs"
+          class="self-start px-0 text-dim hover:text-foreground"
+          @click="groupFilter = 'all'"
+        >
           {{ t('library.filter.clear') }}
-        </span>
+        </Button>
       </div>
 
-      <!-- Close the filter dropdown on outside click. -->
-      <div
-        v-if="projMenu"
-        style="position: fixed; inset: 0; z-index: 40"
-        @click="projMenu = false"
-      />
-
-      <div class="lscroll">
+      <div class="flex-1 overflow-y-auto px-3 py-2">
         <!-- Flat list — used when no groupBy is provided. -->
         <template v-if="!groupBy">
           <div
             v-for="it in visible"
             :key="itemKey(it)"
-            class="libli"
-            :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
+            :class="[ROW, isSelected(it) ? ROW_ON : ROW_OFF]"
             @click="selectedKey = itemKey(it)"
           >
             <slot name="row" :item="it" />
           </div>
-          <div v-if="!filtered.length" class="listempty">{{ t('common.empty.none') }}</div>
+          <div v-if="!filtered.length" class="px-3.5 py-8 text-center text-sm text-dim">
+            {{ t('common.empty.none') }}
+          </div>
         </template>
 
         <!-- Grouped by project tier — collapsible headers (mirrors the Sessions list). -->
@@ -122,30 +105,45 @@
           <div
             v-for="grp in groups"
             :key="grp.key"
-            class="grp"
-            :class="{ col: collapsed[grp.key] }"
+            class="mb-0.5 not-first:mt-3"
             :data-grp="grp.key"
           >
-            <div class="grph" @click="toggleGroup(grp.key)">
-              <Icon name="chev" class="gchv" />
-              <span class="pdot" :style="{ background: grp.dot }" />
-              <span class="gnm">{{ grp.label }}</span>
-              <span class="gct">{{ grp.items.length }}</span>
+            <!-- Header nhóm dính trên cùng khi cuộn, nền đặc + hairline dưới để đọc
+                 như vạch chia nhóm chứ không phải một hàng list. -->
+            <!-- raw-ok: cả header nhóm là một vùng bấm thu gọn, chứa nút thêm bên trong -->
+            <div
+              class="group/grph sticky top-0 z-2 flex cursor-pointer items-center gap-2 border-b bg-sidebar px-2 py-1.5 select-none hover:bg-accent"
+              @click="toggleGroup(grp.key)"
+            >
+              <Icon
+                name="chev"
+                class="size-3 flex-none text-faint transition-transform"
+                :class="{ '-rotate-90': collapsed[grp.key] }"
+              />
+              <span class="size-2 flex-none rounded-sm" :style="{ background: grp.dot }" />
               <span
+                class="text-xs font-semibold text-muted-foreground group-hover/grph:text-foreground"
+              >
+                {{ grp.label }}
+              </span>
+              <span class="ml-auto text-xs text-faint tabular-nums">{{ grp.items.length }}</span>
+              <Button
                 v-if="showNew"
-                class="grpadd"
+                variant="ghost"
+                size="iconSm"
+                class="size-5"
                 :title="t('common.add')"
+                :aria-label="t('common.add')"
                 @click.stop="emit('new-in-group', grp.key)"
               >
-                <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              </span>
+                <Icon name="plus" class="size-3.5" />
+              </Button>
             </div>
-            <div class="grpitems">
+            <div v-show="!collapsed[grp.key]" class="pt-1">
               <div
                 v-for="it in grp.visible"
                 :key="itemKey(it)"
-                class="libli"
-                :class="{ on: !!selected && itemKey(it) === itemKey(selected) }"
+                :class="[ROW, isSelected(it) ? ROW_ON : ROW_OFF]"
                 @click="selectedKey = itemKey(it)"
               >
                 <slot name="row" :item="it" />
@@ -157,7 +155,9 @@
               />
             </div>
           </div>
-          <div v-if="!filtered.length" class="listempty">{{ t('common.empty.none') }}</div>
+          <div v-if="!filtered.length" class="px-3.5 py-8 text-center text-sm text-dim">
+            {{ t('common.empty.none') }}
+          </div>
         </template>
 
         <LoadMoreSentinel
@@ -168,13 +168,16 @@
         />
       </div>
     </div>
-    <div class="detail">
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
       <slot v-if="selected" name="detail" :item="selected" />
-      <div v-else class="empty">
-        <span class="ei">
-          <Icon name="folder" style="width: var(--icon-lg); height: var(--icon-lg)" />
+      <div
+        v-else
+        class="flex flex-1 flex-col items-center justify-center gap-3.5 p-10 text-center text-dim"
+      >
+        <span class="grid size-12 place-items-center rounded-xl border bg-card text-dim">
+          <Icon name="folder" class="size-5" />
         </span>
-        <div class="et">{{ t('common.empty.choose') }}</div>
+        <div class="text-lg text-muted-foreground">{{ t('common.empty.choose') }}</div>
       </div>
     </div>
 
@@ -193,12 +196,13 @@
 import { computed, ref, watch } from 'vue'
 import type { GroupWindow } from '~/composables/useLoadMore'
 import type { ConfigKind } from '~/stores/templates'
+import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
 
-// Shared master-detail shell — a searchable list (.list/.ltop/.lscroll/.libli)
-// beside a detail pane (.detail). Pages supply per-entity #row and #detail slots
-// + an itemKey.
+// Shared master-detail shell — a searchable list beside a detail pane. Pages supply
+// per-entity #row and #detail slots + an itemKey.
 //
 // Optional project grouping: pass `groupBy` (→ a stable group key per item, e.g.
 // 'global' or a projectId) and the list renders collapsible group headers with a
@@ -257,7 +261,6 @@ const collapsed = ref<Record<string, boolean>>({})
 // Filter drawer (grouped lists): show/hide + the active project-tier filter.
 const showFilters = ref(false)
 const groupFilter = ref<string>('all')
-const projMenu = ref(false)
 // Config-import picker (only mounted when `importKind` is set).
 const importOpen = ref(false)
 
@@ -280,11 +283,6 @@ function toggleFoldAll(): void {
   const next: Record<string, boolean> = {}
   for (const k of keys) next[k] = collapseAll
   collapsed.value = next
-}
-
-function selectFilter(key: string): void {
-  groupFilter.value = key
-  projMenu.value = false
 }
 
 const filtered = computed(() => {
@@ -330,9 +328,11 @@ const groupOptions = computed<{ key: string; label: string }[]>(() => {
     })
 })
 
-const filterLabel = computed(
-  () => groupOptions.value.find((o) => o.key === groupFilter.value)?.label ?? groupFilter.value,
-)
+// Lựa chọn cho ô lọc project: "Tất cả" + mọi tier đang có.
+const filterOptions = computed<AppSelectOption[]>(() => [
+  { value: 'all', label: t('library.filter.all') },
+  ...groupOptions.value.map((o) => ({ value: o.key, label: o.label })),
+])
 const activeFilters = computed(() => (groupFilter.value !== 'all' ? 1 : 0))
 
 // Buckets for the grouped render. Insertion order from `filtered`, then the
@@ -373,4 +373,12 @@ const selected = computed<T | null>(() => {
   if (!list.length) return null
   return list.find((it) => props.itemKey(it) === selectedKey.value) ?? list[0] ?? null
 })
+
+const isSelected = (it: T): boolean =>
+  !!selected.value && props.itemKey(it) === props.itemKey(selected.value)
+
+// Hàng list: đang chọn = accent-tint + thanh accent 2px bên trái (nuxt-vue.md).
+const ROW = 'mb-0.5 cursor-pointer rounded-md border px-3 py-2'
+const ROW_OFF = 'border-transparent hover:bg-accent'
+const ROW_ON = 'border-selected-border bg-selected shadow-[inset_2px_0_0_var(--primary)]'
 </script>

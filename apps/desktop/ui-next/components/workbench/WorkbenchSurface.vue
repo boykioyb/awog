@@ -29,6 +29,8 @@ import DocMd from '~/components/workbench/stage/DocMd.vue'
 import DocWeb from '~/components/workbench/stage/DocWeb.vue'
 import DocImage from '~/components/workbench/stage/DocImage.vue'
 import DocVid from '~/components/workbench/stage/DocVid.vue'
+import DocOffice from '~/components/workbench/stage/DocOffice.vue'
+import { isOfficeDoc } from '~/composables/useWorkbenchDocs'
 import DocMermaid from '~/components/workbench/stage/DocMermaid.vue'
 import DocSettings from '~/components/workbench/stage/DocSettings.vue'
 import DocMonitor from '~/components/workbench/stage/DocMonitor.vue'
@@ -63,7 +65,7 @@ function surfaceOf(d: WorkbenchDoc): Component {
     case 'chat':
       return DocChat
     case 'file':
-      return DocFile
+      return isOfficeDoc(d) ? DocOffice : DocFile
     case 'md':
       return DocMd
     case 'web':
@@ -72,6 +74,8 @@ function surfaceOf(d: WorkbenchDoc): Component {
       return DocImage
     case 'vid':
       return DocVid
+    case 'office':
+      return DocOffice
     case 'mmd':
       return DocMermaid
     case 'settings':

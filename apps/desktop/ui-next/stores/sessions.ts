@@ -565,6 +565,8 @@ type EngineMessage = {
   // User attachments persisted on the turn (sidecar SessionMessage.attachments).
   // Restored on hydrate so a reload keeps the attachment chips + previews.
   attachments?: EngineAttachment[]
+  // Lệnh `/` của tin user (sidecar SessionMessage.command) — hydrate lại bubble gọn.
+  command?: SlashCommandRef
   // CLI mà tin này được viết trong đó ("Open in CLI" — sessions.syncCli fold tin
   // CLI-side về JSONL; mirrors sidecar SessionMessage.via). Không có = tin AWOG.
   via?: 'claude' | 'codex' | 'devin'
@@ -1724,6 +1726,15 @@ export const useSessionsStore = defineStore('sessions', () => {
         eid: m.id,
         ...via,
         ...(m.attachments?.length ? { att: m.attachments.map(engineAttToSession) } : {}),
+        ...(m.command?.name
+          ? {
+              command: {
+                name: m.command.name,
+                args: m.command.args ?? '',
+                ...(m.command.native ? { native: true } : {}),
+              },
+            }
+          : {}),
       }
     }
     if (m.role === 'system') {
@@ -4705,7 +4716,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         modelText,
         atts,
         userMessageId,
-        nativeCommand,
+        command,
         autoDelivered,
         comm,
         attachWake,
@@ -4728,9 +4739,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Id the caller already stamped on the pushed user bubble; omitted when the mint
     // failed validation, in which case the sidecar falls back to its own `msg_u_<hex>`.
     userMessageId?: string,
-    // `text` is one of the Claude CLI's own commands (/goal, /context…) and must
-    // reach the CLI verbatim — see the sidecar's RunNonStreamArgs.nativeCommand.
-    nativeCommand?: boolean,
+    // Lệnh `/` đã gọi (khi có). Persist cùng tin user để JSONL reload vẫn hiện bubble
+    // gọn `/tên` + args thay vì body đã nở. `native` = lệnh của chính Claude CLI
+    // (/goal, /context…) phải tới CLI nguyên văn — xem RunNonStreamArgs.nativeCommand.
+    command?: SlashCommandRef,
     // Turn này là một lượt tự giao của nhóm — sổ trần auto-deliver ghi ở đây,
     // ngay khi placeholder được push = turn THẬT đã khởi động.
     autoDelivered?: boolean,
@@ -4741,6 +4753,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     automated?: boolean,
   ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
+    const nativeCommand = command?.native === true
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
     // wake paths already consumed it before calling here; a manual send means the
     // user moved on, so a stale "Continue" card should not linger.
@@ -4853,6 +4866,15 @@ export const useSessionsStore = defineStore('sessions', () => {
         // turn-prompt rider for it, because the CLI only treats a message as a local
         // command when it STARTS with `/`.
         ...(nativeCommand ? { nativeCommand: true } : {}),
+        ...(command
+          ? {
+              command: {
+                name: command.name,
+                args: command.args,
+                ...(command.native ? { native: true } : {}),
+              },
+            }
+          : {}),
         // Lượt trả lời-nhanh của kênh ê-kíp → sidecar kẹp rẻ+low sau mọi overlay.
         ...(comm ? { comm: true } : {}),
         ...(attachWake ? { attachWake: true } : {}),

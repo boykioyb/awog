@@ -9,8 +9,8 @@
     data-wbi="style"
     @click="(e: MouseEvent) => toggle(e.currentTarget as HTMLElement)"
   >
-    <Icon name="text" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    <span class="max-w-[120px] truncate">{{ styleName }}</span>
+    <Icon name="text" class="size-3" />
+    <span class="max-w-30 truncate">{{ styleName }}</span>
   </WbChip>
 </template>
 
@@ -25,7 +25,7 @@ const statusCfg = useStatusConfig()
 const { activeStyleId, styleName, styleGroups, noMd, selectStyle, toggleNoMd } =
   useSessionModelConfig(() => props.session)
 
-// Điểm neo = phần tử <button> THẬT của chip (lấy từ sự kiện / data-wbi) — KHÔNG phải
+// Điểm neo = phần tử nút THẬT của chip (lấy từ sự kiện / data-wbi) — KHÔNG phải
 // `$el` của component: WbChip mở đầu bằng một comment nên ở dev `$el` là nút comment,
 // không có `dataset` ⇒ menu workbench đọc `anchor.dataset.wbi` là văng lỗi.
 const isOpen = computed(() => menu.value?.anchor?.dataset?.wbi === 'style')

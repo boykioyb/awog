@@ -8,58 +8,77 @@
   >
     <TemplateConsentPanel v-if="inspection" :inspection="inspection" :homepage="pickedHomepage" />
 
-    <div v-else class="tdd">
-      <div class="tdd-bar">
-        <Icon name="search" class="tdd-bar-ic" />
+    <div v-else class="flex flex-col gap-3">
+      <div class="flex items-center gap-2">
+        <Icon name="search" class="size-3.5 shrink-0 text-dim" />
         <Input v-model="query" type="text" :placeholder="t('templatesDiscover.search')" />
-        <button
-          type="button"
-          class="tdd-refresh"
+        <Button
+          variant="outline"
+          size="iconMd"
+          class="shrink-0 text-dim"
           :title="t('templatesDiscover.refresh')"
           :disabled="loading"
           @click="load(true)"
         >
-          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="refresh" />
+        </Button>
       </div>
 
-      <p class="tdd-origin" :class="{ stale: result.stale }">{{ originText }}</p>
+      <p class="text-xs leading-relaxed" :class="result.stale ? 'text-warning' : 'text-dim'">
+        {{ originText }}
+      </p>
 
-      <div class="tdd-list">
-        <p v-if="loading" class="tdd-muted">{{ t('templatesDiscover.loading') }}</p>
-        <p v-else-if="!result.entries.length" class="tdd-muted">{{ emptyText }}</p>
+      <div class="flex max-h-85 flex-col gap-1.5 overflow-y-auto">
+        <p v-if="loading" class="text-xs leading-relaxed text-dim">
+          {{ t('templatesDiscover.loading') }}
+        </p>
+        <p v-else-if="!result.entries.length" class="text-xs leading-relaxed text-dim">
+          {{ emptyText }}
+        </p>
         <template v-else>
-          <button
+          <Button
             v-for="e in result.entries"
             :key="e.id"
-            type="button"
-            class="tdd-row"
+            variant="outline"
+            class="h-auto w-full items-start justify-start gap-2.5 rounded-lg bg-muted px-3 py-2 text-left font-normal whitespace-normal hover:border-primary disabled:opacity-60"
             :disabled="inspectingId !== ''"
             @click="onPick(e)"
           >
-            <Icon name="templates" class="tdd-row-ic" />
-            <span class="tdd-row-tx">
-              <span class="tdd-row-nm">
+            <Icon name="templates" class="mt-0.5 text-dim" />
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
                 {{ e.name }}
-                <span v-if="e.version" class="tag">{{ e.version }}</span>
-                <span v-for="kind in e.kinds" :key="kind" class="tag">
+                <Badge v-if="e.version" variant="outline" class="rounded-sm text-muted-foreground">
+                  {{ e.version }}
+                </Badge>
+                <Badge
+                  v-for="kind in e.kinds"
+                  :key="kind"
+                  variant="outline"
+                  class="rounded-sm text-muted-foreground"
+                >
                   {{ t('templates.kind.' + kind) }}
-                </span>
+                </Badge>
               </span>
-              <span class="tdd-row-sub">{{ e.description || e.id }}</span>
-              <span v-if="e.author" class="tdd-row-by">
+              <span class="truncate text-xs text-dim">{{ e.description || e.id }}</span>
+              <span v-if="e.author" class="truncate text-xs text-muted-foreground">
                 {{ t('templatesDiscover.by', { author: e.author }) }}
               </span>
             </span>
-            <Icon name="chev-right" class="tdd-row-go" />
-          </button>
+            <Icon name="chev-right" class="mt-0.5 text-dim" />
+          </Button>
         </template>
       </div>
 
-      <p class="tdd-muted">{{ t('templatesDiscover.curatedNote') }}</p>
+      <p class="text-xs leading-relaxed text-dim">{{ t('templatesDiscover.curatedNote') }}</p>
     </div>
 
-    <div v-if="error" class="tdd-error">{{ error }}</div>
+    <div
+      v-if="error"
+      class="mt-3 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-destructive"
+    >
+      {{ error }}
+    </div>
 
     <template #footer>
       <Button v-if="inspection" :disabled="installing" variant="outline" @click="back">
@@ -244,144 +263,3 @@ const originText = computed(() => {
   return t('templatesDiscover.origin.network')
 })
 </script>
-
-<style scoped>
-.tdd {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.tdd-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tdd-bar-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.tdd-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.tdd-input:focus {
-  border-color: var(--accent);
-}
-.tdd-refresh {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  padding: 6px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.tdd-refresh:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.tdd-refresh:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.tdd-origin,
-.tdd-muted {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.tdd-origin.stale {
-  color: var(--amber);
-}
-.tdd-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 340px;
-  overflow-y: auto;
-}
-.tdd-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-.tdd-row:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--bgHover);
-}
-.tdd-row:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.tdd-row-ic,
-.tdd-row-go {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--textDim);
-}
-.tdd-row-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.tdd-row-nm {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.tdd-row-sub,
-.tdd-row-by {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tdd-row-by {
-  color: var(--textMuted);
-}
-.tdd-error {
-  margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-</style>

@@ -2,8 +2,7 @@
   <section class="mt-3">
     <Button
       variant="ghost"
-      class="h-auto p-0 flex w-full items-center gap-1.5 py-0.5 text-left font-sans text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-      type="button"
+      class="h-auto w-full justify-start gap-1.5 px-0 py-0.5 text-left text-xs font-medium text-muted-foreground hover:bg-transparent hover:text-foreground [&_svg]:size-3"
       @click="open = !open"
     >
       <ChevronDown class="size-3 shrink-0 transition-transform" :class="{ 'rotate-180': open }" />
@@ -12,7 +11,7 @@
     </Button>
 
     <div v-if="open" class="mt-2 flex flex-col gap-2">
-      <div ref="feedEl" class="flex max-h-[220px] flex-col gap-1.5 overflow-y-auto">
+      <div ref="feedEl" class="flex max-h-55 flex-col gap-1.5 overflow-y-auto">
         <div v-if="!entries.length" class="px-0.5 py-1.5 text-xs text-faint">
           {{ t('sessions.workspace.group.channelEmpty') }}
         </div>
@@ -28,19 +27,20 @@
             >
               {{ e.fromTitle }}
             </span>
-            <span
+            <Badge
               v-if="e.kind !== 'chat'"
-              class="shrink-0 rounded-full border px-1.5 text-[10px] leading-4"
+              variant="outline"
+              class="shrink-0 px-1.5 py-0 font-normal"
               :class="kindClass(e.kind)"
             >
               {{ kindLabel(e.kind) }}
-            </span>
-            <span class="ml-auto shrink-0 text-[10px] leading-4 text-faint">
+            </Badge>
+            <span class="ml-auto shrink-0 text-xs text-faint">
               {{ relativeTime(e.at, now) }}
             </span>
           </div>
           <div
-            class="mt-0.5 whitespace-pre-wrap break-words text-sm"
+            class="mt-0.5 whitespace-pre-wrap wrap-break-word text-sm"
             :class="e.kind === 'system' ? 'text-dim' : 'text-foreground'"
           >
             {{ e.text }}

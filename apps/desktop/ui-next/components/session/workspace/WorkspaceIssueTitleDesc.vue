@@ -5,7 +5,9 @@
        modal vẫn ghi cả form và đóng như cũ). -->
   <div v-if="!editing" class="group relative flex min-w-0 flex-col gap-2" @dblclick="startEdit">
     <div class="flex min-w-0 items-start gap-2">
-      <h2 class="itd-title min-w-0 flex-1">{{ title || item.title }}</h2>
+      <h2 class="m-0 min-w-0 flex-1 text-xl font-semibold text-foreground wrap-anywhere">
+        {{ title || item.title }}
+      </h2>
       <Button
         variant="ghost"
         size="iconSm"
@@ -17,7 +19,11 @@
         <Pencil class="size-3.5" />
       </Button>
     </div>
-    <div v-if="desc.trim()" class="itd-md">
+    <!-- Mô tả dạng đọc: markdown transcript nhưng đệm gọn cho cột 9/12 của modal. -->
+    <div
+      v-if="desc.trim()"
+      class="text-base leading-(--lh-prose) text-foreground wrap-anywhere [&_p:first-child]:mt-0"
+    >
       <template v-for="(seg, i) in segments" :key="i">
         <SessionMarkdownHtml v-if="seg.type === 'html'" :html="seg.html" />
       </template>
@@ -38,7 +44,7 @@
     <div class="relative flex min-h-0 flex-col">
       <Textarea
         v-model="desc"
-        class="min-h-[160px] resize-y pr-36"
+        class="min-h-40 resize-y pr-36"
         rows="10"
         :placeholder="t('sessions.workspace.group.field.desc')"
         @keydown.meta.enter.prevent="saveText"
@@ -49,7 +55,7 @@
       <Button
         variant="ghost"
         size="xs"
-        class="absolute right-1.5 top-1.5 gap-1 text-muted-foreground"
+        class="absolute top-1.5 right-1.5 gap-1 text-muted-foreground [&_svg]:size-3"
         :disabled="describing"
         :title="t('board.ai.describeHint')"
         @click="emit('describe')"
@@ -130,24 +136,3 @@ async function saveText(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.itd-title {
-  margin: 0;
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  font-weight: 600;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-/* Mô tả dạng đọc: markdown transcript nhưng đệm gọn cho cột 9/12 của modal. */
-.itd-md {
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.itd-md :deep(p:first-child) {
-  margin-top: 0;
-}
-</style>

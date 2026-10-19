@@ -1,29 +1,36 @@
 <template>
-  <div class="tile monsys">
-    <div class="monsysgrid">
+  <Card class="gap-0 px-3.5 py-3">
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4.5">
       <!-- CPU: từng lõi. Trung bình của các lõi là % bận THẬT của máy (tính cả
            thời gian nhân), khác với tổng CPU của các tiến trình ở hàng thẻ trên. -->
-      <div class="monsyscol">
-        <div class="monsyshd">
-          <span class="monsyst">{{ t('monitor.system.cpu') }}</span>
-          <span class="monsysval tnum" :style="{ color: levelColor(cpuLvl) }">
+      <div class="flex min-w-0 flex-col gap-1.5">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs text-faint">{{ t('monitor.system.cpu') }}</span>
+          <span class="text-lg tabular-nums" :class="levelText(cpuLvl)">
             {{ sys.cpuPercent === null ? '—' : `${Math.round(sys.cpuPercent)}%` }}
           </span>
         </div>
-        <div v-if="sys.cores.length > 0" class="moncores">
+        <!-- Một cột dọc cho mỗi lõi — đọc được "lõi nào đang gánh" trong một cái liếc,
+             và không phụ thuộc số lõi (8, 10, 16 đều vừa). -->
+        <div v-if="sys.cores.length > 0" class="flex items-end gap-1">
           <div
             v-for="(c, i) in sys.cores"
             :key="i"
-            class="moncore"
+            class="flex min-w-0 flex-1 basis-0 flex-col items-center gap-0.5"
             :title="`C${i}: ${Math.round(c)}%`"
           >
-            <div class="moncorebar">
-              <i :style="{ height: `${c}%`, background: levelColor(cpuLevel(c)) }" />
+            <!-- Chiều cao cột (34px) chính là hình dạng của biểu đồ. -->
+            <div class="flex h-8.5 w-full items-end overflow-hidden rounded-sm bg-muted">
+              <i
+                class="block w-full rounded-sm transition-[height] duration-250"
+                :class="levelBg(cpuLevel(c))"
+                :style="{ height: `${c}%` }"
+              />
             </div>
-            <span class="moncorelbl tnum">{{ Math.round(c) }}</span>
+            <span class="text-xs tabular-nums text-faint">{{ Math.round(c) }}</span>
           </div>
         </div>
-        <div class="monsyssub">
+        <div class="text-xs text-faint">
           {{
             t('monitor.system.load', {
               a: fmt(sys.loadAvg[0]),
@@ -36,43 +43,53 @@
 
       <!-- RAM + swap: "đang dùng / tổng", vì một con số tuyệt đối không cho biết
            còn bao nhiêu. Swap đã dùng nhiều = máy đang thiếu RAM thật. -->
-      <div class="monsyscol">
-        <div class="monsyshd">
-          <span class="monsyst">{{ t('monitor.system.mem') }}</span>
-          <span class="monsysval tnum" :style="{ color: levelColor(memLvl) }">
+      <div class="flex min-w-0 flex-col gap-1.5">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs text-faint">{{ t('monitor.system.mem') }}</span>
+          <span class="text-lg tabular-nums" :class="levelText(memLvl)">
             {{ formatMem(sys.memUsedKb) }} / {{ formatMem(sys.memTotalKb) }}
           </span>
         </div>
         <!-- Hai đoạn: phần bị chiếm thật, rồi file cache (nhạt). Gộp cache vào
              "đã dùng" là cách bản đầu ra 99% trên mọi máy — đúng về chữ nghĩa
-             nhưng vô dụng, vì macOS luôn lấp đầy RAM bằng cache. -->
-        <div class="monmeter monmeter2">
-          <i :style="{ width: `${memPct}%`, background: levelColor(memLvl) }" />
+             nhưng vô dụng, vì macOS luôn lấp đầy RAM bằng cache. Cache mờ đi: nó CÓ
+             chiếm chỗ nhưng nhường lại ngay khi cần. -->
+        <div class="flex h-1.5 overflow-hidden rounded-full bg-muted">
           <i
-            class="monmetercache"
-            :style="{ width: `${cachePct}%`, background: levelColor(memLvl) }"
+            class="block h-full rounded-full transition-[width] duration-250"
+            :class="levelBg(memLvl)"
+            :style="{ width: `${memPct}%` }"
+          />
+          <i
+            class="block h-full rounded-full opacity-28 transition-[width] duration-250"
+            :class="levelBg(memLvl)"
+            :style="{ width: `${cachePct}%` }"
           />
         </div>
-        <div class="monsyssub">{{ memSub }}</div>
+        <div class="text-xs text-faint">{{ memSub }}</div>
 
         <template v-if="sys.swapUsedKb > 0">
-          <div class="monsyshd monsysswaphd">
-            <span class="monsyst">{{ t('monitor.system.swap') }}</span>
+          <div class="mt-2 flex items-baseline justify-between gap-2">
+            <span class="text-xs text-faint">{{ t('monitor.system.swap') }}</span>
             <!-- CHỈ số tuyệt đối. `swapTotal` là kích thước swapfile HIỆN TẠI mà
                  macOS tự nới khi cần, không phải trần — hiện "11.4/12.0 GB" là
                  bịa ra một cái trần rồi báo động vì sắp chạm nó. -->
-            <span class="monsysval tnum" :style="{ color: levelColor(swapLvl) }">
+            <span class="text-lg tabular-nums" :class="levelText(swapLvl)">
               {{ formatMem(sys.swapUsedKb) }}
             </span>
           </div>
-          <div class="monmeter">
-            <i :style="{ width: `${swapVsRam}%`, background: levelColor(swapLvl) }" />
+          <div class="h-1.5 overflow-hidden rounded-full bg-muted">
+            <i
+              class="block h-full rounded-full transition-[width] duration-250"
+              :class="levelBg(swapLvl)"
+              :style="{ width: `${swapVsRam}%` }"
+            />
           </div>
-          <div class="monsyssub">{{ t('monitor.system.swapHint') }}</div>
+          <div class="text-xs text-faint">{{ t('monitor.system.swapHint') }}</div>
         </template>
       </div>
     </div>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -80,10 +97,10 @@ import { computed } from 'vue'
 import {
   cpuLevel,
   formatMem,
-  levelColor,
   type SystemStats,
   type UsageLevel,
 } from '~/composables/useMonitorManager'
+import { levelBg, levelText } from './monitor-level'
 
 const props = defineProps<{ sys: SystemStats }>()
 
@@ -127,99 +144,3 @@ const memSub = computed(() => {
   return `${base} · ${t('monitor.system.memCached', { size: formatMem(props.sys.memCachedKb) })}`
 })
 </script>
-
-<style scoped>
-.monsys {
-  padding: 12px 14px;
-}
-.monsysgrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 18px;
-}
-.monsyscol {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.monsyshd {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.monsysswaphd {
-  margin-top: 8px;
-}
-.monsyst {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.monsysval {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-}
-.monsyssub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-/* Một cột dọc cho mỗi lõi — đọc được "lõi nào đang gánh" trong một cái liếc,
-   và không phụ thuộc số lõi (8, 10, 16 đều vừa). */
-.moncores {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-}
-.moncore {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-.moncorebar {
-  width: 100%;
-  height: 34px; /* design-token-ok: chiều cao cột chính là hình dạng */
-  border-radius: var(--r-xs);
-  background: var(--bgActive);
-  display: flex;
-  align-items: flex-end;
-  overflow: hidden;
-}
-.moncorebar > i {
-  display: block;
-  width: 100%;
-  border-radius: var(--r-xs);
-  transition: height 0.25s ease;
-}
-.moncorelbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.monmeter {
-  height: 6px; /* design-token-ok: độ dày vạch chính là hình dạng */
-  border-radius: var(--r-pill);
-  background: var(--bgActive);
-  overflow: hidden;
-}
-.monmeter > i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  transition: width 0.25s ease;
-}
-/* Hai đoạn nằm cạnh nhau trên cùng một vạch. */
-.monmeter2 {
-  display: flex;
-}
-/* Cache mờ đi: nó CÓ chiếm chỗ nhưng nhường lại ngay khi cần, nên không được
-   trông ngang hàng với phần bị chiếm thật. */
-.monmetercache {
-  opacity: 0.28;
-}
-</style>

@@ -3,9 +3,28 @@
        fetched (sessions.get). Mirrors the real layout — a right-aligned user
        bubble + left-aligned assistant text lines — with a gentle shimmer, so
        opening a session reads as "loading" instead of flashing the empty welcome. -->
-  <div class="sk" role="status" :aria-label="t('sessions.transcript.loading')" aria-busy="true">
-    <div v-for="row in ROWS" :key="row.id" class="skmsg" :class="row.side">
-      <div v-for="(w, i) in row.widths" :key="i" class="skbar" :style="{ width: w }" />
+  <div
+    class="flex flex-col gap-6 px-2.5 py-6"
+    role="status"
+    :aria-label="t('sessions.transcript.loading')"
+    aria-busy="true"
+  >
+    <!-- Một message = một cột thanh, rộng hết transcript; căn trái/phải chọn phía. -->
+    <div
+      v-for="row in ROWS"
+      :key="row.id"
+      class="flex w-full flex-col gap-2"
+      :class="row.side === 'u' ? 'items-end' : 'items-start'"
+    >
+      <!-- Hàng user = một khối bong bóng bo tròn, góc trên-phải nhỏ như bong bóng
+           user thật, để đọc ra ngay là tin gửi đi. -->
+      <Skeleton
+        v-for="(w, i) in row.widths"
+        :key="i"
+        class="bg-muted"
+        :class="row.side === 'u' ? 'h-10 rounded-2xl rounded-tr-sm' : 'h-2.5 rounded-sm'"
+        :style="{ width: w }"
+      />
     </div>
   </div>
 </template>
@@ -13,7 +32,7 @@
 <script setup lang="ts">
 // Pure presentational skeleton — no props/state. ROWS is a tiny static descriptor
 // (side + bar widths) so the shape looks organic. Assistant rows render several
-// thin text lines; user rows render a single wide bar styled as a bubble (CSS).
+// thin text lines; user rows render a single wide bar styled as a bubble.
 const { t } = useI18n()
 
 type SkRow = { id: number; side: 'a' | 'u'; widths: string[] }
@@ -24,62 +43,3 @@ const ROWS: SkRow[] = [
   { id: 4, side: 'a', widths: ['82%', '91%', '60%'] },
 ]
 </script>
-
-<style scoped>
-.sk {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  padding: 24px 10px;
-}
-/* One message = a column of bars, full transcript width; alignment picks the side. */
-.skmsg {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  width: 100%;
-}
-.skmsg.a {
-  align-items: flex-start;
-}
-.skmsg.u {
-  align-items: flex-end;
-}
-/* Shimmer: a soft band swept across via background-position (paint-only — no
-   reflow). Wash base + a lighter band trộn từ foreground = đúng nhịp "pulse" của
-   proto, đọc được trong cả hai theme (accent-wash = --bgHover cũ). */
-.skbar {
-  height: 11px;
-  border-radius: var(--r-xs);
-  background: linear-gradient(
-    90deg,
-    var(--accent-wash) 25%,
-    color-mix(in srgb, var(--accent-wash) 55%, var(--foreground) 10%) 50%,
-    var(--accent-wash) 75%
-  );
-  background-size: 200% 100%;
-  animation: sk-shimmer 1.5s ease-in-out infinite;
-}
-/* User row → a single rounded bubble block, matching the real user bubble's
-   top-right tail (.mu `rounded-2xl rounded-tr-md`), so it clearly reads as an
-   outgoing message. */
-.skmsg.u .skbar {
-  height: 40px;
-  border-radius: 1rem;
-  border-top-right-radius: var(--r-sm);
-}
-@keyframes sk-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .skbar {
-    animation: none;
-    background: var(--accent-wash);
-  }
-}
-</style>

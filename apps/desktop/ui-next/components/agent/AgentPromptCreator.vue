@@ -14,9 +14,14 @@
   >
     <template #hint>
       {{ t('agents.creator.hint') }}
-      <button class="apc-manual" @click="emit('manual')">
+      <!-- Link thoát sang form tay — nằm trong hint, mảnh để không đánh chiếm creator. -->
+      <Button
+        variant="link"
+        class="ml-1 inline h-auto p-0 align-baseline text-[length:inherit] font-normal underline hover:opacity-80"
+        @click="emit('manual')"
+      >
         {{ t('agents.creator.manual') }}
-      </button>
+      </Button>
     </template>
   </LibraryCreatorPanel>
 </template>
@@ -39,21 +44,3 @@ const emit = defineEmits<{ close: []; turn: []; manual: [] }>()
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-/* Link thoát sang form tay — nằm trong hint, mảnh để không đánh chiếm creator */
-.apc-manual {
-  display: inline;
-  padding: 0;
-  margin-left: 4px;
-  background: none;
-  border: none;
-  color: var(--accent);
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.apc-manual:hover {
-  opacity: 0.8;
-}
-</style>

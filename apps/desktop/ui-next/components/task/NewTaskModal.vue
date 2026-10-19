@@ -5,57 +5,65 @@
     :width="560"
     @close="emit('cancel')"
   >
-    <div class="nt">
+    <div class="flex flex-col gap-4">
       <!-- project -->
-      <div class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.project') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.project') }}</Label>
         <AppSelect
           v-model="projectId"
           :options="projectOptions"
           :placeholder="t('tasks.new.projectPlaceholder')"
           width="100%"
         />
-        <div class="nt-hint">{{ t('tasks.new.projectHint') }}</div>
+        <div class="text-xs text-dim">{{ t('tasks.new.projectHint') }}</div>
       </div>
 
       <!-- source (hidden for a session-spawned task — its source IS the session) -->
-      <div v-if="!originSessionId" class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.source') }}</label>
-        <div class="seg">
-          <span
+      <div v-if="!originSessionId" class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.source') }}</Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="self-start rounded-lg bg-muted p-0.5"
+          :model-value="sourceType"
+          @update:model-value="pickSource"
+        >
+          <ToggleGroupItem
             v-for="s in sourceOptions"
             :key="s.id"
-            :class="{ on: sourceType === s.id }"
-            @click="sourceType = s.id"
+            :value="s.id"
+            class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
           >
             {{ s.label }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      <div v-if="!originSessionId && sourceType === 'github'" class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.githubUrl') }}</label>
+      <div v-if="!originSessionId && sourceType === 'github'" class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.githubUrl') }}</Label>
         <Input
           v-model="githubUrl"
           placeholder="https://github.com/org/repo/pull/123"
-          class="mono"
+          class="font-mono"
           @input="onGithubInput"
         />
       </div>
-      <div v-if="!originSessionId && sourceType === 'jira'" class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.jiraKey') }}</label>
+      <div v-if="!originSessionId && sourceType === 'jira'" class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.jiraKey') }}</Label>
         <Input
           :model-value="jiraKey"
           placeholder="PROJ-1234"
-          class="mono"
+          class="font-mono"
           @update:model-value="jiraKey = $event.toUpperCase()"
         />
       </div>
 
       <!-- optional connection -->
-      <div v-if="!originSessionId && showConnectionPicker" class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.connection') }}</label>
-        <div v-if="!connections.length" class="nt-hint">{{ t('tasks.new.connectionEmpty') }}</div>
+      <div v-if="!originSessionId && showConnectionPicker" class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.connection') }}</Label>
+        <div v-if="!connections.length" class="text-xs text-dim">
+          {{ t('tasks.new.connectionEmpty') }}
+        </div>
         <template v-else>
           <AppSelect
             v-model="connectionId"
@@ -63,47 +71,52 @@
             :placeholder="t('tasks.new.connectionNone')"
             width="100%"
           />
-          <div class="nt-hint">{{ t('tasks.new.connectionHint') }}</div>
+          <div class="text-xs text-dim">{{ t('tasks.new.connectionHint') }}</div>
         </template>
       </div>
 
       <!-- title -->
-      <div class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.titleLabel') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.titleLabel') }}</Label>
         <Input v-model="title" :placeholder="t('tasks.new.titlePh')" />
       </div>
 
       <!-- description -->
-      <div class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.description') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.description') }}</Label>
+        <Textarea
           v-model="description"
-          class="nt-input nt-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :placeholder="t('tasks.new.descriptionPh')"
         />
       </div>
 
       <!-- workflow -->
-      <div class="nt-field">
-        <label class="nt-label">{{ t('tasks.new.workflow') }}</label>
-        <div v-if="!workflows.length" class="nt-hint">{{ t('tasks.new.workflowEmpty') }}</div>
-        <div v-else class="nt-wflist">
-          <button
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('tasks.new.workflow') }}</Label>
+        <div v-if="!workflows.length" class="text-xs text-dim">
+          {{ t('tasks.new.workflowEmpty') }}
+        </div>
+        <RadioGroup
+          v-else
+          class="gap-1.5"
+          :model-value="workflowId"
+          @update:model-value="(v) => (workflowId = String(v))"
+        >
+          <label
             v-for="wf in workflows"
             :key="wf.id"
-            type="button"
-            class="nt-wf"
-            :class="{ on: workflowId === wf.id }"
-            @click="workflowId = wf.id"
+            class="flex w-full cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5"
+            :class="workflowId === wf.id ? 'border-selected-border bg-selected' : 'bg-muted'"
           >
-            <span class="nt-wf-radio" :class="{ on: workflowId === wf.id }" />
-            <span class="nt-wf-text">
-              <span class="nt-wf-name">{{ wf.name }}</span>
-              <span v-if="wf.description" class="nt-wf-desc">{{ wf.description }}</span>
+            <RadioGroupItem :value="wf.id" class="mt-0.5" />
+            <span class="flex min-w-0 flex-col gap-0.5">
+              <span class="text-sm font-medium text-foreground">{{ wf.name }}</span>
+              <span v-if="wf.description" class="text-xs text-dim">{{ wf.description }}</span>
             </span>
-          </button>
-        </div>
+          </label>
+        </RadioGroup>
       </div>
     </div>
 
@@ -126,7 +139,7 @@
 </template>
 
 <script setup lang="ts">
-// New Task modal — port of the old UI NewTaskModal in prototype CSS. Project +
+// New Task modal. Project +
 // source (github/jira/manual) + optional connection + title/description +
 // workflow picker. Source/connection/workflow data come from the page via the
 // useNewTaskData bundle (no store import — SoC). Before creating the task the
@@ -135,6 +148,7 @@
 // DirtyWorkspaceWarnModal (commit / stash / continue), 'auto-stash' stashes
 // silently then continues. Clean workspace (or suppressed warn) creates directly.
 import { computed, ref, watch } from 'vue'
+import type { AcceptableValue } from 'reka-ui'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import DirtyWorkspaceWarnModal from '~/components/task/DirtyWorkspaceWarnModal.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
@@ -246,6 +260,13 @@ watch(projectId, () => {
     workflowId.value = workflows.value[0]?.id ?? ''
   }
 })
+
+// ToggleGroup single cho bấm lại mục đang bật để bỏ chọn (emit rỗng) — nguồn luôn
+// phải có một giá trị nên bỏ qua lần bỏ chọn đó.
+const pickSource = (v: AcceptableValue | AcceptableValue[]) => {
+  const opt = sourceOptions.find((o) => o.id === v)
+  if (opt) sourceType.value = opt.id
+}
 
 const showConnectionPicker = computed(
   () => sourceType.value === 'github' || sourceType.value === 'jira',
@@ -464,109 +485,3 @@ const onDirtyContinue = (suppress: boolean) => {
   if (payload) emit('save', payload)
 }
 </script>
-
-<style scoped>
-.nt {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.nt-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.nt-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.nt-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.nt-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — path / branch */
-  font-family: var(--code);
-}
-.nt-input:focus {
-  border-color: var(--accent);
-}
-.nt-ta {
-  resize: vertical;
-  min-height: 4rem;
-  line-height: var(--lh-md);
-}
-.nt-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.nt-wflist {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.nt-wf {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  cursor: pointer;
-}
-.nt-wf.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.nt-wf-radio {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 1.5px solid var(--borderStrong);
-  flex: 0 0 auto;
-  margin-top: 2px;
-  display: grid;
-  place-items: center;
-}
-.nt-wf-radio.on {
-  border-color: var(--accent);
-}
-.nt-wf-radio.on::after {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.nt-wf-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.nt-wf-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.nt-wf-desc {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

@@ -2,17 +2,22 @@
   <!-- Link ngược phiên → thread Slack (docs/features/slack-threads.md). Cùng khuôn chip
        của SessionContextStrip: phiên không gắn thread thì VẮNG MẶT khỏi DOM. Chỉ một
        hành động (mở cửa sổ Slack tới thread) nên bấm thẳng, không popover. -->
-  <button
+  <Button
     v-if="thread"
     type="button"
-    class="ctxchip"
+    variant="outline"
+    size="xs"
+    class="h-5.5 min-w-0 shrink gap-1.5 rounded-md px-2.5 font-normal text-dim shadow-none hover:text-foreground [&_svg]:size-3"
     :title="t('slackSession.chip.title')"
     @click="openThread"
   >
-    <Icon name="message" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    <span class="ctxchip-lbl">{{ t('slackSession.chip.label', { title: label }) }}</span>
-    <span v-if="hasNew" class="ctxchip-sub">· {{ t('slackSession.chip.new') }}</span>
-  </button>
+    <Icon name="message" />
+    <!-- Nhãn tự cắt để chip nhường chỗ khi hàng chật. -->
+    <span class="min-w-0 truncate text-foreground">
+      {{ t('slackSession.chip.label', { title: label }) }}
+    </span>
+    <span v-if="hasNew" class="flex-none text-faint">· {{ t('slackSession.chip.new') }}</span>
+  </Button>
 </template>
 
 <script setup lang="ts">

@@ -1,5 +1,8 @@
 <template>
-  <div class="lgs">
+  <!-- Hai cột (trái 240–320px · phải phần còn lại), cùng lề với các tab /infra khác. -->
+  <div
+    class="grid h-full min-h-0 grid-cols-[minmax(15rem,20rem)_minmax(0,1fr)] gap-3.5 overflow-hidden px-4 py-3.5"
+  >
     <InfraEmpty
       v-if="!profile"
       :title="t('infra.empty.noProfile.title')"
@@ -10,26 +13,37 @@
 
     <template v-else>
       <!-- ── Cột trái (3/12): ngữ cảnh · chế độ · khoảng · nhóm log · thư viện ── -->
-      <aside class="lgs-side icard">
-        <!-- Hai chế độ: xem dòng mới nhất (rẻ, tail) hay soạn truy vấn Insights. -->
-        <div class="seg lgs-mode">
-          <span
+      <!-- Hai cột là CARD; đây chỉ thêm bố cục + padding trong khung. -->
+      <Card class="min-h-0 gap-3 overflow-y-auto p-3">
+        <!-- Hai chế độ: xem dòng mới nhất (rẻ, tail) hay soạn truy vấn Insights.
+             Ba nhãn ĐẦY ĐỦ cần 302px trong khi cột chỉ cho 230–284px, nên nhãn rút
+             ngắn (câu đầy đủ ở `title`). `whitespace-nowrap` KHÔNG được bỏ: cột hẹp
+             nhất gặp cỡ chữ lớn nhất thì thanh gãy thành hai hàng gọn chứ không bẻ
+             chữ giữa cụm từ. Bấm lại ô đang bật không bỏ chọn — xem `onMode`. -->
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          class="w-full flex-wrap self-stretch"
+          :model-value="mode"
+          @update:model-value="onMode"
+        >
+          <ToggleGroupItem
             v-for="m in MODES"
             :key="m"
-            :class="{ on: mode === m }"
-            role="button"
-            :aria-pressed="mode === m"
+            :value="m"
+            class="h-ctrl-sm flex-auto px-2 text-xs whitespace-nowrap data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:text-primary"
             :title="t(`infra.logs.mode.${m}Full`)"
-            @click="mode = m"
           >
             {{ t(`infra.logs.mode.${m}`) }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
 
         <!-- Khoảng thời gian: control kiểu AWS CloudWatch (thanh gọn + popover
              Absolute/Relative). Dùng chung với Giám sát/Dashboard. -->
-        <div class="lgs-block">
-          <span class="lgs-block-lbl">{{ t('infra.logs.window.label') }}</span>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('infra.logs.window.label') }}
+          </span>
           <InfraTimeRange v-model="win" />
         </div>
 
@@ -58,16 +72,20 @@
           @delete="onDeleteSaved"
           @clear-history="onClearHistory"
         />
-      </aside>
+      </Card>
 
       <!-- ── Cột phải (9/12): log chính ─────────────────────────────────────── -->
-      <main class="lgs-main icard">
+      <!-- Bảng/danh sách bên trong cột này không tự mang khung — card trong card. -->
+      <Card class="min-h-0 gap-2 overflow-y-auto p-3">
         <!-- ══════════ TAIL (mặc định) ══════════ -->
         <template v-if="mode === 'tail'">
           <!-- Chưa bấm nhóm log nào — cột trái là nơi bắt đầu. -->
-          <div v-if="!tailGroup" class="lgs-pick">
-            <Icon name="table" class="lgs-pick-ic" />
-            <p class="lgs-pick-txt">{{ t('infra.logs.tail.pickGroup') }}</p>
+          <div
+            v-if="!tailGroup"
+            class="flex flex-auto flex-col items-center justify-center gap-2 text-dim"
+          >
+            <Icon name="table" class="size-5" />
+            <p class="max-w-105 text-center text-sm">{{ t('infra.logs.tail.pickGroup') }}</p>
           </div>
 
           <!-- ── CHỦ: danh sách stream của nhóm vừa bấm ──────────────────────
@@ -75,17 +93,20 @@
                Chưa chọn stream thì KHÔNG gọi dòng log nào — `activeStream === null`
                là trạng thái riêng, khác hẳn `''` (gộp mọi stream). -->
           <template v-else-if="activeStream === null">
-            <div class="lgs-mainbar">
+            <div class="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 :disabled="streamsLoading"
                 variant="outline"
                 @click="onTail(tailGroup)"
               >
-                <Icon :name="streamsLoading ? 'clock' : 'refresh'" class="lgs-ic" />
+                <Icon :name="streamsLoading ? 'clock' : 'refresh'" />
                 {{ streamsLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
               </Button>
-              <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
+              <!-- mono-ok: tên log group là định danh tài nguyên -->
+              <span class="min-w-0 font-mono text-xs wrap-anywhere text-dim" :title="tailGroup">
+                {{ tailGroup }}
+              </span>
             </div>
 
             <InfraLogsStreamPicker
@@ -98,7 +119,7 @@
             <!-- Ghi chú về giá đứng ở ĐÂY, không ở màn đọc dòng: đây là lúc người ta
                  quyết định có mở hay không, còn ở bên kia nó chỉ ăn chiều cao của
                  chính cái bảng vừa mở ra để đọc. -->
-            <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
+            <p class="text-xs text-faint">{{ t('infra.logs.tail.rateNote') }}</p>
           </template>
 
           <!-- ── CHI TIẾT: dòng log của stream đã chọn ─────────────────────── -->
@@ -108,10 +129,19 @@
                sinh thêm một lệnh gọi AWS nào.
                `disabled` khi tắt ⇒ inline đúng chỗ cũ, không đổi gì. -->
           <Teleport v-else to="body" :disabled="!tailFull">
-            <div class="lgs-tail" :class="{ full: tailFull }">
-              <div class="lgs-mainbar">
+            <!-- Bọc phần "đọc dòng log" để teleport được nguyên khối. Khi KHÔNG toàn màn
+                 hình nó cư xử như các con trực tiếp của cột chính (cùng trục, cùng khe,
+                 `min-h-0` để bảng còn co được) và là khối neo (`relative`) cho nút đọc
+                 thêm. Toàn màn hình: phủ kín cửa sổ ở `z-160` — trên mọi lớp của shell
+                 (≤ 92) nhưng DƯỚI Dialog (170) và popper (180) của shadcn, để hộp chi
+                 tiết dòng / Tuỳ chọn / menu chọn mở từ bên trong vẫn nổi lên trên. -->
+            <div
+              class="flex min-h-0 flex-auto flex-col gap-2"
+              :class="tailFull ? 'fixed inset-0 z-160 bg-background p-3' : 'relative'"
+            >
+              <div class="flex flex-wrap items-center gap-2">
                 <Button v-if="!tailFull" type="button" variant="outline" @click="backToStreams">
-                  <Icon name="chev-left" class="lgs-ic" />
+                  <Icon name="chev-left" />
                   {{ t('infra.logs.streams.back') }}
                 </Button>
                 <Button
@@ -120,25 +150,35 @@
                   variant="outline"
                   @click="refreshTail"
                 >
-                  <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
+                  <Icon :name="tailLoading ? 'clock' : 'refresh'" />
                   {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
                 </Button>
                 <!-- Đang đọc CÁI GÌ: nhóm rồi tới stream. Thiếu vế sau thì hai bảng
                      của hai stream khác nhau trông y hệt nhau. Ở toàn màn hình thì
                      càng cần: cột trái mang ngữ cảnh đã bị ẩn đi. -->
-                <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
-                <Icon name="chev-right" class="lgs-crumb-ic" />
-                <span class="lgs-mainbar-group" :title="activeStream || undefined">
+                <!-- mono-ok: tên log group / stream là định danh tài nguyên. Hiện ĐẦY ĐỦ:
+                     giữ nguyên khi vừa một dòng, tự ngắt ở bất kỳ đâu khi hẹp. -->
+                <span class="min-w-0 font-mono text-xs wrap-anywhere text-dim" :title="tailGroup">
+                  {{ tailGroup }}
+                </span>
+                <Icon name="chev-right" class="size-3 shrink-0 text-faint" />
+                <span
+                  class="min-w-0 font-mono text-xs wrap-anywhere text-dim"
+                  :title="activeStream || undefined"
+                >
                   {{ activeStream === '' ? t('infra.logs.streams.all') : activeStream }}
                 </span>
-                <span class="lgs-spacer" />
-                <span v-if="!tailLoading && tailRanAt" class="lgs-meta">
+                <span class="flex-auto" />
+                <span
+                  v-if="!tailLoading && tailRanAt"
+                  class="text-xs text-muted-foreground tabular-nums"
+                >
                   {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
-                  <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
+                  <span class="ml-1 text-faint">· {{ tailWhenLabel }}</span>
                 </span>
                 <!-- "Còn nữa" là SỰ THẬT chứ không phải cảnh báo nữa: đã có đường
                      đọc tiếp ngay dưới bảng. -->
-                <span v-if="tailNextToken" class="lgs-trunc">
+                <span v-if="tailNextToken" class="text-xs text-warning">
                   {{ t('infra.logs.tail.hasMore') }}
                 </span>
                 <Button
@@ -146,18 +186,23 @@
                   :title="
                     tailFull ? t('infra.logs.tail.exitFullTitle') : t('infra.logs.tail.fullTitle')
                   "
+                  :aria-label="
+                    tailFull ? t('infra.logs.tail.exitFullTitle') : t('infra.logs.tail.fullTitle')
+                  "
                   variant="outline"
-                  size="sm"
+                  size="iconMd"
                   @click="tailFull = !tailFull"
                 >
-                  <Icon :name="tailFull ? 'fullscreen-exit' : 'fullscreen'" class="lgs-ic" />
+                  <Icon :name="tailFull ? 'fullscreen-exit' : 'fullscreen'" />
                 </Button>
               </div>
 
-              <div v-if="tailError" class="lgs-error">
-                {{ tailError }}
-                <span v-if="tailTokenDead">— {{ t('infra.logs.tail.tokenDead') }}</span>
-              </div>
+              <Alert v-if="tailError" variant="destructive" class="border-destructive px-2 py-1.5">
+                <AlertDescription class="block">
+                  {{ tailError }}
+                  <span v-if="tailTokenDead">— {{ t('infra.logs.tail.tokenDead') }}</span>
+                </AlertDescription>
+              </Alert>
 
               <InfraLogsFilters
                 v-model:quick="quickFilter"
@@ -186,10 +231,11 @@
                    Vẫn là một NÚT chứ không tự nạp khi cuộn: mỗi lượt là một request
                    `filter-log-events` thật, tính tiền theo số request — nên nhãn đó
                    nằm trong `title`, chỗ người dùng hỏi thì mới trả lời. -->
-              <button
+              <Button
                 v-if="tailNextToken && !tailLoading"
-                class="lgs-more"
-                type="button"
+                variant="outline"
+                size="iconMd"
+                class="absolute bottom-2.5 left-1/2 z-2 -translate-x-1/2 rounded-full bg-card text-dim opacity-45 shadow-md transition-opacity hover:bg-card hover:text-foreground hover:opacity-100 disabled:opacity-35 [&_svg]:size-3.5"
                 :disabled="tailLoadingMore"
                 :title="`${t('infra.logs.tail.loadMore')} — ${t('infra.logs.tail.loadMoreHint')}`"
                 :aria-label="t('infra.logs.tail.loadMore')"
@@ -198,8 +244,8 @@
                 <!-- DẤU CỘNG chứ không phải mũi tên xuống: mũi tên xuống trùng
                      nghĩa với "cuộn xuống cuối", mà nay cạnh nó có đúng một nút làm
                      việc đó thật. Cộng = thêm dòng vào tập đang có. -->
-                <Icon :name="tailLoadingMore ? 'clock' : 'plus'" class="lgs-more-ic" />
-              </button>
+                <Icon :name="tailLoadingMore ? 'clock' : 'plus'" />
+              </Button>
             </div>
           </Teleport>
         </template>
@@ -228,8 +274,10 @@
         <template v-else>
           <InfraLogsQueryEditor v-model="query" @run="onRun" @cancel="onCancel" />
 
-          <div class="itoolbar lgs-runbar">
-            <div class="itoolgrp">
+          <!-- Thanh chạy là một Card; mỗi cụm nghĩa là một đơn vị gãy dòng (`shrink-0`)
+               nên khi hẹp thanh xuống dòng theo cụm, không bỏ rơi một nút lẻ. -->
+          <Card class="shrink-0 flex-row flex-wrap items-center gap-2.5 px-2.5 py-2">
+            <div class="flex shrink-0 flex-wrap items-center gap-1.5">
               <Button
                 type="button"
                 :disabled="!canRun"
@@ -237,7 +285,7 @@
                 variant="default"
                 @click="onRun"
               >
-                <Icon :name="running ? 'clock' : 'play'" class="lgs-ic" />
+                <Icon :name="running ? 'clock' : 'play'" />
                 {{ running ? t('infra.logs.run.running') : t('infra.logs.run.go') }}
               </Button>
               <Button
@@ -247,18 +295,18 @@
                 variant="outline"
                 @click="onCancel"
               >
-                <Icon name="stop" class="lgs-ic" />
+                <Icon name="stop" />
                 {{ t('infra.logs.run.cancel') }}
               </Button>
             </div>
 
-            <div class="itoolgrp">
+            <div class="flex shrink-0 flex-wrap items-center gap-1.5">
               <Button type="button" :disabled="saving" variant="outline" @click="onSave">
-                <Icon name="save" class="lgs-ic" />
+                <Icon name="save" />
                 {{ t('infra.logs.run.save') }}
               </Button>
               <Button type="button" variant="outline" @click="onCopyQuery">
-                <Icon name="copy" class="lgs-ic" />
+                <Icon name="copy" />
                 {{ t('infra.logs.run.copyQuery') }}
               </Button>
               <Button
@@ -267,18 +315,21 @@
                 variant="outline"
                 @click="onSendToMonitoring"
               >
-                <Icon name="forward" class="lgs-ic" />
+                <Icon name="forward" />
                 {{ t('infra.logs.window.sendToMonitoring') }}
               </Button>
             </div>
 
-            <div class="itoolgrp iend lgs-meta-grp">
-              <label class="lgs-check">
-                <input v-model="histogramOn" type="checkbox" />
+            <div class="ml-auto flex shrink-0 flex-wrap items-center gap-2.5">
+              <Label class="cursor-pointer gap-1 text-xs font-normal text-dim">
+                <Checkbox
+                  :model-value="histogramOn"
+                  @update:model-value="histogramOn = $event === true"
+                />
                 {{ t('infra.logs.run.histogram') }}
-              </label>
+              </Label>
 
-              <span class="lgs-meta">
+              <span class="text-xs text-muted-foreground tabular-nums">
                 <template v-if="estimating">{{ t('infra.logs.run.estimating') }}</template>
                 <template v-else-if="estimate">
                   {{
@@ -287,7 +338,7 @@
                       usd: plannedUsd.toFixed(4),
                     })
                   }}
-                  <span class="lgs-meta-dim">
+                  <span class="ml-1 text-faint">
                     {{
                       estimate.basis === 'history'
                         ? t('infra.logs.run.basisHistory')
@@ -305,17 +356,25 @@
                 size="sm"
                 @click="refreshEstimate"
               >
-                <Icon name="refresh" class="lgs-ic" />
+                <Icon name="refresh" />
                 {{ t('infra.logs.run.reestimate') }}
               </Button>
             </div>
-          </div>
+          </Card>
 
-          <div v-if="runError" class="lgs-error">{{ runError }}</div>
+          <Alert v-if="runError" variant="destructive" class="border-destructive px-2 py-1.5">
+            <AlertDescription>{{ runError }}</AlertDescription>
+          </Alert>
 
-          <div v-if="status" class="lgs-status">
-            <span class="lgs-status-chip" :class="{ ok: status === 'Complete' }">{{ status }}</span>
-            <span class="lgs-meta">
+          <div v-if="status" class="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="outline"
+              class="rounded-sm font-normal"
+              :class="status === 'Complete' ? 'border-success text-success' : 'text-dim'"
+            >
+              {{ status }}
+            </Badge>
+            <span class="text-xs text-muted-foreground tabular-nums">
               {{
                 t('infra.logs.run.scanned', {
                   size: formatBytes(bytesScanned),
@@ -324,7 +383,7 @@
                 })
               }}
             </span>
-            <span v-if="ranAt" class="lgs-meta-dim">{{ whenLabel }}</span>
+            <span v-if="ranAt" class="text-xs text-faint">{{ whenLabel }}</span>
           </div>
 
           <InfraLogsHistogram :buckets="histogram" :from-rows="histogramFromRows" @zoom="onZoom" />
@@ -349,9 +408,9 @@
             @trace="onTraceFromRow"
           />
 
-          <p class="lgs-hint">{{ t('infra.logs.run.rateNote') }}</p>
+          <p class="text-xs text-faint">{{ t('infra.logs.run.rateNote') }}</p>
         </template>
-      </main>
+      </Card>
     </template>
   </div>
 </template>
@@ -506,6 +565,12 @@ const bridge = useInfraWindowSync()
 
 /** Ba chế độ, khai một chỗ để thanh chuyển chế độ không phải liệt kê tay. */
 const MODES = ['tail', 'advanced', 'trace'] as const
+
+/** Bấm lại chế độ đang bật thì ToggleGroup gửi giá trị rỗng — bỏ qua để luôn có một chế độ. */
+function onMode(v: unknown): void {
+  const next = MODES.find((m) => m === v)
+  if (next) mode.value = next
+}
 
 // ── Lần theo một request (L5) ───────────────────────────────────────────────
 // Nhóm log + khoảng thời gian do CỘT TRÁI sở hữu, nên chúng được đưa vào qua hàm
@@ -757,283 +822,3 @@ onBeforeUnmount(() => {
   void cancel()
 })
 </script>
-
-<style scoped>
-.lgs {
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: 14px;
-  padding: 14px 16px;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Hai cột là CARD (skin dùng chung `.icard`: viền + --r-card + --bgPanel + shadow).
-   Đây chỉ thêm bố cục + padding trong khung. */
-.lgs-side {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-.lgs-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-/* Bọc phần "đọc dòng log" để nó teleport được nguyên khối. Khi KHÔNG toàn màn hình,
-   khối này phải cư xử y như lúc các con còn là con trực tiếp của `.lgs-main`: cùng
-   trục, cùng khe, và cùng `min-height: 0` để bảng còn co được. */
-.lgs-tail {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  flex: 1 1 auto;
-  /* Khối neo cho nút "đọc thêm" nổi bên dưới. */
-  position: relative;
-}
-
-/* Nút đọc thêm NỔI trên đáy bảng, không chiếm một hàng nào của bố cục.
-   `position: absolute` nên nó không đẩy bảng lên, và mờ khi rảnh để không tranh
-   chỗ với chính những dòng log nó sắp mang về. */
-.lgs-more {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bgEl);
-  color: var(--textDim);
-  box-shadow: var(--shadow-md);
-  opacity: 0.45;
-  cursor: pointer;
-  transition:
-    opacity 0.15s,
-    color 0.15s;
-}
-
-.lgs-more:hover {
-  opacity: 1;
-  color: var(--text);
-}
-
-.lgs-more:disabled {
-  cursor: default;
-  opacity: 0.35;
-}
-
-.lgs-more-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-/* Toàn màn hình: phủ kín cửa sổ. `z-index` 300 bằng lớp cao nhất đang dùng
-   (xem reference_ui_next_zindex_bands) — popover chọn cột nằm ở 129 nên khi khối này
-   đã teleport ra `<body>` thì thứ tự DOM đủ giữ popover ở trên. */
-.lgs-tail.full {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  background: var(--bg);
-  padding: 12px;
-  gap: 8px;
-}
-
-/* Bảng bên trong `.lgs-main` đã bị gỡ khung để không thành "card trong card"; ở toàn
-   màn hình nó không còn nằm trong `.lgs-main` nữa nên phải gỡ lại tại chỗ. */
-.lgs-tail.full :deep(.tblcard) {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-}
-
-/* Bảng kết quả bên trong cột phải đã là `.tblcard` — bỏ khung/shadow/nền của nó
-   để không thành "card trong card"; header dính (--bgEl) vẫn đủ tách khỏi thân. */
-.lgs-main :deep(.tblcard) {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-  border-radius: 0;
-}
-
-.lgs-mode {
-  align-self: stretch;
-}
-
-/* Chưa bấm nhóm log nào — panel chính nói ra bước tiếp theo thay vì để trống. */
-.lgs-pick {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--textDim);
-}
-
-.lgs-pick-ic {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-}
-
-.lgs-pick-txt {
-  margin: 0;
-  max-width: 420px;
-  text-align: center;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-/* Dấu phân cách nhóm → stream trên thanh công cụ. */
-.lgs-crumb-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-
-/* Ba chế độ trong một cột rộng 240–320px.
- *
- * ⚠ Đo được ở bản trước: ba nhãn ĐẦY ĐỦ ("Dòng mới nhất" · "Truy vấn nâng cao" ·
- * "Lần theo request") cần 302px, trong khi cột chỉ cho 230–284px — nên mỗi nhãn bị
- * bẻ GIỮA CỤM TỪ ("Dòng mới / nhất"), và thanh cao 54–72px thay vì 36px. Nhãn rút
- * ngắn lại vừa một hàng ở mọi cỡ chữ Appearance 13→18 và mọi bề rộng cột 216→296;
- * câu đầy đủ nằm ở `title`.
- *
- * `white-space: nowrap` là phần KHÔNG được bỏ dù nhãn đã ngắn: khi cột hẹp nhất gặp
- * cỡ chữ lớn nhất, thanh phải gãy thành hai hàng GỌN chứ không bẻ chữ. */
-.lgs-mode > span {
-  flex: 1 1 auto;
-  text-align: center;
-  white-space: nowrap;
-  padding-left: 8px;
-  padding-right: 8px;
-}
-
-.lgs-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.lgs-block-lbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-
-/* Thanh công cụ của cột chính (tail). Da/nền dùng lại `.itoolbar` khi cần. */
-.lgs-mainbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.lgs-mainbar-group {
-  /* Hiện ĐẦY ĐỦ tên nhóm: giữ nguyên khi vừa một dòng, tự ngắt khi hẹp (định danh
-     dài nên ngắt ở bất kỳ đâu). `min-width: 0` cho phép co trong hàng flex. */
-  min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  /* mono-ok: tên log group là định danh tài nguyên */
-  font-family: var(--code);
-}
-
-.lgs-spacer {
-  flex: 1 1 auto;
-}
-
-.lgs-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lgs-meta-grp {
-  gap: 10px;
-}
-
-.lgs-meta {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-  font-variant-numeric: tabular-nums;
-}
-
-.lgs-meta-dim {
-  color: var(--textFaint);
-  margin-left: 5px;
-}
-
-.lgs-trunc {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-}
-
-.lgs-hint {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.lgs-error {
-  padding: 6px 9px;
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.lgs-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.lgs-status-chip {
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.lgs-status-chip.ok {
-  border-color: var(--green);
-  color: var(--green);
-}
-
-.lgs-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-</style>

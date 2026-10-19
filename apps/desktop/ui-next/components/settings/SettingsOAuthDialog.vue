@@ -5,54 +5,64 @@
     :lock-scrim="phase === 'confirming'"
     @close="onCancel"
   >
-    <div class="oad">
-      <div v-if="reauthAccountId" class="oareauth">{{ t('settingsModels.oauth.reauthHint') }}</div>
+    <div class="flex flex-col gap-4">
+      <div v-if="reauthAccountId" class="rounded-md border bg-muted px-3 py-2 text-dim">
+        {{ t('settingsModels.oauth.reauthHint') }}
+      </div>
       <!-- Step 1 -->
-      <section class="oastep">
-        <div class="oarow">
-          <span class="oabadge on">1</span>
-          <div class="oatext">{{ t('settingsModels.oauth.step1') }}</div>
+      <section class="flex flex-col gap-2">
+        <div class="flex items-center gap-2">
+          <span
+            class="grid size-5 shrink-0 place-items-center rounded-full border text-xs font-semibold border-transparent bg-primary text-primary-foreground"
+          >
+            1
+          </span>
+          <div class="text-foreground">{{ t('settingsModels.oauth.step1') }}</div>
         </div>
         <Button
           type="button"
-          :class="{ done: phase === 'waiting-code' }"
           :disabled="phase === 'opening' || phase === 'waiting-code' || phase === 'confirming'"
-          class="oaopen"
-          variant="default"
+          class="w-full"
+          :variant="phase === 'waiting-code' ? 'outline' : 'default'"
           @click="onOpenLogin"
         >
-          <Icon
-            :name="phase === 'waiting-code' ? 'check' : 'agents'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="phase === 'waiting-code' ? 'check' : 'agents'" class="size-3.5" />
           <span>{{ openButtonLabel }}</span>
         </Button>
       </section>
 
       <!-- Step 2 -->
-      <section class="oastep">
-        <div class="oarow">
-          <span class="oabadge" :class="{ on: phase !== 'idle' && phase !== 'opening' }">2</span>
-          <div class="oatext">{{ t('settingsModels.oauth.step2') }}</div>
+      <section class="flex flex-col gap-2">
+        <div class="flex items-center gap-2">
+          <span
+            class="grid size-5 shrink-0 place-items-center rounded-full border text-xs font-semibold"
+            :class="badgeClass(phase !== 'idle' && phase !== 'opening')"
+          >
+            2
+          </span>
+          <div class="text-foreground">{{ t('settingsModels.oauth.step2') }}</div>
         </div>
       </section>
 
       <!-- Step 3 -->
-      <section class="oastep">
-        <div class="oarow">
+      <section class="flex flex-col gap-2">
+        <div class="flex items-center gap-2">
           <span
-            class="oabadge"
-            :class="{ on: phase === 'waiting-code' || phase === 'confirming' || phase === 'error' }"
+            class="grid size-5 shrink-0 place-items-center rounded-full border text-xs font-semibold"
+            :class="
+              badgeClass(phase === 'waiting-code' || phase === 'confirming' || phase === 'error')
+            "
           >
             3
           </span>
-          <div class="oatext">{{ t('settingsModels.oauth.step3') }}</div>
+          <div class="text-foreground">{{ t('settingsModels.oauth.step3') }}</div>
         </div>
-        <textarea
+        <!-- mono-ok: mã OAuth người dùng dán lại. resize-none: ô dán mã ngắn một mục đích. -->
+        <Textarea
           ref="codeInput"
           v-model="code"
           rows="3"
-          class="keyinp mono oacode"
+          class="resize-none font-mono"
           :placeholder="t('settingsModels.oauth.codePlaceholder')"
           spellcheck="false"
           :disabled="phase === 'confirming'"
@@ -66,7 +76,13 @@
         />
       </section>
 
-      <div v-if="error" class="oaerror">{{ error }}</div>
+      <Alert
+        v-if="error"
+        variant="destructive"
+        class="border-destructive/50 bg-destructive/10 px-3 py-2"
+      >
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
     </div>
 
     <template #footer>
@@ -90,8 +106,6 @@
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
 import { SidecarError, SidecarUnavailableError, useSidecar } from '~/composables/useSidecar'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 // Anthropic OAuth (subscription) connect dialog. Flow: startOAuth →
 // openExternal(authUrl) → user pastes one-time code → completeOAuth. The user may
@@ -126,7 +140,12 @@ const oauthState = ref<string | null>(null)
 const code = ref('')
 const label = ref('')
 const error = ref<string | null>(null)
-const codeInput = useTemplateRef<HTMLTextAreaElement>('codeInput')
+// Textarea là component shadcn — template ref trả instance, phần tử thật ở `$el`.
+const codeInput = useTemplateRef<{ $el: HTMLTextAreaElement }>('codeInput')
+
+// Huy hiệu số bước: bước đã tới thì tô primary, chưa tới thì muted.
+const badgeClass = (reached: boolean): string =>
+  reached ? 'border-transparent bg-primary text-primary-foreground' : 'bg-muted text-dim'
 
 const resetState = () => {
   phase.value = 'idle'
@@ -174,7 +193,7 @@ const onOpenLogin = async () => {
     await sidecar.openExternal(authUrl)
     phase.value = 'waiting-code'
     await nextTick()
-    codeInput.value?.focus()
+    codeInput.value?.$el?.focus()
   } catch (err) {
     phase.value = 'error'
     error.value = errorMessageFrom(err)
@@ -221,77 +240,3 @@ const onCancel = () => {
   emit('close')
 }
 </script>
-
-<style scoped>
-.oad {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.oareauth {
-  font-size: 1em;
-  color: var(--textDim);
-  line-height: var(--lh-md);
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.oastep {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.oarow {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.oabadge {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 650;
-  flex: 0 0 auto;
-  background: var(--bgInput);
-  color: var(--textDim);
-  border: 1px solid var(--border);
-}
-.oabadge.on {
-  background: var(--accent);
-  color: var(--accentText);
-  border-color: transparent;
-}
-.oatext {
-  font-size: 1em;
-  color: var(--text);
-}
-.oaopen {
-  justify-content: center;
-  width: 100%;
-}
-.oaopen.done {
-  background: var(--bgInput);
-  color: var(--text);
-  border: 1px solid var(--borderStrong);
-  font-weight: 550;
-}
-.oacode {
-  width: 100%;
-  resize: none;
-  /* mono-ok: OAuth code the user pastes back */
-  font-family: var(--code);
-}
-.oaerror {
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-  font-size: 1em;
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-</style>

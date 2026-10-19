@@ -1,31 +1,33 @@
 <template>
-  <Teleport to="body">
-    <div v-if="clientId != null" class="ovl on forkovl" @click.self="close">
-      <div class="forkmodal">
-        <div class="forkmodal-head">
-          <Icon
-            name="fork"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--primary)"
-          />
-          <span class="forkmodal-title">{{ t('sessions.fork.treeTitle') }}</span>
-          <span style="flex: 1" />
-          <button class="forkmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
-        <div class="forkmodal-body">
-          <SessionForkGraph v-if="hasLineage" :client-id="clientId" @navigate="onNavigate" />
-          <div v-else class="forkempty">
-            <span class="ei">
-              <Icon name="fork" style="width: var(--icon-lg); height: var(--icon-lg)" />
-            </span>
-            <div class="et">{{ t('sessions.fork.empty') }}</div>
-            <div class="es">{{ t('sessions.fork.emptyHint') }}</div>
-          </div>
+  <Dialog :open="clientId != null" @update:open="(v) => !v && close()">
+    <DialogContent
+      class="flex h-[80vh] w-[92vw] max-w-250 flex-col gap-0 overflow-hidden bg-card p-0 text-card-foreground sm:max-w-250"
+      :aria-describedby="undefined"
+    >
+      <div class="flex h-12 shrink-0 items-center gap-2 pr-12 pl-4">
+        <Icon name="fork" class="size-3.5 text-primary" />
+        <DialogTitle>{{ t('sessions.fork.treeTitle') }}</DialogTitle>
+      </div>
+      <Separator />
+      <div class="flex min-h-0 flex-1">
+        <SessionForkGraph
+          v-if="hasLineage && clientId != null"
+          :client-id="clientId"
+          @navigate="onNavigate"
+        />
+        <div
+          v-else
+          class="flex flex-1 flex-col items-center justify-center gap-2.5 text-muted-foreground"
+        >
+          <span class="grid size-12 place-items-center rounded-lg border bg-muted">
+            <Icon name="fork" class="size-5" />
+          </span>
+          <div>{{ t('sessions.fork.empty') }}</div>
+          <div class="text-sm text-faint">{{ t('sessions.fork.emptyHint') }}</div>
         </div>
       </div>
-    </div>
-  </Teleport>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -62,78 +64,3 @@ function onKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
-<style scoped>
-.forkovl {
-  align-items: center;
-  padding: 24px;
-  z-index: 130;
-}
-.forkmodal {
-  width: min(1000px, 92vw);
-  height: 80vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-.forkmodal-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.forkmodal-title {
-  font-weight: 600;
-}
-.forkmodal-x {
-  background: transparent;
-  border: none;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  display: inline-flex;
-}
-.forkmodal-x:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.forkmodal-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.forkempty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--muted-foreground);
-}
-.forkempty .ei {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius); /* rounded-lg */
-  background: var(--muted);
-  border: 1px solid var(--border);
-  display: grid;
-  place-items: center;
-}
-.forkempty .et {
-  color: var(--muted-foreground);
-}
-.forkempty .es {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-</style>

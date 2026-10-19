@@ -5,31 +5,35 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="pll">
-      <div class="pll-note">
+    <div class="flex flex-col gap-4">
+      <div class="text-sm text-dim">
         {{ t('projects.llm.note', { name: ctrl.project.value?.name ?? '' }) }}
       </div>
 
-      <div class="pll-field">
-        <label class="pll-label">{{ t('projects.llm.provider') }}</label>
-        <div class="pll-seg">
-          <button
+      <div :class="FIELD">
+        <Label>{{ t('projects.llm.provider') }}</Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1.5"
+          class="flex-wrap"
+          :model-value="ctrl.draft.value.provider"
+          @update:model-value="(v) => v && ctrl.setProvider(v as ProviderName)"
+        >
+          <ToggleGroupItem
             v-for="p in ctrl.providers"
             :key="p"
-            type="button"
-            class="chip pll-chip"
-            :class="{ on: ctrl.draft.value.provider === p }"
+            :value="p"
+            :class="CHIP"
             :disabled="!ctrl.isProviderConnected(p)"
             :title="ctrl.isProviderConnected(p) ? '' : t('projects.llm.providerOff')"
-            @click="ctrl.setProvider(p)"
           >
             {{ providerLabel(p) }}
-          </button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      <div class="pll-field">
-        <label class="pll-label">{{ t('projects.llm.account') }}</label>
+      <div :class="FIELD">
+        <Label>{{ t('projects.llm.account') }}</Label>
         <AppSelect
           :model-value="ctrl.draft.value.accountId ?? '__active'"
           :options="accountOptions"
@@ -38,8 +42,8 @@
         />
       </div>
 
-      <div class="pll-field">
-        <label class="pll-label">{{ t('projects.llm.model') }}</label>
+      <div :class="FIELD">
+        <Label>{{ t('projects.llm.model') }}</Label>
         <AppSelect
           :model-value="ctrl.draft.value.modelId"
           :options="modelOptions"
@@ -49,60 +53,64 @@
         />
       </div>
 
-      <div class="pll-field">
-        <label class="pll-label">{{ t('projects.llm.effort') }}</label>
-        <div class="pll-seg">
-          <button
-            v-for="lv in ctrl.levels"
-            :key="lv"
-            type="button"
-            class="chip pll-chip"
-            :class="{ on: ctrl.draft.value.level === lv }"
-            @click="ctrl.setLevel(lv)"
-          >
+      <div :class="FIELD">
+        <Label>{{ t('projects.llm.effort') }}</Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1.5"
+          class="flex-wrap"
+          :model-value="ctrl.draft.value.level"
+          @update:model-value="(v) => v && ctrl.setLevel(v as ThinkingLevel)"
+        >
+          <ToggleGroupItem v-for="lv in ctrl.levels" :key="lv" :value="lv" :class="CHIP">
             {{ t('common.thinking.' + lv) }}
-          </button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      <div class="pll-field">
-        <div class="pll-mcphead">
-          <label class="pll-label">{{ t('projects.llm.mcp') }}</label>
-          <button
+      <div :class="FIELD">
+        <div class="flex items-center justify-between gap-2">
+          <Label>{{ t('projects.llm.mcp') }}</Label>
+          <Button
             v-if="ctrl.isMcpCustomized.value"
-            type="button"
-            class="pll-mcpreset"
+            variant="link"
+            size="xs"
+            class="h-auto px-0"
             @click="ctrl.resetMcp"
           >
             {{ t('projects.llm.mcpReset') }}
-          </button>
+          </Button>
         </div>
-        <p class="pll-mcphint">
+        <p class="text-xs text-dim">
           {{ ctrl.isMcpCustomized.value ? t('projects.llm.mcpCustom') : t('projects.llm.mcpAll') }}
         </p>
-        <div v-if="!ctrl.mcpEnabledServers.value.length" class="listempty">
+        <div
+          v-if="!ctrl.mcpEnabledServers.value.length"
+          class="px-3.5 py-8 text-center text-sm text-dim"
+        >
           {{ t('projects.llm.mcpNone') }}
         </div>
-        <div v-else class="pll-mcplist">
+        <div v-else class="max-h-49 divide-y overflow-y-auto rounded-md border px-2.5">
+          <!-- Cả hàng là vùng bấm bật/tắt; Switch chỉ hiển thị trạng thái (pointer-events-none)
+               để một cú bấm không lật hai lần. -->
           <div
             v-for="m in ctrl.mcpEnabledServers.value"
             :key="m.id"
-            class="mcprow"
+            class="flex cursor-pointer items-center gap-2 py-2 text-sm"
             @click="ctrl.toggleMcp(m.id)"
           >
             <span
-              class="cdot"
-              :style="{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background:
-                  m.connectionStatus === 'connected' ? 'var(--green)' : 'var(--textFaint)',
-              }"
+              class="size-2 flex-none rounded-full"
+              :class="m.connectionStatus === 'connected' ? 'bg-success' : 'bg-faint'"
             />
-            <span class="mcpn">{{ m.name }}</span>
-            <span class="mcpst">{{ m.connectionStatus ?? 'untested' }}</span>
-            <span class="tog2 sm" :class="{ off: !ctrl.isMcpActive(m.id) }" />
+            <span class="text-foreground">{{ m.name }}</span>
+            <span class="ml-auto text-xs text-faint">{{ m.connectionStatus ?? 'untested' }}</span>
+            <Switch
+              :checked="ctrl.isMcpActive(m.id)"
+              tabindex="-1"
+              aria-hidden="true"
+              class="pointer-events-none"
+            />
           </div>
         </div>
       </div>
@@ -111,9 +119,9 @@
     <template #footer>
       <Button
         v-if="ctrl.hasCustomDefaults.value"
-        style="margin-right: auto; color: var(--danger)"
+        class="mr-auto"
         :disabled="ctrl.saving.value"
-        variant="outline"
+        variant="danger"
         @click="onReset"
       >
         {{ t('projects.llm.reset') }}
@@ -137,7 +145,12 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useProjectLlmDefaults } from '~/composables/useProjectLlmDefaults'
 import type { Project, ProviderName } from '~/types'
+import type { ThinkingLevel } from '~/composables/useSessionsData'
 import Button from '~/components/ui/button/Button.vue'
+import Label from '~/components/ui/label/Label.vue'
+import Switch from '~/components/ui/switch/Switch.vue'
+import ToggleGroup from '~/components/ui/toggle-group/ToggleGroup.vue'
+import ToggleGroupItem from '~/components/ui/toggle-group/ToggleGroupItem.vue'
 
 const props = defineProps<{ open: boolean; project: Project | null }>()
 const emit = defineEmits<{ saved: [project: Project]; cancel: [] }>()
@@ -155,6 +168,11 @@ const PROVIDER_LABEL: Record<ProviderName, string> = {
   google: 'Google',
 }
 const providerLabel = (p: ProviderName) => PROVIDER_LABEL[p]
+
+const FIELD = 'flex flex-col gap-2'
+// Chip chọn một (provider / mức suy luận): viền trung tính, đang chọn = accent-tint.
+const CHIP =
+  'h-ctrl-xs rounded-sm border bg-muted px-2.5 text-xs font-medium text-muted-foreground data-[state=on]:border-selected-border data-[state=on]:bg-selected data-[state=on]:text-primary'
 
 const accountOptions = computed<AppSelectOption[]>(() => [
   { value: '__active', label: t('projects.llm.accountActive') },
@@ -176,69 +194,3 @@ const onReset = async () => {
   if (saved) emit('saved', saved)
 }
 </script>
-
-<style scoped>
-.pll {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.pll-note {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-.pll-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.pll-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.pll-seg {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.pll-chip {
-  cursor: pointer;
-  background: var(--bgInput);
-}
-.pll-chip.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.pll-chip:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.pll-mcphead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.pll-mcpreset {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--accent);
-  cursor: pointer;
-}
-.pll-mcphint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.pll-mcplist {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 0 10px;
-  max-height: 196px;
-  overflow-y: auto;
-}
-</style>

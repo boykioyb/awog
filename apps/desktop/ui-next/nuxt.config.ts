@@ -1,8 +1,12 @@
 import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineNuxtConfig({
-  modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@nuxt/eslint'],
+  modules: ['@pinia/nuxt', '@nuxt/eslint'],
   vite: {
+    // Tailwind v4 chạy qua plugin Vite (không còn module @nuxtjs/tailwindcss).
+    // Theme + layer khai trong assets/css/main.css.
+    plugins: [tailwindcss()],
     // Monaco is only ever dynamic-imported (kept out of the initial bundle). Left
     // undeclared, Vite's dev optimizer discovers it lazily and re-bundles mid-
     // session as its many internal/language modules surface — each re-optimize
@@ -74,37 +78,16 @@ export default defineNuxtConfig({
   // controllers, plus shadcn-vue `ui/<x>/index.ts` barrels) must stay out of the
   // auto-scan or two `types.ts` both resolve to `<Types>` (name collision).
   components: [{ path: '~/components', pathPrefix: false, ignore: ['**/*.ts'] }],
-  // Tailwind base/components/utilities come from main.css (module prepends it),
-  // then the ported prototype design system, then app-shell overrides last so
-  // the full-window shell wins over the prototype's centered-showcase framing.
-  tailwindcss: { cssPath: '~/assets/css/main.css' },
   css: [
     // Bundled variable fonts (offline, local-first) for the Appearance → Font
     // picker. 'Geist Variable' / 'Geist Mono Variable' become available; the
     // System option falls back to the OS sans stack.
     '@fontsource-variable/geist',
     '@fontsource-variable/geist-mono',
-    '~/assets/css/prototype.css',
-    '~/assets/css/app-shell.css',
-    // shadcn neutral theme for the /proto preview — scoped to body.proto-shadcn,
-    // inert for the rest of the app. See the file header for the bridge story.
-    '~/assets/css/proto-shadcn.css',
-    // shadcn canonical var names → AWOG token aliases (production bridge, :root).
-    // Lets components/ui/* consume the standard shadcn names app-wide while the
-    // look stays AWOG; light/cute flip for free through the aliased vars.
-    '~/assets/css/shadcn-bridge.css',
-    // Rendered-markdown prose (`.mdbody`) — global so every surface that renders
-    // markdown gets the same typography instead of each component carrying its own
-    // scoped copy (ADR 0073).
-    '~/assets/css/markdown.css',
-    // Agent whitelist pickers (`.awp-*`) — shared by AgentEditor and the agent
-    // detail tabs so both surfaces render the same checkbox/chip lists.
-    '~/assets/css/agent-whitelist.css',
-    // The "Cute" theme family (Settings → Appearance → Theme). Every rule inside is
-    // scoped under `body[data-theme-family='cute']`, so it is inert unless the user
-    // opts in; loaded last so it wins over both the prototype design system and the
-    // app-shell overrides. See docs/features/theme-cute.md.
-    '~/assets/css/theme-cute.css',
+    // Tailwind v4 + toàn bộ CSS cũ của app (prototype, app-shell, bridge, cute…).
+    // CSS cũ được import vào layer `legacy` NẰM DƯỚI `utilities` ngay trong
+    // main.css — xem comment đầu file đó cho lý do.
+    '~/assets/css/main.css',
     '@vue-flow/core/dist/style.css',
     '@vue-flow/core/dist/theme-default.css',
     '@vue-flow/controls/dist/style.css',

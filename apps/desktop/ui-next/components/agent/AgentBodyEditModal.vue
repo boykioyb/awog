@@ -6,13 +6,13 @@
     :width="540"
     @close="emit('cancel')"
   >
-    <div class="abe">
-      <div class="abe-hint">{{ t('agents.bodyEdit.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('agents.bodyEdit.hint') }}</div>
 
-      <div v-if="!draft" class="abe-promptbox">
-        <textarea
+      <div v-if="!draft" class="flex flex-col gap-1">
+        <Textarea
           v-model="prompt"
-          class="abe-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('agents.bodyEdit.placeholder')"
@@ -20,30 +20,37 @@
         />
         <!-- One-click: spec đầy đủ theo vai trò + lưu luôn — chạy nền, đóng
              modal được, xong/lỗi bắn toast. -->
-        <div class="abe-quick">
-          <button
-            type="button"
-            class="abe-quickbtn"
+        <div class="flex justify-end">
+          <Button
+            variant="ghost"
+            size="xs"
+            :class="QUICK_BTN"
             :disabled="isGenerating"
             :title="t('agents.bodyEdit.fullSpecHint')"
             @click="onFullSpec"
           >
             <Icon name="sparkles" />
             {{ t('agents.bodyEdit.fullSpec') }}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div v-if="error" class="abe-err">{{ error }}</div>
-      <div v-else-if="notice" class="abe-notice">{{ notice }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
+      <Alert v-else-if="notice">
+        <AlertDescription class="text-dim">{{ notice }}</AlertDescription>
+      </Alert>
 
-      <div v-if="draft" class="abe-preview">
-        <div class="abe-prow">
-          <span class="mono abe-pname">{{ draft.name }}</span>
-          <span v-if="draft.role" class="tag">{{ draft.role }}</span>
-          <span v-if="draft.id" class="tag mono">{{ draft.id }}</span>
+      <div v-if="draft" class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- mono-ok: tên agent dạng slug -->
+          <span class="font-mono text-sm font-medium text-foreground">{{ draft.name }}</span>
+          <Badge v-if="draft.role" variant="secondary">{{ draft.role }}</Badge>
+          <!-- mono-ok: id agent -->
+          <Badge v-if="draft.id" variant="secondary" class="font-mono">{{ draft.id }}</Badge>
         </div>
-        <div class="abe-pdesc">{{ draft.description }}</div>
+        <div class="text-sm text-muted-foreground">{{ draft.description }}</div>
         <LibraryMarkdownBody
           :title="t('agents.bodyEdit.proposed')"
           :content="draft.systemPrompt || t('agents.bodyEdit.emptyPrompt')"
@@ -53,68 +60,66 @@
              every entry is a real pickable value). All ticked = apply as
              proposed; untick to exclude. Sections only render when the draft
              actually proposes a whitelist. -->
-        <div v-if="draftSkills.length" class="abe-sug">
-          <div class="abe-sugtitle">{{ t('agents.bodyEdit.suggestedSkills') }}</div>
-          <div class="awp-list">
-            <label
+        <div v-if="draftSkills.length" class="flex flex-col gap-1.5">
+          <div class="text-xs font-medium text-muted-foreground">
+            {{ t('agents.bodyEdit.suggestedSkills') }}
+          </div>
+          <AgentPickList :is-empty="false" empty-text="">
+            <AgentPickRow
               v-for="sid in draftSkills"
               :key="sid"
-              class="awp-row"
-              :class="{ on: selSkills.has(sid) }"
+              :checked="selSkills.has(sid)"
+              @toggle="toggleSkill(sid)"
             >
-              <input
-                type="checkbox"
-                class="awp-cbx"
-                :checked="selSkills.has(sid)"
-                @change="toggleSkill(sid)"
-              />
-              <span class="awp-name">{{ skillName(sid) }}</span>
-              <span class="awp-tier mono">{{ sid }}</span>
-            </label>
-          </div>
+              <span class="text-sm font-medium text-foreground">{{ skillName(sid) }}</span>
+              <!-- mono-ok: id skill -->
+              <span class="truncate font-mono text-xs text-faint">{{ sid }}</span>
+            </AgentPickRow>
+          </AgentPickList>
         </div>
-        <div v-if="draftTools.length" class="abe-sug">
-          <div class="abe-sugtitle">{{ t('agents.bodyEdit.suggestedTools') }}</div>
-          <div class="awp-list">
-            <label
+        <div v-if="draftTools.length" class="flex flex-col gap-1.5">
+          <div class="text-xs font-medium text-muted-foreground">
+            {{ t('agents.bodyEdit.suggestedTools') }}
+          </div>
+          <AgentPickList :is-empty="false" empty-text="">
+            <AgentPickRow
               v-for="tl in draftTools"
               :key="tl"
-              class="awp-row"
-              :class="{ on: selTools.has(tl) }"
+              :checked="selTools.has(tl)"
+              @toggle="toggleTool(tl)"
             >
-              <input
-                type="checkbox"
-                class="awp-cbx"
-                :checked="selTools.has(tl)"
-                @change="toggleTool(tl)"
-              />
-              <span class="awp-name mono">{{ tl }}</span>
-              <span class="awp-tier">{{ toolGroup(tl) }}</span>
-            </label>
-          </div>
+              <!-- mono-ok: tên tool -->
+              <span class="font-mono text-sm font-medium text-foreground">{{ tl }}</span>
+              <span class="truncate text-xs text-faint">{{ toolGroup(tl) }}</span>
+            </AgentPickRow>
+          </AgentPickList>
         </div>
 
         <!-- Tinh chỉnh tiếp draft hiện tại — vòng lặp refine: draft mới bám
              theo kết quả đang xem (kể cả tick review), không quay về spec gốc. -->
-        <div class="abe-promptbox">
-          <textarea
+        <div class="flex flex-col gap-1">
+          <Textarea
             v-model="refinePrompt"
-            class="abe-ta"
+            class="min-h-16 resize-y"
             rows="2"
             :disabled="isGenerating"
             :placeholder="t('agents.bodyEdit.refinePh')"
             @keydown.enter.exact.prevent="onRefine"
           />
-          <div class="abe-quick">
-            <button
-              type="button"
-              class="abe-quickbtn"
+          <div class="flex justify-end">
+            <Button
+              variant="ghost"
+              size="xs"
+              :class="QUICK_BTN"
               :disabled="isGenerating || !refinePrompt.trim()"
               @click="onRefine"
             >
-              <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+              <Icon
+                :name="isGenerating ? 'refresh' : 'sparkles'"
+                :class="{ 'animate-spin': isGenerating }"
+              />
               {{ isGenerating ? t('agents.bodyEdit.generating') : t('agents.bodyEdit.refine') }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -122,7 +127,7 @@
 
     <template #footer>
       <AiModelPicker width="190px" />
-      <span class="abe-fspacer" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button v-if="draft" variant="outline" @click="resetDraft">
         <Icon name="refresh" />
@@ -144,7 +149,10 @@
         variant="default"
         @click="onGenerate"
       >
-        <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+        <Icon
+          :name="isGenerating ? 'refresh' : 'sparkles'"
+          :class="{ 'animate-spin': isGenerating }"
+        />
         {{ isGenerating ? t('agents.bodyEdit.generating') : t('agents.bodyEdit.generate') }}
       </Button>
       <Button v-else :disabled="!canApply" variant="default" @click="onApply">
@@ -193,6 +201,9 @@ const skillsStore = useSkillsStore()
 const connections = useConnectionsStore()
 
 type AgentDraft = AgentDraftResult
+
+// Nút chữ accent nhỏ dưới ô prompt (Spec đầy đủ / Tinh chỉnh).
+const QUICK_BTN = 'text-primary hover:bg-selected hover:text-primary [&_svg]:size-3'
 
 // Catalogs sent to agents.generate — the model may only pick from these, so a
 // suggested whitelist is guaranteed valid. Skills: GLOBAL tier only (agents
@@ -420,127 +431,3 @@ const onApply = () => {
   emit('apply', applyDraft(props.agent, d, selSkills.value, selTools.value))
 }
 </script>
-
-<style scoped>
-.abe {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.abe-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.abe-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.abe-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.abe-quick {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-.abe-quickbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  background: transparent;
-  padding: 3px 6px;
-  border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
-  color: var(--accent);
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.abe-quickbtn:hover:not(:disabled) {
-  background: var(--accentDim);
-}
-.abe-quickbtn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.abe-quickbtn .icn {
-  width: 12px;
-  height: 12px;
-}
-.abe-fspacer {
-  flex: 1;
-}
-.abe-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.abe-notice {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.abe-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.abe-prow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.abe-pname {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.abe-pdesc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.abe-sug {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.abe-sugtitle {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--textDim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.spin {
-  animation: abe-spin 0.9s linear infinite;
-}
-@keyframes abe-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="connections">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="connections">
     <LibraryView
       :items="sources"
       :item-key="(c) => c.slug"
@@ -9,35 +9,41 @@
       @new="openAddPicker"
     >
       <template #row="{ item }">
-        <div class="crow" @contextmenu.prevent="openRowMenu($event, item)">
-          <div class="lrow">
+        <div class="group/crow" @contextmenu.prevent="openRowMenu($event, item)">
+          <div class="flex items-center gap-2">
             <SourceAvatar :source="item" size="sm" />
-            <span class="ttl">{{ item.name || item.slug }}</span>
-            <span class="tag crow-type">{{ t('connections.typeBadge.' + item.type) }}</span>
-            <span
+            <span class="min-w-0 flex-1 truncate text-base font-medium">
+              {{ item.name || item.slug }}
+            </span>
+            <Badge variant="outline" class="text-muted-foreground uppercase">
+              {{ t('connections.typeBadge.' + item.type) }}
+            </Badge>
+            <Badge
               v-if="deriveStatus(item) !== 'connected'"
-              class="tag crow-status"
-              :style="{ color: statusColor(item), borderColor: statusColor(item) }"
+              variant="outline"
+              :class="STATUS_BADGE[deriveStatus(item)]"
               :title="item.connectionError || undefined"
             >
               {{ t('connections.statusBadge.' + deriveStatus(item)) }}
-            </span>
+            </Badge>
           </div>
           <!-- 2×2: the ⋯ rides the second row's dead space on the right instead
                of reserving a slot on row 1 (leaving an empty gap between the
                badges and the row edge when it's hidden). -->
-          <div class="sub">
-            <span class="sub-txt">
+          <div class="mt-1 flex items-center justify-between gap-1.5 text-sm text-muted-foreground">
+            <span class="min-w-0 flex-1 truncate">
               {{ item.tagline || item.provider || sourceTransport(item) }}
             </span>
+            <!-- Nút ⋯ chỉ hiện khi hover hàng để dòng mô tả giữ đủ bề ngang lúc rảnh. -->
             <Button
               :title="t('connections.menu.more')"
-              class="crow-menu"
-              variant="outline"
-              size="iconMd"
+              :aria-label="t('connections.menu.more')"
+              class="-my-0.5 -mr-1 size-5 shrink-0 opacity-0 transition-opacity group-hover/crow:opacity-100 focus-visible:opacity-100"
+              variant="ghost"
+              size="iconSm"
               @click.stop="openRowMenu($event, item)"
             >
-              <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="dots" class="size-3.5" />
             </Button>
           </div>
         </div>
@@ -145,18 +151,19 @@ import SourceAvatar from '~/components/connection/SourceAvatar.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import { useConnectionsPage } from '~/composables/useConnectionsPage'
 import Button from '~/components/ui/button/Button.vue'
-import {
-  deriveStatus,
-  sourceTransport,
-  SOURCE_STATUS_COLORS,
-  type Source,
-} from '~/stores/connections'
+import { deriveStatus, sourceTransport, type SourceConnectionStatus } from '~/stores/connections'
 
 const { t } = useI18n()
 
-// Theme color for a source's derived status — drives the list-row status badge
-// (text + border), matching Craft's colored status label.
-const statusColor = (s: Source): string => SOURCE_STATUS_COLORS[deriveStatus(s)]
+// Màu badge trạng thái ở hàng list (chữ + viền) — cùng ý nghĩa với SOURCE_STATUS_COLORS
+// (stores/connections.ts) nhưng ở dạng utility ngữ nghĩa thay cho var màu inline.
+const STATUS_BADGE: Record<SourceConnectionStatus, string> = {
+  connected: 'border-success text-success',
+  needs_auth: 'border-warning text-warning',
+  failed: 'border-destructive text-destructive',
+  untested: 'text-dim',
+  local_disabled: 'text-faint',
+}
 
 const {
   sources,
@@ -199,46 +206,3 @@ const {
   onRowMenuSelect,
 } = useConnectionsPage()
 </script>
-
-<style scoped>
-.crow-type {
-  font-size: 12px;
-  line-height: 18px;
-  padding: 1px 6px;
-  text-transform: uppercase;
-}
-.crow-status {
-  font-size: 12px;
-  line-height: 18px;
-  padding: 1px 6px;
-  background: transparent;
-}
-/* Per-source ⋯ menu button — sits on the second row (right end of .sub),
-   reveals on row hover so the slug line keeps its full width when idle. */
-.sub {
-  justify-content: space-between;
-}
-.sub-txt {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.crow-menu {
-  width: 22px;
-  height: 18px;
-  border: none;
-  border-radius: var(--r-xs);
-  flex: 0 0 auto;
-  margin: -1px -4px -1px 0;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.libli:hover .crow-menu {
-  opacity: 1;
-}
-.crow-menu:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-</style>

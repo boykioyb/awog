@@ -1,11 +1,13 @@
 <template>
-  <div class="ltset">
+  <!-- Lề ngang của riêng vùng này: trang không đệm (hai dải full-bleed của tab Ngày cần
+       chạy hết bề ngang), nên mỗi vùng con tự lấy lề. -->
+  <div class="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-6 pb-4.5">
     <!-- 1 · Nguồn PMS: người dùng CHỌN nguồn nào Logtime được dùng, không dò hết
          mọi server MCP đang bật (ADR 0091 D-2). Năng lực dò bằng tools/list. -->
-    <div class="ltsech">
+    <div class="flex items-center gap-2 text-xs font-semibold text-dim">
       <span>{{ t('logtime.setup.sources') }}</span>
-      <span class="ltmuted">{{ t('logtime.setup.sourcesHint') }}</span>
-      <span class="ltsp" />
+      <span class="font-normal">{{ t('logtime.setup.sourcesHint') }}</span>
+      <span class="flex-1" />
       <Button
         type="button"
         :disabled="store.busy"
@@ -17,51 +19,77 @@
       </Button>
     </div>
 
-    <div v-if="store.capabilities.length === 0" class="ltnote">
+    <div v-if="store.capabilities.length === 0" class="text-sm text-dim">
       {{ t('logtime.setup.noSourcePicked') }}
     </div>
 
-    <div v-for="cap in store.capabilities" :key="cap.sourceId" class="tile ltcard">
-      <div class="ltcardh">
-        <i class="ltdot" :style="{ background: cap.canPush ? 'var(--accent)' : 'var(--amber)' }" />
-        <div class="ltcardhm">
-          <div class="ltcardt">{{ cap.name }}</div>
-          <div v-if="cap.url" class="ltcardu">{{ cap.url }}</div>
+    <Card v-for="cap in store.capabilities" :key="cap.sourceId" class="gap-2 p-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <i
+          class="size-2 shrink-0 rounded-full"
+          :class="cap.canPush ? 'bg-primary' : 'bg-warning'"
+        />
+        <div class="min-w-0">
+          <div class="text-base font-semibold">{{ cap.name }}</div>
+          <!-- URL endpoint, người dùng copy được ⇒ mono hợp lệ. -->
+          <div v-if="cap.url" class="font-mono text-xs break-all text-dim">{{ cap.url }}</div>
         </div>
-        <span class="ltsp" />
-        <span class="chip" :class="cap.canPush ? 'acc' : 'warn'">
+        <span class="flex-1" />
+        <Badge
+          variant="outline"
+          :class="
+            cap.canPush
+              ? 'rounded-sm border-primary/40 bg-primary/10 text-primary'
+              : 'rounded-sm border-warning/40 text-warning'
+          "
+        >
           {{ cap.canPush ? t('logtime.setup.canPush') : t('logtime.setup.readOnly') }}
-        </span>
-        <button
-          class="ltico"
+        </Badge>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-6 shrink-0 text-dim hover:text-destructive"
           type="button"
           :title="t('logtime.setup.removeSource')"
           @click="removeSource(cap.sourceId)"
         >
-          <Icon name="x" class="lticon" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
-      <div class="ltcaps">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-1.5">
         <div
           v-for="c in CAPS"
           :key="c.tool"
-          class="ltcap"
-          :class="{ no: !cap.tools.includes(c.tool) }"
+          class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 rounded-md border bg-muted px-2 py-1.5"
+          :class="{ 'opacity-60': !cap.tools.includes(c.tool) }"
         >
-          <Icon :name="cap.tools.includes(c.tool) ? 'check' : 'x'" class="ltcapic" />
-          <span class="ltcapl">{{ t(c.label) }}</span>
-          <span class="ltcapv">{{ c.tool }}</span>
+          <Icon
+            :name="cap.tools.includes(c.tool) ? 'check' : 'x'"
+            class="row-span-2 size-3.5"
+            :class="cap.tools.includes(c.tool) ? 'text-primary' : 'text-destructive'"
+          />
+          <span class="truncate text-sm">{{ t(c.label) }}</span>
+          <!-- Tên tool MCP là hợp đồng, copy được ⇒ mono hợp lệ. -->
+          <span class="truncate font-mono text-xs text-faint">{{ c.tool }}</span>
         </div>
       </div>
-      <div v-if="cap.error" class="ltwarn">{{ errorText(cap) }}</div>
-      <div v-else-if="!cap.canPush" class="ltwarn">
+      <div
+        v-if="cap.error"
+        class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground"
+      >
+        {{ errorText(cap) }}
+      </div>
+      <div
+        v-else-if="!cap.canPush"
+        class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground"
+      >
         {{ t('logtime.setup.missingTools', { tools: cap.missing.join(', ') }) }}
       </div>
-    </div>
+    </Card>
 
-    <div class="tile ltcard">
-      <div class="ltmrow ltaddrow">
-        <Icon name="plus" class="ltaddi" />
+    <Card class="gap-2 p-4">
+      <div class="flex flex-wrap items-center gap-2 border-t py-2 first:border-t-0">
+        <Icon name="plus" class="size-3.5 shrink-0 text-dim" />
         <AppSelect
           v-if="addableSources.length > 0"
           :model-value="sourceDraft"
@@ -71,33 +99,45 @@
           width="260px"
           @update:model-value="onPickSource"
         />
-        <span v-else-if="store.availableSources.length === 0" class="ltnote">
+        <span v-else-if="store.availableSources.length === 0" class="text-sm text-dim">
           {{ t('logtime.setup.noSources') }}
         </span>
-        <span v-else class="ltnote">{{ t('logtime.setup.noMoreSources') }}</span>
+        <span v-else class="text-sm text-dim">{{ t('logtime.setup.noMoreSources') }}</span>
       </div>
-    </div>
+    </Card>
 
     <!-- 2 · Dự án đang theo dõi: chỉ những dòng người dùng đã nối, KHÔNG đổ hết
          dự án của workspace ra. -->
-    <div class="ltsech ltsech2">
+    <div class="flex items-center gap-2 text-xs font-semibold text-dim mt-2">
       <span>{{ t('logtime.setup.links') }}</span>
-      <span class="ltsp" />
-      <span class="ltmuted">{{ t('logtime.setup.linksHint') }}</span>
+      <span class="flex-1" />
+      <span class="font-normal">{{ t('logtime.setup.linksHint') }}</span>
     </div>
 
-    <div class="tile ltcard">
-      <div v-if="settings.links.length === 0" class="ltnote ltempty">
+    <Card class="gap-2 p-4">
+      <div v-if="settings.links.length === 0" class="py-2 text-sm text-dim">
         {{ t('logtime.setup.noLinks') }}
       </div>
-      <div v-for="link in settings.links" :key="link.projectKey" class="ltmrow">
-        <span class="ltml">
-          <i class="ltdot" :style="{ background: link.color || 'var(--textFaint)' }" />
-          <span class="ltmname">{{ link.label || link.projectKey }}</span>
+      <div
+        v-for="link in settings.links"
+        :key="link.projectKey"
+        class="flex flex-wrap items-center gap-2 border-t py-2 first:border-t-0"
+      >
+        <span class="flex min-w-0 shrink-0 grow-0 basis-42 items-center gap-2 text-sm font-medium">
+          <!-- Màu chấm là màu DỰ ÁN người dùng tự đặt (dữ liệu) nên đi qua :style;
+               chưa đặt màu thì chấm mờ. -->
+          <i
+            class="size-2 shrink-0 rounded-full"
+            :class="{ 'bg-faint': !link.color }"
+            :style="link.color ? { background: link.color } : undefined"
+          />
+          <span class="truncate">{{ link.label || link.projectKey }}</span>
         </span>
-        <Icon name="chev-right" class="ltarrow" />
-        <span class="ltmsrc">{{ sourceName(link.sourceId) }}</span>
-        <Icon name="chev-right" class="ltarrow" />
+        <Icon name="chev-right" class="size-3.5 shrink-0 text-faint" />
+        <span class="max-w-42.5 truncate text-sm text-muted-foreground">
+          {{ sourceName(link.sourceId) }}
+        </span>
+        <Icon name="chev-right" class="size-3.5 shrink-0 text-faint" />
         <AppSelect
           :model-value="link.pmsProjectId"
           :options="pmsOptionsForSource(link.sourceId)"
@@ -105,34 +145,44 @@
           width="180px"
           @update:model-value="(v: string) => setPmsProject(link, v)"
         />
-        <span v-if="link.pmsProjectId" class="chip acc">
+        <Badge
+          v-if="link.pmsProjectId"
+          variant="outline"
+          class="rounded-sm border-primary/40 bg-primary/10 text-primary"
+        >
           <Icon name="check" />
           {{ t('logtime.setup.linked') }}
-        </span>
-        <span v-else class="chip warn">
+        </Badge>
+        <Badge v-else variant="outline" class="rounded-sm border-warning/40 text-warning">
           <Icon name="alert" />
           {{ t('logtime.setup.unlinked') }}
-        </span>
-        <span class="ltsp" />
-        <button
-          class="ltico"
+        </Badge>
+        <span class="flex-1" />
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-6 shrink-0 text-dim hover:text-destructive"
           type="button"
           :title="t('logtime.setup.removeLink')"
           @click="removeLink(link.projectKey)"
         >
-          <Icon name="trash" class="lticon" />
-        </button>
+          <Icon name="trash" />
+        </Button>
         <!-- Nguồn hỏng ⇒ dropdown ở trên rỗng. Không nói gì thì người dùng tưởng
-             PMS thật sự không có dự án nào. -->
-        <div v-if="pmsError[link.sourceId]" class="ltwarn ltpmserr">
+             PMS thật sự không có dự án nào. Khối lỗi nằm trong hàng flex-wrap; ép nó
+             xuống dòng riêng (basis-full) thay vì chen vào giữa các ô chọn. -->
+        <div
+          v-if="pmsError[link.sourceId]"
+          class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground shrink-0 grow basis-full"
+        >
           {{ pmsError[link.sourceId] }}
         </div>
       </div>
 
       <!-- Thêm dự án: dự án AWOG → nguồn → dự án PMS. Chọn dự án PMS là bước cuối
            nên chốt luôn, không có nút Lưu riêng. -->
-      <div class="ltmrow ltaddrow">
-        <Icon name="plus" class="ltaddi" />
+      <div class="flex flex-wrap items-center gap-2 border-t py-2 first:border-t-0">
+        <Icon name="plus" class="size-3.5 shrink-0 text-dim" />
         <template v-if="projectOptions.length > 0">
           <AppSelect
             :model-value="newProjectKey"
@@ -141,7 +191,7 @@
             width="200px"
             @update:model-value="(v: string) => (newProjectKey = v)"
           />
-          <Icon name="chev-right" class="ltarrow" />
+          <Icon name="chev-right" class="size-3.5 shrink-0 text-faint" />
           <AppSelect
             :model-value="newSourceId"
             :options="sourceOptions"
@@ -150,7 +200,7 @@
             :disabled="!newProjectKey || sourceOptions.length === 0"
             @update:model-value="(v: string) => (newSourceId = v)"
           />
-          <Icon name="chev-right" class="ltarrow" />
+          <Icon name="chev-right" class="size-3.5 shrink-0 text-faint" />
           <AppSelect
             :model-value="newPmsId"
             :options="newPmsOptions"
@@ -159,49 +209,70 @@
             :disabled="!newSourceId"
             @update:model-value="(v: string) => (newPmsId = v)"
           />
-          <button
+          <Button
             v-if="newProjectKey"
-            class="ltico"
+            variant="ghost"
+            size="iconSm"
+            class="size-6 shrink-0 text-dim hover:text-destructive"
             type="button"
             :title="t('logtime.setup.cancel')"
             @click="resetNew"
           >
-            <Icon name="x" class="lticon" />
-          </button>
-          <div v-if="newSourceId && pmsError[newSourceId]" class="ltwarn ltpmserr">
+            <Icon name="x" />
+          </Button>
+          <div
+            v-if="newSourceId && pmsError[newSourceId]"
+            class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground shrink-0 grow basis-full"
+          >
             {{ pmsError[newSourceId] }}
           </div>
         </template>
-        <span v-else class="ltnote">{{ addNote }}</span>
+        <span v-else class="text-sm text-dim">{{ addNote }}</span>
       </div>
-    </div>
+    </Card>
 
     <!-- 3 · Quy tắc ngày công — số ở đây là CẤU HÌNH, không phải chữ trong câu -->
-    <div class="ltsech ltsech2">
+    <div class="flex items-center gap-2 text-xs font-semibold text-dim mt-2">
       <span>{{ t('logtime.setup.rules') }}</span>
     </div>
 
-    <div class="tile ltcard">
-      <div class="ltopt">
-        <div class="ltoptb">
-          <div class="ltopt1">{{ t('logtime.setup.daily') }}</div>
-          <div class="ltopt2">{{ t('logtime.setup.dailyHint') }}</div>
+    <Card class="gap-2 p-4">
+      <div class="flex items-start gap-3 border-t py-3 first:border-t-0">
+        <div class="min-w-0 flex-1">
+          <div class="text-base font-medium">{{ t('logtime.setup.daily') }}</div>
+          <div class="mt-0.5 text-xs text-dim">{{ t('logtime.setup.dailyHint') }}</div>
         </div>
-        <div class="ltoptc">
-          <div class="lthours">
-            <button type="button" class="ltstep" aria-label="-" @click="bumpDaily(-0.5)">−</button>
-            <span class="tnum">{{ fmt(dDaily) }}h</span>
-            <button type="button" class="ltstep" aria-label="+" @click="bumpDaily(0.5)">+</button>
+        <div class="flex shrink-0 items-center gap-2">
+          <div class="flex items-center gap-1.5 rounded-md border bg-muted px-2 py-1 text-sm">
+            <Button
+              type="button"
+              variant="outline"
+              class="size-5.5 p-0 font-normal text-muted-foreground hover:border-input hover:text-foreground"
+              aria-label="-"
+              @click="bumpDaily(-0.5)"
+            >
+              −
+            </Button>
+            <span class="tabular-nums">{{ fmt(dDaily) }}h</span>
+            <Button
+              type="button"
+              variant="outline"
+              class="size-5.5 p-0 font-normal text-muted-foreground hover:border-input hover:text-foreground"
+              aria-label="+"
+              @click="bumpDaily(0.5)"
+            >
+              +
+            </Button>
           </div>
         </div>
       </div>
 
-      <div class="ltopt">
-        <div class="ltoptb">
-          <div class="ltopt1">{{ t('logtime.setup.round') }}</div>
-          <div class="ltopt2">{{ t('logtime.setup.roundHint') }}</div>
+      <div class="flex items-start gap-3 border-t py-3 first:border-t-0">
+        <div class="min-w-0 flex-1">
+          <div class="text-base font-medium">{{ t('logtime.setup.round') }}</div>
+          <div class="mt-0.5 text-xs text-dim">{{ t('logtime.setup.roundHint') }}</div>
         </div>
-        <div class="ltoptc">
+        <div class="flex shrink-0 items-center gap-2">
           <AppSelect
             :model-value="String(dRound)"
             :options="ROUND_OPTIONS"
@@ -211,30 +282,25 @@
         </div>
       </div>
 
-      <div class="ltopt">
-        <div class="ltoptb">
-          <div class="ltopt1">{{ t('logtime.setup.remind') }}</div>
-          <div class="ltopt2">{{ t('logtime.setup.remindHint') }}</div>
+      <div class="flex items-start gap-3 border-t py-3 first:border-t-0">
+        <div class="min-w-0 flex-1">
+          <div class="text-base font-medium">{{ t('logtime.setup.remind') }}</div>
+          <div class="mt-0.5 text-xs text-dim">{{ t('logtime.setup.remindHint') }}</div>
         </div>
-        <div class="ltoptc">
-          <Input v-model="dRemindAt" type="time" class="lttime" />
-          <button
-            type="button"
-            class="ltsw"
-            :class="{ on: dRemindOn }"
-            role="switch"
-            :aria-checked="dRemindOn"
-            @click="dRemindOn = !dRemindOn"
-          />
+        <div class="flex shrink-0 items-center gap-2">
+          <Input v-model="dRemindAt" type="time" class="w-auto bg-muted tabular-nums" />
+          <Switch v-model:checked="dRemindOn" />
         </div>
       </div>
 
       <!-- Nút lưu cho cả mục: các ô trên chỉ đổi NHÁP, chưa ghi tới khi bấm Lưu — để
            người dùng thấy rõ đã lưu (toast) chứ không đoán. -->
-      <div class="ltsave">
-        <span v-if="rulesDirty" class="ltsavehint">{{ t('logtime.setup.unsaved') }}</span>
-        <span v-else class="ltsavehint ok">{{ t('logtime.setup.savedState') }}</span>
-        <span class="ltsp" />
+      <div class="mt-1 flex items-center gap-2.5 border-t pt-3">
+        <span v-if="rulesDirty" class="text-xs text-warning">
+          {{ t('logtime.setup.unsaved') }}
+        </span>
+        <span v-else class="text-xs text-faint">{{ t('logtime.setup.savedState') }}</span>
+        <span class="flex-1" />
         <Button
           type="button"
           :disabled="!rulesDirty || store.busy"
@@ -244,7 +310,7 @@
           {{ t('logtime.setup.save') }}
         </Button>
       </div>
-    </div>
+    </Card>
   </div>
 </template>
 
@@ -509,318 +575,3 @@ watch(newPmsId, (id) => {
   if (id) void commitNew()
 })
 </script>
-
-<style scoped>
-.ltset {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  /* Lề ngang của riêng vùng này: `.ltpage` không còn đệm (hai dải full-bleed của tab
-     Ngày cần chạy hết bề ngang), nên mỗi vùng con tự lấy `--padX`. */
-  padding: 0 var(--padX) 18px;
-}
-.ltsech {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-}
-.ltsech2 {
-  margin-top: 8px;
-}
-.ltsp {
-  flex: 1;
-}
-.ltmuted {
-  font-weight: 400;
-}
-.ltcard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.ltcardh {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-}
-.ltcardhm {
-  min-width: 0;
-}
-.ltcardt {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.ltcardu {
-  font-family: var(--code); /* mono-ok: URL endpoint, người dùng copy được */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.ltdot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.ltcaps {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 6px;
-}
-.ltcap {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0 8px;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-  padding: 7px 9px;
-  min-width: 0;
-}
-.ltcap.no {
-  opacity: 0.6;
-}
-.ltcapic {
-  grid-row: span 2;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--accent);
-}
-.ltcap.no .ltcapic {
-  color: var(--danger);
-}
-.ltcapl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltcapv {
-  font-family: var(--code); /* mono-ok: tên tool MCP là hợp đồng, copy được */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltwarn {
-  border: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  border-radius: var(--r-btn);
-  padding: 9px 11px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.ltnote {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-/* Khối lỗi nằm trong hàng flex-wrap của `.ltmrow`; ép nó xuống dòng riêng thay vì
-   chen vào giữa các ô chọn. */
-.ltpmserr {
-  flex: 1 0 100%;
-}
-.ltempty {
-  padding: 9px 0;
-}
-.ltmrow {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  padding: 9px 0;
-  border-top: 1px solid var(--border);
-}
-.ltmrow:first-child {
-  border-top: 0;
-}
-.ltml {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 168px;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-}
-.ltmname {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltmsrc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  max-width: 170px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltarrow {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-.ltaddrow {
-  gap: 7px;
-}
-.ltaddi {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.ltico {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.ltico:hover {
-  background: var(--bgHover);
-  color: var(--danger);
-}
-.lticon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.ltopt {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 11px 0;
-  border-top: 1px solid var(--border);
-}
-.ltopt:first-child {
-  border-top: 0;
-}
-/* Hàng lưu của mục quy tắc: nhắc trạng thái + nút Lưu. */
-.ltsave {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 12px;
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-}
-.ltsavehint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-}
-.ltsavehint.ok {
-  color: var(--textFaint);
-}
-.ltoptb {
-  flex: 1;
-  min-width: 0;
-}
-.ltopt1 {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-}
-.ltopt2 {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  margin-top: 3px;
-}
-.ltoptc {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-.lthours {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 4px 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ltstep {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--textMuted);
-  cursor: pointer;
-  font-family: inherit;
-}
-.ltstep:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-.lttime {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  padding: 5px 8px;
-  font-variant-numeric: tabular-nums;
-}
-.ltsw {
-  width: 38px;
-  height: 22px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--border);
-  background: var(--bgActive);
-  position: relative;
-  cursor: pointer;
-  transition: background var(--dur) var(--ease);
-  flex: 0 0 auto;
-}
-.ltsw::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--bgPanel);
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--dur) var(--ease);
-}
-.ltsw.on {
-  background: var(--accent);
-  border-color: transparent;
-}
-.ltsw.on::after {
-  transform: translateX(16px);
-}
-</style>

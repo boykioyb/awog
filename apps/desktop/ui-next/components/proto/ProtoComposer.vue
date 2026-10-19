@@ -1,7 +1,7 @@
 <template>
   <div class="shrink-0 px-4 pb-3">
     <div
-      class="rounded-xl border border-input bg-background shadow-sm focus-within:ring-1 focus-within:ring-ring"
+      class="rounded-xl border border-input bg-background shadow-xs focus-within:ring-1 focus-within:ring-ring"
     >
       <!-- Quoted excerpts — from message Quote action or selection → Quote.
            Mirrors the production quote draft: blockquote chip + remove. -->
@@ -29,8 +29,9 @@
            overflow collapses into +N. -->
       <div v-if="composerAtts.length" class="flex flex-wrap items-center gap-1.5 px-2.5 pt-2.5">
         <template v-for="(a, i) in visibleAtts" :key="i">
-          <button
-            class="group flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 py-1 pr-1 pl-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          <Button
+            variant="outline"
+            class="group h-auto gap-1.5 rounded-lg bg-muted/40 px-1.5 py-1 text-xs font-normal text-muted-foreground shadow-none hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
             :title="`Preview ${a.name}`"
             @click="preview.open(a)"
           >
@@ -48,9 +49,9 @@
               :aria-label="`Remove ${a.name}`"
               @click.stop="composerAtts.splice(i, 1)"
             >
-              <X class="size-3" />
+              <X class="size-3!" />
             </span>
-          </button>
+          </Button>
         </template>
         <Button
           v-if="composerAtts.length > 3"
@@ -65,7 +66,7 @@
       <Textarea
         v-model="draft"
         placeholder="Message the session… (Enter to send, ⇧Enter for newline)"
-        class="min-h-[52px] resize-none border-0 bg-transparent px-3.5 py-2.5 shadow-none focus-visible:ring-0"
+        class="min-h-13 resize-none border-0 bg-transparent px-3.5 py-2.5 shadow-none focus-visible:ring-0"
       />
 
       <div class="flex items-center gap-1 px-2 pb-2">
@@ -110,7 +111,7 @@
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Separator orientation="vertical" class="mx-1 !h-4" />
+        <Separator orientation="vertical" class="mx-1 h-4!" />
 
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
@@ -233,6 +234,8 @@ let fileIdx = 0
 function addFile() {
   composerAtts.value.push(MOCK_FILES[fileIdx++ % MOCK_FILES.length]!)
 }
+// Ảnh/video demo dựng bằng SVG data URI: màu trong đó là PIXEL của ảnh mẫu, không phải
+// màu theme — viết rgb() vì data URI không đọc được token CSS.
 function addImage() {
   composerAtts.value.push({
     name: 'screenshot-attach.png',
@@ -241,7 +244,7 @@ function addImage() {
     src:
       'data:image/svg+xml;utf8,' +
       encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="300" viewBox="0 0 480 300"><rect width="480" height="300" fill="#27272a"/><rect x="20" y="20" width="440" height="36" rx="8" fill="#3f3f46"/><rect x="20" y="76" width="200" height="204" rx="8" fill="#3f3f46"/><rect x="240" y="76" width="220" height="120" rx="8" fill="#3f3f46"/><rect x="240" y="216" width="220" height="64" rx="8" fill="#e4e4e7"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="300" viewBox="0 0 480 300"><rect width="480" height="300" fill="rgb(39,39,42)"/><rect x="20" y="20" width="440" height="36" rx="8" fill="rgb(63,63,70)"/><rect x="20" y="76" width="200" height="204" rx="8" fill="rgb(63,63,70)"/><rect x="240" y="76" width="220" height="120" rx="8" fill="rgb(63,63,70)"/><rect x="240" y="216" width="220" height="64" rx="8" fill="rgb(228,228,231)"/></svg>`,
       ),
   })
 }
@@ -253,7 +256,7 @@ function addVideo() {
     src:
       'data:image/svg+xml;utf8,' +
       encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270"><rect width="480" height="270" fill="#09090b"/><circle cx="240" cy="125" r="34" fill="#e4e4e7" fill-opacity="0.9"/><path d="M230 108l34 17-34 17z" fill="#09090b"/></svg>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270"><rect width="480" height="270" fill="rgb(9,9,11)"/><circle cx="240" cy="125" r="34" fill="rgb(228,228,231)" fill-opacity="0.9"/><path d="M230 108l34 17-34 17z" fill="rgb(9,9,11)"/></svg>`,
       ),
   })
 }

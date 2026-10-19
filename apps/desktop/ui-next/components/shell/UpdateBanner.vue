@@ -2,18 +2,29 @@
   <!-- Global auto-update banner (ADR 0028). Single app-lifetime mount in the
        layout, between the top bar and the page body so it pushes content down
        (full width) instead of overlaying it. Renders nothing unless the update
-       store says there's something worth surfacing. -->
-  <div v-if="update.bannerVisible" class="upd-banner" :class="{ error: isError }">
-    <Icon :name="leadIcon" class="upd-ic" />
+       store says there's something worth surfacing.
+       Dải tint accent (không fill xám) cho vòng đời cập nhật; tint destructive khi lỗi. -->
+  <div
+    v-if="update.bannerVisible"
+    class="flex shrink-0 items-center gap-3 border-b px-4 py-2"
+    :class="isError ? 'border-destructive bg-destructive/10' : 'border-ring bg-selected'"
+  >
+    <Icon
+      :name="leadIcon"
+      class="size-4 shrink-0"
+      :class="isError ? 'text-destructive' : 'text-primary'"
+    />
 
-    <div class="upd-body">
-      <div class="upd-msg">{{ message }}</div>
-      <div v-if="update.status === 'downloading'" class="upd-track">
-        <div class="upd-bar" :style="{ width: `${update.progressPercent}%` }" />
-      </div>
+    <div class="min-w-0 flex-1">
+      <div class="truncate text-foreground">{{ message }}</div>
+      <Progress
+        v-if="update.status === 'downloading'"
+        :model-value="update.progressPercent"
+        class="mt-1 h-1 bg-border"
+      />
     </div>
 
-    <div class="upd-actions">
+    <div class="flex shrink-0 items-center gap-1.5">
       <Button
         v-if="action"
         size="sm"
@@ -21,7 +32,10 @@
         :disabled="update.actionBusy"
         @click="update.runPrimaryAction()"
       >
-        <Icon :name="action.icon" :class="{ uaspin: update.actionBusy }" />
+        <Icon
+          :name="action.icon"
+          :class="update.actionBusy && 'animate-spin motion-reduce:animate-none'"
+        />
         {{ action.label }}
       </Button>
       <Button
@@ -74,73 +88,3 @@ const dismissLabel = computed(() =>
   update.status === 'downloaded' ? t('update.dismiss.later') : t('update.dismiss.dismiss'),
 )
 </script>
-
-<style scoped>
-/* Accent-tinted notice (not a gray fill) for the update lifecycle; destructive
-   tint for an error. Colours come from theme CSS vars so dark/light both hold. */
-.upd-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: var(--accentDim);
-  border-bottom: 1px solid var(--ring);
-}
-.upd-banner.error {
-  background: var(--dangerDim);
-  border-bottom-color: var(--destructive);
-}
-.upd-ic {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex-shrink: 0;
-  color: var(--primary);
-}
-.upd-banner.error .upd-ic {
-  color: var(--destructive);
-}
-.upd-body {
-  flex: 1;
-  min-width: 0;
-}
-.upd-msg {
-  font-size: 1em;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.upd-track {
-  margin-top: 4px;
-  height: 4px;
-  border-radius: var(--r-pill);
-  overflow: hidden;
-  background: var(--border);
-}
-.upd-bar {
-  height: 100%;
-  border-radius: var(--r-pill);
-  background: var(--primary);
-  transition: width 0.2s;
-}
-.upd-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-/* Spinner for the in-flight primary action (no rotate keyframe in prototype.css). */
-.uaspin {
-  animation: uaspin 0.8s linear infinite;
-}
-@keyframes uaspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .uaspin {
-    animation: none;
-  }
-}
-</style>

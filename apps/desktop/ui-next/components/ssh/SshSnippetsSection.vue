@@ -1,77 +1,91 @@
 <template>
-  <div class="sshx-sn">
-    <div class="sshx-sn-top">
-      <span class="sshx-sn-title">{{ t('ssh.nav.snippets') }}</span>
-      <span class="sshx-sn-count">{{ snippetsStore.snippets.length }}</span>
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div class="flex shrink-0 items-center gap-2.5 px-4 py-3.5">
+      <span class="text-lg font-semibold text-foreground">{{ t('ssh.nav.snippets') }}</span>
+      <Badge variant="secondary">{{ snippetsStore.snippets.length }}</Badge>
       <Button
         :title="t('ssh.snippet.new')"
-        class="sshx-sn-new"
+        class="ml-auto"
         variant="default"
         size="sm"
         @click="openNew"
       >
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="plus" />
         {{ t('ssh.snippet.new') }}
       </Button>
     </div>
+    <Separator />
 
     <!-- Run target: the live terminal connection a snippet is written into. -->
-    <div class="sshx-sn-bar">
-      <span class="sshx-sn-runon">{{ t('ssh.snippet.target') }}</span>
+    <div class="flex shrink-0 items-center gap-2.5 px-4 py-2.5">
+      <span class="text-xs font-semibold text-muted-foreground">{{ t('ssh.snippet.target') }}</span>
       <AppSelect v-if="hasTarget" v-model="selectedConnId" :options="targetOptions" width="220px" />
-      <span v-else class="sshx-sn-notarget">{{ t('ssh.snippet.noTarget') }}</span>
+      <span v-else class="text-sm text-muted-foreground">{{ t('ssh.snippet.noTarget') }}</span>
     </div>
+    <Separator />
 
-    <div class="sshx-sn-scroll">
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <SshEmptyState
         v-if="!snippetsStore.snippets.length"
         icon="commands"
         :title="t('ssh.snippet.emptyTitle')"
         :body="t('ssh.snippet.emptyBody')"
       />
-      <div v-else class="sshx-sn-list">
-        <div v-for="s in snippetsStore.snippets" :key="s.id" class="sshx-sn-row">
-          <span class="sshx-sn-ic">
-            <Icon name="commands" style="width: var(--icon-md); height: var(--icon-md)" />
+      <div v-else class="flex flex-col gap-2 px-3 py-2">
+        <Card
+          v-for="s in snippetsStore.snippets"
+          :key="s.id"
+          class="flex-row items-center gap-3 rounded-lg p-3 shadow-none"
+        >
+          <span class="grid size-8 shrink-0 place-items-center rounded-md bg-selected text-primary">
+            <Icon name="commands" class="size-4" />
           </span>
-          <div class="sshx-sn-main">
-            <span class="sshx-sn-name">{{ s.name }}</span>
-            <span class="sshx-sn-cmd mono">{{ s.command }}</span>
+          <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="text-base font-medium text-foreground">{{ s.name }}</span>
+            <span class="truncate font-mono text-sm text-muted-foreground">{{ s.command }}</span>
           </div>
-          <button
-            class="sshx-sn-act"
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground disabled:pointer-events-auto disabled:cursor-not-allowed"
             :disabled="!hasTarget"
             :title="hasTarget ? t('ssh.snippet.run') : t('ssh.snippet.noTarget')"
             :aria-label="t('ssh.snippet.run')"
             @click="run(s)"
           >
-            <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
-            class="sshx-sn-act"
+            <Icon name="play" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground"
             :title="t('ssh.snippet.copy')"
             :aria-label="t('ssh.snippet.copy')"
             @click="copy(s)"
           >
-            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
-            class="sshx-sn-act"
+            <Icon name="copy" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground"
             :title="t('ssh.snippet.edit')"
             :aria-label="t('ssh.snippet.edit')"
             @click="openEdit(s)"
           >
-            <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
-            class="sshx-sn-act sshx-sn-del"
+            <Icon name="edit" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             :title="t('ssh.snippet.delete')"
             :aria-label="t('ssh.snippet.delete')"
             @click="del(s)"
           >
-            <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+            <Icon name="trash" />
+          </Button>
+        </Card>
       </div>
     </div>
 
@@ -185,142 +199,3 @@ async function del(snippet: SshSnippet): Promise<void> {
   if (ok) snippetsStore.remove(snippet.id)
 }
 </script>
-
-<style scoped>
-.sshx-sn {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.sshx-sn-top {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-}
-.sshx-sn-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.sshx-sn-count {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.sshx-sn-new {
-  margin-left: auto;
-}
-.sshx-sn-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--border);
-}
-.sshx-sn-runon {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.sshx-sn-notarget {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sshx-sn-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-.sshx-sn-list {
-  padding: 8px 12px;
-}
-.sshx-sn-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.sshx-sn-row + .sshx-sn-row {
-  margin-top: 8px;
-}
-.sshx-sn-ic {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-sm);
-  color: var(--accent);
-  background: var(--accentDim);
-  flex: 0 0 auto;
-}
-.sshx-sn-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.sshx-sn-name {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-  color: var(--text);
-}
-.sshx-sn-cmd {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sshx-sn-act {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshx-sn-act:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshx-sn-act:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.sshx-sn-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.sshx-sn-del:hover:not(:disabled) {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-</style>

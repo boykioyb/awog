@@ -1,14 +1,14 @@
 <template>
   <!-- MỘT BIỂU ĐỒ = MỘT CARD. Trước 2026-09-17 tiêu đề và chú giải trôi thẳng trên
        nền trang còn riêng vùng vẽ có khung, nên mỗi ô đọc ra thành HAI thứ rời:
-       một dòng chữ, rồi một cái hộp (ảnh người dùng). Da card dùng chung `.icard`
-       của khu hạ tầng (app-shell.css) — cùng bề mặt với thanh công cụ và các khối
-       của màn Chi phí, không tự khai riêng một kiểu nữa. -->
-  <div class="mc icard">
-    <div class="mc-head">
-      <span class="mc-title">{{ title }}</span>
-      <span class="mc-head-right">
-        <span class="mc-unit">{{ unitLabel }}</span>
+       một dòng chữ, rồi một cái hộp (ảnh người dùng). Da card dùng chung (Card
+       shadcn) — cùng bề mặt với thanh công cụ và các khối của màn Chi phí, không tự
+       khai riêng một kiểu nữa. -->
+  <Card class="min-w-0 gap-1.5 px-3 py-2.5">
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-sm font-semibold">{{ title }}</span>
+      <span class="flex items-center gap-1.5">
+        <span class="text-xs text-faint">{{ unitLabel }}</span>
         <!-- Một ngưỡng đang sửa được (đã có bản nháp) > cảnh báo đã có > chưa có gì.
              Ba nhánh loại trừ nhau: hiện nút "Đặt ngưỡng" cạnh cảnh báo đã có là mời
              người dùng tạo cảnh báo thứ hai cho ĐÚNG metric đó mà không nói ra.
@@ -16,58 +16,66 @@
              không có ngưỡng, không có bản nháp, và một nút "Đặt ngưỡng" bấm vào không
              dẫn tới đâu cả. -->
         <template v-if="showAlarm">
-          <button
+          <Button
             v-if="threshold && threshold.editable"
-            class="mc-chip on"
-            type="button"
+            variant="outline"
+            size="xs"
+            class="h-auto gap-1 rounded-full px-1.5 py-px text-xs font-normal shadow-none [&_svg]:size-3 border-warning/40 bg-warning/10 text-warning hover:bg-warning/10 hover:text-warning"
             :title="t('infra.monitoring.alarm.dragHint')"
           >
-            <Icon name="move" class="mc-ic" />
+            <Icon name="move" />
             {{
               t('infra.monitoring.alarm.thresholdValue', {
                 v: formatMetricValue(threshold.value, unit),
               })
             }}
-          </button>
-          <button
+          </Button>
+          <Button
             v-else-if="threshold"
-            class="mc-chip"
-            type="button"
+            variant="outline"
+            size="xs"
+            class="h-auto gap-1 rounded-full px-1.5 py-px text-xs font-normal shadow-none [&_svg]:size-3 text-dim hover:border-input hover:bg-transparent hover:text-foreground"
             :title="t('infra.monitoring.alarm.edit')"
             @click="emit('alarm-edit')"
           >
-            <Icon name="bell" class="mc-ic" />
+            <Icon name="bell" />
             {{ threshold.label }}
-          </button>
-          <button
+          </Button>
+          <Button
             v-else-if="hasData"
-            class="mc-chip"
-            type="button"
+            variant="outline"
+            size="xs"
+            class="h-auto gap-1 rounded-full px-1.5 py-px text-xs font-normal shadow-none [&_svg]:size-3 text-dim hover:border-input hover:bg-transparent hover:text-foreground"
             :title="t('infra.monitoring.alarm.create')"
             @click="emit('alarm-create')"
           >
-            <Icon name="plus" class="mc-ic" />
+            <Icon name="plus" />
             {{ t('infra.monitoring.alarm.create') }}
-          </button>
+          </Button>
         </template>
       </span>
     </div>
 
     <!-- Bảng chú giải: danh tính chuỗi KHÔNG bao giờ chỉ dựa vào màu, và trạng thái
          "thiếu dữ liệu" nói ra ở đây vì không có gì để vẽ trên khung. -->
-    <ul class="mc-legend">
-      <li v-for="s in series" :key="s.key" class="mc-leg">
-        <span class="mc-swatch" :style="{ background: s.color, opacity: s.shade }" />
-        <span class="mc-leg-label">{{ s.label }}</span>
-        <span v-if="s.missing" class="mc-leg-missing">{{ t('infra.monitoring.missing') }}</span>
+    <ul class="m-0 flex list-none flex-wrap gap-x-2.5 gap-y-1 p-0">
+      <li v-for="s in series" :key="s.key" class="inline-flex items-center gap-1 text-xs text-dim">
+        <span
+          class="size-2 shrink-0 rounded-sm"
+          :style="{ background: s.color, opacity: s.shade }"
+        />
+        <span>{{ s.label }}</span>
+        <span v-if="s.missing" class="text-faint">{{ t('infra.monitoring.missing') }}</span>
       </li>
     </ul>
 
-    <div ref="plotRoot" class="mc-plot">
+    <!-- CARD LỒNG CARD THÌ KHỬ KHUNG CON: vùng vẽ không viền, chỉ một nền phụ tách
+         nó khỏi phần chữ của card — việc nền làm được mà viền không làm được. -->
+    <div ref="plotRoot" class="relative overflow-hidden rounded-md bg-muted/40">
       <svg
         v-if="hasData && vw >= MIN_W"
         ref="svgRef"
-        class="mc-svg"
+        class="block h-40 w-full cursor-crosshair touch-none"
         :viewBox="`0 0 ${vw} ${H}`"
         role="img"
         :aria-label="title"
@@ -78,7 +86,7 @@
         <rect
           v-for="b in bands"
           :key="b.key"
-          class="mc-band"
+          class="fill-destructive opacity-12"
           :x="b.x"
           :y="PAD_T"
           :width="b.w"
@@ -87,9 +95,15 @@
 
         <!-- Lưới + nhãn trục -->
         <template v-for="(tick, i) in yTicks" :key="`y${i}`">
-          <line class="mc-grid" :x1="PAD_L" :x2="vw - PAD_R" :y1="yOf(tick)" :y2="yOf(tick)" />
+          <line
+            class="stroke-border stroke-1"
+            :x1="PAD_L"
+            :x2="vw - PAD_R"
+            :y1="yOf(tick)"
+            :y2="yOf(tick)"
+          />
           <text
-            class="mc-tick"
+            class="fill-faint text-xs tabular-nums"
             :x="PAD_L - 6"
             :y="yOf(tick)"
             text-anchor="end"
@@ -101,24 +115,41 @@
         <!-- `ms` chứ không `t`: `t` là hàm dịch của i18n ở scope ngoài, đặt trùng tên
              thì trong vòng lặp này không còn gọi được hàm dịch nữa. -->
         <template v-for="(ms, i) in xTicks" :key="`x${i}`">
-          <line class="mc-grid" :x1="xOf(ms)" :x2="xOf(ms)" :y1="PAD_T" :y2="PAD_T + PLOT_H" />
-          <text class="mc-tick" :x="xOf(ms)" :y="H - 6" text-anchor="middle">
+          <line
+            class="stroke-border stroke-1"
+            :x1="xOf(ms)"
+            :x2="xOf(ms)"
+            :y1="PAD_T"
+            :y2="PAD_T + PLOT_H"
+          />
+          <text
+            class="fill-faint text-xs tabular-nums"
+            :x="xOf(ms)"
+            :y="H - 6"
+            text-anchor="middle"
+          >
             {{ formatAxisTime(ms, windowSeconds) }}
           </text>
         </template>
-        <line class="mc-baseline" :x1="PAD_L" :x2="vw - PAD_R" :y1="yOf(0)" :y2="yOf(0)" />
+        <line
+          class="stroke-input stroke-1"
+          :x1="PAD_L"
+          :x2="vw - PAD_R"
+          :y1="yOf(0)"
+          :y2="yOf(0)"
+        />
 
         <!-- Chuỗi -->
         <template v-for="s in series" :key="s.key">
           <path
             v-if="s.points.length > 1 && kind === 'area'"
-            class="mc-area"
+            class="stroke-none"
             :d="areaPath(s.points)"
             :style="{ fill: s.color, fillOpacity: s.shade * 0.18 }"
           />
           <path
             v-if="s.points.length > 1 && kind !== 'bar'"
-            class="mc-line"
+            class="fill-none stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
             :d="linePath(s.points)"
             :style="{ stroke: s.color, strokeOpacity: s.shade }"
           />
@@ -126,7 +157,7 @@
             <rect
               v-for="(b, i) in barsFor(s.points)"
               :key="`b${s.key}${i}`"
-              class="mc-bar"
+              class="stroke-none"
               :x="b.x"
               :y="b.y"
               :width="b.w"
@@ -136,7 +167,7 @@
           </template>
           <circle
             v-if="s.points.length === 1"
-            class="mc-dot"
+            class="stroke-card stroke-1"
             :cx="xOf(s.points[0]?.t ?? 0)"
             :cy="yOf(s.points[0]?.v ?? 0)"
             r="3"
@@ -151,7 +182,7 @@
                2026-09-17. Xem `spreadLabels`. -->
           <text
             v-if="endLabels[s.key] !== undefined"
-            class="mc-end"
+            class="fill-dim text-xs tabular-nums"
             :x="Math.min(vw - PAD_R + 6, xOf(lastOf(s.points).t) + 6)"
             :y="endLabels[s.key]"
             dominant-baseline="middle"
@@ -163,7 +194,7 @@
         <!-- Ngưỡng cảnh báo -->
         <template v-if="threshold">
           <line
-            class="mc-threshold"
+            class="stroke-warning stroke-[1.5] [stroke-dasharray:4_3]"
             :x1="PAD_L"
             :x2="vw - PAD_R"
             :y1="yOf(threshold.value)"
@@ -171,7 +202,7 @@
           />
           <rect
             v-if="threshold.editable"
-            class="mc-grip"
+            class="cursor-ns-resize fill-warning"
             :x="PAD_L + 4"
             :y="yOf(threshold.value) - 7"
             width="14"
@@ -187,11 +218,17 @@
         <!-- Lớp hover: đường dóng + điểm. Tooltip là DOM bên dưới, không phải SVG —
              chữ trong SVG không xuống dòng được. -->
         <template v-if="hover">
-          <line class="mc-cross" :x1="hover.x" :x2="hover.x" :y1="PAD_T" :y2="PAD_T + PLOT_H" />
+          <line
+            class="stroke-dim stroke-1 [stroke-dasharray:2_2]"
+            :x1="hover.x"
+            :x2="hover.x"
+            :y1="PAD_T"
+            :y2="PAD_T + PLOT_H"
+          />
           <circle
             v-for="r in hover.rows"
             :key="`h${r.key}`"
-            class="mc-dot"
+            class="stroke-card stroke-1"
             :cx="hover.x"
             :cy="r.y"
             r="3"
@@ -200,19 +237,37 @@
         </template>
       </svg>
 
-      <div v-if="!hasData" class="mc-empty">{{ t('infra.monitoring.missing') }}</div>
-      <div v-if="loading" class="mc-loading">{{ t('infra.monitoring.loading') }}</div>
+      <div
+        v-if="!hasData"
+        class="absolute inset-0 flex items-center justify-center text-sm text-dim"
+      >
+        {{ t('infra.monitoring.missing') }}
+      </div>
+      <div
+        v-if="loading"
+        class="absolute inset-0 flex items-center justify-center text-sm text-dim"
+      >
+        {{ t('infra.monitoring.loading') }}
+      </div>
 
-      <div v-if="hover" class="mc-tip" :style="tipStyle">
-        <div class="mc-tip-time">{{ formatAxisTime(hover.t, windowSeconds) }}</div>
-        <div v-for="r in hover.rows" :key="`t${r.key}`" class="mc-tip-row">
-          <span class="mc-swatch" :style="{ background: r.color }" />
-          <span class="mc-tip-label">{{ r.label }}</span>
-          <span class="mc-tip-value">{{ formatMetricValue(r.v, unit) }}</span>
+      <div
+        v-if="hover"
+        class="pointer-events-none absolute top-1.5 z-2 min-w-30 rounded-md border border-input bg-popover px-2 py-1.5 shadow-lg"
+        :style="tipStyle"
+      >
+        <div class="text-xs text-muted-foreground tabular-nums">
+          {{ formatAxisTime(hover.t, windowSeconds) }}
+        </div>
+        <div v-for="r in hover.rows" :key="`t${r.key}`" class="mt-0.5 flex items-center gap-1.5">
+          <span class="size-2 shrink-0 rounded-sm" :style="{ background: r.color }" />
+          <span class="flex-auto text-xs text-dim">{{ r.label }}</span>
+          <span class="text-xs text-foreground tabular-nums">
+            {{ formatMetricValue(r.v, unit) }}
+          </span>
         </div>
       </div>
     </div>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -601,236 +656,3 @@ function onGripUp(e: PointerEvent): void {
   ;(e.target as Element).releasePointerCapture?.(e.pointerId)
 }
 </script>
-
-<style scoped>
-.mc {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — ở đây chỉ có lề trong. */
-  padding: 10px 12px;
-}
-
-.mc-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.mc-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-
-.mc-head-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mc-unit {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.mc-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-
-.mc-chip:hover {
-  color: var(--text);
-  border-color: var(--borderStrong);
-}
-
-.mc-chip.on {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
-}
-
-.mc-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.mc-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.mc-leg {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.mc-swatch {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-xs);
-  flex: 0 0 auto;
-}
-
-.mc-leg-missing {
-  color: var(--textFaint);
-}
-
-/* CARD LỒNG CARD THÌ KHỬ KHUNG CON. Cả khối nay là `.icard`, nên một viền thứ hai
-   quanh vùng vẽ chỉ vẽ lại đúng hình dạng đã có, cách vào trong vài pixel — đọc ra
-   thành hai hộp lồng nhau. Nền `--bgEl` GIỮ LẠI: nó tách vùng vẽ khỏi phần chữ của
-   card, và đó là việc nền làm được mà viền không làm được. */
-.mc-plot {
-  position: relative;
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-  overflow: hidden;
-}
-
-/* Bề rộng 100% + cao 160px (chẵn): class này CHỈ gắn trên <svg> nên guard coi nó là
-   hộp icon (R5) — px lẻ ở đây sẽ bị bắt. */
-.mc-svg {
-  display: block;
-  width: 100%;
-  height: 160px;
-  cursor: crosshair;
-  touch-action: none;
-}
-
-.mc-grid {
-  stroke: var(--border);
-  stroke-width: 1;
-}
-
-.mc-baseline {
-  stroke: var(--borderStrong);
-  stroke-width: 1;
-}
-
-.mc-tick {
-  fill: var(--textFaint);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.mc-band {
-  fill: var(--danger);
-  opacity: 0.12;
-}
-
-.mc-line {
-  fill: none;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.mc-area {
-  stroke: none;
-}
-
-.mc-bar {
-  stroke: none;
-}
-
-.mc-dot {
-  stroke: var(--bgEl);
-  stroke-width: 1;
-}
-
-.mc-end {
-  fill: var(--textDim);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.mc-threshold {
-  stroke: var(--amber);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
-}
-
-.mc-grip {
-  fill: var(--amber);
-  cursor: ns-resize;
-}
-
-.mc-cross {
-  stroke: var(--textDim);
-  stroke-width: 1;
-  stroke-dasharray: 2 2;
-}
-
-.mc-empty,
-.mc-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.mc-tip {
-  position: absolute;
-  top: 6px;
-  z-index: 2;
-  min-width: 120px;
-  padding: 6px 8px;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
-  pointer-events: none;
-}
-
-.mc-tip-time {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.mc-tip-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.mc-tip-label {
-  flex: 1 1 auto;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.mc-tip-value {
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-</style>

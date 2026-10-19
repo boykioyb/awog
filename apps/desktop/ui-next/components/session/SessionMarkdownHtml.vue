@@ -530,6 +530,8 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 </script>
 
 <style scoped>
+/* style-ok: style cho DOM HTML markdown render ra (gắn imperative vào `.mdinline`,
+   class/utility không chạm tới được) — thuộc ngoại lệ "HTML markdown render ra". */
 /* Inline-markdown styling for the transcript (§3). Colors via theme tokens only; sizing
    inherits .blk.txt (text-[1em]). Reasonably complete (tables, hr, headings, spacing,
    line-height) — PreviewModal still owns heavy/full-screen rendering. */
@@ -609,7 +611,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   cursor: pointer;
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 10%, transparent);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   padding: 0 3px;
   margin: 0 -1px;
   text-decoration: none;
@@ -671,7 +673,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(li > ol) {
   margin: 3px 0 0;
 }
-/* GFM task lists (`- [ ]`): marked emits `<li><input type=checkbox> …>` with no class,
+/* GFM task lists (`- [ ]`): marked emits `li > input[type=checkbox]` with no class,
    so the `ul { list-style: disc }` above paints a bullet AND the checkbox. The checkbox
    IS the marker — drop the disc and the list indent so items sit flush (like GitHub),
    and give the box some breathing room from its label. */
@@ -745,8 +747,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   background: color-mix(in srgb, var(--muted) 45%, transparent);
 }
 /* Radius --r-btn (= --radius shadcn, 10px) khớp proto/`.mdbody img`; hairline border
-   đã có sẵn. Dưới theme Cute, rule `body[cute] .mdinline img` (theme-cute.css) vẫn
-   override về --r-sm theo ngôn ngữ riêng của nó. */
+   đã có sẵn. */
 .mdinline :deep(img) {
   max-width: 100%;
   height: auto;
@@ -793,24 +794,20 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
    trong subtree imperative, nên :deep). Spec: controls ghost + header row mờ.
    Global app-shell vẫn là chip nền --bg + viền; trong transcript siết về ghost:
    trong suốt, hover = accent-wash, giữ nguyên opacity gate (hover/focus).
-   ⚠ `body:not([data-theme-family='cute'])` là gate bắt buộc: Cute tô block code
-   TỐI (--codeBg) và skin chrome theo --termText — nếu rule này thắng specificity
-   (scoped deep thắng attr-selector của theme), chip ngôn ngữ muted-foreground sẽ
-   chìm trên nền tối. Không đụng chrome của Cute. */
-body:not([data-theme-family='cute']) .mdinline :deep(.codecopy),
-body:not([data-theme-family='cute']) .mdinline :deep(.codewrap),
-body:not([data-theme-family='cute']) .mdinline :deep(.codeexpand) {
+   Theme Cute giờ chỉ là bộ màu nên không còn rẽ nhánh theo theme family ở đây. */
+.mdinline :deep(.codecopy),
+.mdinline :deep(.codewrap),
+.mdinline :deep(.codeexpand) {
   background: transparent;
   border-color: transparent;
 }
-body:not([data-theme-family='cute']) .mdinline :deep(.codecopy:hover),
-body:not([data-theme-family='cute']) .mdinline :deep(.codewrap:hover),
-body:not([data-theme-family='cute']) .mdinline :deep(.codeexpand:hover) {
+.mdinline :deep(.codecopy:hover),
+.mdinline :deep(.codewrap:hover),
+.mdinline :deep(.codeexpand:hover) {
   background: var(--accent-wash);
   color: var(--foreground);
 }
-/* Nút Run giữ tint primary — hành động duy nhất trong thanh có hệ quả ra ngoài.
-   Không cần gate: emerald đọc được trên cả nền tối của Cute. */
+/* Nút Run giữ tint primary — hành động duy nhất trong thanh có hệ quả ra ngoài. */
 .mdinline :deep(.coderun) {
   color: var(--primary);
 }
@@ -820,7 +817,7 @@ body:not([data-theme-family='cute']) .mdinline :deep(.codeexpand:hover) {
   color: var(--primary);
 }
 /* Chip ngôn ngữ: header-row text-xs muted, không cần nền/viền riêng trên card. */
-body:not([data-theme-family='cute']) .mdinline :deep(.codelang) {
+.mdinline :deep(.codelang) {
   background: transparent;
   border-color: transparent;
   color: var(--muted-foreground);

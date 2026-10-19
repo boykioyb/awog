@@ -1,64 +1,92 @@
 <template>
-  <Teleport to="body">
-    <Transition name="cmdk">
-      <div v-if="isOpen" class="cmdk-ovl" @click.self="close">
-        <div class="cmdk-card" role="dialog" aria-modal="true">
-          <div class="cmdk-search">
-            <Search :size="16" class="cmdk-search-ic" />
-            <Input
-              ref="inputRef"
-              v-model="query"
-              :placeholder="t('palette.placeholder')"
-              :aria-label="t('palette.placeholder')"
-              @keydown.down.prevent="moveDown"
-              @keydown.up.prevent="moveUp"
-              @keydown.enter.prevent="runActive"
-              @keydown.esc.prevent="close"
-            />
-          </div>
-
-          <div class="cmdk-list">
-            <p v-if="entries.length === 0" class="cmdk-empty">{{ t('palette.empty') }}</p>
-
-            <template v-for="group in grouped" :key="group.section">
-              <div v-if="group.entries.length" class="cmdk-group">
-                {{ group.label }}
-              </div>
-              <button
-                v-for="entry in group.entries"
-                :key="entry.id"
-                ref="rowEls"
-                type="button"
-                class="cmdk-row"
-                :class="{ on: entry.flatIndex === activeIndex }"
-                @mouseenter="activeIndex = entry.flatIndex"
-                @click="run(entry)"
-              >
-                <component :is="entry.icon ?? defaultIcon" :size="14" class="cmdk-row-ic" />
-                <span class="cmdk-row-label">
-                  <span
-                    v-for="(seg, si) in highlightSegments(entry.label, entry.positions)"
-                    :key="si"
-                    :class="{ hl: seg.match }"
-                  >
-                    {{ seg.text }}
-                  </span>
-                </span>
-                <span v-if="entry.meta" class="cmdk-row-meta">{{ entry.meta }}</span>
-                <span v-if="entry.hint" class="cmdk-row-hint">{{ entry.hint }}</span>
-              </button>
-            </template>
-          </div>
-
-          <div class="cmdk-foot">
-            <span>{{ t('palette.hint.navUp') }}</span>
-            <span>{{ t('palette.hint.enter') }}</span>
-            <span>{{ t('palette.hint.esc') }}</span>
-          </div>
-        </div>
+  <!-- shadcn Dialog (role=dialog ⇒ OVERLAYS đã phủ; thay cho `.cmdk-ovl` cũ). Esc / bấm
+       ngoài = đóng qua `update:open`. Neo cao 14vh thay vì căn giữa: danh sách lọc co
+       giãn theo chữ gõ, căn giữa thì ô tìm nhảy lên xuống mỗi phím. z-200: trên mọi
+       modal thường, cùng bậc confirm. -->
+  <Dialog :open="isOpen" @update:open="(v: boolean) => !v && close()">
+    <DialogContent
+      class="top-[14vh] z-200 flex max-h-[64vh] w-[calc(100%-2rem)] max-w-150 translate-y-0 flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground data-[state=closed]:[--tw-exit-translate-y:0]! data-[state=open]:[--tw-enter-translate-y:0]!"
+      :aria-label="t('palette.placeholder')"
+      :aria-describedby="undefined"
+    >
+      <DialogTitle class="sr-only">{{ t('palette.placeholder') }}</DialogTitle>
+      <!-- pr-10: chừa chỗ nút X (DialogContent tự vẽ ở góc phải trên). -->
+      <div class="flex shrink-0 items-center gap-2 border-b py-2.5 pr-10 pl-3.5">
+        <Search class="size-4 shrink-0 text-muted-foreground" />
+        <Input
+          ref="inputRef"
+          v-model="query"
+          unstyled
+          class="min-h-0 min-w-0 flex-1 text-base placeholder:text-faint"
+          :placeholder="t('palette.placeholder')"
+          :aria-label="t('palette.placeholder')"
+          @keydown.down.prevent="moveDown"
+          @keydown.up.prevent="moveUp"
+          @keydown.enter.prevent="runActive"
+        />
       </div>
-    </Transition>
-  </Teleport>
+
+      <div class="min-h-0 flex-1 overflow-y-auto px-1 pt-1 pb-2">
+        <p v-if="entries.length === 0" class="px-3 py-3.5 text-base text-muted-foreground">
+          {{ t('palette.empty') }}
+        </p>
+
+        <template v-for="group in grouped" :key="group.section">
+          <div
+            v-if="group.entries.length"
+            class="px-2.5 pt-2 pb-1 text-xs font-medium text-muted-foreground"
+          >
+            {{ group.label }}
+          </div>
+          <!-- raw-ok: hàng kết quả cả dòng là một vùng bấm; ref mảng để cuộn theo phím -->
+          <button
+            v-for="entry in group.entries"
+            :key="entry.id"
+            ref="rowEls"
+            type="button"
+            class="group/row flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left"
+            :class="
+              entry.flatIndex === activeIndex
+                ? 'on bg-accent text-accent-foreground'
+                : 'text-popover-foreground'
+            "
+            @mouseenter="activeIndex = entry.flatIndex"
+            @click="run(entry)"
+          >
+            <component
+              :is="entry.icon ?? defaultIcon"
+              class="size-3.5 shrink-0 text-muted-foreground group-[.on]/row:text-primary"
+            />
+            <span class="min-w-0 flex-1 truncate text-base font-medium">
+              <span
+                v-for="(seg, si) in highlightSegments(entry.label, entry.positions)"
+                :key="si"
+                :class="{ 'font-semibold text-primary': seg.match }"
+              >
+                {{ seg.text }}
+              </span>
+            </span>
+            <Badge
+              v-if="entry.meta"
+              variant="secondary"
+              class="block max-w-[40%] shrink-0 truncate bg-muted font-normal text-muted-foreground"
+            >
+              {{ entry.meta }}
+            </Badge>
+            <span v-if="entry.hint" class="shrink-0 text-sm text-muted-foreground">
+              {{ entry.hint }}
+            </span>
+          </button>
+        </template>
+      </div>
+
+      <div class="flex shrink-0 gap-3.5 border-t px-3.5 py-2 text-sm text-muted-foreground">
+        <span>{{ t('palette.hint.navUp') }}</span>
+        <span>{{ t('palette.hint.enter') }}</span>
+        <span>{{ t('palette.hint.esc') }}</span>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -80,7 +108,6 @@ import { useProjects } from '~/composables/useProjects'
 import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
 import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
 import { useLinkOpen } from '~/composables/useLinkOpen'
-import Input from '~/components/ui/input/Input.vue'
 import { highlightSegments } from '~/utils/fuzzy'
 import { SETTINGS_SECTIONS } from '~/components/settings/sections'
 import {
@@ -110,7 +137,8 @@ const defaultIcon = Terminal
 
 const query = ref('')
 const activeIndex = ref(0)
-const inputRef = useTemplateRef<HTMLInputElement>('inputRef')
+// Input shadcn expose focus() (template ref là instance, không phải phần tử input).
+const inputRef = useTemplateRef<{ focus: () => void }>('inputRef')
 const rowEls = useTemplateRef<HTMLElement[]>('rowEls')
 
 // ── Navigate commands (file-based routes) ────────────────────────────────────
@@ -349,150 +377,3 @@ watch(activeIndex, (i) => {
   nextTick(() => rowEls.value?.[i]?.scrollIntoView({ block: 'nearest' }))
 })
 </script>
-
-<style scoped>
-.cmdk-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 14vh;
-  background: rgba(0, 0, 0, 0.55);
-}
-.cmdk-card {
-  width: 100%;
-  max-width: 600px;
-  margin: 0 16px;
-  display: flex;
-  flex-direction: column;
-  max-height: 64vh;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-.cmdk-search {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.cmdk-search-ic {
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-}
-.cmdk-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  outline: none;
-  color: var(--foreground);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.cmdk-input::placeholder {
-  color: var(--textFaint);
-}
-.cmdk-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 5px 5px 7px;
-}
-.cmdk-empty {
-  padding: 14px 12px;
-  color: var(--muted-foreground);
-  font-size: 1em;
-}
-/* Group header — the shadcn uppercase micro-label idiom. */
-.cmdk-group {
-  padding: 8px 10px 4px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.cmdk-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  text-align: left;
-  color: var(--popover-foreground);
-  cursor: pointer;
-  background: transparent;
-}
-.cmdk-row.on {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.cmdk-row-ic {
-  flex-shrink: 0;
-  color: var(--muted-foreground);
-}
-.cmdk-row.on .cmdk-row-ic {
-  color: var(--primary);
-}
-.cmdk-row-label {
-  flex: 1;
-  min-width: 0;
-  font-size: 1em;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cmdk-row-label .hl {
-  color: var(--primary);
-  font-weight: 600;
-}
-.cmdk-row-meta {
-  flex-shrink: 0;
-  max-width: 40%;
-  padding: 1px 7px;
-  border-radius: var(--r-pill); /* rounded-full */
-  background: var(--muted);
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cmdk-row-hint {
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.cmdk-foot {
-  display: flex;
-  gap: 14px;
-  padding: 7px 14px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-
-.cmdk-enter-active,
-.cmdk-leave-active {
-  transition: opacity 120ms ease;
-}
-.cmdk-enter-from,
-.cmdk-leave-to {
-  opacity: 0;
-}
-</style>

@@ -1,23 +1,46 @@
 <template>
-  <!-- Teleport to body so the modal escapes the workspace-panel stacking context
-       and renders as a top-level full-window overlay. Single instance, driven by
-       the shared useGitModal() store. The Git Manager is mounted lazily (v-if) so
-       its store.init() only runs while the modal is actually open. -->
+  <!-- Teleport ra body để modal thoát stacking context của workspace panel và phủ cả
+       cửa sổ. Một instance duy nhất, lái bởi store useGitModal(). Git Manager mount lười
+       (v-if) nên store.init() chỉ chạy khi modal đang mở.
+       Scrim tự dựng, KHÔNG phải Dialog reka: Git Manager tự mở menu / popover / hộp
+       thoại con teleport ra body (AppSelect, menu nhánh, context menu…) — Dialog modal
+       của reka khoá pointer-events của body nên mấy lớp đó sẽ không bấm được. Card mang
+       `role="dialog"` + `data-state="open"` để khớp OVERLAYS (useEmbeddedBrowser.ts).
+       z-120: trên trang phiên, dưới hộp thoại con của git (150) và Dialog shadcn (170). -->
   <Teleport to="body">
-    <div v-if="isOpen" class="ovl on gitovl" @click.self="close">
-      <div class="gitmodal">
-        <div class="gitmodal-head">
+    <div
+      v-if="isOpen"
+      class="fixed inset-0 z-120 flex items-center justify-center bg-black/55 p-6 [-webkit-app-region:no-drag]"
+      @click.self="close"
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        data-state="open"
+        :aria-label="t('sessions.workspace.gitModal.title')"
+        class="flex h-[88vh] w-[95vw] max-w-320 flex-col gap-0 overflow-hidden rounded-lg py-0 shadow-lg"
+      >
+        <div class="flex shrink-0 items-center gap-2 px-3.5 py-2.5">
           <Icon name="git" class="size-3.5 text-primary" />
-          <span class="gitmodal-title">{{ t('sessions.workspace.gitModal.title') }}</span>
-          <span style="flex: 1" />
-          <button class="gitmodal-x" :title="t('common.close')" @click="close">
+          <span class="flex-1 font-semibold">{{ t('sessions.workspace.gitModal.title') }}</span>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="text-muted-foreground"
+            :title="t('common.close')"
+            :aria-label="t('common.close')"
+            @click="close"
+          >
             <Icon name="x" class="size-3.5" />
-          </button>
+          </Button>
         </div>
-        <div class="gitmodal-body">
+        <Separator />
+        <!-- Git Manager lấp phần còn lại; mô phỏng đúng wrapper của trang /git (flex
+             column + min-width/min-height 0 + overflow hidden) để nó không tràn modal. -->
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <GitManager :project-id="projectId ?? undefined" />
         </div>
-      </div>
+      </Card>
     </div>
   </Teleport>
 </template>
@@ -42,60 +65,3 @@ function onKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
-<style scoped>
-/* Center the large modal (the base .ovl pins to the top for small dialogs). */
-.gitovl {
-  align-items: center;
-  padding: 24px;
-  z-index: 120;
-}
-.gitmodal {
-  width: min(1280px, 95vw);
-  height: 88vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn); /* rounded-lg */
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-.gitmodal-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.gitmodal-title {
-  font-weight: 600;
-}
-.gitmodal-x {
-  background: transparent;
-  border: none;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  display: inline-flex;
-}
-.gitmodal-x:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-/* The Git Manager fills the remaining space; its own .gcols handles overflow.
-   Mirror the full /git page wrapper (.page + inline flex-direction:column) exactly
-   — flex column + min-width:0 + min-height:0 + overflow:hidden — so GitManager
-   renders under the same container constraints and never spills past the modal. */
-.gitmodal-body {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-</style>

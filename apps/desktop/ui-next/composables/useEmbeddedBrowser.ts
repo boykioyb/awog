@@ -72,9 +72,18 @@ const OVERLAYS = [
   '.shell-scrim', // scrim của drawer ở shell compact
   '.dropzone', // khung "thả file vào đây" (pointer-events:none ⇒ hit-test không thấy)
   '.tst', // toast card (AppToaster) — xem khối comment phía trên
-  '.ntf-panel', // hộp thư GitHub/CI ở TopBar (đỉnh-phải, chính vùng panel)
+  // Popper của reka/shadcn không mang class skin cũ: menu (DropdownMenu, ContextMenu,
+  // submenu) có role="menu"; Select và HoverCard nhận diện qua data-slot. Popover thì
+  // role="dialog" nên đã khớp dòng dialog phía trên.
+  '[role="menu"][data-state="open"]',
+  '[data-slot="select-content"][data-state="open"]',
+  '[data-slot="hover-card-content"][data-state="open"]',
+  // Bề mặt nổi tự định vị không phải reka: popover khung giờ + menu tài khoản của Infra,
+  // khung highlight của tour hướng dẫn.
+  '[data-infra-overlay]',
+  '[data-tour-overlay]',
   '.wbm', // context menu của workbench explorer (fixed, không phải .smenu)
-  '.wbcm-backdrop', // nền bắt click của WorkbenchContextMenu — trang đè lên sẽ
+  '.wbm-backdrop', // nền bắt click của WorkbenchContextMenu — trang đè lên sẽ
   // nuốt click "đóng menu" dù mắt vẫn thấy web
   // Bề mặt nổi của trang Slack: bảng emoji (Popover reka), menu ⋯ (DropdownMenu reka —
   // không mang `.smenu`), danh sách gợi ý @/: của ô trả lời. Gắn chung một attribute

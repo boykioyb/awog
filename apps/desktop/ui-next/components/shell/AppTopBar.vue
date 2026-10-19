@@ -1,48 +1,61 @@
 <template>
-  <div class="top">
-    <!-- Compact-mode drawer toggles (≤1100px): ☰ reveals the nav rail; the
-         panel-left icon reveals the page's secondary list. Hidden at full width. -->
-    <Button
-      v-if="compact"
-      variant="ghost"
-      size="iconSm"
-      class="shelltgl"
-      :class="{ on: navOpen }"
-      :title="t('topbar.openNav')"
-      @click="toggleNav"
-    >
-      <Icon name="menu" style="width: var(--icon-md); height: var(--icon-md)" />
-    </Button>
+  <!-- Header của SidebarInset (mẫu sidebar-07): SidebarTrigger · Separator dọc ·
+       Breadcrumb theo route, rồi các tiện ích cấp app (chuông, ⌘K, New).
+
+       Cửa sổ ẩn title bar (electron/src/window.ts) nên thanh này CHÍNH LÀ title bar:
+       nền là vùng kéo cửa sổ, mọi control bên trong phải opt-out (`no-drag`), không
+       thì control nằm trong vùng kéo nuốt mất click của chính nó. Opt-out viết rộng
+       theo loại phần tử (thay cho rule `.top button, .top a…` của app-shell.css) để
+       control thêm sau này không lặng lẽ thành vật chết. `[role=tab]` cho tab phiên
+       của SessionTabBar (thẻ <div>); nền strip tab vẫn kéo được như VS Code. -->
+  <header
+    class="flex h-titlebar shrink-0 items-center gap-2 bg-sidebar px-3 shadow-[inset_0_-1px_0_var(--border)] [-webkit-app-region:drag] [&_:is(button,a,input,select,textarea,label,[role=button],[role=tab],[data-slot=button])]:[-webkit-app-region:no-drag]"
+  >
+    <!-- Khối title bar chạy hết bề ngang cửa sổ (sidebar nằm BÊN DƯỚI), nên cụm ba
+         đèn giao thông macOS luôn nằm trong thanh này: chừa đúng bề rộng của chúng
+         (--titlebar-inset-start = 68px ở darwin, 0 khi fullscreen / Windows / Linux). -->
+    <div aria-hidden="true" class="w-(--titlebar-inset-start) shrink-0" />
+    <SidebarTrigger :title="t('nav.collapse')" />
+    <Separator orientation="vertical" class="mr-1 h-4!" />
+    <!-- Chế độ hẹp (≤1100px): cột list phụ của trang thành drawer — nút này bật nó. -->
     <Button
       v-if="compact && hasList"
       variant="ghost"
       size="iconSm"
-      class="shelltgl"
-      :class="{ on: listOpen }"
+      :class="listOpen ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'"
       :title="t('topbar.openList')"
+      :aria-pressed="listOpen"
       @click="toggleList"
     >
-      <Icon name="dock-left" style="width: var(--icon-md); height: var(--icon-md)" />
+      <Icon name="dock-left" />
     </Button>
     <SessionTabBar v-if="isWorkbench" hide-list-toggle class="min-w-0 flex-1" />
-    <span v-else class="ptitle">{{ title }}</span>
-    <span class="sp" />
+    <Breadcrumb v-else class="min-w-0 flex-1">
+      <BreadcrumbList class="flex-nowrap">
+        <template v-if="crumb.groupKey">
+          <BreadcrumbItem class="hidden md:inline-flex">{{ t(crumb.groupKey) }}</BreadcrumbItem>
+          <BreadcrumbSeparator class="hidden md:block" />
+        </template>
+        <BreadcrumbItem class="min-w-0">
+          <BreadcrumbPage class="truncate">{{ title }}</BreadcrumbPage>
+        </BreadcrumbItem>
+      </BreadcrumbList>
+    </Breadcrumb>
+    <!-- GitHub / CI notification inbox (bell + unread badge). -->
+    <TopBarNotifications />
     <template v-if="!isWorkbench">
-      <!-- GitHub notification inbox (bell + unread badge). Left of the search box
-           so the two live in the same "utilities" cluster before the primary
-           action. -->
-      <TopBarNotifications />
-      <button
-        type="button"
-        class="kbd"
+      <Button
+        variant="outline"
+        size="sm"
+        class="min-w-0 shrink justify-start font-normal text-muted-foreground"
         data-tour="cmdk-hint"
         :title="t('topbar.searchHint')"
         @click="openPalette"
       >
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span class="kbd-label">{{ t('topbar.search') }}</span>
-        <span class="kk">⌘K</span>
-      </button>
+        <Icon name="search" />
+        <span class="min-w-0 truncate">{{ t('topbar.search') }}</span>
+        <Kbd>⌘K</Kbd>
+      </Button>
       <Button
         size="sm"
         class="shrink-0"
@@ -54,7 +67,10 @@
         <span>{{ t('topbar.new') }}</span>
       </Button>
     </template>
-  </div>
+    <!-- Windows/Linux: `titleBarOverlay` vẽ nút thu nhỏ/phóng to/đóng đè lên góc
+         phải — chừa đúng bề rộng Chromium báo (token của app-shell.css, 0 ở macOS). -->
+    <div aria-hidden="true" class="w-(--titlebar-inset-end) shrink-0" />
+  </header>
 </template>
 
 <script setup lang="ts">
@@ -63,42 +79,20 @@ import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
 import SessionTabBar from '~/components/session/SessionTabBar.vue'
 import TopBarNotifications from '~/components/shell/TopBarNotifications.vue'
-
-// Route → page-title i18n key (reuses the NavRail nav.* keys).
-const TITLE_KEYS: Record<string, string> = {
-  '/': 'nav.home',
-  '/workbench': 'nav.sessions',
-  '/tasks': 'nav.tasks',
-  '/workflows': 'nav.workflows',
-  '/agents': 'nav.agents',
-  '/skills': 'nav.skills',
-  '/commands': 'nav.commands',
-  '/rules': 'nav.rules',
-  '/templates': 'nav.templates',
-  '/projects': 'nav.projects',
-  '/git': 'nav.git',
-  '/connections': 'nav.connections',
-  '/hooks': 'nav.hooks',
-  '/settings': 'nav.settings',
-  // `/infra` trước đây rơi vào nhánh mặc định ⇒ thanh trên hiện "AWOG". Mục menu
-  // đã đổi tên thành "AWS" (2026-09-14) nên tiêu đề trang đi theo cùng một nguồn.
-  '/infra': 'nav.infra',
-}
-
+import { routeCrumb } from '~/components/shell/sidebar07/nav-groups'
 const { t } = useI18n()
 const route = useRoute()
 const isWorkbench = computed(() => route.path.startsWith('/workbench'))
-const { compact, navOpen, listOpen, hasList, toggleNav, toggleList } = useResponsiveShell()
+const { compact, listOpen, hasList, toggleList } = useResponsiveShell()
 
-// Search box opens the ⌘K command palette (the keyboard shortcut is bound in the
-// layout; this makes the visible box clickable too).
+// Search box opens the ⌘K command palette (the keyboard shortcut lives in
+// useGlobalShortcuts; this makes the visible box clickable too).
 const { open: openPalette } = useCommandPalette()
-const title = computed(() => {
-  const path = route.path
-  const key = Object.keys(TITLE_KEYS).find((k) => (k === '/' ? path === '/' : path.startsWith(k)))
-  const titleKey = key ? TITLE_KEYS[key] : undefined
-  return titleKey ? t(titleKey) : 'AWOG'
-})
+
+// Breadcrumb: nhóm sidebar → tên trang (nguồn chung với sidebar, nav-groups.ts).
+// Route không có tên thì hiện "AWOG" như thanh trên cũ.
+const crumb = computed(() => routeCrumb(route.path))
+const title = computed(() => (crumb.value.titleKey ? t(crumb.value.titleKey) : 'AWOG'))
 
 // Global "New" → always start a fresh DEFAULT (global, no-project) session and land
 // on the Sessions page. This header button is the neutral "clean slate" entry point;
@@ -110,20 +104,3 @@ function onNew() {
   if (!route.path.startsWith('/workbench')) navigateTo('/workbench')
 }
 </script>
-
-<style scoped>
-/* Compact drawer toggles — ghost iconSm Buttons (28px) left of the page title.
-   Geometry + hover/focus come from the primitive; scoped keeps the resting dim
-   icon and the drawer-open wash (same idiom as the nav rail's selection). */
-.shelltgl {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.shelltgl:hover {
-  color: var(--foreground);
-}
-.shelltgl.on {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-</style>

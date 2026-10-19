@@ -13,6 +13,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { emit } from '../transport/stdio.js'
 import { registerOwnedProcess, unregisterOwnedProcess } from '../monitor/owned.js'
 import { log } from '../util/logger.js'
+import { envWithoutSecrets } from '../util/child-env.js'
 
 export interface TerminalSessionRef {
   terminalId: string
@@ -97,16 +98,6 @@ function appendOutput(record: TerminalRecord, chunk: string): void {
 // lives until the user closes it (see the note on idle-kill below).
 const MAX_PER_SESSION = 20
 
-// Strip credentials before handing env to an interactive shell (invariant #1).
-const SENSITIVE_EXACT = new Set(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY'])
-const SENSITIVE_SUFFIX = /(_TOKEN|_KEY|_SECRET)$/i
-
-// The sidecar is launched as `electron --run-as-node`, so its env carries flags
-// that hijack any `node`/`electron` the USER runs from the shell (ELECTRON_RUN_AS_NODE
-// makes an electron binary behave as plain node; NODE_OPTIONS is inherited by every
-// node child). A real terminal must not leak the host process's runtime flags.
-const HOST_RUNTIME_VARS = ['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'ELECTRON_NO_ATTACH_CONSOLE']
-
 // Ngữ cảnh hạ tầng của phiên (ADR 0088, task 0.13) — chỉ TÊN, không bí mật.
 // Nhờ vậy người dùng gõ `aws s3 ls` trong terminal của phiên là trúng đúng
 // account đang hiện trên thanh ngữ cảnh, không phải profile `default`.
@@ -116,13 +107,8 @@ export interface TerminalInfraContext {
 }
 
 function sanitizedEnv(infra?: TerminalInfraContext): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value === undefined) continue
-    if (SENSITIVE_EXACT.has(key) || SENSITIVE_SUFFIX.test(key)) continue
-    if (HOST_RUNTIME_VARS.includes(key)) continue
-    out[key] = value
-  }
+  // Credentials + the host's runtime flags stripped (invariant #1) — util/child-env.ts.
+  const out = envWithoutSecrets()
   // What a terminal emulator is expected to advertise (TERM itself is set by
   // node-pty from `name`). Only fill LANG when absent — never override the user's.
   out.TERM_PROGRAM = 'AWOG'
@@ -131,7 +117,7 @@ function sanitizedEnv(infra?: TerminalInfraContext): Record<string, string> {
   // Ghi ĐÈ (không phải "chỉ điền khi trống"): phiên đã ghim một account thì cái
   // đang ghim mới là sự thật, còn `AWS_PROFILE` thừa hưởng từ môi trường của
   // AWOG chính là thứ hay trỏ vào production mà không ai để ý. Bộ lọc
-  // SENSITIVE_SUFFIX ở trên GIỮ NGUYÊN — nó vẫn chặn AWS_SECRET_ACCESS_KEY /
+  // Bộ lọc credential (util/child-env.ts) GIỮ NGUYÊN — nó vẫn chặn AWS_SECRET_ACCESS_KEY /
   // AWS_SESSION_TOKEN, và ta cố tình chỉ truyền tên profile.
   if (infra?.awsProfile) out.AWS_PROFILE = infra.awsProfile
   // Hai biến region, xem chú thích ở `runtime/tools/shell.ts`.

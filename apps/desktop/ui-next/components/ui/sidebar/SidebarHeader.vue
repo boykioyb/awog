@@ -1,11 +1,8 @@
 <template>
   <div
-    :class="
-      cn(
-        'flex h-12 shrink-0 items-center gap-2 px-3 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0',
-        props.class,
-      )
-    "
+    data-slot="sidebar-header"
+    data-sidebar="header"
+    :class="cn('flex flex-col gap-2 p-2', props.class)"
   >
     <slot />
   </div>
@@ -15,5 +12,7 @@
 import type { HTMLAttributes } from 'vue'
 import { cn } from '~/lib/utils'
 
-const props = defineProps<{ class?: HTMLAttributes['class'] }>()
+const props = defineProps<{
+  class?: HTMLAttributes['class']
+}>()
 </script>

@@ -1,69 +1,62 @@
 <template>
-  <div class="hkd">
-    <div class="dh">
-      <div class="hkd-icn">
-        <Icon name="zap" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-12.5 flex-none items-center gap-2.5 border-b px-5.5">
+      <div
+        class="grid size-6.5 flex-none place-items-center rounded-sm border bg-muted text-muted-foreground"
+      >
+        <Icon name="zap" class="size-3.5" />
       </div>
-      <div class="dt">{{ hook.name }}</div>
-      <span class="tag mono">{{ hook.event }}</span>
-      <span class="tag" :class="{ acc: hook.runMode === 'blocking' }">{{ hook.runMode }}</span>
-      <span class="tag" :class="{ acc: isProject }">{{ sourceLabel }}</span>
-      <span v-if="isImported" class="tag hkd-lock">
-        <Icon name="shield" style="width: 10px; height: 10px" />
+      <div class="min-w-0 truncate text-lg font-semibold">{{ hook.name }}</div>
+      <!-- mono-ok: tên event hook -->
+      <Badge variant="outline" class="font-mono text-muted-foreground">{{ hook.event }}</Badge>
+      <Badge variant="outline" :class="hook.runMode === 'blocking' ? TAG_ACC : TAG">
+        {{ hook.runMode }}
+      </Badge>
+      <Badge variant="outline" :class="isProject ? TAG_ACC : TAG">{{ sourceLabel }}</Badge>
+      <Badge v-if="isImported" variant="outline" :class="TAG">
+        <Icon name="shield" />
         {{ t('hooks.detail.imported') }}
-      </span>
-      <span style="flex: 1" />
+      </Badge>
+      <span class="flex-1" />
       <Button
         v-if="!isImported"
         :title="t('hooks.detail.runOnce')"
         :disabled="running"
-        class="hkd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('run')"
       >
-        <Icon
-          :name="running ? 'refresh' : 'play'"
-          :class="{ spin: running }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
+        <Icon :name="running ? 'refresh' : 'play'" :class="{ 'animate-spin': running }" />
       </Button>
-      <Button
-        :title="t('hooks.detail.edit')"
-        class="hkd-act"
-        variant="outline"
-        size="iconMd"
-        @click="emit('edit')"
-      >
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Button :title="t('hooks.detail.edit')" variant="outline" size="iconSm" @click="emit('edit')">
+        <Icon name="edit" />
       </Button>
       <Button
         v-if="!isImported"
         :title="t('hooks.detail.delete')"
-        class="hkd-act hkd-danger"
+        class="hover:border-destructive hover:text-destructive"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="trash" />
       </Button>
     </div>
 
-    <div class="dscroll">
-      <p class="hkd-desc">{{ hook.description }}</p>
+    <div class="flex-1 overflow-y-auto p-5.5">
+      <p class="m-0 text-base leading-(--lh-prose) text-muted-foreground">{{ hook.description }}</p>
 
       <!-- Trust gate (ADR 0032 D-8): a project-tier hook must be explicitly
            trusted before it can spawn. -->
-      <div v-if="needsTrust" class="hkd-trust">
-        <Icon
-          name="alert"
-          class="hkd-trust-icn"
-          style="width: var(--icon-md); height: var(--icon-md)"
-        />
-        <div class="hkd-trust-body">
-          <div class="hkd-trust-ttl">{{ t('hooks.trust.title') }}</div>
-          <div class="hkd-trust-desc">{{ t('hooks.trust.desc') }}</div>
-          <Button class="hkd-trust-btn" variant="outline" size="sm" @click="emit('trust')">
+      <div
+        v-if="needsTrust"
+        class="mt-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-3.5 py-3"
+      >
+        <Icon name="alert" class="mt-0.5 size-4 flex-none text-warning" />
+        <div class="flex min-w-0 flex-col gap-1">
+          <div class="text-base font-semibold text-warning">{{ t('hooks.trust.title') }}</div>
+          <div class="text-sm text-muted-foreground">{{ t('hooks.trust.desc') }}</div>
+          <Button class="mt-1.5 self-start" variant="outline" size="sm" @click="emit('trust')">
             <Icon name="shield" />
             {{ t('hooks.trust.button') }}
           </Button>
@@ -71,70 +64,87 @@
       </div>
 
       <!-- Quick controls -->
-      <div class="hkd-controls">
-        <div class="hkd-ctl">
-          <span class="hkd-ctl-label">{{ t('hooks.detail.enabled') }}</span>
-          <span
-            class="tog2 hkd-tog"
-            :class="{ off: !hook.enabled, locked: isImported }"
+      <div class="mt-4 grid grid-cols-3 gap-2.5">
+        <div :class="CTL">
+          <span :class="CTL_LABEL">{{ t('hooks.detail.enabled') }}</span>
+          <Switch
+            class="self-start"
+            :checked="hook.enabled"
+            :disabled="isImported"
             :title="t('hooks.detail.toggleHint')"
-            @click="!isImported && emit('toggle')"
+            :aria-label="t('hooks.detail.enabled')"
+            @update:checked="emit('toggle')"
           />
         </div>
-        <div class="hkd-ctl">
-          <span class="hkd-ctl-label">{{ t('hooks.detail.runMode') }}</span>
-          <span class="hkd-ctl-val mono">{{ hook.runMode }}</span>
+        <div :class="CTL">
+          <span :class="CTL_LABEL">{{ t('hooks.detail.runMode') }}</span>
+          <!-- mono-ok: giá trị cấu hình runMode -->
+          <span class="font-mono text-sm text-foreground">{{ hook.runMode }}</span>
         </div>
-        <div class="hkd-ctl">
-          <span class="hkd-ctl-label">{{ t('hooks.detail.timeout') }}</span>
-          <span class="hkd-ctl-val tnum">{{ hook.timeoutMs }}ms</span>
+        <div :class="CTL">
+          <span :class="CTL_LABEL">{{ t('hooks.detail.timeout') }}</span>
+          <span class="tnum text-sm text-foreground">{{ hook.timeoutMs }}ms</span>
         </div>
       </div>
 
       <!-- Matcher -->
-      <div class="sech">{{ t('hooks.detail.matcher') }}</div>
-      <div v-if="matcherEntries.length === 0" class="hkd-faint">
+      <div :class="SECH">{{ t('hooks.detail.matcher') }}</div>
+      <div v-if="matcherEntries.length === 0" class="text-sm text-faint">
         {{ t('hooks.detail.matcherEmpty') }}
       </div>
-      <div v-else class="hkd-kvs">
-        <div v-for="[k, v] in matcherEntries" :key="k" class="hkd-kv">
-          <span class="hkd-kv-key mono">{{ k }}</span>
-          <span class="hkd-kv-val mono">{{ v }}</span>
+      <div v-else class="flex flex-col gap-2">
+        <!-- mono-ok: khoá/giá trị matcher -->
+        <div v-for="[k, v] in matcherEntries" :key="k" :class="KV">
+          <span class="flex-none font-mono text-sm text-dim">{{ k }}</span>
+          <span class="break-all font-mono text-sm text-foreground">{{ v }}</span>
         </div>
       </div>
 
       <!-- Command -->
-      <div class="sech">{{ t('hooks.detail.command') }}</div>
-      <pre class="codeblk hkd-cmd">{{ hook.command }}</pre>
-      <div class="hkd-kvs hkd-kvs-tight">
-        <div class="hkd-kv">
-          <span class="hkd-kv-key">{{ t('hooks.detail.cwd') }}</span>
-          <span class="hkd-kv-val mono">{{ hook.cwd }}</span>
+      <div :class="SECH">{{ t('hooks.detail.command') }}</div>
+      <!-- mono-ok: lệnh shell của hook -->
+      <pre
+        class="m-0 whitespace-pre-wrap break-words rounded-lg border bg-muted p-3 font-mono text-sm leading-(--lh-prose) text-muted-foreground"
+        >{{ hook.command }}</pre
+      >
+      <div class="mt-2.5 flex flex-col gap-2">
+        <div :class="KV">
+          <span class="flex-none text-sm text-dim">{{ t('hooks.detail.cwd') }}</span>
+          <!-- mono-ok: đường dẫn cwd -->
+          <span class="break-all font-mono text-sm text-foreground">{{ hook.cwd }}</span>
         </div>
-        <div class="hkd-kv">
-          <span class="hkd-kv-key">{{ t('hooks.detail.env') }}</span>
-          <span class="hkd-kv-val">{{ t('hooks.detail.envCount', { count: envCount }) }}</span>
+        <div :class="KV">
+          <span class="flex-none text-sm text-dim">{{ t('hooks.detail.env') }}</span>
+          <span class="break-all text-sm text-foreground">
+            {{ t('hooks.detail.envCount', { count: envCount }) }}
+          </span>
         </div>
       </div>
 
       <!-- Recent runs -->
-      <div class="sech">{{ t('hooks.detail.recentRuns', { count: hook.recentRuns.length }) }}</div>
-      <div v-if="hook.recentRuns.length === 0" class="hkd-faint">
+      <div :class="SECH">
+        {{ t('hooks.detail.recentRuns', { count: hook.recentRuns.length }) }}
+      </div>
+      <div v-if="hook.recentRuns.length === 0" class="text-sm text-faint">
         {{ t('hooks.detail.noRuns') }}
       </div>
-      <div v-else class="hkd-runs">
-        <div v-for="(run, i) in hook.recentRuns" :key="i" class="hkd-run">
+      <div v-else class="flex flex-col gap-1.5">
+        <div v-for="(run, i) in hook.recentRuns" :key="i" :class="[KV, 'flex-wrap gap-3']">
           <span
-            class="hkd-run-dot"
-            :style="{ background: run.exitCode === 0 ? 'var(--green)' : 'var(--danger)' }"
+            class="size-1.5 flex-none rounded-full"
+            :class="run.exitCode === 0 ? 'bg-success' : 'bg-destructive'"
           />
-          <span class="hkd-run-code mono">
+          <!-- mono-ok: exit code -->
+          <span class="min-w-14 font-mono text-sm text-foreground">
             {{ run.exitCode === 0 ? 'OK' : `EXIT ${run.exitCode}` }}
           </span>
-          <span class="hkd-run-dur">{{ run.durationMs }}ms</span>
-          <span v-if="run.stderr" class="hkd-run-err mono">{{ run.stderr }}</span>
-          <span v-else style="flex: 1" />
-          <span class="hkd-run-at">{{ run.at }}</span>
+          <span class="min-w-17.5 text-sm text-dim">{{ run.durationMs }}ms</span>
+          <!-- mono-ok: stderr của lệnh -->
+          <span v-if="run.stderr" class="flex-1 truncate font-mono text-sm text-destructive">
+            {{ run.stderr }}
+          </span>
+          <span v-else class="flex-1" />
+          <span class="text-sm text-dim">{{ run.at }}</span>
         </div>
       </div>
     </div>
@@ -142,8 +152,8 @@
 </template>
 
 <script setup lang="ts">
-// Hook detail pane — rendered in prototype CSS (.dh header + .dscroll body,
-// matching the skills/agents detail markup). Surfaces the event/matcher/command,
+// Hook detail pane — header cố định + thân cuộn, cùng bố cục với detail của
+// skills/agents. Surfaces the event/matcher/command,
 // the enabled toggle + run-mode/timeout chips, a project-tier trust gate
 // (ADR 0032 D-8), and the recentRuns audit. Header actions emit to the page.
 import { computed } from 'vue'
@@ -162,6 +172,14 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// Class dùng lại trong thân detail.
+const SECH = 'mb-2 mt-5 text-xs font-semibold text-dim first:mt-0'
+const TAG = 'text-muted-foreground'
+const TAG_ACC = 'border-primary/45 bg-primary/8 text-primary'
+const CTL = 'flex flex-col gap-1.5 rounded-lg border bg-muted px-3 py-2.5'
+const CTL_LABEL = 'text-xs font-medium text-dim'
+const KV = 'flex items-center gap-2.5 rounded-md border bg-muted px-3 py-2'
+
 const isImported = computed(() => props.hook.readOnly === true)
 const isProject = computed(() => (props.hook.source ?? 'global') === 'project')
 const needsTrust = computed(() => isProject.value && props.hook.trusted === false)
@@ -170,206 +188,3 @@ const sourceLabel = computed(() => (isProject.value ? '.awog' : '~/.awog'))
 const matcherEntries = computed(() => Object.entries(props.hook.matcher ?? {}))
 const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 </script>
-
-<style scoped>
-.hkd {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.hkd-icn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textMuted);
-  flex: 0 0 auto;
-}
-.hkd-act {
-  width: 28px;
-  height: 28px;
-}
-.hkd-act:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.hkd-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.hkd-lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.hkd-desc {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-prose);
-  margin: 0;
-}
-.hkd-trust {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-}
-.hkd-trust-icn {
-  color: var(--amber);
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-.hkd-trust-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.hkd-trust-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--amber);
-}
-.hkd-trust-desc {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.hkd-trust-btn {
-  align-self: flex-start;
-  margin-top: 6px;
-}
-.hkd-controls {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 16px;
-}
-.hkd-ctl {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.hkd-ctl-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--textDim);
-}
-.hkd-ctl-val {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.hkd-tog.locked {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.hkd-faint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.hkd-kvs {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.hkd-kvs-tight {
-  margin-top: 10px;
-}
-.hkd-kv {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.hkd-kv-key {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.hkd-kv-val {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  word-break: break-all;
-}
-.hkd-cmd {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.hkd-runs {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.hkd-run {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 7px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-.hkd-run-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.hkd-run-code {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  min-width: 56px;
-}
-.hkd-run-dur {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  min-width: 70px;
-}
-.hkd-run-err {
-  flex: 1;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hkd-run-at {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.spin {
-  animation: hkd-spin 0.9s linear infinite;
-}
-@keyframes hkd-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

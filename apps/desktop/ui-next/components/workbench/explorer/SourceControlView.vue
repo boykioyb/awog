@@ -220,7 +220,7 @@
           <div
             v-for="c in git.commits.slice(0, 5)"
             :key="c.sha || c.h"
-            class="flex h-[24px] cursor-pointer items-center gap-2 whitespace-nowrap pl-3 pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
+            class="flex h-[var(--lh-xl)] cursor-pointer items-center gap-2 whitespace-nowrap pl-3 pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
             :title="`${c.h} — ${c.m}`"
             @click="openCommit(c)"
           >

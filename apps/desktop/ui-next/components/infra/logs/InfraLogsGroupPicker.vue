@@ -1,80 +1,104 @@
 <template>
-  <div class="lgp">
-    <div class="lgp-head">
-      <span class="lgp-title">{{ t('infra.logs.groups.title') }}</span>
-      <span v-if="mode === 'multi'" class="lgp-count">
+  <!-- Lấp đầy phần còn lại của cột trái: danh sách nhóm cao hết cỡ rồi mới cuộn,
+       không để trống khoảng dưới. -->
+  <div class="flex min-h-0 flex-auto flex-col gap-2">
+    <div class="flex items-baseline justify-between gap-2">
+      <span class="text-sm font-semibold">{{ t('infra.logs.groups.title') }}</span>
+      <span v-if="mode === 'multi'" class="text-xs text-dim tabular-nums">
         {{ t('infra.logs.groups.picked', { n: picked.length, max: maxGroups }) }}
       </span>
-      <span v-else class="lgp-count">
+      <span v-else class="text-xs text-dim tabular-nums">
         {{ t('infra.logs.groups.available', { n: shown.length }) }}
       </span>
     </div>
 
-    <div class="lgp-field">
-      <Icon name="search" class="lgp-field-ic" />
-      <Input
-        :model-value="pattern"
-        type="search"
-        spellcheck="false"
-        autocomplete="off"
-        :placeholder="t('infra.logs.groups.searchPh')"
-        class="lgp-search"
-        @keydown.enter="emit('reload')"
-        @update:model-value="onSearch"
-      />
+    <div class="flex items-center gap-1.5">
+      <div class="relative min-w-0 flex-auto">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-faint"
+        />
+        <Input
+          :model-value="pattern"
+          type="search"
+          spellcheck="false"
+          autocomplete="off"
+          :placeholder="t('infra.logs.groups.searchPh')"
+          class="h-ctrl-sm pl-8"
+          @keydown.enter="emit('reload')"
+          @update:model-value="onSearch"
+        />
+      </div>
       <Button type="button" :disabled="loading" variant="outline" size="sm" @click="emit('reload')">
         {{ loading ? t('infra.logs.groups.loading') : t('infra.logs.groups.reload') }}
       </Button>
     </div>
 
     <!-- Nhóm dùng gần đây lên trước khi CHƯA bấm nhóm nào — lối tắt vào việc hay làm. -->
-    <div v-if="recent.length > 0 && !activeMarked" class="lgp-recent">
-      <span class="lgp-recent-lbl">{{ t('infra.logs.groups.recent') }}</span>
-      <button
+    <div v-if="recent.length > 0 && !activeMarked" class="flex flex-wrap items-center gap-1">
+      <span class="text-xs text-dim">{{ t('infra.logs.groups.recent') }}</span>
+      <Button
         v-for="name in recent"
         :key="name"
-        class="lgp-chip"
-        type="button"
+        variant="outline"
+        size="xs"
+        class="h-auto max-w-full rounded-full px-2 py-1 font-normal text-muted-foreground shadow-none hover:border-input hover:bg-transparent hover:text-foreground"
         :title="name"
         @click="pick(name)"
       >
-        <span class="lgp-chip-name">{{ shortName(name) }}</span>
-      </button>
+        <!-- mono-ok: tên log group là định danh tài nguyên, không phải câu văn -->
+        <span class="max-w-60 truncate font-mono">{{ shortName(name) }}</span>
+      </Button>
     </div>
 
-    <div v-if="error" class="lgp-error">{{ error }}</div>
+    <Alert v-if="error" variant="destructive" class="border-destructive px-2 py-1.5">
+      <AlertDescription>{{ error }}</AlertDescription>
+    </Alert>
 
     <!-- Đang tải thì NÓI ra. Trước đây nhánh này chỉ ẩn dòng "không có nhóm log"
          khi `loading`, nên chỗ đó là một khoảng trắng không giải thích gì — và người
          mới mở màn không phân biệt được "đang nạp" với "tài khoản này trống". -->
-    <p v-else-if="loading && shown.length === 0" class="lgp-empty">
+    <p v-else-if="loading && shown.length === 0" class="p-3 text-sm text-dim">
       {{ t('infra.logs.groups.loading') }}
     </p>
 
-    <p v-else-if="shown.length === 0" class="lgp-empty">
+    <p v-else-if="shown.length === 0" class="p-3 text-sm text-dim">
       {{ t('infra.logs.groups.empty') }}
     </p>
 
     <!-- Danh sách nhóm là CHIP, không phải hàng hai dòng có byte/hạn lưu: bấm một
          chip là tail nhóm đó ngay (mode tail), hoặc tick chọn (mode multi). Số đo
-         dung lượng chuyển vào tooltip để chip mỏng, giảm mật độ. -->
-    <div v-else class="lgp-cloud" role="listbox" :aria-multiselectable="mode === 'multi'">
-      <button
+         dung lượng chuyển vào tooltip để chip mỏng, giảm mật độ. Cao hết phần còn
+         lại của cột trái rồi mới cuộn. -->
+    <div
+      v-else
+      class="flex min-h-24 flex-auto flex-wrap content-start gap-1 overflow-y-auto p-px"
+      role="listbox"
+      :aria-multiselectable="mode === 'multi'"
+    >
+      <!-- Trạng thái chọn = accent-tint (KHÔNG nền xám). -->
+      <Button
         v-for="g in shown"
         :key="g.name"
-        class="lgp-chip"
-        :class="{ on: isOn(g.name) }"
-        type="button"
+        variant="outline"
+        size="xs"
+        class="h-auto max-w-full gap-1 rounded-full px-2 py-1 font-normal shadow-none [&_svg]:size-3 disabled:cursor-not-allowed disabled:opacity-40"
+        :class="
+          isOn(g.name)
+            ? 'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary'
+            : 'text-muted-foreground hover:border-input hover:bg-transparent hover:text-foreground'
+        "
         role="option"
         :aria-selected="isOn(g.name)"
         :title="chipTitle(g)"
         :disabled="mode === 'multi' && !picked.includes(g.name) && picked.length >= maxGroups"
         @click="pick(g.name)"
       >
-        <Icon :name="chipIcon(g.name)" class="lgp-chip-ic" />
-        <span class="lgp-chip-name">{{ shortName(g.name) }}</span>
-        <Icon v-if="mode === 'multi' && picked.includes(g.name)" name="x" class="lgp-chip-x" />
-      </button>
+        <Icon :name="chipIcon(g.name)" />
+        <!-- mono-ok: tên log group là định danh tài nguyên, không phải câu văn -->
+        <span class="max-w-60 truncate font-mono">{{ shortName(g.name) }}</span>
+        <Icon v-if="mode === 'multi' && picked.includes(g.name)" name="x" class="opacity-70" />
+      </Button>
     </div>
   </div>
 </template>
@@ -176,164 +200,3 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(2)} GiB`
 }
 </script>
-
-<style scoped>
-.lgp {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  /* Lấp đầy phần còn lại của cột trái: danh sách nhóm cao hết cỡ rồi mới cuộn,
-     không để trống khoảng dưới. */
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.lgp-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.lgp-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-
-.lgp-count {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-
-.lgp-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-}
-
-.lgp-field-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-
-.lgp-search {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-}
-
-.lgp-recent {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-}
-
-.lgp-recent-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lgp-error {
-  padding: 6px 8px;
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.lgp-empty {
-  margin: 0;
-  padding: 12px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.lgp-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  align-content: flex-start;
-  /* Cao hết phần còn lại của cột trái rồi mới cuộn (thay chốt cứng 168px). */
-  flex: 1 1 auto;
-  min-height: 96px;
-  overflow-y: auto;
-  padding: 1px;
-}
-
-.lgp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  padding: 4px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    border-color 0.12s,
-    color 0.12s;
-}
-
-.lgp-chip:hover:not(:disabled) {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-
-/* Trạng thái chọn = accent-tint (KHÔNG nền xám): --accentDim + --accentBorder. */
-.lgp-chip.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-
-.lgp-chip:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.lgp-chip-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
-}
-
-.lgp-chip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 240px;
-  /* mono-ok: tên log group là định danh tài nguyên, không phải câu văn */
-  font-family: var(--code);
-}
-
-.lgp-chip-x {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
-  opacity: 0.7;
-}
-</style>

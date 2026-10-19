@@ -39,6 +39,10 @@
   "wb.strip.deleteTitle": "Xoá vĩnh viễn \"{title}\"?",
   "wb.strip.deleteDesc": "Transcript của phiên sẽ bị xoá khỏi đĩa và không khôi phục được.",
   "wb.strip.deleteConfirm": "Xoá vĩnh viễn",
+  "wb.strip.deleteAllArchived": "Xoá hết",
+  "wb.strip.deleteAllArchivedTitle": "Xoá vĩnh viễn {n} phiên đã đóng?",
+  "wb.strip.deleteAllArchivedDesc": "Transcript của các phiên này sẽ bị xoá khỏi đĩa và không khôi phục được.",
+  "wb.strip.deleteAllArchivedConfirm": "Xoá {n} phiên",
   "wb.strip.clearAllTitle": "Clear transcript mọi phiên trong project?",
   "wb.strip.clearAllDesc": "{n} phiên sẽ bị xoá toàn bộ transcript (phiên đang chạy được bỏ qua). Hành động này không hoàn tác được.",
   "wb.strip.clearAllConfirm": "Clear {n} phiên",
@@ -117,5 +121,12 @@
   "wb.gitlog.loading": "Đang tải…",
   "wb.gitlog.pick": "Chọn một commit để xem file đổi và chi tiết.",
   "wb.gitlog.files": "{n} file thay đổi",
-  "wb.gitlog.parents": "Parent"
+  "wb.gitlog.parents": "Parent",
+  "workbench.office.openExternal": "Mở bằng ứng dụng ngoài",
+  "workbench.office.tooLarge": "Tệp quá lớn để xem trong app ({size}) — mở bằng ứng dụng ngoài.",
+  "workbench.file.modeTable": "Bảng",
+  "wb.sessions.group.today": "Hôm nay",
+  "wb.sessions.group.yesterday": "Hôm qua",
+  "wb.sessions.group.week": "7 ngày qua",
+  "wb.sessions.group.older": "Cũ hơn"
 }

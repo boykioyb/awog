@@ -4,31 +4,25 @@
        project), issues (việc trên board theo status), files (cây project + changed files), scm (git stage/commit), gh
        (PR/issue). Bấm icon đang chọn = đóng panel.
        v-show giữ state từng view (scroll, input, list) khi đổi view. -->
-  <div class="exp flex h-full min-h-0 flex-col">
-    <div class="flex flex-none items-center gap-0.5 border-b border-[var(--border)] px-1.5 py-1">
+  <div class="flex h-full min-h-0 flex-col text-sm">
+    <div class="flex flex-none items-center gap-0.5 border-b border-border px-1.5 py-1">
       <Button
         v-for="v in views"
         :key="v.id"
         variant="ghost"
-        size="iconSm"
-        class="sv relative size-[22px] rounded-[var(--r-xs)] p-0"
-        :class="{ on: wb.sideView === v.id }"
+        :class="[VIEW_BTN, wb.sideView === v.id && VIEW_BTN_ACTIVE]"
         :title="v.title"
         @click="onViewClick(v.id)"
       >
         <!-- eslint-disable-next-line vue/no-v-html -- icon là SVG constant hardcode trong `views`, không phải input -->
-        <span class="sv-ico" v-html="v.icon" />
-        <span v-if="v.badge" class="sv-bdg" :style="v.badgeStyle">{{ v.badge }}</span>
+        <span class="flex" v-html="v.icon" />
+        <CountBadge v-if="v.badge" :class="[v.badgeClass, 'text-background']">
+          {{ v.badge }}
+        </CountBadge>
       </Button>
       <span class="flex-1" />
-      <Button
-        variant="ghost"
-        size="iconSm"
-        class="sv relative size-[22px] rounded-[var(--r-xs)] p-0"
-        title="Đóng panel ⌘B"
-        @click="wb.toggleSide()"
-      >
-        <X :size="14" />
+      <Button variant="ghost" :class="VIEW_BTN" title="Đóng panel ⌘B" @click="wb.toggleSide()">
+        <X />
       </Button>
     </div>
     <FilesView v-show="wb.sideView === 'files'" class="min-h-0" />
@@ -54,7 +48,13 @@ import SourceControlView from './explorer/SourceControlView.vue'
 import SessionsView from './explorer/SessionsView.vue'
 import IssuesView from './explorer/IssuesView.vue'
 import { useBoardStore } from '~/stores/board'
-import { EXPLORER_VIEWS, type ExplorerView, type ExplorerViewId } from './explorer-views'
+import {
+  EXPLORER_VIEWS,
+  VIEW_BTN,
+  VIEW_BTN_ACTIVE,
+  type ExplorerView,
+  type ExplorerViewId,
+} from './explorer-views'
 
 const wb = useWorkbenchStore()
 const git = useGitStore()
@@ -64,7 +64,7 @@ const board = useBoardStore()
 
 type SegView = ExplorerView & {
   badge?: string
-  badgeStyle?: string
+  badgeClass?: string
 }
 const scmBadge = computed(() => {
   const n = git.staged.length + git.unstaged.length + git.conflicted.length
@@ -88,16 +88,16 @@ const issuesBadge = computed(() => {
 })
 // Badge chỉ ở dải chọn view của panel; danh sách view lấy từ EXPLORER_VIEWS (dùng
 // chung với rail mini khi panel thu gọn).
-const BADGES: Partial<Record<ExplorerViewId, () => Pick<SegView, 'badge' | 'badgeStyle'>>> = {
+const BADGES: Partial<Record<ExplorerViewId, () => Pick<SegView, 'badge' | 'badgeClass'>>> = {
   sessions: () => ({
     badge: sessionsBadge.value,
-    badgeStyle: 'background:var(--accent);color:var(--bg)',
+    badgeClass: 'bg-primary',
   }),
   issues: () => ({
     badge: issuesBadge.value,
-    badgeStyle: 'background:var(--destructive);color:var(--bg)',
+    badgeClass: 'bg-destructive',
   }),
-  scm: () => ({ badge: scmBadge.value, badgeStyle: 'background:var(--amber);color:var(--bg)' }),
+  scm: () => ({ badge: scmBadge.value, badgeClass: 'bg-warning' }),
 }
 const views = computed<SegView[]>(() =>
   EXPLORER_VIEWS.map((v) => ({ ...v, ...(BADGES[v.id]?.() ?? {}) })),
@@ -112,49 +112,3 @@ onMounted(() => {
   void exp.init()
 })
 </script>
-
-<style scoped>
-/* Màu + font giữ scoped (token theme); layout/spacing đã chuyển sang Tailwind
-   ở template. `.sv` giữ tên ngắn vì `.on` là marker trạng thái. */
-.exp {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sv {
-  color: var(--textDim);
-}
-.sv:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.sv.on {
-  color: var(--accent);
-  background: var(--accentDim);
-}
-/* Icon nằm trong v-html ⇒ ép cỡ qua :deep() — 16px (--icon-md), chuẩn codicon
-   VS Code; 14px trước đây quá bé trong nút 22px. */
-.sv-ico {
-  display: flex;
-}
-.sv-ico :deep(svg) {
-  width: var(--icon-md);
-  height: var(--icon-md);
-}
-/* Badge SCM: bubble cảnh báo chồng góc nút, box-shadow cắt theo nền panel. */
-.sv-bdg {
-  position: absolute;
-  bottom: -3px;
-  right: -4px;
-  z-index: 10;
-  min-width: 12px;
-  min-height: 11px;
-  padding: 0 4px 1px;
-  border-radius: var(--r-pill);
-  font-size: 8.5px; /* design-token-ok: badge đếm dưới thang --fs-* */
-  line-height: 10px;
-  font-family: var(--code, ui-monospace, monospace); /* mono-ok: badge đếm */
-  display: grid;
-  place-items: center;
-  box-shadow: 0 0 0 2px var(--bgPanel);
-}
-</style>

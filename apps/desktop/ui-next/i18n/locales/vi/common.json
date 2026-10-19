@@ -128,5 +128,8 @@
   "common.discard": "Huỷ thay đổi",
   "common.remove": "Xoá",
   "common.time.never": "Chưa hoạt động",
-  "common.openSettings": "Mở cài đặt"
+  "common.openSettings": "Mở cài đặt",
+  "common.preview.csvTable": "Bảng",
+  "common.preview.csvSource": "Mã nguồn",
+  "common.preview.remoteImageBlocked": "Ảnh từ link ngoài đã bị chặn"
 }

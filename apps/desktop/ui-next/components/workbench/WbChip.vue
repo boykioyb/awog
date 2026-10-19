@@ -1,11 +1,10 @@
 <template>
-  <!-- Status-bar chip (sbi): 20px inline button, accent khi `.on`.
-       NGOẠI LỆ trong workbench-ui rule: `<button>` thô — Button iconSm 28px
-       quá cao cho status bar 26px. Dùng chung cho mọi chip ở
-       WorkbenchStatusBar + status bar khác. -->
+  <!-- Status-bar chip (sbi): 20px inline button, accent khi `active`. Dùng chung cho
+       mọi chip ở WorkbenchStatusBar + status bar khác. -->
+  <!-- raw-ok: NGOẠI LỆ của workbench-ui rule — Button iconSm 28px quá cao cho status bar 26px -->
   <button
-    class="wb-chip"
-    :class="{ on: active }"
+    class="inline-flex h-5 flex-none cursor-pointer items-center gap-1 whitespace-nowrap rounded-sm border-0 bg-transparent px-1.5 [font:inherit] hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
+    :class="active ? 'text-primary' : 'text-inherit'"
     :title="title"
     :disabled="disabled"
     v-bind="$attrs"
@@ -22,32 +21,3 @@ defineProps<{
   disabled?: boolean
 }>()
 </script>
-
-<style scoped>
-.wb-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 20px;
-  padding: 0 7px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-xs);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-  flex: none;
-}
-.wb-chip:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.wb-chip.on {
-  color: var(--accent);
-}
-.wb-chip:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-</style>

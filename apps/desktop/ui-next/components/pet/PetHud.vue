@@ -1,53 +1,74 @@
 <template>
-  <div class="hud">
+  <div class="flex flex-col gap-0.5 rounded-lg border bg-card p-1.5 text-foreground shadow-lg">
     <template v-if="model.state === 'offline'">
-      <div class="empty">{{ t('pet.offline') }}</div>
+      <div class="px-2 py-1.5 text-dim">{{ t('pet.offline') }}</div>
     </template>
 
     <template v-else>
-      <button
+      <Button
         v-for="item in model.items"
         :key="`${item.kind}-${item.id}`"
-        class="row"
+        variant="ghost"
+        class="h-auto w-full items-start justify-start gap-2 px-2 py-1.5 text-left text-base font-normal whitespace-normal text-foreground"
         @click="emit('open', item)"
       >
-        <span class="dot" :class="`is-${item.hint}`" />
-        <span class="rowbody">
-          <span class="rowtop">
-            <span class="title">{{ item.title }}</span>
-            <span class="meta" :class="`is-${item.hint}`">{{ metaOf(item) }}</span>
+        <span class="mt-1.5 size-1.5 shrink-0 rounded-full" :class="dotClass(item.hint)" />
+        <!-- Hai dòng: tiêu đề + đang làm gì. Chấm nằm ở dòng đầu. -->
+        <span class="flex min-w-0 flex-1 flex-col gap-px">
+          <span class="flex min-w-0 items-baseline gap-2">
+            <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
+            <!-- px-ok: chip phụ cỡ cố định — hàng HUD không được nở khi tăng cỡ chữ app -->
+            <span class="shrink-0 text-[12px] tabular-nums" :class="metaClass(item.hint)">
+              {{ metaOf(item) }}
+            </span>
           </span>
           <!-- What it is actually saying/doing right now. Without this the HUD only
                repeats the session titles, which is the least changing thing about it. -->
-          <span v-if="item.preview" class="preview">{{ item.preview }}</span>
+          <!-- px-ok: chữ phụ cỡ cố định — hàng không nở khi người dùng tăng cỡ chữ app -->
+          <span v-if="item.preview" class="truncate text-[12px] leading-[18px] text-dim">
+            {{ item.preview }}
+          </span>
         </span>
-      </button>
+      </Button>
 
-      <button v-if="extra > 0" class="row more" @click="emit('activity')">
+      <Button
+        v-if="extra > 0"
+        variant="ghost"
+        class="h-auto w-full items-start justify-center gap-2 px-2 py-1.5 text-left text-base font-normal whitespace-normal text-dim"
+        @click="emit('activity')"
+      >
         {{ t('pet.more', { count: extra }) }}
-      </button>
+      </Button>
 
-      <div v-if="!model.items.length" class="empty">{{ t('pet.empty') }}</div>
+      <div v-if="!model.items.length" class="px-2 py-1.5 text-dim">{{ t('pet.empty') }}</div>
 
       <!-- Permission: the summary always shows, the buttons only when the HUD is
            deliberately open (hover/pinned) — never during an auto-peek, so a glance
            can't turn into an accidental approval. -->
-      <div v-if="model.permission" class="perm">
-        <div class="perm-head">
-          <span class="perm-tool">{{ model.permission.toolName }}</span>
-          <span v-if="model.permission.target" class="perm-target">
-            {{ model.permission.target }}
+      <Separator v-if="model.permission" class="mt-1" />
+      <div v-if="model.permission" class="flex flex-col gap-1.5 p-2">
+        <div class="flex min-w-0 items-baseline gap-1.5">
+          <span class="shrink-0 font-semibold text-warning">{{ model.permission.toolName }}</span>
+          <span v-if="model.permission.target" class="min-w-0 flex-1 truncate text-dim">
+            <!-- mono-ok: đích của tool (path / lệnh). px-ok: chữ phụ cỡ cố định -->
+            <span class="font-mono text-[12px] leading-[18px]">{{ model.permission.target }}</span>
           </span>
         </div>
-        <div v-if="expanded" class="perm-actions">
-          <Button class="deny" variant="outline" @click="emit('decide', 'deny')">
+        <!-- Khoảng cách rộng có chủ đích: bấm nhầm ở đây là duyệt một lệnh gọi tool. -->
+        <div v-if="expanded" class="flex justify-end gap-3">
+          <Button variant="outline" size="sm" class="text-dim" @click="emit('decide', 'deny')">
             {{ t('pet.perm.deny') }}
           </Button>
-          <Button class="allow" variant="outline" @click="emit('decide', 'allow')">
+          <Button
+            variant="outline"
+            size="sm"
+            class="border-primary/60 text-primary hover:text-primary"
+            @click="emit('decide', 'allow')"
+          >
             {{ t('pet.perm.allow') }}
           </Button>
         </div>
-        <div v-else class="perm-hint">{{ t('pet.perm.hint') }}</div>
+        <div v-else class="text-dim">{{ t('pet.perm.hint') }}</div>
       </div>
     </template>
   </div>
@@ -56,7 +77,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AwogPetItem, AwogPetModel } from '~/types/awog-bridge'
-import Button from '~/components/ui/button/Button.vue'
 
 // Mini-HUD next to the pet (docs/features/desktop-pet.md): at most three rows of
 // what needs the user, plus the parked permission. Deliberately NOT a second tray
@@ -78,167 +98,21 @@ const extra = computed(() => {
   return Math.max(0, running + attention + unread - props.model.items.length)
 })
 
+// Màu theo trạng thái: chờ duyệt = cảnh báo, đang chạy = primary, chưa đọc = thành công.
+function dotClass(hint: AwogPetItem['hint']): string {
+  if (hint === 'awaiting') return 'bg-warning'
+  if (hint === 'running') return 'bg-primary'
+  if (hint === 'unread') return 'bg-success'
+  return 'bg-muted-foreground'
+}
+function metaClass(hint: AwogPetItem['hint']): string {
+  if (hint === 'awaiting') return 'text-warning'
+  if (hint === 'running') return 'text-primary'
+  return 'text-dim'
+}
+
 function metaOf(item: AwogPetItem): string {
   if (item.hint === 'running' && typeof item.percent === 'number') return `${item.percent}%`
   return t(`pet.hint.${item.hint}`)
 }
 </script>
-
-<style scoped>
-.hud {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px;
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-  color: var(--text);
-}
-
-.row {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  width: 100%;
-  padding: 5px 7px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.row:hover {
-  background: var(--bgHover);
-}
-/* Two stacked lines: title + what it is doing. The dot stays on the first line. */
-.rowbody {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.rowtop {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  min-width: 0;
-}
-.title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.preview {
-  /* Fixed 12px, like every other hint chip: this is secondary text, and the row must
-     not grow when the user raises the app font size. */
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.meta {
-  flex: none;
-  font-size: 12px;
-  font-family: var(--mono, ui-monospace, monospace);
-  line-height: 12px;
-  color: var(--textDim);
-}
-.meta.is-awaiting {
-  color: var(--amber);
-}
-.meta.is-running {
-  color: var(--accent);
-}
-.dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--textMuted);
-}
-.dot.is-awaiting {
-  background: var(--amber);
-}
-.dot.is-running {
-  background: var(--accent);
-}
-.dot.is-unread {
-  background: var(--green);
-}
-.more {
-  color: var(--textDim);
-  justify-content: center;
-}
-.empty {
-  padding: 6px 7px;
-  color: var(--textDim);
-}
-
-.perm {
-  margin-top: 4px;
-  padding: 7px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.perm-head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-.perm-tool {
-  flex: none;
-  font-weight: 600;
-  color: var(--amber);
-}
-.perm-target {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.perm-hint {
-  color: var(--textDim);
-}
-.perm-actions {
-  display: flex;
-  justify-content: flex-end;
-  /* Wide gap on purpose: a mis-click here approves a tool call. */
-  gap: 12px;
-}
-.btn {
-  padding: 4px 12px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-.btn:hover {
-  background: var(--bgHover);
-}
-.btn.allow {
-  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
-  color: var(--accent);
-}
-.btn.deny {
-  color: var(--textDim);
-}
-</style>

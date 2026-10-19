@@ -1,104 +1,138 @@
 <template>
-  <Teleport to="body">
-    <div v-if="pushOpen" class="ovl on ltp-ovl" @click.self="close">
-      <div class="ltp-card" role="dialog" aria-modal="true" :aria-label="t('logtime.push.title')">
-        <div class="ltp-head">
-          <div>
-            <div class="ltp-title">
-              {{ done ? t('logtime.push.done') : t('logtime.push.title') }}
-            </div>
-            <div class="ltp-sub">
-              {{ t('logtime.push.sub', { n: pushableDrafts.length, h: fmt(pushableHours) }) }}
-            </div>
-          </div>
-          <span class="ltsp" />
-          <button class="ltp-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+  <Dialog :open="pushOpen" @update:open="(v) => !v && close()">
+    <DialogContent
+      class="flex max-h-[calc(100vh-48px)] w-full max-w-170 flex-col gap-0 overflow-hidden border-input bg-sidebar p-0 sm:max-w-170 sm:rounded-2xl"
+      :aria-label="t('logtime.push.title')"
+    >
+      <DialogHeader class="flex-none border-b px-4 py-3 pr-12">
+        <DialogTitle class="text-lg font-semibold">
+          {{ done ? t('logtime.push.done') : t('logtime.push.title') }}
+        </DialogTitle>
+        <DialogDescription class="text-xs text-dim">
+          {{ t('logtime.push.sub', { n: pushableDrafts.length, h: fmt(pushableHours) }) }}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3.5">
+        <!-- Cảnh báo thao tác RA NGOÀI: PMS là hệ thống thật của công ty. -->
+        <div
+          v-if="!done"
+          class="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-muted-foreground"
+        >
+          <Icon name="alert" class="size-3.5 shrink-0 text-warning" />
+          <span>{{ t('logtime.push.warn') }}</span>
+        </div>
+        <div
+          v-else
+          class="flex items-start gap-2 rounded-lg border border-selected-border bg-selected px-3 py-2.5 text-sm text-muted-foreground"
+        >
+          <Icon name="check" class="size-3.5 shrink-0 text-primary" />
+          <span>{{ t('logtime.push.okNote', { n: okCount }) }}</span>
         </div>
 
-        <div class="ltp-body">
-          <!-- Cảnh báo thao tác RA NGOÀI: PMS là hệ thống thật của công ty. -->
-          <div v-if="!done" class="ltp-warn">
-            <Icon name="alert" class="ltp-warnic" />
-            <span>{{ t('logtime.push.warn') }}</span>
-          </div>
-          <div v-else class="ltp-warn ok">
-            <Icon name="check" class="ltp-warnic" />
-            <span>{{ t('logtime.push.okNote', { n: okCount }) }}</span>
-          </div>
-
-          <div v-if="blockedDrafts.length > 0" class="ltp-warn bad">
-            <Icon name="alert" class="ltp-warnic" />
-            <span>{{ t('logtime.push.blocked', { n: blockedDrafts.length }) }}</span>
-          </div>
-
-          <!-- Từng dòng sẽ gửi, gom theo nguồn -->
-          <div v-for="group in groups" :key="group.sourceId" class="ltp-grp">
-            <div class="ltp-grph">
-              <span class="ltp-gname">{{ group.name }}</span>
-              <span class="ltp-gurl">{{ group.url }}</span>
-              <span class="ltsp" />
-              <span class="chip tnum">{{ group.entries.length }} · {{ fmt(group.hours) }}h</span>
-            </div>
-            <div v-for="entry in group.entries" :key="entry.id" class="ltp-row">
-              <span class="ltp-pn">{{ labelOf(entry.projectKey) }} — {{ entry.note }}</span>
-              <span class="ltp-ph tnum">{{ fmt(entry.hours) }}h</span>
-              <span class="ltp-ps">
-                <span v-if="resultOf(entry.id)?.ok" class="chip acc">
-                  <Icon name="check" />
-                  {{ shortId(resultOf(entry.id)?.worklogId) }}
-                </span>
-                <span
-                  v-else-if="resultOf(entry.id)"
-                  class="chip dgr"
-                  :title="resultOf(entry.id)?.error"
-                >
-                  <Icon name="alert" />
-                  {{ t('logtime.push.failed') }}
-                </span>
-                <span v-else-if="pushing" class="chip">{{ t('logtime.push.sending') }}</span>
-                <span v-else class="chip">{{ t('logtime.push.ready') }}</span>
-              </span>
-            </div>
-          </div>
-
-          <!-- Payload dòng đầu: nhìn thấy đúng thứ sắp bay đi -->
-          <template v-if="!done && firstPayload">
-            <div class="ltp-sech">{{ t('logtime.push.payload') }}</div>
-            <pre class="ltp-code">{{ firstPayload }}</pre>
-          </template>
-
-          <!-- Ô xác nhận: nút chỉ mở khoá khi người dùng tự tích -->
-          <label v-if="!done" class="ltp-confirm">
-            <input v-model="pushConfirmed" type="checkbox" />
-            <span>
-              {{ t('logtime.push.confirm', { n: pushableDrafts.length, h: fmt(pushableHours) }) }}
-            </span>
-          </label>
+        <div
+          v-if="blockedDrafts.length > 0"
+          class="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-muted-foreground"
+        >
+          <Icon name="alert" class="size-3.5 shrink-0 text-destructive" />
+          <span>{{ t('logtime.push.blocked', { n: blockedDrafts.length }) }}</span>
         </div>
 
-        <div class="ltp-foot">
-          <span class="ltp-hint">
-            {{ done ? t('logtime.push.hintDone') : t('logtime.push.hint') }}
-          </span>
-          <span class="ltsp" />
-          <Button type="button" variant="outline" @click="close">
-            {{ done ? t('common.close') : t('common.cancel') }}
-          </Button>
-          <Button
-            v-if="!done"
-            type="button"
-            :disabled="!pushConfirmed || pushing || pushableDrafts.length === 0"
-            variant="default"
-            @click="runPush"
+        <!-- Từng dòng sẽ gửi, gom theo nguồn -->
+        <div
+          v-for="group in groups"
+          :key="group.sourceId"
+          class="overflow-hidden rounded-lg border"
+        >
+          <div class="flex flex-wrap items-center gap-2 border-b bg-muted px-3 py-2">
+            <span class="text-base font-semibold">{{ group.name }}</span>
+            <!-- URL endpoint MCP, người dùng copy được ⇒ mono hợp lệ. -->
+            <span class="font-mono text-xs break-all text-faint">{{ group.url }}</span>
+            <span class="flex-1" />
+            <Badge variant="outline" class="rounded-sm text-muted-foreground tabular-nums">
+              {{ group.entries.length }} · {{ fmt(group.hours) }}h
+            </Badge>
+          </div>
+          <div
+            v-for="entry in group.entries"
+            :key="entry.id"
+            class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
           >
-            {{ t('logtime.push.go', { n: pushableDrafts.length }) }}
-          </Button>
+            <span class="min-w-0 truncate">{{ labelOf(entry.projectKey) }} — {{ entry.note }}</span>
+            <span class="tabular-nums text-dim">{{ fmt(entry.hours) }}h</span>
+            <span>
+              <Badge
+                v-if="resultOf(entry.id)?.ok"
+                variant="outline"
+                class="rounded-sm border-primary/40 bg-primary/10 text-primary"
+              >
+                <Icon name="check" />
+                {{ shortId(resultOf(entry.id)?.worklogId) }}
+              </Badge>
+              <Badge
+                v-else-if="resultOf(entry.id)"
+                variant="outline"
+                class="rounded-sm border-destructive/40 text-destructive"
+                :title="resultOf(entry.id)?.error"
+              >
+                <Icon name="alert" />
+                {{ t('logtime.push.failed') }}
+              </Badge>
+              <Badge v-else-if="pushing" variant="outline" class="rounded-sm text-muted-foreground">
+                {{ t('logtime.push.sending') }}
+              </Badge>
+              <Badge v-else variant="outline" class="rounded-sm text-muted-foreground">
+                {{ t('logtime.push.ready') }}
+              </Badge>
+            </span>
+          </div>
         </div>
+
+        <!-- Payload dòng đầu: nhìn thấy đúng thứ sắp bay đi (JSON copy được ⇒ mono). -->
+        <template v-if="!done && firstPayload">
+          <div class="text-xs font-semibold text-dim">{{ t('logtime.push.payload') }}</div>
+          <pre
+            class="overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-sm leading-relaxed text-muted-foreground"
+            >{{ firstPayload }}</pre
+          >
+        </template>
+
+        <!-- Ô xác nhận: nút chỉ mở khoá khi người dùng tự tích -->
+        <label
+          v-if="!done"
+          class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-input bg-muted px-3 py-3 text-sm text-muted-foreground"
+        >
+          <Checkbox
+            class="mt-0.5"
+            :model-value="pushConfirmed"
+            @update:model-value="pushConfirmed = $event === true"
+          />
+          <span>
+            {{ t('logtime.push.confirm', { n: pushableDrafts.length, h: fmt(pushableHours) }) }}
+          </span>
+        </label>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex flex-none flex-wrap items-center gap-2 border-t px-4 py-3">
+        <span class="text-xs text-dim">
+          {{ done ? t('logtime.push.hintDone') : t('logtime.push.hint') }}
+        </span>
+        <span class="flex-1" />
+        <Button type="button" variant="outline" @click="close">
+          {{ done ? t('common.close') : t('common.cancel') }}
+        </Button>
+        <Button
+          v-if="!done"
+          type="button"
+          :disabled="!pushConfirmed || pushing || pushableDrafts.length === 0"
+          variant="default"
+          @click="runPush"
+        >
+          {{ t('logtime.push.go', { n: pushableDrafts.length }) }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -186,190 +220,3 @@ function close(): void {
   pushOpen.value = false
 }
 </script>
-
-<style scoped>
-.ltp-ovl {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.ltp-card {
-  background: var(--bgPanel);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-panel);
-  box-shadow: var(--shadow-lg);
-  width: 100%;
-  max-width: 680px;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.ltp-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-  flex: 0 0 auto;
-}
-.ltp-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-}
-.ltp-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ltsp {
-  flex: 1;
-}
-.ltp-x {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: none;
-  color: var(--textDim);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.ltp-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ltp-body {
-  padding: 14px 16px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.ltp-warn {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  border: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  border-radius: var(--r-btn);
-  padding: 10px 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.ltp-warn.ok {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.ltp-warn.bad {
-  border-color: var(--dangerBorder);
-  background: var(--dangerBg);
-}
-.ltp-warnic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--amber);
-}
-.ltp-warn.ok .ltp-warnic {
-  color: var(--accent);
-}
-.ltp-warn.bad .ltp-warnic {
-  color: var(--danger);
-}
-.ltp-grp {
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  overflow: hidden;
-}
-.ltp-grph {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  padding: 9px 11px;
-  background: var(--bgSubtle);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.ltp-gname {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.ltp-gurl {
-  font-family: var(--code); /* mono-ok: URL endpoint MCP, người dùng copy được */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  word-break: break-all;
-}
-.ltp-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 9px;
-  align-items: center;
-  padding: 9px 11px;
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ltp-pn {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ltp-ph {
-  color: var(--textDim);
-}
-.ltp-sech {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-}
-.ltp-code {
-  margin: 0;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-  font-family: var(--code); /* mono-ok: payload JSON gửi đi, copy được */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-  overflow-x: auto;
-}
-.ltp-confirm {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
-  background: var(--bgSubtle);
-  padding: 11px 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  cursor: pointer;
-}
-.ltp-foot {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  padding: 11px 16px;
-  box-shadow: inset 0 1px 0 var(--border);
-  flex: 0 0 auto;
-}
-.ltp-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

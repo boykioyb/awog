@@ -1,15 +1,18 @@
 <template>
   <Dialog :open="ctx.settingsOpen.value" @update:open="(v) => (ctx.settingsOpen.value = v)">
-    <DialogContent class="slk-set sm:max-w-2xl">
+    <!-- Hộp cao hơn màn hình nhỏ ⇒ thân cuộn, đầu hộp đứng yên. -->
+    <DialogContent class="max-h-[88vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>{{ t('slack.settings.title') }}</DialogTitle>
         <DialogDescription>{{ t('slack.settings.desc') }}</DialogDescription>
       </DialogHeader>
 
-      <div class="slk-set-body">
+      <div class="grid min-h-0 gap-5 overflow-y-auto pr-1">
         <!-- Model dịch -->
         <section class="grid gap-2">
-          <h3 class="slk-set-h">{{ t('slack.settings.model.heading') }}</h3>
+          <h3 class="text-base font-semibold text-foreground">
+            {{ t('slack.settings.model.heading') }}
+          </h3>
           <div role="radiogroup" class="grid grid-cols-2 gap-2">
             <SlackChoiceCard
               :title="t('slack.settings.model.inherit')"
@@ -25,7 +28,7 @@
             />
           </div>
           <div v-if="p.llmMode.value === 'pinned'" class="grid grid-cols-3 gap-2">
-            <label class="slk-set-field">
+            <label class="grid min-w-0 gap-1 text-sm text-dim">
               <span>{{ t('slack.settings.model.provider') }}</span>
               <AppSelect
                 v-model="p.provider.value"
@@ -33,7 +36,7 @@
                 width="100%"
               />
             </label>
-            <label class="slk-set-field">
+            <label class="grid min-w-0 gap-1 text-sm text-dim">
               <span>{{ t('slack.settings.model.account') }}</span>
               <AppSelect
                 v-model="p.accountId.value"
@@ -41,7 +44,7 @@
                 width="100%"
               />
             </label>
-            <label class="slk-set-field">
+            <label class="grid min-w-0 gap-1 text-sm text-dim">
               <span>{{ t('slack.settings.model.model') }}</span>
               <AppSelect
                 v-model="p.modelId.value"
@@ -55,7 +58,9 @@
 
         <!-- Phong cách dịch -->
         <section class="grid gap-2">
-          <h3 class="slk-set-h">{{ t('slack.settings.style.heading') }}</h3>
+          <h3 class="text-base font-semibold text-foreground">
+            {{ t('slack.settings.style.heading') }}
+          </h3>
           <div role="radiogroup" class="grid grid-cols-3 gap-2">
             <SlackChoiceCard
               v-for="s in SLACK_TRANSLATE_STYLES"
@@ -70,9 +75,11 @@
 
         <!-- Ngôn ngữ -->
         <section class="grid gap-2">
-          <h3 class="slk-set-h">{{ t('slack.settings.lang.heading') }}</h3>
+          <h3 class="text-base font-semibold text-foreground">
+            {{ t('slack.settings.lang.heading') }}
+          </h3>
           <div class="grid grid-cols-2 gap-2">
-            <label class="slk-set-field">
+            <label class="grid min-w-0 gap-1 text-sm text-dim">
               <span>{{ t('slack.settings.lang.read') }}</span>
               <AppSelect
                 v-model="p.readLang.value"
@@ -80,7 +87,7 @@
                 width="100%"
               />
             </label>
-            <label class="slk-set-field">
+            <label class="grid min-w-0 gap-1 text-sm text-dim">
               <span>{{ t('slack.settings.lang.send') }}</span>
               <AppSelect v-model="p.sendChoice.value" :options="p.sendOptions.value" width="100%" />
             </label>
@@ -89,7 +96,9 @@
 
         <!-- Thuật ngữ -->
         <section class="grid gap-2">
-          <h3 class="slk-set-h">{{ t('slack.settings.terms.heading') }}</h3>
+          <h3 class="text-base font-semibold text-foreground">
+            {{ t('slack.settings.terms.heading') }}
+          </h3>
           <div class="flex items-start gap-3">
             <div class="grid flex-1 gap-0.5">
               <span class="text-sm">{{ t('slack.settings.terms.keep') }}</span>
@@ -104,15 +113,20 @@
             <span class="text-sm">{{ t('slack.settings.terms.glossary') }}</span>
             <span class="text-xs text-dim">{{ t('slack.settings.terms.glossaryDesc') }}</span>
           </div>
+          <!-- mono-ok: bảng thuật ngữ là file chữ người dùng sửa như code (`日本語 = bản dịch`). -->
           <Textarea
             v-model="p.glossaryText.value"
-            class="slk-set-gloss min-h-[8rem] resize-y"
+            class="min-h-32 resize-y font-mono text-sm"
             :placeholder="t('slack.settings.terms.placeholder')"
             :maxlength="GLOSSARY_MAX_CHARS"
             spellcheck="false"
           />
           <div class="flex items-center gap-2">
-            <span v-if="p.glossaryPath.value" class="slk-set-path min-w-0 flex-1 truncate">
+            <!-- mono-ok: đường dẫn file, người dùng copy để mở bằng editor. -->
+            <span
+              v-if="p.glossaryPath.value"
+              class="min-w-0 flex-1 truncate font-mono text-xs text-dim"
+            >
               {{ p.glossaryPath.value }}
             </span>
             <span v-else class="flex-1" />
@@ -149,45 +163,3 @@ const { t } = useI18n()
 const ctx = useSlackCtx()
 const p = useSlackSettingsPanel(ctx.settingsOpen, () => ctx.selected.value?.projectId ?? null)
 </script>
-
-<style scoped>
-/* Hộp cao hơn màn hình nhỏ ⇒ thân cuộn, đầu hộp đứng yên. */
-.slk-set {
-  max-height: 88vh;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-.slk-set-body {
-  display: grid;
-  gap: 20px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.slk-set-h {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.slk-set-field {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.slk-set-gloss {
-  /* mono-ok: bảng thuật ngữ là file chữ người dùng sửa như code (`日本語 = bản dịch`). */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-}
-.slk-set-path {
-  /* mono-ok: đường dẫn file, người dùng copy để mở bằng editor. */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

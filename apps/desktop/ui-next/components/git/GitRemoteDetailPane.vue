@@ -1,43 +1,49 @@
 <template>
-  <div class="gdetailpane">
-    <div v-if="!remote" class="gsecempty">{{ t('git.sidebar.empty') }}</div>
-    <div v-else style="max-width: 560px">
-      <div class="gdph">
-        <Icon name="conn" class="size-[18px] text-primary" />
-        <span class="gdpt">{{ remote.name }}</span>
-        <span style="flex: 1" />
-        <button
+  <div class="flex-1 overflow-auto p-6">
+    <div v-if="!remote" class="py-1.5 pr-2.5 pl-7 text-sm text-muted-foreground italic">
+      {{ t('git.sidebar.empty') }}
+    </div>
+    <div v-else class="max-w-140">
+      <div class="mb-3.5 flex items-center gap-2 px-3 py-2.5">
+        <Icon name="conn" class="size-4.5 text-primary" />
+        <span class="text-lg font-semibold text-foreground">{{ remote.name }}</span>
+        <span class="flex-1" />
+        <Button
           v-if="!editing"
-          class="gdp-edit"
+          variant="ghost"
+          size="iconSm"
+          class="flex-none text-muted-foreground"
           :title="t('git.remote.edit')"
           :aria-label="t('git.remote.edit')"
           @click="startEdit"
         >
           <Icon name="edit" class="size-3.5" />
-        </button>
+        </Button>
       </div>
 
       <!-- Read-only view -->
-      <div v-if="!editing" class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
-        <div class="kvrow">
-          <span class="kvk">{{ t('git.remote.fetchUrl') }}</span>
-          <span class="kvv mono">{{ remote.fetchUrl }}</span>
+      <div v-if="!editing" class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-xs">
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('git.remote.fetchUrl') }}</span>
+          <!-- mono-ok: URL remote -->
+          <span :class="KV_V">{{ remote.fetchUrl }}</span>
         </div>
-        <div class="kvrow">
-          <span class="kvk">{{ t('git.remote.pushUrl') }}</span>
-          <span class="kvv mono">{{ remote.pushUrl }}</span>
+        <div :class="KV_ROW">
+          <span :class="KV_K">{{ t('git.remote.pushUrl') }}</span>
+          <!-- mono-ok: URL remote -->
+          <span :class="KV_V">{{ remote.pushUrl }}</span>
         </div>
-        <div class="gdpactions">
+        <div class="mt-4 flex items-center gap-2">
           <Button variant="outline" size="sm" :disabled="busy" @click="emit('fetch')">
-            <Icon name="refresh" :class="{ gdpspin: syncOp?.op === 'fetch' }" class="size-3.5" />
+            <Icon name="refresh" :class="{ [SPIN]: syncOp?.op === 'fetch' }" class="size-3.5" />
             {{ t('git.ops.fetch') }}
           </Button>
           <Button variant="outline" size="sm" :disabled="busy" @click="emit('pull')">
-            <Icon v-if="syncOp?.op === 'pull'" name="refresh" class="gdpspin size-3.5" />
+            <Icon v-if="syncOp?.op === 'pull'" name="refresh" :class="[SPIN, 'size-3.5']" />
             {{ t('git.ops.pullWord') }}
           </Button>
           <Button size="sm" :disabled="busy" @click="emit('push')">
-            <Icon v-if="syncOp?.op === 'push'" name="refresh" class="gdpspin size-3.5" />
+            <Icon v-if="syncOp?.op === 'push'" name="refresh" :class="[SPIN, 'size-3.5']" />
             {{ t('git.ops.pushWord') }}
           </Button>
           <Button
@@ -53,9 +59,9 @@
       </div>
 
       <!-- Edit view -->
-      <div v-else class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
-        <label class="gdp-field">
-          <span class="kvk">{{ t('git.remote.fetchUrl') }}</span>
+      <div v-else class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-xs">
+        <label :class="FIELD">
+          <span :class="KV_K">{{ t('git.remote.fetchUrl') }}</span>
           <Input
             v-model="fetchDraft"
             class="font-mono"
@@ -64,8 +70,8 @@
             @keydown.esc.prevent="cancelEdit"
           />
         </label>
-        <label class="gdp-field">
-          <span class="kvk">{{ t('git.remote.pushUrl') }}</span>
+        <label :class="FIELD">
+          <span :class="KV_K">{{ t('git.remote.pushUrl') }}</span>
           <Input
             v-model="pushDraft"
             class="font-mono"
@@ -74,8 +80,8 @@
             @keydown.esc.prevent="cancelEdit"
           />
         </label>
-        <div class="gdpactions">
-          <span style="flex: 1" />
+        <div class="mt-4 flex items-center gap-2">
+          <span class="flex-1" />
           <Button variant="outline" size="sm" @click="cancelEdit">{{ t('common.cancel') }}</Button>
           <Button size="sm" :disabled="!canSave" @click="onSave">
             {{ t('common.save') }}
@@ -93,6 +99,13 @@
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
 import type { RemoteInfo } from './git-types'
+
+const KV_ROW = 'mb-2.5 flex items-center gap-3 text-sm'
+const KV_K = 'w-16 flex-none text-xs text-dim'
+const KV_V = 'min-w-0 flex-1 break-words font-mono text-sm text-foreground'
+const FIELD = 'flex items-center gap-3 py-1.5'
+// Icon xoay của thao tác mạng đang chạy (tắt khi reduced-motion).
+const SPIN = 'animate-spin motion-reduce:animate-none'
 
 type SyncOp = { op: 'fetch' | 'pull' | 'push'; phase: string; pct: number | null }
 
@@ -181,38 +194,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-.gdp-edit {
-  flex: none;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  transition: background 0.12s;
-}
-.gdp-edit:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.gdp-field {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 0;
-}
-/* Spinner for the in-flight fetch/pull/push op (no rotate keyframe in the shared
-   prototype.css). Disabled under reduced-motion. */
-.gdpspin {
-  animation: gdpspin 0.8s linear infinite;
-}
-@keyframes gdpspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .gdpspin {
-    animation: none;
-  }
-}
-</style>

@@ -107,6 +107,14 @@ export function useOfficePreview() {
     }
   }
 
+  /** Nạp một book đã có sẵn (vd CSV đã parse bằng utils/office-csv), giữ sheet đang xem
+   *  nếu vẫn còn — nạp lại sau khi sửa không nhảy về sheet đầu. */
+  function load(next: XlsxBook): void {
+    doc.value = null
+    book.value = next
+    if (sheetIndex.value >= next.sheets.length) sheetIndex.value = 0
+  }
+
   return {
     doc,
     sheet,
@@ -123,6 +131,7 @@ export function useOfficePreview() {
     truncated,
     text,
     parse,
+    load,
     reset,
   }
 }

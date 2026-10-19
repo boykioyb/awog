@@ -1,45 +1,62 @@
 <template>
-  <div class="iad">
-    <header class="iad-hero">
-      <div class="iad-hero-main">
-        <div class="iad-name">{{ profile.name }}</div>
-        <div class="iad-meta">
-          <span class="tag">{{ kindLabel }}</span>
-          <span v-if="isDefault" class="tag acc">{{ t('infra.list.default') }}</span>
-          <span v-if="expiry" class="tag" :class="{ danger: expiry.expired }">
+  <!-- mono-ok (các giá trị font-mono dưới đây): account id / ARN / start URL / MFA
+       serial là định danh người dùng copy-paste sang console hoặc CLI. -->
+  <div class="flex min-h-0 flex-1 flex-col">
+    <header class="flex flex-none items-start gap-2.5 border-b px-4.5 py-3.5">
+      <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div class="truncate text-lg font-semibold text-foreground">{{ profile.name }}</div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" class="rounded-sm px-1.5 py-0 font-normal text-muted-foreground">
+            {{ kindLabel }}
+          </Badge>
+          <Badge
+            v-if="isDefault"
+            variant="outline"
+            class="rounded-sm px-1.5 py-0 font-normal border-primary/45 bg-primary/10 text-primary"
+          >
+            {{ t('infra.list.default') }}
+          </Badge>
+          <Badge
+            v-if="expiry"
+            variant="outline"
+            class="rounded-sm px-1.5 py-0 font-normal"
+            :class="
+              expiry.expired ? 'border-destructive/40 text-destructive' : 'text-muted-foreground'
+            "
+          >
             {{ expiry.label }}
-          </span>
+          </Badge>
         </div>
       </div>
-      <div class="iad-actions">
+      <div class="flex flex-none items-center gap-0.5 pt-0.5">
         <Button
           type="button"
           :disabled="identity?.loading"
           :title="t('infra.list.action.checkIdentity')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
           @click="emit('check-identity')"
         >
-          <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="shield" class="size-3.5" />
         </Button>
         <Button
           type="button"
           :disabled="!canEdit"
           :title="canEdit ? t('common.edit') : t('infra.list.action.editDisabledProcess')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
           @click="canEdit && emit('edit')"
         >
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="edit" class="size-3.5" />
         </Button>
         <Button
           type="button"
           :title="t('infra.list.action.duplicate')"
-          variant="outline"
+          variant="ghost"
           size="iconMd"
           @click="emit('duplicate')"
         >
-          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="copy" class="size-3.5" />
         </Button>
         <Button
           type="button"
@@ -47,57 +64,59 @@
           :title="
             isDefault ? t('infra.list.action.alreadyDefault') : t('infra.list.action.setDefault')
           "
-          variant="outline"
+          variant="ghost"
           size="iconMd"
           @click="!isDefault && emit('set-default')"
         >
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="check" class="size-3.5" />
         </Button>
         <Button
           type="button"
           :title="t('common.delete')"
-          class="iad-danger"
-          variant="outline"
+          class="text-dim hover:bg-destructive/10 hover:text-destructive"
+          variant="ghost"
           size="iconMd"
           @click="emit('delete')"
         >
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="trash" class="size-3.5" />
         </Button>
       </div>
     </header>
 
-    <div class="dscroll">
+    <div class="flex-1 overflow-y-auto p-4.5">
       <div
         v-if="identity"
-        class="iad-identity"
-        :class="{ err: identity.result && !identity.result.ok }"
+        class="mb-4.5 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm"
+        :class="
+          identity.result && !identity.result.ok
+            ? 'border-destructive/40 bg-destructive/10 text-destructive'
+            : 'text-foreground'
+        "
       >
         <template v-if="identity.loading">
-          <Icon
-            name="refresh"
-            class="iad-spin"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon name="refresh" class="size-3.5 animate-spin" />
           {{ t('infra.list.identity.checking') }}
         </template>
         <template v-else-if="identity.result?.ok">
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="mono">{{ identity.result.accountId }}</span>
-          <span class="mono iad-arn">{{ identity.result.arn }}</span>
+          <Icon name="check" class="size-3.5" />
+          <span class="font-mono">{{ identity.result.accountId }}</span>
+          <span class="font-mono break-all text-dim">{{ identity.result.arn }}</span>
         </template>
         <template v-else-if="identity.result">
-          <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="alert" class="size-3.5" />
           <span>{{ identity.result.error }}</span>
         </template>
       </div>
 
-      <dl class="iad-kv">
-        <div class="iad-kv-row">
+      <dl class="mt-0 mb-5.5">
+        <div
+          class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+        >
           <dt>{{ t('infra.list.field.accountId') }}</dt>
           <dd>
             <template v-if="accountId">
-              <span class="mono">{{ accountId.accountId }}</span>
-              <span class="iad-accid-src">
+              <span class="font-mono">{{ accountId.accountId }}</span>
+              <span class="ml-2 text-xs text-dim">
                 {{
                   accountId.origin === 'sts' && accountId.at
                     ? t('infra.list.accountId.verifiedAt', { time: verifiedAtLabel })
@@ -111,60 +130,77 @@
                  từ `~/.aws` (`origin: 'config'`) thì không có nút: nó luôn tươi
                  theo file cấu hình, không có gì để phân giải lại hay để quên. -->
             <template v-if="canResolveAccountId">
-              <span class="iad-accid-actions">
-                <button
-                  class="iad-linkbtn"
+              <!-- Hai nút phụ xuống dòng khi hàng hẹp thay vì bóp nhau, và tách khỏi
+                   giá trị id một khoảng khi đứng cùng dòng với nó. -->
+              <span class="ml-2 inline-flex flex-wrap gap-1.5 align-middle first:ml-0">
+                <Button
                   type="button"
+                  variant="outline"
+                  size="xs"
+                  class="h-auto gap-1 rounded-sm px-2 py-0.5 font-normal"
                   :disabled="accountIdResolving"
                   :title="t('infra.list.accountId.resolveOneHint')"
                   @click="emit('resolve-account-id')"
                 >
                   <Icon
                     :name="accountIdResolving ? 'refresh' : 'search'"
-                    :class="{ 'iad-spin': accountIdResolving }"
-                    style="width: var(--icon-xs); height: var(--icon-xs)"
+                    class="size-3"
+                    :class="{ 'animate-spin': accountIdResolving }"
                   />
                   {{ resolveAccountIdLabel }}
-                </button>
-                <button
+                </Button>
+                <Button
                   v-if="canForgetAccountId"
-                  class="iad-linkbtn"
                   type="button"
+                  variant="outline"
+                  size="xs"
+                  class="h-auto gap-1 rounded-sm px-2 py-0.5 font-normal"
                   :disabled="accountIdResolving"
                   :title="t('infra.list.accountId.forgetHint')"
                   @click="emit('forget-account-id')"
                 >
-                  <Icon name="trash" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                  <Icon name="trash" class="size-3" />
                   {{ t('infra.list.accountId.forget') }}
-                </button>
+                </Button>
               </span>
-              <div v-if="accountIdFailure" class="iad-accid-err">{{ accountIdFailure }}</div>
+              <div v-if="accountIdFailure" class="mt-1.5 text-xs text-destructive">
+                {{ accountIdFailure }}
+              </div>
             </template>
           </dd>
         </div>
-        <div class="iad-kv-row">
+        <div
+          class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+        >
           <dt>{{ t('infra.list.field.region') }}</dt>
           <!-- Không region KHÔNG phải một ô trống vô hại: `--profile X` không đọc
                `region` từ section `[default]`, nên profile này chết ở mọi lệnh.
                Nói ra hậu quả ngay tại hàng, thay vì để "Chưa đặt" trơ ra như một
                trạng thái bình thường (ca 2026-09-14 01:32). -->
-          <dd :class="{ 'iad-value-warn': !profile.region }">
+          <dd :class="{ 'text-warning': !profile.region }">
             {{ profile.region || t('infra.list.value.regionUnset') }}
           </dd>
         </div>
-        <div v-if="profile.output" class="iad-kv-row">
+        <div
+          v-if="profile.output"
+          class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+        >
           <dt>{{ t('infra.list.field.output') }}</dt>
           <dd>{{ profile.output }}</dd>
         </div>
 
         <template v-if="profile.kind === 'static'">
-          <div class="iad-kv-row">
+          <div
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.staticKeys') }}</dt>
             <dd>
               {{ profile.hasStaticKeys ? t('infra.list.value.yes') : t('infra.list.value.no') }}
             </dd>
           </div>
-          <div class="iad-kv-row">
+          <div
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.sessionToken') }}</dt>
             <dd>
               {{ profile.hasSessionToken ? t('infra.list.value.yes') : t('infra.list.value.no') }}
@@ -173,40 +209,63 @@
         </template>
 
         <template v-else-if="profile.kind === 'sso'">
-          <div v-if="profile.ssoStartUrl" class="iad-kv-row">
+          <div
+            v-if="profile.ssoStartUrl"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.ssoStartUrl') }}</dt>
-            <dd class="mono">{{ profile.ssoStartUrl }}</dd>
+            <dd class="font-mono">{{ profile.ssoStartUrl }}</dd>
           </div>
-          <div v-if="profile.ssoSession" class="iad-kv-row">
+          <div
+            v-if="profile.ssoSession"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.ssoSession') }}</dt>
             <dd>{{ profile.ssoSession }}</dd>
           </div>
-          <div v-if="profile.ssoAccountId" class="iad-kv-row">
+          <div
+            v-if="profile.ssoAccountId"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.ssoAccountId') }}</dt>
-            <dd class="mono">{{ profile.ssoAccountId }}</dd>
+            <dd class="font-mono">{{ profile.ssoAccountId }}</dd>
           </div>
-          <div v-if="profile.ssoRoleName" class="iad-kv-row">
+          <div
+            v-if="profile.ssoRoleName"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.ssoRoleName') }}</dt>
             <dd>{{ profile.ssoRoleName }}</dd>
           </div>
         </template>
 
         <template v-else-if="profile.kind === 'assume-role'">
-          <div v-if="profile.roleArn" class="iad-kv-row">
+          <div
+            v-if="profile.roleArn"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.roleArn') }}</dt>
-            <dd class="mono">{{ profile.roleArn }}</dd>
+            <dd class="font-mono">{{ profile.roleArn }}</dd>
           </div>
-          <div v-if="profile.sourceProfile" class="iad-kv-row">
+          <div
+            v-if="profile.sourceProfile"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.sourceProfile') }}</dt>
             <dd>{{ profile.sourceProfile }}</dd>
           </div>
-          <div v-if="profile.mfaSerial" class="iad-kv-row">
+          <div
+            v-if="profile.mfaSerial"
+            class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+          >
             <dt>{{ t('infra.list.field.mfaSerial') }}</dt>
-            <dd class="mono">{{ profile.mfaSerial }}</dd>
+            <dd class="font-mono">{{ profile.mfaSerial }}</dd>
           </div>
         </template>
 
-        <div class="iad-kv-row">
+        <div
+          class="flex gap-4 border-t py-2 text-sm first:border-t-0 [&>dd]:m-0 [&>dd]:min-w-0 [&>dd]:flex-1 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:w-35 [&>dt]:flex-none [&>dt]:text-dim"
+        >
           <dt>{{ t('infra.list.field.source') }}</dt>
           <dd>{{ sourceLabel }}</dd>
         </div>
@@ -216,31 +275,39 @@
            (types/index.ts, khoá cho A2) không mang trường lưu nguyên văn lệnh, nên
            không có gì thật để hiện ở đây ngoài việc trỏ người dùng ra file thật.
            Xem openIssues: thiếu `credentialProcess?: string` xuyên sidecar → UI. -->
-      <div v-if="profile.kind === 'process'" class="iad-note">
-        <Icon
-          name="info"
-          style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 1px"
-        />
+      <div
+        v-if="profile.kind === 'process'"
+        class="mb-5.5 flex gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm leading-relaxed text-muted-foreground"
+      >
+        <Icon name="info" class="mt-px size-3.5 flex-none" />
         <div>
-          <p>{{ t('infra.list.process.note') }}</p>
-          <button class="iad-linkbtn" type="button" @click="emit('open-config-file')">
-            <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <p class="mt-0 mb-1.5">{{ t('infra.list.process.note') }}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            class="h-auto gap-1 rounded-sm px-2 py-0.5 font-normal"
+            @click="emit('open-config-file')"
+          >
+            <Icon name="external" class="size-3" />
             {{ t('infra.list.process.openFile') }}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div v-else-if="profile.kind === 'unknown'" class="iad-note">
-        <Icon
-          name="info"
-          style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 1px"
-        />
-        <p>{{ t('infra.list.unknown.note') }}</p>
+      <div
+        v-else-if="profile.kind === 'unknown'"
+        class="mb-5.5 flex gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm leading-relaxed text-muted-foreground"
+      >
+        <Icon name="info" class="mt-px size-3.5 flex-none" />
+        <p class="mt-0 mb-1.5">{{ t('infra.list.unknown.note') }}</p>
       </div>
 
-      <div class="iad-sec-h">{{ t('infra.list.usage.title') }}</div>
-      <div class="iad-usage">
-        <p v-if="!usageProjects.length && !usageSessionCount" class="iad-usage-empty">
+      <div class="mt-0 mb-1.5 text-xs font-semibold text-dim">
+        {{ t('infra.list.usage.title') }}
+      </div>
+      <div class="text-sm leading-relaxed text-muted-foreground [&_p]:mt-0 [&_p]:mb-1">
+        <p v-if="!usageProjects.length && !usageSessionCount" class="text-dim">
           {{ t('infra.list.usage.none') }}
         </p>
         <template v-else>
@@ -376,212 +443,3 @@ const expiry = computed(() => {
   }
 })
 </script>
-
-<style scoped>
-.iad {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-
-.iad-hero {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 18px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.iad-hero-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.iad-name {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.iad-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.iad-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-  padding-top: 2px;
-}
-
-.iad-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
-.iad-identity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-bottom: 18px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.iad-identity.err {
-  color: var(--danger);
-  background: var(--dangerDim);
-  border-color: var(--dangerBorder);
-}
-
-.iad-arn {
-  color: var(--textDim);
-  word-break: break-all;
-}
-
-@keyframes iad-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-.iad-spin {
-  animation: iad-spin 0.8s linear infinite;
-}
-
-.iad-kv {
-  margin: 0 0 22px;
-}
-.iad-kv-row {
-  display: flex;
-  gap: 16px;
-  padding: 8px 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.iad-kv-row + .iad-kv-row {
-  border-top: 1px solid var(--border);
-}
-.iad-kv-row dt {
-  flex: 0 0 auto;
-  width: 140px;
-  color: var(--textDim);
-}
-.iad-kv-row dd {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  color: var(--text);
-  word-break: break-word;
-}
-.iad-value-warn {
-  color: var(--amber);
-}
-
-.iad-note {
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-bottom: 22px;
-  border-radius: var(--r-btn);
-  background: var(--bgHover);
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-.iad-note p {
-  margin: 0 0 6px;
-}
-
-.iad-linkbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.iad-linkbtn:hover {
-  border-color: var(--borderStrong);
-  background: var(--bgHover);
-}
-
-.iad-linkbtn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* Hai nút phụ của hàng Account — xuống dòng khi hàng hẹp thay vì bóp nhau, và
-   tách khỏi giá trị id một khoảng khi chúng đứng cùng dòng với nó. */
-.iad-accid-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: 8px;
-  vertical-align: middle;
-}
-.iad-accid-actions:first-child {
-  margin-left: 0;
-}
-
-.iad-accid-src {
-  margin-left: 8px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.iad-accid-err {
-  margin-top: 6px;
-  color: var(--danger);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.iad-sec-h {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-  margin: 0 0 6px;
-}
-
-.iad-usage p {
-  margin: 0 0 4px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-}
-.iad-usage-empty {
-  color: var(--textDim);
-}
-
-.tag.danger {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-}
-</style>

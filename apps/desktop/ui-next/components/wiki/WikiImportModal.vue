@@ -1,45 +1,47 @@
 <template>
-  <div v-if="open" class="wim-back" @click.self="emit('close')">
-    <div class="wim" :style="{ background: 'var(--bgPanel)', border: '1px solid var(--border)' }">
-      <div class="wim-head">
-        <span class="sech">{{ t('wiki.importModal.title') }}</span>
-        <button class="wim-x" :title="t('common.close')" @click="emit('close')">
-          <Icon name="x" :size="13" />
-        </button>
-      </div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="w-105 max-w-[92vw] gap-2.5 bg-sidebar p-3.5">
+      <DialogHeader class="pr-8">
+        <DialogTitle class="text-xs font-semibold text-dim">
+          {{ t('wiki.importModal.title') }}
+        </DialogTitle>
+      </DialogHeader>
 
-      <p class="wim-hint" :style="{ color: 'var(--textDim)' }">
+      <DialogDescription class="text-base text-dim">
         {{ t('wiki.importModal.hint') }}
-      </p>
+      </DialogDescription>
 
-      <label class="wim-field">
-        <span class="sech">{{ t('wiki.importModal.tier') }}</span>
+      <label class="flex flex-col gap-1">
+        <span class="text-xs font-semibold text-dim">{{ t('wiki.importModal.tier') }}</span>
         <AppSelect v-model="tier" :options="tierOptions" />
       </label>
 
-      <label class="wim-field">
-        <span class="sech">{{ t('wiki.importModal.space') }}</span>
+      <label class="flex flex-col gap-1">
+        <span class="text-xs font-semibold text-dim">{{ t('wiki.importModal.space') }}</span>
         <AppSelect v-model="space" :options="spaceOptions" />
       </label>
 
-      <label v-if="space === NEW_SPACE" class="wim-field">
-        <span class="sech">{{ t('wiki.importModal.newSpaceName') }}</span>
+      <label v-if="space === NEW_SPACE" class="flex flex-col gap-1">
+        <span class="text-xs font-semibold text-dim">
+          {{ t('wiki.importModal.newSpaceName') }}
+        </span>
         <Input v-model="newSpaceName" :placeholder="t('wiki.newSpace.placeholder')" />
       </label>
 
-      <p class="wim-dest" :style="{ color: 'var(--textFaint)' }">
+      <p class="m-0 text-sm text-faint">
         {{ t('wiki.importModal.destination') }}
-        <code>{{ destinationLabel }}</code>
+        <!-- mono-ok: đường dẫn đích -->
+        <code class="font-mono">{{ destinationLabel }}</code>
       </p>
 
-      <div class="wim-actions">
+      <DialogFooter class="mt-0.5 gap-1.5">
         <Button
           :disabled="!canImport"
           variant="outline"
           size="sm"
           @click="emit('pick-files', target)"
         >
-          <Icon name="file" :size="13" />
+          <Icon name="file" class="size-3.5" />
           {{ t('wiki.import.files') }}
         </Button>
         <Button
@@ -48,12 +50,12 @@
           size="sm"
           @click="emit('pick-folder', target)"
         >
-          <Icon name="folder" :size="13" />
+          <Icon name="folder" class="size-3.5" />
           {{ t('wiki.import.folder') }}
         </Button>
-      </div>
-    </div>
-  </div>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -66,6 +68,12 @@ import AppSelect from '~/components/common/AppSelect.vue'
 import type { WikiSource } from '~/stores/wiki'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
 
 export interface WikiImportTarget {
   source: WikiSource
@@ -150,79 +158,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.wim-back {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-.wim {
-  width: 420px;
-  max-width: 92vw;
-  border-radius: var(--r-sm);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  /* Was `var(--shadow)` — a token that does not exist anywhere in the design system,
-     so this centered modal rendered with NO shadow at all. Modal → top of the ramp. */
-  box-shadow: var(--shadow-lg);
-}
-.wim-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.wim-x {
-  background: transparent;
-  border: 0;
-  color: var(--textFaint);
-  cursor: pointer;
-  padding: 2px;
-}
-.wim-x:hover {
-  color: var(--text);
-}
-.wim-hint {
-  margin: 0;
-  font-size: 1em;
-  line-height: var(--lh-md);
-}
-.wim-field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.wim-input {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  padding: 5px 7px;
-  font-size: 1em;
-  outline: none;
-}
-.wim-input:focus {
-  border-color: var(--borderFocus);
-}
-.wim-dest {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-}
-.wim-dest code {
-  /* mono-ok: destination path */
-  font-family: var(--code);
-}
-.wim-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-top: 2px;
-}
-</style>

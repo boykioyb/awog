@@ -5,28 +5,28 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="sne">
-      <div class="sne-field">
-        <label class="sne-label">{{ t('ssh.snippet.name') }}</label>
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">{{ t('ssh.snippet.name') }}</Label>
         <Input v-model="name" :placeholder="t('ssh.snippet.namePh')" />
       </div>
 
-      <div class="sne-field">
-        <label class="sne-label">{{ t('ssh.snippet.command') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">{{ t('ssh.snippet.command') }}</Label>
+        <Textarea
           v-model="command"
-          class="sne-input sne-ta mono"
+          class="min-h-24 resize-y font-mono"
           rows="5"
           :placeholder="t('ssh.snippet.commandPh')"
           spellcheck="false"
           autocomplete="off"
         />
-        <div class="sne-hint">{{ t('ssh.snippet.commandHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.snippet.commandHint') }}</div>
       </div>
     </div>
 
     <template #footer>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('ssh.snippet.save') }}
@@ -73,51 +73,3 @@ const onSave = () => {
   emit('save', name.value.trim(), command.value)
 }
 </script>
-
-<style scoped>
-.sne {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.sne-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sne-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.sne-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.sne-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — shell snippet */
-  font-family: var(--code);
-}
-.sne-input:focus {
-  border-color: var(--accent);
-}
-.sne-ta {
-  resize: vertical;
-  min-height: 6rem;
-  line-height: var(--lh-md);
-}
-.sne-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

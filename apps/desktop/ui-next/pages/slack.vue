@@ -1,5 +1,6 @@
 <template>
-  <section class="page on slk-page" data-page="slack">
+  <!-- Cửa sổ riêng không có layout ⇒ tự ghim kín cửa sổ (fixed inset-0). -->
+  <section class="fixed inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden" data-page="slack">
     <SlackWorkspace mode="window" />
   </section>
   <AppGlobalHosts />
@@ -28,13 +29,3 @@ definePageMeta({
   },
 })
 </script>
-
-<style scoped>
-/* Cửa sổ riêng không có layout ⇒ tự ghim kín cửa sổ. */
-.slk-page {
-  position: fixed;
-  inset: 0;
-  flex-direction: column;
-  min-height: 0;
-}
-</style>

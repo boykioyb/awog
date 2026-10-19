@@ -1,24 +1,26 @@
 <template>
-  <div class="ape-field">
-    <label class="ape-label">
+  <!-- mono-ok (các ô font-mono dưới đây): role ARN / MFA serial / external id là giá
+       trị copy-paste từ IAM console vào ~/.aws/config. -->
+  <div class="flex flex-col gap-1.5">
+    <Label class="gap-1 text-xs font-semibold text-foreground">
       <!-- Dấu `*` CHỈ ở lượt tạo mới: sửa profile có sẵn thì ô trống là "giữ
            nguyên giá trị trên đĩa" (S2a) nên không bắt buộc. -->
       {{ t('infra.editor.assumeRole.roleArn') }}
-      <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
-    </label>
+      <span v-if="!isExisting" class="font-semibold text-destructive" aria-hidden="true">*</span>
+    </Label>
     <Input
       v-model.trim="model.roleArn"
       spellcheck="false"
       :placeholder="t('infra.editor.assumeRole.roleArnPh')"
-      class="mono"
+      class="font-mono"
     />
   </div>
 
-  <div class="ape-field">
-    <label class="ape-label">
+  <div class="flex flex-col gap-1.5">
+    <Label class="gap-1 text-xs font-semibold text-foreground">
       {{ t('infra.editor.assumeRole.sourceProfile') }}
-      <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
-    </label>
+      <span v-if="!isExisting" class="font-semibold text-destructive" aria-hidden="true">*</span>
+    </Label>
     <AppSelect
       v-model="model.sourceProfile"
       :options="sourceProfileOptions"
@@ -27,38 +29,38 @@
     />
   </div>
 
-  <div class="ape-row">
-    <div class="ape-field">
-      <label class="ape-label">
+  <div class="grid grid-cols-2 gap-3.5">
+    <div class="flex flex-col gap-1.5">
+      <Label class="gap-1 text-xs font-semibold text-foreground">
         {{ t('infra.editor.assumeRole.mfaSerial') }}
-        <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
-      </label>
+        <span class="font-normal text-dim">{{ t('infra.editor.optional') }}</span>
+      </Label>
       <Input
         v-model.trim="model.mfaSerial"
         spellcheck="false"
         :placeholder="t('infra.editor.assumeRole.mfaSerialPh')"
-        class="mono"
+        class="font-mono"
       />
     </div>
-    <div class="ape-field">
-      <label class="ape-label">
+    <div class="flex flex-col gap-1.5">
+      <Label class="gap-1 text-xs font-semibold text-foreground">
         {{ t('infra.editor.assumeRole.externalId') }}
-        <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
-      </label>
+        <span class="font-normal text-dim">{{ t('infra.editor.optional') }}</span>
+      </Label>
       <Input
         v-model.trim="model.externalId"
         spellcheck="false"
         :placeholder="t('infra.editor.assumeRole.externalIdPh')"
-        class="mono"
+        class="font-mono"
       />
     </div>
   </div>
 
-  <div class="ape-field">
-    <label class="ape-label">
+  <div class="flex flex-col gap-1.5">
+    <Label class="gap-1 text-xs font-semibold text-foreground">
       {{ t('infra.editor.assumeRole.duration') }}
-      <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
-    </label>
+      <span class="font-normal text-dim">{{ t('infra.editor.optional') }}</span>
+    </Label>
     <Input
       v-model.trim="model.durationSeconds"
       type="number"
@@ -103,51 +105,3 @@ const sourceProfileOptions = computed<AppSelectOption[]>(() =>
     .map((p) => ({ value: p.name, label: p.name })),
 )
 </script>
-
-<style scoped>
-.ape-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ape-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.ape-optional {
-  font-weight: 400;
-  color: var(--textDim);
-}
-/* Dấu `*` bắt buộc — cùng vocabulary với `.sse-req` (SshEditor). */
-.ape-req {
-  color: var(--danger);
-  font-weight: 700;
-}
-.ape-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ape-input.mono {
-  /* mono-ok: role ARN / MFA serial / external id là giá trị copy-paste từ
-     IAM console vào ~/.aws/config. */
-  font-family: var(--code);
-}
-.ape-input:focus {
-  border-color: var(--accent);
-}
-.ape-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-</style>

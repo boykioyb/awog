@@ -1,21 +1,33 @@
 <template>
-  <div class="odbody">
+  <div class="w-full max-w-220 text-foreground">
     <template v-for="(block, i) in doc.blocks" :key="i">
       <OfficeDocPara v-if="block.type === 'p'" :para="block" />
 
       <img
         v-else-if="block.type === 'image'"
-        class="odimg"
+        class="my-[0.9em] block h-auto max-w-full rounded-sm"
         :src="block.src"
         :alt="block.alt"
         :style="block.width ? { width: `${block.width}px` } : undefined"
       />
 
-      <div v-else class="odtwrap">
-        <table class="odtable">
+      <!-- Bảng rộng cuộn trong khung riêng thay vì kéo giãn cột đọc. -->
+      <div v-else class="my-[0.9em] overflow-x-auto">
+        <table class="w-full border-collapse">
           <tbody>
-            <tr v-for="(row, r) in block.rows" :key="r">
-              <td v-for="(cell, c) in row" :key="c" :colspan="cell.colSpan">
+            <!-- Hàng đầu của Word theo lệ là header — cùng độ đậm renderer markdown cho
+                 <th> để bảng đọc giống nhau giữa các preview. -->
+            <tr
+              v-for="(row, r) in block.rows"
+              :key="r"
+              :class="{ 'bg-muted font-semibold': r === 0 }"
+            >
+              <td
+                v-for="(cell, c) in row"
+                :key="c"
+                :colspan="cell.colSpan"
+                class="border px-2.5 py-1.5 align-top [&>p]:my-[0.15em]"
+              >
                 <OfficeDocPara v-for="(para, p) in cell.paras" :key="p" :para="para" />
               </td>
             </tr>
@@ -24,7 +36,9 @@
       </div>
     </template>
 
-    <div v-if="doc.truncated" class="odtrunc">{{ t('common.preview.officeTruncated') }}</div>
+    <div v-if="doc.truncated" class="mt-[1.4em] rounded-md border bg-muted px-3 py-2 text-warning">
+      {{ t('common.preview.officeTruncated') }}
+    </div>
   </div>
 </template>
 
@@ -39,49 +53,3 @@ defineProps<{ doc: DocxDoc }>()
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-.odbody {
-  width: 100%;
-  max-width: 880px;
-  color: var(--text);
-}
-.odimg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 0.9em 0;
-  border-radius: var(--r-xs);
-}
-/* Wide tables scroll inside their own box instead of stretching the column. */
-.odtwrap {
-  margin: 0.9em 0;
-  overflow-x: auto;
-}
-.odtable {
-  border-collapse: collapse;
-  width: 100%;
-}
-.odtable td {
-  border: 1px solid var(--border);
-  padding: 6px 10px;
-  vertical-align: top;
-}
-/* Word's first row is conventionally the header — give it the same weight the
-   markdown renderer gives <th> so tables read the same way across previews. */
-.odtable tr:first-child td {
-  background: var(--bgActive);
-  font-weight: 600;
-}
-.odtable :deep(.odp) {
-  margin: 0.15em 0;
-}
-.odtrunc {
-  margin: 1.4em 0 0;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--amber);
-  background: var(--bgSubtle);
-}
-</style>

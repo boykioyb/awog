@@ -1,7 +1,9 @@
 <template>
-  <div class="swin">
+  <!-- Ghim kín cửa sổ: pane chi tiết tự cuộn bên trong, thân cửa sổ không bao giờ cuộn. -->
+  <div class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
     <SessionDetail v-if="session" :key="session.id" :session="session" />
-    <div v-else class="swin-miss">
+    <!-- Chỉ tới được khi phiên đã bị xoá ở cửa sổ chính, hoặc URL thiếu id. -->
+    <div v-else class="grid h-screen place-items-center text-faint">
       {{ resolving ? t('sessions.window.loading') : t('sessions.window.missing') }}
     </div>
     <AppGlobalHosts />
@@ -62,25 +64,3 @@ useHead({
   title: computed(() => (session.value ? `${session.value.title} — AWOG` : 'AWOG')),
 })
 </script>
-
-<style scoped>
-/* Pin to the whole window: the detail pane owns its own internal scrolling, so the
-   window body itself must never scroll. */
-.swin {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--text);
-  overflow: hidden;
-}
-/* Only reachable when the window was opened for a session that no longer exists
-   (deleted from the main window) or without an id (a malformed URL). */
-.swin-miss {
-  display: grid;
-  place-items: center;
-  height: 100vh;
-  color: var(--textFaint);
-}
-</style>

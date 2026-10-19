@@ -5,27 +5,37 @@
     lock-scrim
     @close="onCancel"
   >
-    <div class="cxd">
+    <div class="flex flex-col gap-3.5">
       <!-- Starting: waiting for the sidecar to build the authorize URL -->
-      <div v-if="phase === 'starting'" class="cxrow">
-        <span class="cxspin" />
-        <span class="cxtext">{{ t('settingsModels.codex.preparing') }}</span>
+      <div v-if="phase === 'starting'" class="flex items-center gap-2 text-foreground">
+        <span
+          class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-border border-t-primary"
+        />
+        <span>{{ t('settingsModels.codex.preparing') }}</span>
       </div>
 
       <!-- URL ready: the browser was opened; wait for the loopback callback -->
       <template v-else-if="phase === 'waiting'">
-        <div class="cxtext">{{ t('settingsModels.codex.opened') }}</div>
-        <Button v-if="authUrl" type="button" class="cxreopen" variant="default" @click="onOpen">
-          <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div class="text-foreground">{{ t('settingsModels.codex.opened') }}</div>
+        <Button v-if="authUrl" type="button" class="w-full" variant="default" @click="onOpen">
+          <Icon name="agents" class="size-3.5" />
           <span>{{ t('settingsModels.codex.reopen') }}</span>
         </Button>
-        <div class="cxrow cxwaiting">
-          <span class="cxspin" />
+        <div class="flex items-center gap-2 text-dim">
+          <span
+            class="size-3.5 shrink-0 animate-spin rounded-full border-2 border-border border-t-primary"
+          />
           <span>{{ t('settingsModels.codex.waiting') }}</span>
         </div>
       </template>
 
-      <div v-if="error" class="cxerror">{{ error }}</div>
+      <Alert
+        v-if="error"
+        variant="destructive"
+        class="border-destructive/50 bg-destructive/10 px-3 py-2"
+      >
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
     </div>
 
     <template #footer>
@@ -39,7 +49,6 @@
 <script setup lang="ts">
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
 import {
   SidecarError,
   SidecarUnavailableError,
@@ -175,51 +184,3 @@ watch(
 
 onBeforeUnmount(cleanup)
 </script>
-
-<style scoped>
-.cxd {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.cxrow {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--text);
-}
-.cxwaiting {
-  color: var(--textDim);
-}
-.cxtext {
-  font-size: 1em;
-  color: var(--text);
-  line-height: var(--lh-md);
-}
-.cxreopen {
-  justify-content: center;
-  width: 100%;
-}
-.cxspin {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: cxspin 0.7s linear infinite;
-}
-@keyframes cxspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.cxerror {
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-  font-size: 1em;
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-</style>

@@ -1,11 +1,11 @@
 <template>
-  <div class="cap-detail">
-    <div v-if="!cap.selectedSummary.value" class="cap-empty">{{ t('capture.detail.select') }}</div>
-    <div v-else-if="!entry" class="cap-empty">{{ t('capture.detail.loading') }}</div>
+  <div class="flex min-w-0 flex-col bg-sidebar">
+    <div v-if="!cap.selectedSummary.value" :class="CAP_EMPTY">{{ t('capture.detail.select') }}</div>
+    <div v-else-if="!entry" :class="CAP_EMPTY">{{ t('capture.detail.loading') }}</div>
     <template v-else>
-      <div class="cap-dhead">
-        <span class="cap-meth">{{ entry.method }}</span>
-        <span class="cap-cut cap-code" :title="entry.url">{{ entry.url }}</span>
+      <div class="flex items-center gap-2 px-2 py-1.5 shadow-[inset_0_-1px_0_var(--color-border)]">
+        <Badge variant="outline" class="font-semibold">{{ entry.method }}</Badge>
+        <span class="min-w-0 flex-1 truncate font-mono" :title="entry.url">{{ entry.url }}</span>
         <Button
           variant="ghost"
           size="iconSm"
@@ -17,7 +17,7 @@
           <Icon name="x" />
         </Button>
       </div>
-      <div class="cap-actions" aria-live="polite">
+      <div class="flex flex-wrap gap-1 px-2 py-1.5" aria-live="polite">
         <Button
           v-for="a in ACTIONS"
           :key="a.kind"
@@ -34,7 +34,7 @@
         <Button
           variant="outline"
           size="xs"
-          class="cap-on gap-1.5 [&_svg]:size-3"
+          class="border-selected-border bg-selected text-foreground hover:bg-selected gap-1.5 [&_svg]:size-3"
           :title="t('capture.action.repeaterHint')"
           @click="cap.sendToRepeater(entry)"
         >
@@ -64,7 +64,7 @@
         </TabsList>
       </Tabs>
 
-      <div class="cap-tabbody">
+      <div class="min-h-0 flex-auto overflow-auto">
         <CaptureHeadersTab v-if="active === 'headers'" :entry="entry" />
         <CapturePayloadTab v-else-if="active === 'payload'" :entry="entry" />
         <CaptureResponseTab v-else-if="active === 'response'" :entry="entry" />
@@ -92,6 +92,7 @@ import CaptureResponseTab from './CaptureResponseTab.vue'
 import CaptureSecurityTab from './CaptureSecurityTab.vue'
 import CaptureTimingTab from './CaptureTimingTab.vue'
 import CaptureWsTab from './CaptureWsTab.vue'
+import { CAP_EMPTY } from './capture-ui'
 
 type TabId =
   | 'headers'

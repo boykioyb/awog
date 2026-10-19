@@ -3,7 +3,9 @@
        Click: dir → expand/collapse + chọn; file → mở doc + chọn. Chuột phải →
        context menu VS Code. Mọi hàng cùng màu `--text` (≈ #fff ở dark, tự đảo ở
        light — KHÔNG ghim hex) + font-weight 400 (nhẹ hơn 500 cũ); hàng chọn chỉ
-       khác ở nền + thanh accent; icon md/mmd giữ màu loại file. -->
+       khác ở nền + thanh accent; icon md/mmd giữ màu loại file. Chiều cao hàng =
+       --lh-xl (giãn theo cỡ chữ Appearance, luôn px chẵn) — ghim 23px thì đổi cỡ chữ
+       chữ to lên mà hàng không giãn, nhìn chật như chưa đổi. -->
   <div class="flex min-h-full flex-col" @contextmenu.self="exp.blankCtxMenu">
     <template v-for="r in exp.rows.value" :key="r.kind + ':' + r.path">
       <ExplorerInlineInput
@@ -17,7 +19,7 @@
       />
       <div
         v-else
-        class="flex h-[23px] cursor-pointer select-none items-center gap-1.5 whitespace-nowrap pr-2 font-normal text-[color:var(--text)]"
+        class="flex h-[var(--lh-xl)] cursor-pointer select-none items-center gap-1.5 whitespace-nowrap pr-2 font-normal text-[color:var(--text)]"
         :class="{
           'bg-[color:var(--accentDim)] shadow-[inset_2px_0_0_var(--accent)]': wb.selPath === r.path,
           'hover:bg-[color:var(--bgHover)]': wb.selPath !== r.path,
@@ -52,6 +54,7 @@ import {
   Folder,
   Image,
   Video,
+  FileSpreadsheet,
   Workflow,
 } from 'lucide-vue-next'
 import { computed } from 'vue'
@@ -72,6 +75,8 @@ function iconFor(r: TreeRow) {
       return Image
     case 'vid':
       return Video
+    case 'office':
+      return FileSpreadsheet
     case 'mmd':
       return Workflow
     default:

@@ -5,13 +5,14 @@
        THUẦN TRÌNH BÀY: nó không biết gì về lược đồ, về luật quay lui, hay về lượt lưu.
        Bước đi vào qua `v-model` và mỗi lần sửa GHI LẠI CẢ BƯỚC lên cha — không mutate
        object của `form.steps` tại chỗ (`vue/no-mutating-props` cấm, và cấm đúng). -->
-  <li class="pbe-step">
-    <div class="pbe-step-hd">
-      <span class="pbe-no">{{ index + 1 }}</span>
+  <li class="flex flex-col gap-1.5 rounded-xl border bg-card px-3 py-2.5">
+    <div class="flex items-center gap-1.5">
+      <span class="min-w-5 text-sm text-dim tabular-nums">{{ index + 1 }}</span>
 
       <AppSelect v-model="verb" :options="verbOptions" width="116px" />
       <AppSelect v-model="tool" :options="toolOptions" width="116px" />
 
+      <!-- mono-ok: id đi vào `actor: playbook:<id>#<bước>` của nhật ký -->
       <Input
         v-model="id"
         type="text"
@@ -20,39 +21,46 @@
         spellcheck="false"
         :placeholder="t('playbooks.editor.step.idPlaceholder')"
         :title="t('playbooks.editor.step.idWhy')"
-        class="pbe-id"
+        class="w-32 font-mono"
       />
 
-      <span class="pbe-step-gap" />
+      <span class="flex-1" />
 
       <!-- Bốn nút icon-trần: nhãn chữ trên một hàng lặp 20 lần là 20 lần đọc lại cùng
            một chữ. `title` mang nghĩa, và thứ tự lên/xuống là luật (xem `moveStep`). -->
-      <button
-        class="pbe-ibtn"
-        type="button"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-dim disabled:opacity-40"
         :disabled="index === 0"
         :title="t('playbooks.editor.step.up')"
+        :aria-label="t('playbooks.editor.step.up')"
         @click="emit('move', -1)"
       >
-        <Icon name="chev" class="pbe-ic pbe-up" />
-      </button>
-      <button
-        class="pbe-ibtn"
-        type="button"
+        <!-- Sprite không có mũi tên LÊN — xoay mũi tên xuống. -->
+        <Icon name="chev" class="rotate-180" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-dim disabled:opacity-40"
         :disabled="isLast"
         :title="t('playbooks.editor.step.down')"
+        :aria-label="t('playbooks.editor.step.down')"
         @click="emit('move', 1)"
       >
-        <Icon name="chev" class="pbe-ic" />
-      </button>
-      <button
-        class="pbe-ibtn danger"
-        type="button"
+        <Icon name="chev" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-dim hover:bg-destructive/10 hover:text-destructive"
         :title="t('playbooks.editor.step.remove')"
+        :aria-label="t('playbooks.editor.step.remove')"
         @click="emit('remove')"
       >
-        <Icon name="trash" class="pbe-ic" />
-      </button>
+        <Icon name="trash" />
+      </Button>
     </div>
 
     <Input
@@ -65,31 +73,34 @@
     <!-- MỖI DÒNG MỘT ĐỐI SỐ. Không phải ô lệnh shell: `args` là mảng theo hợp đồng, và
          một ô tự tách theo khoảng trắng sẽ bẻ đôi `--query 'Reservations[].Instances[]'`.
          Nhãn nói thẳng điều đó thay vì để người dùng đoán rồi gõ sai. -->
-    <label class="pbe-sub">
-      <span class="pbe-sub-lbl">
+    <label class="flex flex-col gap-1">
+      <span class="flex items-baseline gap-1.5 text-xs text-dim">
         {{ t('playbooks.editor.step.args') }}
-        <span class="pbe-hint">{{ t('playbooks.editor.step.argsWhy') }}</span>
+        <span class="text-faint">{{ t('playbooks.editor.step.argsWhy') }}</span>
       </span>
-      <textarea
-        v-model="argsText"
-        class="pbe-inp pbe-area"
+      <!-- mono-ok: argv và ghi chú kèm lệnh, copy được ra terminal -->
+      <Textarea
+        :model-value="argsText"
+        class="min-h-14 resize-y font-mono"
         rows="3"
         spellcheck="false"
         :placeholder="argsPlaceholder"
+        @update:model-value="(v: string | number) => (argsText = String(v))"
       />
     </label>
 
-    <label class="pbe-sub">
-      <span class="pbe-sub-lbl">
+    <label class="flex flex-col gap-1">
+      <span class="flex items-baseline gap-1.5 text-xs text-dim">
         {{ t('playbooks.editor.step.note') }}
-        <span class="pbe-hint">{{ t('playbooks.editor.step.noteWhy') }}</span>
+        <span class="text-faint">{{ t('playbooks.editor.step.noteWhy') }}</span>
       </span>
-      <textarea
-        v-model="note"
-        class="pbe-inp pbe-area"
+      <Textarea
+        :model-value="note"
+        class="min-h-14 resize-y font-mono"
         rows="2"
         maxlength="2000"
         :placeholder="t('playbooks.editor.step.notePlaceholder')"
+        @update:model-value="(v: string | number) => (note = String(v))"
       />
     </label>
   </li>
@@ -167,110 +178,3 @@ const toolOptions = computed<AppSelectOption[]>(() =>
 /** Ví dụ đổi theo công cụ đang chọn — một ví dụ `aws` dưới ô `kubectl` là chỉ dẫn sai. */
 const argsPlaceholder = computed(() => t(`playbooks.editor.step.argsEg.${model.value.tool}`))
 </script>
-
-<style scoped>
-.pbe-step {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
-}
-
-.pbe-step-hd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pbe-no {
-  min-width: 20px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-
-.pbe-step-gap {
-  flex: 1;
-}
-
-.pbe-inp {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pbe-id {
-  width: 128px;
-  font-family: var(--code); /* mono-ok: id đi vào `actor: playbook:<id>#<bước>` của nhật ký */
-}
-
-.pbe-area {
-  resize: vertical;
-  min-height: 3.5rem;
-  font-family: var(--code); /* mono-ok: argv và ghi chú kèm lệnh, copy được ra terminal */
-}
-
-.pbe-sub {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.pbe-sub-lbl {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.pbe-hint {
-  color: var(--textFaint);
-}
-
-.pbe-ibtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-
-.pbe-ibtn:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-
-.pbe-ibtn.danger:hover:not(:disabled) {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-
-.pbe-ibtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.pbe-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.pbe-up {
-  transform: rotate(180deg);
-}
-</style>

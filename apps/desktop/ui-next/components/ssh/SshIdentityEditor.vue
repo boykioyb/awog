@@ -5,80 +5,94 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="ssi">
-      <div class="ssi-field">
-        <label class="ssi-label">{{ t('ssh.identity.name') }}</label>
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">{{ t('ssh.identity.name') }}</Label>
         <Input v-model="name" :placeholder="t('ssh.identity.namePh')" />
       </div>
 
-      <div class="ssi-field">
-        <label class="ssi-label">{{ t('ssh.identity.keyType') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">{{ t('ssh.identity.keyType') }}</Label>
         <AppSelect v-model="keyTypeSelect" :options="keyTypeOptions" width="100%" />
       </div>
 
       <!-- Key source: a path to a file on disk, OR pasted inline material (stored
-           in the keychain). -->
-      <div class="ssi-field">
-        <label class="ssi-label">{{ t('ssh.identity.keySource') }}</label>
-        <div class="seg ssi-seg">
-          <span :class="{ on: keySource === 'file' }" @click="keySource = 'file'">
+           in the keychain). Bấm lại mục đang bật thì ToggleGroup emit rỗng — bỏ qua. -->
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">
+          {{ t('ssh.identity.keySource') }}
+        </Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="self-start rounded-lg bg-muted p-0.5"
+          :model-value="keySource"
+          @update:model-value="
+            (v) => {
+              if (v === 'file' || v === 'inline') keySource = v
+            }
+          "
+        >
+          <ToggleGroupItem value="file" :class="SEG_ITEM">
             {{ t('ssh.identity.sourceFile') }}
-          </span>
-          <span :class="{ on: keySource === 'inline' }" @click="keySource = 'inline'">
+          </ToggleGroupItem>
+          <ToggleGroupItem value="inline" :class="SEG_ITEM">
             {{ t('ssh.identity.sourceInline') }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      <div v-if="keySource === 'file'" class="ssi-field">
-        <label class="ssi-label">{{ t('ssh.identity.keyPath') }}</label>
-        <div class="ssi-path-row">
+      <div v-if="keySource === 'file'" class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">{{ t('ssh.identity.keyPath') }}</Label>
+        <div class="flex items-center gap-2">
           <Input
             v-model="keyPath"
             :placeholder="t('ssh.identity.keyPathPh')"
             spellcheck="false"
-            class="mono"
+            class="min-w-0 flex-1 font-mono"
             @blur="autodetectPath"
           />
           <Button
             v-if="canBrowse"
             type="button"
-            class="ssi-browse"
+            class="shrink-0"
             variant="outline"
             size="sm"
             @click="browseKey"
           >
-            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="folder" />
             {{ t('ssh.identity.browse') }}
           </Button>
         </div>
-        <div class="ssi-hint">{{ t('ssh.identity.keyPathHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('ssh.identity.keyPathHint') }}</div>
       </div>
 
-      <div v-else class="ssi-field">
-        <label class="ssi-label">{{ t('ssh.identity.privateKey') }}</label>
-        <textarea
+      <div v-else class="flex flex-col gap-1.5">
+        <Label class="text-xs font-semibold text-foreground">
+          {{ t('ssh.identity.privateKey') }}
+        </Label>
+        <Textarea
           v-model="privateKey"
-          class="ssi-input ssi-ta mono"
+          class="min-h-24 resize-y font-mono"
           rows="5"
           :placeholder="t('ssh.identity.privateKeyPh')"
           spellcheck="false"
           autocomplete="off"
           @blur="autodetectInline"
         />
-        <div class="ssi-hint">
+        <div class="text-xs text-muted-foreground">
           {{ isExisting ? t('ssh.identity.privateKeyHintKeep') : t('ssh.identity.privateKeyHint') }}
         </div>
       </div>
 
-      <!-- Write-only passphrase — blank on open, omitted when blank. -->
-      <div class="ssi-secret">
-        <div class="ssi-secret-head">
-          <Icon
-            name="shield"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
-          <span class="ssi-secret-title">{{ t('ssh.identity.passphrase') }}</span>
+      <!-- Write-only passphrase — blank on open, omitted when blank. Khung nhấn accent:
+           passphrase chỉ ghi, đi thẳng vào keychain. -->
+      <div class="flex flex-col gap-2 rounded-lg border border-selected-border bg-selected p-3">
+        <div class="flex items-center gap-2">
+          <Icon name="shield" class="size-3.5 text-primary" />
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('ssh.identity.passphrase') }}
+          </span>
         </div>
         <Input
           v-model="passphrase"
@@ -86,16 +100,16 @@
           :placeholder="t('ssh.identity.passphrasePh')"
           spellcheck="false"
           autocomplete="off"
-          class="mono"
+          class="font-mono"
         />
-        <div class="ssi-hint">
+        <div class="text-xs text-muted-foreground">
           {{ isExisting ? t('ssh.identity.secretHintKeep') : t('ssh.identity.secretHint') }}
         </div>
       </div>
     </div>
 
     <template #footer>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('ssh.identity.save') }}
@@ -131,6 +145,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Item của segmented control (ToggleGroup) chọn nguồn key.
+const SEG_ITEM =
+  'h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 const isExisting = computed(() => !!props.identity)
 
@@ -233,88 +251,3 @@ const onSave = () => {
   emit('save', buildIdentity(), secret)
 }
 </script>
-
-<style scoped>
-.ssi {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.ssi-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ssi-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.ssi-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ssi-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — key path / passphrase */
-  font-family: var(--code);
-}
-.ssi-path-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ssi-path-row .ssi-input {
-  flex: 1;
-  min-width: 0;
-}
-.ssi-browse {
-  flex: 0 0 auto;
-}
-.ssi-input:focus {
-  border-color: var(--accent);
-}
-.ssi-ta {
-  resize: vertical;
-  min-height: 6rem;
-  line-height: var(--lh-md);
-}
-.ssi-seg {
-  align-self: flex-start;
-}
-.ssi-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Secret callout — subtle accent-tinted card (mirrors SshDetail's .ssh-err idiom):
-   the passphrase is write-only + goes straight to the keychain. */
-.ssi-secret {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-}
-.ssi-secret-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.ssi-secret-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-</style>

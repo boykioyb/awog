@@ -1,38 +1,59 @@
 <template>
-  <div class="edtop">
-    <button class="edback" :title="t('editor.back')" @click="emit('back')">
-      <Icon name="chev" class="chev-left" />
+  <!-- Hairline là INSET SHADOW, không phải border: border 1px ăn một pixel của content
+       box (44 − 1 = 43) đẩy mọi con căn giữa vào nửa pixel. Inset để nền của sibling kế
+       tiếp không vẽ đè lên vạch. -->
+  <div
+    class="flex min-h-11 shrink-0 items-center gap-2 bg-sidebar px-3.5 py-2 shadow-[inset_0_-1px_0_var(--border)]"
+  >
+    <Button
+      variant="ghost"
+      size="sm"
+      class="gap-1 px-2 text-base font-normal text-dim"
+      :title="t('editor.back')"
+      @click="emit('back')"
+    >
+      <Icon name="chev" class="size-3.5 rotate-90" />
       <span>{{ backLabel }}</span>
-    </button>
+    </Button>
 
-    <div class="edsep" />
+    <Separator orientation="vertical" class="h-4" />
 
-    <Icon :name="titleIcon" class="edicon" />
-    <span class="edtitle">{{ title }}</span>
-    <span v-if="subtitle" class="edsub">{{ subtitle }}</span>
+    <Icon :name="titleIcon" class="size-3.5 shrink-0 text-dim" />
+    <span class="font-semibold whitespace-nowrap text-foreground">{{ title }}</span>
+    <!-- mono: subtitle mang đường dẫn project ở pages/code/[id].vue -->
+    <span v-if="subtitle" class="min-w-0 truncate font-mono text-sm text-faint">
+      {{ subtitle }}
+    </span>
 
     <!-- Diff stats (Task Artifact Editor, .diff/.patch files). -->
-    <div v-if="diffStats" class="eddiff">
-      <span class="eddiff-files">
+    <div v-if="diffStats" class="ml-1.5 flex items-center gap-2 text-sm tabular-nums">
+      <span class="text-dim">
         {{ t('editor.diffFiles', { n: diffStats.files }) }}
       </span>
-      <span class="eddiff-add">+{{ diffStats.additions }}</span>
-      <span class="eddiff-del">−{{ diffStats.deletions }}</span>
+      <span class="text-diff-add">+{{ diffStats.additions }}</span>
+      <span class="text-destructive">−{{ diffStats.deletions }}</span>
     </div>
 
-    <span class="edspacer" />
+    <span class="flex-1" />
 
     <!-- View-mode segmented control (markdown/yaml; hidden for diff). -->
-    <div v-if="viewModes" class="seg edseg">
-      <span
+    <ToggleGroup
+      v-if="viewModes"
+      type="single"
+      :spacing="1"
+      class="shrink-0 rounded-lg bg-muted p-0.5"
+      :model-value="activeView"
+      @update:model-value="onView"
+    >
+      <ToggleGroupItem
         v-for="v in viewOptions"
         :key="v.id"
-        :class="{ on: activeView === v.id }"
-        @click="emit('change-view', v.id)"
+        :value="v.id"
+        class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
       >
         {{ t(v.labelKey) }}
-      </span>
-    </div>
+      </ToggleGroupItem>
+    </ToggleGroup>
 
     <slot name="actions" />
   </div>
@@ -67,97 +88,14 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// ToggleGroup single phát rỗng khi bấm lại mục đang bật — bỏ qua, chỉ phát khi đổi mục.
+function onView(v: unknown) {
+  if (typeof v === 'string' && v) emit('change-view', v as EditorViewMode)
+}
+
 const viewOptions = [
   { id: 'code' as const, labelKey: 'editor.view.code' },
   { id: 'split' as const, labelKey: 'editor.view.split' },
   { id: 'preview' as const, labelKey: 'editor.view.preview' },
 ]
 </script>
-
-<style scoped>
-/* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
-   box under `box-sizing: border-box`, leaving an odd height (44 - 1 = 43) that puts every
-   vertically centred child on a half pixel. A shadow takes no layout space. Inset rather
-   than outset so the next sibling's background cannot paint over the line. */
-.edtop {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 14px;
-  min-height: 44px;
-  flex-shrink: 0;
-  box-shadow: inset 0 -1px 0 var(--border);
-  background: var(--bgPanel);
-}
-.edback {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: transparent;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-.edback:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.edback .chev-left {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  transform: rotate(90deg);
-}
-.edsep {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-}
-.edicon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--textDim);
-  flex-shrink: 0;
-}
-.edtitle {
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-}
-.edsub {
-  /* mono-ok: subtitle carries the project path in pages/code/[id].vue */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.eddiff {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 6px;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-}
-.eddiff-files {
-  color: var(--textDim);
-}
-.eddiff-add {
-  color: var(--add);
-}
-.eddiff-del {
-  color: var(--danger);
-}
-.edspacer {
-  flex: 1;
-}
-.edseg {
-  flex-shrink: 0;
-}
-</style>

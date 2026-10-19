@@ -1,31 +1,34 @@
 <template>
-  <div class="cap-tab cap-ws">
-    <div v-if="!frames.length" class="cap-note">{{ t('capture.ws.none') }}</div>
+  <div :class="CAP_TAB">
+    <div v-if="!frames.length" :class="CAP_NOTE">{{ t('capture.ws.none') }}</div>
     <template v-else>
-      <div class="ws-list" role="list">
-        <button
+      <div class="flex max-h-[40%] flex-col overflow-auto" role="list">
+        <!-- Cả dòng là một vùng bấm; đang chọn = accent-tint + thanh accent 2px. -->
+        <Button
           v-for="(f, i) in frames"
           :key="i"
-          type="button"
-          class="ws-row"
-          :class="[f.dir, { sel: i === selected }]"
+          variant="ghost"
+          class="grid h-auto grid-cols-[1.125rem_1fr_3.5rem_5.25rem] justify-normal gap-2 rounded-none px-2 py-0.5 text-left font-normal text-foreground"
+          :class="i === selected && CAP_ROW_SEL"
           role="listitem"
           @click="selected = i"
         >
-          <span class="ws-dir" aria-hidden="true">{{ f.dir === 'sent' ? '↑' : '↓' }}</span>
-          <span class="ws-pl cap-code">{{ preview(f) }}</span>
-          <span class="cap-dim tnum">{{ f.payload.length }}</span>
-          <span class="cap-dim tnum">{{ clock(f.ts) }}</span>
-        </button>
+          <span :class="f.dir === 'sent' ? 'text-success' : 'text-info'" aria-hidden="true">
+            {{ f.dir === 'sent' ? '↑' : '↓' }}
+          </span>
+          <span class="truncate font-mono">{{ preview(f) }}</span>
+          <span class="tnum text-dim">{{ f.payload.length }}</span>
+          <span class="tnum text-dim">{{ clock(f.ts) }}</span>
+        </Button>
       </div>
-      <div v-if="current" class="ws-detail">
-        <div class="cap-bar">
-          <span class="cap-dim">
+      <div v-if="current" class="px-2 py-1">
+        <div :class="CAP_BAR">
+          <span class="text-dim">
             {{ current.dir === 'sent' ? t('capture.ws.sent') : t('capture.ws.received') }} ·
             {{ t('capture.ws.opcode', { n: current.opcode }) }}
           </span>
           <Badge v-if="current.truncated" variant="warning">{{ t('capture.ws.truncated') }}</Badge>
-          <span class="cap-grow" />
+          <span class="flex-auto" />
           <Button
             variant="ghost"
             size="iconSm"
@@ -35,14 +38,14 @@
           >
             <Icon
               :name="copy.iconFor('ws-payload')"
-              :style="copy.copiedKey.value === 'ws-payload' ? { color: 'var(--green)' } : undefined"
+              :class="copy.copiedKey.value === 'ws-payload' && 'text-success'"
             />
           </Button>
-          <span class="ws-live" aria-live="polite">
+          <span class="sr-only" aria-live="polite">
             {{ copy.copiedKey.value === 'ws-payload' ? t('capture.toast.copied') : '' }}
           </span>
         </div>
-        <pre class="cap-pre cap-code">{{ pretty(current) }}</pre>
+        <pre :class="CAP_PRE">{{ pretty(current) }}</pre>
       </div>
     </template>
   </div>
@@ -53,6 +56,7 @@ import { computed, ref, watch } from 'vue'
 import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
 import type { CaptureEntry, WsFrame } from '~/types/network-capture'
+import { CAP_BAR, CAP_NOTE, CAP_PRE, CAP_ROW_SEL, CAP_TAB } from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()
@@ -88,53 +92,3 @@ function pretty(f: WsFrame): string {
 const clock = (ms: number): string =>
   new Date(ms < 1e12 ? ms * 1000 : ms).toLocaleTimeString([], { hour12: false })
 </script>
-
-<style scoped>
-.ws-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 40%;
-  overflow: auto;
-}
-.ws-row {
-  display: grid;
-  grid-template-columns: 18px 1fr 56px 84px;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 8px;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ws-row:hover {
-  background: var(--bgHover);
-}
-.ws-row.sel {
-  background: var(--accentDim);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.ws-row.sent .ws-dir {
-  color: var(--green);
-}
-.ws-row.received .ws-dir {
-  color: var(--blue);
-}
-.ws-pl {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ws-detail {
-  padding: 4px 8px;
-}
-.ws-live {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-</style>

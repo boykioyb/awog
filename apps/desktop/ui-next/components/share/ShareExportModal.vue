@@ -2,181 +2,232 @@
   <!-- Hộp xuất · chia sẻ (mốc 6.5–6.7).
        Bản xem trước là ĐÚNG chuỗi sidecar trả về với hai công tắc đang bật — tức
        đúng thứ sẽ được ghi ra đĩa. Không có bản dựng lại ở client, và HTML của bộ
-       xuất KHÔNG bao giờ đi vào DOM ở đây: nó là chuỗi để ghi ra tệp. -->
+       xuất KHÔNG bao giờ đi vào DOM ở đây: nó là chuỗi để ghi ra tệp.
+       KHÔNG dùng Dialog reka: "Xem toàn màn hình" mở PreviewModal (overlay tự viết,
+       z 480) ĐÈ lên hộp này mà không đóng nó — Dialog modal của reka khoá
+       pointer-events của body + bẫy focus nên PreviewModal sẽ không bấm/gõ được. -->
   <Teleport to="body">
-    <div v-if="share.open" class="ovl on sx-ovl" @click.self="closeShare">
-      <div class="sx-card" role="dialog" aria-modal="true">
-        <header class="sx-head">
-          <Icon name="download" class="sx-icn" />
-          <span class="sx-ttl">{{ t('infra.share.title') }}</span>
-          <span class="sx-subj">{{ subjectTitle }}</span>
-          <button class="sx-x" type="button" :title="t('common.close')" @click="closeShare">
-            <Icon name="x" class="sx-x-icn" />
-          </button>
+    <!-- hook-ok: `.ovl.on` nằm trong OVERLAYS (useEmbeddedBrowser.ts); skin cũ bị utility đè hết -->
+    <div v-if="share.open" :class="SCRIM" @click.self="closeShare">
+      <div
+        class="flex max-h-[88vh] w-180 max-w-[94vw] flex-col gap-3 rounded-xl border bg-popover p-4 shadow-lg"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header class="flex min-w-0 items-center gap-2">
+          <Icon name="download" class="size-4 flex-none text-primary" />
+          <span class="flex-none text-lg font-semibold text-foreground">
+            {{ t('infra.share.title') }}
+          </span>
+          <span class="min-w-0 flex-auto truncate text-sm text-dim">{{ subjectTitle }}</span>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="flex-none text-dim [&_svg]:size-4"
+            :title="t('common.close')"
+            @click="closeShare"
+          >
+            <Icon name="x" />
+          </Button>
         </header>
 
         <!-- Tuỳ chọn: định dạng · ngôn ngữ của tệp · mẫu chia sẻ (playbook) -->
-        <div class="sx-opts">
-          <div class="sx-opt">
-            <span class="sx-lbl">{{ t('infra.share.format') }}</span>
-            <div class="seg">
-              <span :class="{ on: share.format === 'markdown' }" @click="setFormat('markdown')">
+        <div class="flex flex-wrap gap-x-4.5 gap-y-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-dim">{{ t('infra.share.format') }}</span>
+            <ToggleGroup
+              type="single"
+              :spacing="1"
+              :class="SEG"
+              :model-value="share.format"
+              @update:model-value="(v: unknown) => v && setFormat(v as ShareFormat)"
+            >
+              <ToggleGroupItem value="markdown" :class="SEG_ITEM">
                 {{ t('infra.share.format.markdown') }}
-              </span>
-              <span :class="{ on: share.format === 'html' }" @click="setFormat('html')">
+              </ToggleGroupItem>
+              <ToggleGroupItem value="html" :class="SEG_ITEM">
                 {{ t('infra.share.format.html') }}
-              </span>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
-          <div class="sx-opt">
-            <span class="sx-lbl">{{ t('infra.share.lang') }}</span>
-            <div class="seg">
-              <span :class="{ on: share.lang === 'vi' }" @click="setLang('vi')">Tiếng Việt</span>
-              <span :class="{ on: share.lang === 'en' }" @click="setLang('en')">English</span>
-            </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-dim">{{ t('infra.share.lang') }}</span>
+            <ToggleGroup
+              type="single"
+              :spacing="1"
+              :class="SEG"
+              :model-value="share.lang"
+              @update:model-value="(v: unknown) => v && setLang(v as ShareLang)"
+            >
+              <ToggleGroupItem value="vi" :class="SEG_ITEM">Tiếng Việt</ToggleGroupItem>
+              <ToggleGroupItem value="en" :class="SEG_ITEM">English</ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
-          <div v-if="isPlaybook" class="sx-opt">
-            <span class="sx-lbl">{{ t('infra.share.audience.label') }}</span>
-            <div class="seg">
-              <span
-                v-for="a in AUDIENCES"
-                :key="a"
-                :class="{ on: audience === a }"
-                @click="setAudience(a)"
-              >
+          <div v-if="isPlaybook" class="flex items-center gap-2">
+            <span class="text-sm text-dim">{{ t('infra.share.audience.label') }}</span>
+            <ToggleGroup
+              type="single"
+              :spacing="1"
+              :class="SEG"
+              :model-value="audience ?? undefined"
+              @update:model-value="(v: unknown) => v && setAudience(v as ShareAudience)"
+            >
+              <ToggleGroupItem v-for="a in AUDIENCES" :key="a" :value="a" :class="SEG_ITEM">
                 {{ t(`infra.share.audience.${a}`) }}
-              </span>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
         </div>
 
-        <p v-if="audienceHint" class="sx-hint">
-          <Icon name="info" class="sx-hint-icn" />
+        <p
+          v-if="audienceHint"
+          class="flex items-start gap-1.5 text-sm leading-(--lh-prose) text-dim"
+        >
+          <Icon name="info" class="mt-1 size-3 flex-none" />
           {{ audienceHint }}
         </p>
 
         <!-- Công tắc che. Mẫu "để duyệt" BỊ BUỘC che nên công tắc khoá, không phải
              chỉ mặc định bật — người dùng phải thấy vì sao không tắt được. -->
-        <div class="sx-masks">
-          <div class="sx-mask">
-            <span class="sx-mask-tx">{{ t('infra.share.mask.enabled') }}</span>
-            <span v-if="forcedMask" class="chip sx-lock">
-              <Icon name="shield" class="sx-lock-icn" />
+        <div class="flex flex-wrap gap-x-5 gap-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-foreground">{{ t('infra.share.mask.enabled') }}</span>
+            <Badge
+              v-if="forcedMask"
+              variant="outline"
+              class="border-selected-border font-normal text-primary"
+            >
+              <Icon name="shield" />
               {{ t('infra.share.mask.forced') }}
-            </span>
+            </Badge>
             <SettingsTog v-else :model-value="share.maskEnabled" @update:model-value="setMask" />
           </div>
-          <div class="sx-mask">
-            <span class="sx-mask-tx">{{ t('infra.share.mask.buckets') }}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-foreground">{{ t('infra.share.mask.buckets') }}</span>
             <SettingsTog
               :model-value="share.bucketsDomains"
               @update:model-value="setBucketsDomains"
             />
           </div>
         </div>
-        <p class="sx-note">{{ t('infra.share.mask.enabledHint') }}</p>
-        <p v-if="!share.maskEnabled" class="sx-warn">
-          <Icon name="alert" class="sx-warn-icn" />
+        <p :class="NOTE">{{ t('infra.share.mask.enabledHint') }}</p>
+        <p v-if="!share.maskEnabled" class="flex items-center gap-1.5 text-sm text-warning">
+          <Icon name="alert" class="size-3.5 flex-none" />
           {{ t('infra.share.mask.warning') }}
         </p>
 
         <!-- Báo cáo: hai hành động riêng của 6.6 -->
-        <div v-if="report" class="sx-report">
-          <p class="sx-about">{{ t(report.aboutKey) }}</p>
-          <div class="sx-report-acts">
-            <Button type="button" variant="outline" size="sm" @click="saveReportToWiki">
-              <Icon name="book" class="sx-btn-icn" />
+        <div v-if="report" class="flex flex-col gap-2 rounded-md border px-3 py-2.5">
+          <p class="text-sm leading-(--lh-prose) text-dim">{{ t(report.aboutKey) }}</p>
+          <div class="flex gap-2">
+            <Button variant="outline" size="sm" :class="BTN" @click="saveReportToWiki">
+              <Icon name="book" />
               {{ t('infra.share.action.wiki') }}
             </Button>
             <!-- Ngoặc là bắt buộc: `scheduleReport` nhận `kind?`, nên viết trần
                  thì PointerEvent của cú bấm chui vào tham số đầu, `reportInfo()`
                  không tìm thấy loại nào và cú bấm thành im lặng. Gọi rỗng để
                  composable tự lấy loại từ đối tượng đang mở. -->
-            <Button type="button" variant="outline" size="sm" @click="scheduleReport()">
-              <Icon name="clock" class="sx-btn-icn" />
+            <Button variant="outline" size="sm" :class="BTN" @click="scheduleReport()">
+              <Icon name="clock" />
               {{ t('infra.share.action.schedule') }}
             </Button>
           </div>
         </div>
 
         <!-- Bản xem trước ĐÃ che -->
-        <div class="sx-prev">
-          <div class="sx-prev-hd">
-            <span class="sx-prev-ttl">{{ t('infra.share.preview.title') }}</span>
-            <span v-if="share.doc" class="sx-prev-name mono">{{ share.doc.filename }}</span>
-            <span
+        <div class="flex min-h-0 flex-col gap-1.5">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="flex-none text-sm font-medium text-foreground">
+              {{ t('infra.share.preview.title') }}
+            </span>
+            <!-- mono: tên tệp sẽ ghi ra đĩa -->
+            <span v-if="share.doc" class="min-w-0 flex-auto truncate font-mono text-xs text-dim">
+              {{ share.doc.filename }}
+            </span>
+            <!-- "đã che / chưa che": hai màu phải nói được SỰ KHÁC NHAU giữa bản gửi đi
+                 và bản còn nguyên định danh. -->
+            <Badge
               v-if="share.doc"
-              class="chip"
-              :class="share.doc.masked ? 'sx-chip-ok' : 'sx-chip-bad'"
+              variant="outline"
+              class="font-normal"
+              :class="
+                share.doc.masked ? 'border-success text-success' : 'border-warning/40 text-warning'
+              "
             >
               {{
                 share.doc.masked
                   ? t('infra.share.preview.masked')
                   : t('infra.share.preview.unmasked')
               }}
-            </span>
-            <span v-if="share.doc" class="sx-prev-bytes">
+            </Badge>
+            <span v-if="share.doc" class="flex-none text-xs text-faint tabular-nums">
               {{ t('infra.share.preview.bytes', { n: share.doc.bytes }) }}
             </span>
           </div>
 
-          <pre v-if="share.doc" class="sx-src mono">{{ share.doc.text }}</pre>
-          <p v-else-if="share.busy" class="sx-state">{{ t('infra.share.preview.loading') }}</p>
-          <p v-else class="sx-state sx-state-bad">
+          <!-- mono: nội dung tệp xuất (markdown/HTML nguồn) -->
+          <pre
+            v-if="share.doc"
+            class="m-0 max-h-[46vh] min-h-45 flex-auto overflow-auto rounded-md border bg-muted px-3 py-2.5 font-mono text-sm break-words whitespace-pre-wrap text-foreground"
+            >{{ share.doc.text }}</pre
+          >
+          <p v-else-if="share.busy" :class="STATE">{{ t('infra.share.preview.loading') }}</p>
+          <p v-else :class="cn(STATE, 'text-destructive')">
             {{ share.error || t('infra.share.preview.empty') }}
           </p>
-          <ul v-if="share.issues.length" class="sx-issues">
+          <ul v-if="share.issues.length" class="list-disc pl-4.5 text-xs text-warning">
             <li v-for="(msg, i) in share.issues" :key="i">{{ msg }}</li>
           </ul>
 
-          <p class="sx-note">{{ t('infra.share.preview.snapshot') }}</p>
+          <p :class="NOTE">{{ t('infra.share.preview.snapshot') }}</p>
         </div>
 
-        <footer class="sx-foot">
+        <footer class="flex items-center gap-2">
           <Button
-            type="button"
             :disabled="!share.doc"
             variant="outline"
             size="sm"
+            :class="BTN"
             @click="copyMarkdown"
           >
-            <Icon name="copy" class="sx-btn-icn" />
+            <Icon name="copy" />
             {{ t('infra.share.action.copy') }}
           </Button>
           <Button
-            type="button"
             :disabled="!share.doc"
             variant="outline"
             size="sm"
+            :class="BTN"
             @click="sendToChat"
           >
-            <Icon name="send" class="sx-btn-icn" />
+            <Icon name="send" />
             {{ t('infra.share.action.chat') }}
           </Button>
           <Button
-            type="button"
             :disabled="!share.doc"
             variant="outline"
             size="sm"
+            :class="BTN"
             @click="openFullPreview"
           >
-            <Icon name="fullscreen" class="sx-btn-icn" />
+            <Icon name="fullscreen" />
             {{ t('infra.share.action.preview') }}
           </Button>
-          <span class="sx-gap" />
-          <Button type="button" variant="outline" size="sm" @click="closeShare">
+          <span class="flex-auto" />
+          <Button variant="outline" size="sm" @click="closeShare">
             {{ t('common.close') }}
           </Button>
           <Button
-            type="button"
             :disabled="!share.doc"
             variant="default"
             size="sm"
+            :class="BTN"
             @click="saveToFile"
           >
-            <Icon name="save" class="sx-btn-icn" />
+            <Icon name="save" />
             {{ t('infra.share.action.save') }}
           </Button>
         </footer>
@@ -189,10 +240,10 @@
 // Hộp xuất dùng chung cho ba đối tượng: một playbook (hai mẫu), một lượt chạy đã
 // xong, một báo cáo. State + mọi lời gọi IPC nằm ở `useShareExport` (mọc module) nên
 // hộp này chỉ bind — bên gọi chỉ cần gọi `openShare(subject)` rồi render component.
+import { cn } from '~/lib/utils'
 import { computed } from 'vue'
 import { useShareExport } from '~/composables/useShareExport'
-import type { ShareAudience } from '~/composables/useShareExport'
-import Button from '~/components/ui/button/Button.vue'
+import type { ShareAudience, ShareFormat, ShareLang } from '~/composables/useShareExport'
 
 const { t } = useI18n()
 const {
@@ -216,6 +267,18 @@ const {
 
 const AUDIENCES: ShareAudience[] = ['approval', 'runbook']
 
+// Scrim: `ovl on` chỉ còn là hook cho OVERLAYS — mọi thuộc tính hình khối của skin cũ
+// (vị trí, nền, căn, padding, z) bị utility dưới đây đè. z-200: trên Git modal / sub-modal.
+const SCRIM =
+  'ovl on fixed inset-0 z-200 flex items-center justify-center bg-black/55 p-0 [-webkit-app-region:no-drag]'
+// Segmented control (ToggleGroup) — cùng kiểu với NewTaskModal.
+const SEG = 'rounded-lg bg-muted p-0.5'
+const SEG_ITEM =
+  'h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
+const BTN = '[&_svg]:size-3.5'
+const NOTE = 'text-xs text-faint'
+const STATE = 'flex min-h-45 items-center justify-center text-sm text-dim'
+
 const isPlaybook = computed(() => share.subject?.kind === 'playbook')
 
 const audience = computed<ShareAudience | null>(() =>
@@ -236,253 +299,9 @@ const audienceHint = computed(() => {
 
 // Trạng thái mở nằm ở MỌC MODULE (không phải `ref` của component), nên listener
 // phải hỏi `share.open` chứ không thể chỉ dựa vào vòng đời của component này.
+// (Esc tự xử lý vì hộp này không dựng trên Dialog reka — xem comment template.)
 useEscToClose(
   () => share.open,
   () => closeShare(),
 )
 </script>
-
-<style scoped>
-.sx-ovl {
-  align-items: center;
-  padding-top: 0;
-  z-index: 200;
-}
-.sx-card {
-  width: 720px;
-  max-width: 94vw;
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.sx-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-.sx-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-.sx-ttl {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-  flex: 0 0 auto;
-}
-.sx-subj {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sx-x {
-  flex: 0 0 auto;
-  display: flex;
-  padding: 4px;
-  border: 0;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.sx-x:hover {
-  color: var(--text);
-}
-.sx-x-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-}
-.sx-opts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-}
-.sx-opt {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sx-lbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sx-hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.sx-hint-icn {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  margin-top: 4px;
-  flex: 0 0 auto;
-}
-.sx-masks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-.sx-mask {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sx-mask-tx {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.sx-lock {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.sx-lock-icn {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-.sx-note {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.sx-warn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-}
-.sx-warn-icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-}
-.sx-report {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-.sx-about {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.sx-report-acts {
-  display: flex;
-  gap: 8px;
-}
-.sx-prev {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-}
-.sx-prev-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.sx-prev-ttl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-  flex: 0 0 auto;
-}
-.sx-prev-name {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sx-prev-bytes {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  font-variant-numeric: tabular-nums;
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-.sx-src {
-  flex: 1 1 auto;
-  min-height: 180px;
-  max-height: 46vh;
-  overflow: auto;
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.sx-state {
-  min-height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sx-state-bad {
-  color: var(--danger);
-}
-/* Chip "đã che / chưa che": lớp chip toàn cục không mang nghĩa trạng thái, và hai
-   màu này phải nói được SỰ KHÁC NHAU giữa bản gửi đi và bản còn nguyên định danh. */
-.sx-chip-ok {
-  color: var(--green);
-  border-color: var(--green);
-}
-.sx-chip-bad {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-}
-.sx-issues {
-  padding-left: 18px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-}
-.sx-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sx-btn-icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.sx-gap {
-  flex: 1 1 auto;
-}
-</style>

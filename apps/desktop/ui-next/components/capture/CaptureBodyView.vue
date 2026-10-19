@@ -1,22 +1,22 @@
 <template>
-  <div class="cap-body-view">
-    <div v-if="evicted" class="cap-note warn">{{ t('capture.body.evicted') }}</div>
-    <div v-else-if="!body" class="cap-note">{{ emptyLabel ?? t('capture.body.none') }}</div>
+  <div class="flex flex-col gap-1">
+    <div v-if="evicted" :class="CAP_NOTE_WARN">{{ t('capture.body.evicted') }}</div>
+    <div v-else-if="!body" :class="CAP_NOTE">{{ emptyLabel ?? t('capture.body.none') }}</div>
     <template v-else>
-      <div class="cap-bar">
+      <div :class="CAP_BAR">
         <Button
-          v-for="m in modes"
-          :key="m"
+          v-for="opt in modes"
+          :key="opt"
           variant="ghost"
           size="xs"
-          :class="mode === m && 'cap-on'"
-          :aria-pressed="mode === m"
-          @click="mode = m"
+          :class="mode === opt && CAP_ON"
+          :aria-pressed="mode === opt"
+          @click="mode = opt"
         >
-          {{ t(`capture.body.mode.${m}`) }}
+          {{ t(`capture.body.mode.${opt}`) }}
         </Button>
-        <span class="cap-grow" />
-        <span class="cap-dim tnum">
+        <span class="flex-auto" />
+        <span class="tnum text-dim">
           {{ formatBytes(body.size) }}
           <template v-if="pretty && mode === 'pretty'">· {{ pretty.kind }}</template>
         </span>
@@ -31,15 +31,15 @@
           <Icon :name="iconFor('body')" />
         </Button>
       </div>
-      <div v-if="body.truncated" class="cap-note warn">{{ t('capture.body.truncated') }}</div>
+      <div v-if="body.truncated" :class="CAP_NOTE_WARN">{{ t('capture.body.truncated') }}</div>
 
       <img
         v-if="mode === 'pretty' && imageSrc"
         :src="imageSrc"
-        class="cap-img"
+        class="max-h-[60vh] max-w-full self-start rounded-sm bg-muted [image-rendering:pixelated]"
         :alt="t('capture.body.imageAlt')"
       />
-      <pre v-else class="cap-pre cap-code">{{ visibleText }}</pre>
+      <pre v-else :class="CAP_PRE">{{ visibleText }}</pre>
       <Button
         v-if="!showAll && shownText.length > DISPLAY_CAP"
         variant="outline"
@@ -61,6 +61,7 @@ import { computed, ref, watch } from 'vue'
 import type { CaptureBody } from '~/types/network-capture'
 import { prettyBody } from '~/utils/capture-export'
 import { formatBytes } from '~/utils/format-bytes'
+import { CAP_BAR, CAP_NOTE, CAP_NOTE_WARN, CAP_ON, CAP_PRE } from './capture-ui'
 
 const DISPLAY_CAP = 200_000
 const HEX_CAP = 64 * 1024

@@ -5,24 +5,30 @@
     :width="640"
     @close="emit('cancel')"
   >
-    <div class="rle">
+    <div class="flex flex-col gap-4">
       <!-- Save location (tier) — locked once a rule exists (moving tiers = a new file). -->
-      <div class="rle-field">
-        <label class="rle-label">{{ t('rules.editor.saveLocation') }}</label>
-        <div class="rle-tiers">
-          <button
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('rules.editor.saveLocation') }}
+        </Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="self-start rounded-lg bg-muted p-0.5"
+          :model-value="draft.source"
+          :disabled="isExisting"
+          @update:model-value="(v) => v && (draft.source = v as RuleSource)"
+        >
+          <ToggleGroupItem
             v-for="opt in sourceOptions"
             :key="opt.value"
-            type="button"
-            class="chip rle-tier"
-            :class="{ on: draft.source === opt.value }"
-            :disabled="isExisting"
-            @click="draft.source = opt.value"
+            :value="opt.value"
+            :class="SEG_ITEM"
           >
             {{ opt.label }}
-          </button>
-        </div>
-        <div v-if="draft.source === 'project'" class="rle-project">
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <div v-if="draft.source === 'project'">
           <AppSelect
             v-model="draft.projectId"
             :options="projectOptions"
@@ -30,26 +36,26 @@
             width="100%"
           />
         </div>
-        <div class="rle-hint">{{ sourceHint }}</div>
+        <div class="text-xs text-dim">{{ sourceHint }}</div>
       </div>
 
-      <div class="rle-grid">
-        <div class="rle-field">
-          <label class="rle-label">{{ t('rules.editor.slug') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('rules.editor.slug') }}</Label>
           <Input
             :model-value="draft.id"
             :disabled="isImported"
             placeholder="e.g. security"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
             @update:model-value="onSlugInput"
           />
-          <div class="rle-hint">
+          <div class="text-xs text-dim">
             {{ t('rules.editor.slugHint', { slug: draft.id || 'slug' }) }}
           </div>
         </div>
-        <div class="rle-field">
-          <label class="rle-label">{{ t('rules.editor.name') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('rules.editor.name') }}</Label>
           <Input
             v-model="draft.name"
             :disabled="isImported"
@@ -58,40 +64,39 @@
         </div>
       </div>
 
-      <div v-if="!isImported" class="rle-field">
-        <label class="rle-label">{{ t('rules.editor.description') }}</label>
-        <textarea
+      <div v-if="!isImported" class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('rules.editor.description') }}
+        </Label>
+        <Textarea
           v-model="draft.description"
-          class="rle-input rle-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('rules.editor.descPh')"
         />
       </div>
 
-      <div v-if="!isImported" class="rle-field">
-        <label class="rle-label">{{ t('rules.editor.globs') }}</label>
-        <Input v-model="globsText" :placeholder="t('rules.editor.globsPh')" class="mono" />
-        <div class="rle-hint">{{ t('rules.editor.globsHint') }}</div>
+      <div v-if="!isImported" class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('rules.editor.globs') }}</Label>
+        <Input v-model="globsText" :placeholder="t('rules.editor.globsPh')" class="font-mono" />
+        <div class="text-xs text-dim">{{ t('rules.editor.globsHint') }}</div>
       </div>
 
-      <div class="rle-field">
-        <label class="rle-label">{{ t('rules.editor.body') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('rules.editor.body') }}</Label>
+        <!-- mono-ok: nội dung dạng file/code người dùng sửa như code -->
+        <Textarea
           v-model="draft.body"
-          class="rle-input rle-ta mono"
+          class="min-h-12 resize-y font-mono"
           rows="12"
           :placeholder="t('rules.editor.bodyPh')"
         />
       </div>
 
-      <div v-if="!isImported" class="rle-field rle-togrow">
-        <span class="rle-label">{{ t('rules.editor.enabled') }}</span>
-        <span style="flex: 1" />
-        <span
-          class="tog2"
-          :class="{ off: !draft.enabled }"
-          @click="draft.enabled = !draft.enabled"
-        />
+      <div v-if="!isImported" class="flex items-center gap-1.5">
+        <span class="text-sm font-medium text-foreground">{{ t('rules.editor.enabled') }}</span>
+        <span class="flex-1" />
+        <Switch :checked="draft.enabled" @update:checked="(v: boolean) => (draft.enabled = v)" />
       </div>
     </div>
 
@@ -105,8 +110,8 @@
 </template>
 
 <script setup lang="ts">
-// Rule form editor — port of the old UI RuleEditor logic, rendered in prototype
-// CSS inside LibraryEntityModal. Save-location tier is locked once the rule
+// Rule form editor — port of the old UI RuleEditor logic, rendered
+// inside LibraryEntityModal. Save-location tier is locked once the rule
 // exists; slug is sanitized to kebab-case and auto-derived from the name while
 // creating. Globs edit as a comma-separated string, stored as string[]. Imported
 // (read-only) rules expose only the body. Emits a save payload carrying the
@@ -130,6 +135,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Segmented control chọn tier (cùng kiểu LibraryMarkdownBody).
+const SEG_ITEM =
+  'h-6 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 const sourceOptions: { value: RuleSource; label: string }[] = [
   { value: 'global', label: '~/.awog/rules' },
@@ -273,82 +282,3 @@ const onSave = () => {
   emit('save', payload)
 }
 </script>
-
-<style scoped>
-.rle {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.rle-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.rle-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.rle-togrow {
-  flex-direction: row;
-  align-items: center;
-}
-.rle-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.rle-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.rle-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — glob / path */
-  font-family: var(--code);
-}
-.rle-input:focus {
-  border-color: var(--accent);
-}
-.rle-input:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.rle-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.rle-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.rle-tiers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.rle-tier {
-  cursor: pointer;
-  background: var(--bgInput);
-}
-.rle-tier.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.rle-tier:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-</style>

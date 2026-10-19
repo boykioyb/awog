@@ -1,15 +1,24 @@
 <template>
-  <div class="asl">
-    <p class="asl-sub">{{ t('infra.import.sso.subtitle') }}</p>
+  <!-- mono-ok (các ô font-mono dưới đây): tên session / start URL / region — copy được
+       thẳng vào ~/.aws/config hoặc dán vào trình duyệt. -->
+  <div class="flex flex-col gap-3.5">
+    <p class="m-0 text-sm text-dim">{{ t('infra.import.sso.subtitle') }}</p>
 
-    <div v-if="needsLoginNotice" class="asl-notice">{{ needsLoginNotice }}</div>
+    <div
+      v-if="needsLoginNotice"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+    >
+      {{ needsLoginNotice }}
+    </div>
 
     <!-- A7: nguồn SSO máy đã biết ([sso-session] / profile SSO cũ / cache của
          những lần `aws sso login` trước) — chỉ đọc file cục bộ MỘT LẦN lúc mở
          bước này, KHÔNG gọi mạng (khác hẳn nút "Đăng nhập" ở footer, luôn cần
          người dùng tự bấm — luật cứng #1 của bàn giao). Hỏng thì degrade êm
          về giao diện 3 ô gõ tay cũ, không chặn wizard. -->
-    <p v-if="sourcesLoading" class="asl-src-note">{{ t('infra.import.sso.src.loading') }}</p>
+    <p v-if="sourcesLoading" class="m-0 text-sm leading-relaxed text-dim">
+      {{ t('infra.import.sso.src.loading') }}
+    </p>
     <AwsSsoImportLoginStepSourcePicker
       v-else-if="sources.length > 0"
       :sources="sources"
@@ -18,49 +27,55 @@
       :logging-in="loggingIn"
       @select="onPickSource"
     />
-    <p v-else class="asl-src-note">
+    <p v-else class="m-0 text-sm leading-relaxed text-dim">
       {{ sourcesError ? t('infra.import.sso.src.loadFailed') : t('infra.import.sso.src.noneHint') }}
     </p>
 
-    <div class="asl-field">
-      <label class="asl-label">{{ t('infra.import.sso.login.sessionName') }}</label>
+    <div class="flex flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.sso.login.sessionName') }}
+      </Label>
       <Input
         v-model="sessionName"
-        :class="{ 'asl-invalid': showRequired && !sessionName.trim() }"
+        :class="{ 'border-destructive': showRequired && !sessionName.trim() }"
         :placeholder="t('infra.import.sso.login.sessionNamePh')"
         spellcheck="false"
         :disabled="loggingIn"
-        class="mono"
+        class="font-mono"
       />
-      <div v-if="showRequired && !sessionName.trim()" class="asl-req">
+      <div v-if="showRequired && !sessionName.trim()" class="text-xs text-destructive">
         {{ t('infra.import.sso.login.required') }}
       </div>
     </div>
-    <div class="asl-field">
-      <label class="asl-label">{{ t('infra.import.sso.login.startUrl') }}</label>
+    <div class="flex flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.sso.login.startUrl') }}
+      </Label>
       <Input
         v-model="startUrl"
-        :class="{ 'asl-invalid': showRequired && !startUrl.trim() }"
+        :class="{ 'border-destructive': showRequired && !startUrl.trim() }"
         :placeholder="t('infra.import.sso.login.startUrlPh')"
         spellcheck="false"
         :disabled="loggingIn"
-        class="mono"
+        class="font-mono"
       />
-      <div v-if="showRequired && !startUrl.trim()" class="asl-req">
+      <div v-if="showRequired && !startUrl.trim()" class="text-xs text-destructive">
         {{ t('infra.import.sso.login.required') }}
       </div>
     </div>
-    <div class="asl-field">
-      <label class="asl-label">{{ t('infra.import.sso.login.region') }}</label>
+    <div class="flex flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.sso.login.region') }}
+      </Label>
       <Input
         v-model="ssoRegion"
-        :class="{ 'asl-invalid': showRequired && !ssoRegion.trim() }"
+        :class="{ 'border-destructive': showRequired && !ssoRegion.trim() }"
         :placeholder="t('infra.import.sso.login.regionPh')"
         spellcheck="false"
         :disabled="loggingIn"
-        class="mono"
+        class="font-mono"
       />
-      <div v-if="showRequired && !ssoRegion.trim()" class="asl-req">
+      <div v-if="showRequired && !ssoRegion.trim()" class="text-xs text-destructive">
         {{ t('infra.import.sso.login.required') }}
       </div>
     </div>
@@ -68,13 +83,19 @@
     <!-- Hint MỀM — không hứa chắc là bỏ qua được bước đăng nhập: token cache
          có thể đã bị tổ chức thu hồi phía server dù đồng hồ nội bộ còn tính
          là "sống" (xem contract useAwsProfilesApi.ts, field hasLiveToken). -->
-    <div v-if="liveTokenHint" class="asl-livehint">
-      <Icon name="check" class="asl-livehint-icn" />
+    <div
+      v-if="liveTokenHint"
+      class="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary"
+    >
+      <Icon name="check" class="size-3.5 flex-none" />
       {{ t('infra.import.sso.src.liveTokenHint') }}
     </div>
 
-    <div v-if="loggingIn" class="asl-waiting">
-      <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <div
+      v-if="loggingIn"
+      class="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm text-primary"
+    >
+      <Icon name="globe" class="size-3.5" />
       {{ t('infra.import.sso.login.waiting') }}
     </div>
   </div>
@@ -242,103 +263,3 @@ const liveTokenHint = computed(
   () => selectedKey.value !== null && selectedKey.value !== OTHER_KEY && hasLiveToken.value,
 )
 </script>
-
-<style scoped>
-.asl {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.asl-sub {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.asl-notice {
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.asl-src-note {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.asl-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.asl-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.asl-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.asl-input:focus {
-  border-color: var(--accent);
-}
-.asl-input.asl-invalid {
-  border-color: var(--danger);
-}
-.asl-req {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--danger);
-}
-.asl-input.mono {
-  /* mono-ok: tên session / start URL / region — copy được thẳng vào
-     ~/.aws/config hoặc dán vào trình duyệt */
-  font-family: var(--code);
-}
-.asl-input:disabled {
-  opacity: 0.6;
-}
-.asl-livehint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.asl-livehint-icn {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.asl-waiting {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

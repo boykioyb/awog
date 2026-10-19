@@ -34,11 +34,13 @@ import { createKillShellTool } from './kill-shell-tool.js'
 import { createMonitorTool } from './monitor-tool.js'
 import { createDevServerTool } from './dev-server-tool.js'
 import { createReadTerminalTool } from './read-terminal-tool.js'
+import { createTerminalSnippetTools } from './terminal-snippet-tools.js'
 import { createSessionMessagingTools } from './session-tools.js'
 import { createBoardTools } from './board-tools.js'
 import { createMemberTools } from './member-tools.js'
 import { createChannelTools } from './channel-tools.js'
 import { createWakeupTool } from './wakeup-tool.js'
+import { createScheduleProposeTool } from './schedule-propose-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
@@ -266,6 +268,12 @@ export function createAwogToolDefinitions(
     // rather than `backgroundExec` so it survives plan mode: it is read-only, and
     // planning is when the user's own terminal output is most worth reading.
     ...(filter.chatSession ? [createReadTerminalTool(cwd)] : []),
+    // Snippet của terminal (list/save/delete/run) — cùng họ read_terminal, cùng điều
+    // kiện chat session: run gõ vào shell NGƯỜI DÙNG đang xem, task/subagent không có
+    // ai xem. Ghi/chạy đi qua permission gate (TERMINAL_SNIPPET_MUTATING_TOOL_NAMES).
+    ...(filter.chatSession
+      ? createTerminalSnippetTools({ cwd, sessionId: filter.chatSession.sessionId })
+      : []),
     // Nhắn giữa các phiên (list_sessions / send_session_message). Chat session
     // only: một task/subagent không có người ngồi đọc hộp thư để bấm giao.
     ...(filter.chatSession
@@ -286,6 +294,10 @@ export function createAwogToolDefinitions(
     // một lời nhắc vào hộp thư cho NGƯỜI DÙNG bấm giao, mà task/subagent không có
     // người đó. Không chạy lượt nào, không tiêu tiền trong lúc chờ.
     ...(filter.chatSession ? [createWakeupTool({ sessionId: filter.chatSession.sessionId })] : []),
+    // propose_schedule (ADR 0108): agent soạn một lịch chạy theo lời người dùng — lịch TẮT,
+    // người dùng duyệt trong trang Lịch chạy. Cùng cổng `chatSession`: task/subagent không
+    // có người đọc đề xuất.
+    ...(filter.chatSession ? [createScheduleProposeTool({ sessionId: filter.chatSession.sessionId })] : []),
     // team_say / team_note / channel_read (Session Teams §7): kênh CHUNG của nhóm
     // — broadcast cả ê-kíp, khác hộp thư 1-1 của hai tool phía trên. Cùng cổng
     // `chatSession`; `runId` vắng/undefined thì factory tự resolve ĐỒNG BỘ

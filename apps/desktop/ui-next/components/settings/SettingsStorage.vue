@@ -2,50 +2,56 @@
   <div>
     <SettingsPaneHeader :title="t('settings.storage.heading')" />
 
-    <div v-if="loading && !scan" class="stoload">{{ t('settings.storage.scanning') }}</div>
+    <div v-if="loading && !scan" class="py-6 text-sm text-dim">
+      {{ t('settings.storage.scanning') }}
+    </div>
 
     <template v-else-if="scan">
       <!-- Total + what makes it up. The bar is the answer to "how heavy is it";
            the legend is the answer to "what is it made of", which is what decides
            whether there is anything worth deleting. -->
-      <div class="stototal">
-        <span class="stobig">{{ fmt(scan.totalBytes) }}</span>
-        <span class="stosub">
+      <div class="flex items-baseline gap-2.5 pt-1 pb-3">
+        <span class="text-2xl font-semibold text-foreground tabular-nums">
+          {{ fmt(scan.totalBytes) }}
+        </span>
+        <span class="text-sm text-dim">
           {{ t('settings.storage.summary', { s: scan.sessions.length, p: scan.projects.length }) }}
         </span>
-        <span style="flex: 1" />
+        <span class="flex-1" />
         <Button :disabled="loading" variant="outline" size="sm" @click="refresh">
-          <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="refresh" class="size-3" />
           {{ t('settings.storage.refresh') }}
         </Button>
       </div>
 
-      <div class="stobar">
+      <!-- Thanh xếp chồng: bề rộng mỗi đoạn là tỉ lệ dữ liệu (inline width). -->
+      <div class="flex h-2.5 overflow-hidden rounded-full bg-muted">
         <span
           v-for="p in parts"
           :key="p.key"
-          class="stoseg"
-          :style="{ width: pct(p.bytes), background: p.color }"
+          class="h-full"
+          :class="p.colorClass"
+          :style="{ width: pct(p.bytes) }"
           :title="`${p.label} — ${fmt(p.bytes)}`"
         />
       </div>
-      <div class="stolegend">
-        <span v-for="p in parts" :key="p.key" class="stolg">
-          <span class="stodot" :style="{ background: p.color }" />
+      <div class="flex flex-wrap gap-x-4 gap-y-1.5 pt-2.5 pb-1 text-xs text-dim">
+        <span v-for="p in parts" :key="p.key" class="inline-flex items-center gap-1.5">
+          <span class="size-2 rounded-full" :class="p.colorClass" />
           {{ p.label }}
-          <b class="tnum">{{ fmt(p.bytes) }}</b>
+          <b class="font-semibold text-foreground tabular-nums">{{ fmt(p.bytes) }}</b>
         </span>
       </div>
 
       <!-- Cleanup. Both actions state the exact reclaim before asking. -->
-      <div class="sech">{{ t('settings.storage.cleanup.heading') }}</div>
+      <SettingsGroupLabel>{{ t('settings.storage.cleanup.heading') }}</SettingsGroupLabel>
 
       <SettingsField
         :name="t('settings.storage.cleanup.snapshots.name')"
         :desc="t('settings.storage.cleanup.snapshots.desc')"
       >
-        <div class="storow">
-          <AppSelect v-model="olderThanDays" :options="dayOptions" style="width: 132px" />
+        <div class="flex items-center gap-2">
+          <AppSelect v-model="olderThanDays" :options="dayOptions" width="132px" />
           <Button
             :disabled="busy || !scan.snapshotBytes"
             variant="danger"
@@ -61,11 +67,11 @@
         :name="t('settings.storage.cleanup.orphans.name')"
         :desc="t('settings.storage.cleanup.orphans.desc')"
       >
-        <div class="storow">
-          <span class="chip">
+        <div class="flex items-center gap-2">
+          <Badge variant="outline" class="text-muted-foreground">
             {{ t('settings.storage.cleanup.orphans.count', { n: scan.orphanCount }) }}
             · {{ fmt(scan.orphanBytes) }}
-          </span>
+          </Badge>
           <Button
             :disabled="busy || !scan.orphanCount"
             variant="danger"
@@ -78,45 +84,59 @@
       </SettingsField>
 
       <!-- Per project: the breakdown the question was actually about. -->
-      <div class="sech">{{ t('settings.storage.byProject') }}</div>
-      <div class="stolist">
-        <div v-for="p in scan.projects" :key="p.projectId ?? '-'" class="storowi">
-          <span class="stonm">{{ projectName(p.projectId) }}</span>
-          <span class="stominibar">
-            <span
-              class="stominiseg"
-              :style="{ width: rel(p.totalBytes), background: 'var(--accent)' }"
-            />
+      <SettingsGroupLabel>{{ t('settings.storage.byProject') }}</SettingsGroupLabel>
+      <div class="flex flex-col">
+        <div
+          v-for="p in scan.projects"
+          :key="p.projectId ?? '-'"
+          class="flex h-ctrl-sm items-center gap-2.5 rounded-sm px-1 hover:bg-accent"
+        >
+          <span class="min-w-0 flex-1 truncate text-sm text-foreground">
+            {{ projectName(p.projectId) }}
           </span>
-          <span class="stoct tnum">
+          <span class="h-1.5 w-30 shrink-0 overflow-hidden rounded-full bg-muted">
+            <span class="block h-full bg-primary" :style="{ width: rel(p.totalBytes) }" />
+          </span>
+          <span class="shrink-0 text-xs text-faint tabular-nums">
             {{ t('settings.storage.nSessions', { n: p.sessionCount }) }}
           </span>
-          <span class="stosz tnum">{{ fmt(p.totalBytes) }}</span>
+          <span class="w-18 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+            {{ fmt(p.totalBytes) }}
+          </span>
         </div>
       </div>
 
       <!-- The handful of sessions that dominate. Deleting one of these is often
            the whole fix, and it is not discoverable from the session list. -->
-      <div class="sech">{{ t('settings.storage.biggest') }}</div>
-      <div class="stolist">
-        <div v-for="s in biggest" :key="s.id" class="storowi">
-          <span class="stonm" :title="s.title">{{ s.title }}</span>
-          <span class="stoct">{{ projectName(s.projectId) }}</span>
-          <span class="stosz tnum">{{ fmt(s.totalBytes) }}</span>
+      <SettingsGroupLabel>{{ t('settings.storage.biggest') }}</SettingsGroupLabel>
+      <div class="flex flex-col">
+        <div
+          v-for="s in biggest"
+          :key="s.id"
+          class="flex h-ctrl-sm items-center gap-2.5 rounded-sm px-1 hover:bg-accent"
+        >
+          <span class="min-w-0 flex-1 truncate text-sm text-foreground" :title="s.title">
+            {{ s.title }}
+          </span>
+          <span class="shrink-0 text-xs text-faint">{{ projectName(s.projectId) }}</span>
+          <span class="w-18 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+            {{ fmt(s.totalBytes) }}
+          </span>
           <Button
             :disabled="busy"
             :title="t('settings.storage.deleteSession')"
+            :aria-label="t('settings.storage.deleteSession')"
             variant="danger"
             size="sm"
             @click="onDeleteSession(s)"
           >
-            <Icon name="trash" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="trash" class="size-3" />
           </Button>
         </div>
       </div>
     </template>
 
-    <div v-else class="stoload">{{ t('settings.storage.unavailable') }}</div>
+    <div v-else class="py-6 text-sm text-dim">{{ t('settings.storage.unavailable') }}</div>
   </div>
 </template>
 
@@ -130,7 +150,6 @@
 // snapshots were 70% of it and stray *.bak debris another 26%, while the
 // conversations themselves were 6%.
 import type { StorageScan, StorageSessionUsage } from '~/composables/useStorageApi'
-import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
@@ -157,25 +176,25 @@ const parts = computed(() => {
       key: 'snap',
       label: t('settings.storage.kind.snapshots'),
       bytes: s.snapshotBytes,
-      color: 'var(--accent)',
+      colorClass: 'bg-primary',
     },
     {
       key: 'orph',
       label: t('settings.storage.kind.orphans'),
       bytes: s.orphanBytes,
-      color: 'var(--danger)',
+      colorClass: 'bg-destructive',
     },
     {
       key: 'tx',
       label: t('settings.storage.kind.transcripts'),
       bytes: s.transcriptBytes,
-      color: 'var(--blue)',
+      colorClass: 'bg-info',
     },
     {
       key: 'att',
       label: t('settings.storage.kind.attachments'),
       bytes: s.attachmentBytes,
-      color: 'var(--amber)',
+      colorClass: 'bg-warning',
     },
   ].filter((p) => p.bytes > 0)
 })
@@ -314,117 +333,3 @@ onMounted(() => {
   refresh()
 })
 </script>
-
-<style scoped>
-.stoload {
-  padding: 24px 0;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.stototal {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 4px 0 12px;
-}
-.stobig {
-  font-size: var(--fs-2xl);
-  line-height: var(--lh-2xl);
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-.stosub {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.stobar {
-  display: flex;
-  height: 10px;
-  border-radius: var(--r-pill);
-  overflow: hidden;
-  background: var(--bgSubtle);
-}
-.stoseg {
-  height: 100%;
-}
-.stolegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  padding: 10px 0 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.stolg {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.stolg b {
-  color: var(--text);
-  font-weight: 600;
-}
-.stodot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.storow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.stolist {
-  display: flex;
-  flex-direction: column;
-}
-.storowi {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 32px;
-  padding: 0 4px;
-  border-radius: var(--r-xs);
-}
-.storowi:hover {
-  background: var(--bgHover);
-}
-.stonm {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--text);
-}
-.stominibar {
-  flex: 0 0 120px;
-  height: 6px;
-  border-radius: var(--r-pill);
-  background: var(--bgSubtle);
-  overflow: hidden;
-}
-.stominiseg {
-  display: block;
-  height: 100%;
-}
-.stoct {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.stosz {
-  flex: 0 0 72px;
-  text-align: right;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-</style>

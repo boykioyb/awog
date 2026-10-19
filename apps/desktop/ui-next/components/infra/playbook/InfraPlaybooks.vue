@@ -5,12 +5,14 @@
        và nó đọc cùng một ngữ cảnh AWS với mọi tab khác, thứ mà một trang riêng phải tự
        đi lấy.
 
-       MỘT ROOT DUY NHẤT (`.pb-shell`). Khung `.infra-pane` của `/infra` tạo kiểu cho
+       MỘT ROOT DUY NHẤT. Khung `.infra-pane` của `/infra` tạo kiểu cho
        `> *`, nên một component nhiều root sẽ không nhận được kích thước. Hộp menu và hộp
        soạn vì thế nằm TRONG shell thay vì là anh em của nó; cả hai đều `position: fixed`
        / Teleport nên chỗ đứng trong cây DOM không đổi chỗ chúng hiện ra. -->
-  <div class="pb-shell">
-    <div class="itoolbar pb-top">
+  <div class="flex h-full w-full min-w-0 flex-col">
+    <!-- Hàng công cụ: soạn mới · đếm · nạp lại. Thanh là một Card; `margin` giữ
+         khoảng cách ngoài mà `padding` cũ cho. -->
+    <Card class="mx-4 mt-2.5 mb-2 shrink-0 flex-row flex-wrap items-center gap-2.5 px-2.5 py-2">
       <!-- Soạn kế hoạch mới. Menu chứ không phải một hành động: "trống" và "nhân
            bản bản đang mở" là hai điểm xuất phát rất khác nhau, và nhân bản là đường
            DUY NHẤT để có bản của riêng mình từ một bản dựng sẵn (bản dựng sẵn nằm
@@ -27,20 +29,22 @@
         size="sm"
         @click.stop="openNewMenu"
       >
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="plus" />
         {{ t('playbooks.toolbar.new') }}
-        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <Icon name="chev" class="size-3" />
       </Button>
 
       <!-- Một con số, không chia theo trạng thái: playbook KHÔNG có status — status
            thuộc LƯỢT CHẠY (`PlaybookRun`), mà một playbook có thể có nhiều lượt với
            nhiều trạng thái khác nhau. Đếm theo status ở đây là gán nhãn cho nhầm
            đối tượng; trạng thái đọc ở màn chi tiết, nơi có lượt chạy thật. -->
-      <span class="pb-counts">
-        <span class="chip">{{ t('playbooks.count.total', { n: total }) }}</span>
+      <span class="flex min-w-0 flex-wrap items-center gap-1">
+        <Badge variant="outline" class="rounded-sm font-medium text-muted-foreground">
+          {{ t('playbooks.count.total', { n: total }) }}
+        </Badge>
       </span>
 
-      <div class="itoolgrp iend">
+      <div class="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
         <Button
           type="button"
           :disabled="loading"
@@ -49,18 +53,15 @@
           size="sm"
           @click="load"
         >
-          <Icon
-            name="refresh"
-            :class="{ ikspin: loading }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon name="refresh" :class="{ 'animate-spin': loading }" />
           {{ t('playbooks.toolbar.refresh') }}
         </Button>
       </div>
-    </div>
+    </Card>
 
-    <div class="pb-body">
-      <aside class="pb-side">
+    <div class="flex min-h-0 flex-1">
+      <!-- Cột danh sách hẹp, cố định; pane chi tiết lấp phần còn lại và tự cuộn. -->
+      <aside class="min-w-0 flex-[0_0_16.5rem] border-r">
         <PlaybookList
           :groups="groups"
           :selected-key="selectedKey"
@@ -71,7 +72,7 @@
         />
       </aside>
 
-      <div class="pb-pane">
+      <div class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1">
         <PlaybookDetail
           :playbook="current?.playbook ?? null"
           :view="detailView"
@@ -161,7 +162,8 @@ const { openBlank, openDuplicate, openEdit } = usePlaybookEditor()
  * trúng mép nào.
  */
 const newMenuPos = ref<MenuPos | null>(null)
-const newBtn = useTemplateRef<HTMLElement>('newBtn')
+// `Button` là component (reka `Primitive`) — template ref trả INSTANCE, phần tử nằm ở `$el`.
+const newBtn = useTemplateRef<{ $el: HTMLElement }>('newBtn')
 
 const newMenuItems = computed<MenuItem[]>(() => [
   { id: 'blank', label: t('playbooks.toolbar.newBlank'), icon: 'plus' },
@@ -176,7 +178,7 @@ const newMenuItems = computed<MenuItem[]>(() => [
 ])
 
 function openNewMenu(): void {
-  const el = newBtn.value
+  const el = newBtn.value?.$el
   if (!el) return
   const r = el.getBoundingClientRect()
   newMenuPos.value = { x: r.left, y: r.bottom + 4 }
@@ -255,59 +257,3 @@ function shareRun(): void {
   void openShare({ kind: 'run', id: r.id }, { label: current.value?.playbook.name ?? r.id })
 }
 </script>
-
-<style scoped>
-.pb-shell {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-}
-
-/* Hàng công cụ: soạn mới · đếm · mức chi tiết · nạp lại. Bố cục + da ở `.itoolbar`
-   (app-shell.css); `margin` giữ khoảng cách ngoài mà `padding` cũ cho. */
-.pb-top {
-  margin: 10px 16px 8px;
-}
-
-.pb-counts {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.pb-top-lbl {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pb-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-/* Cột danh sách hẹp, cố định; pane chi tiết lấp phần còn lại và tự cuộn. */
-.pb-side {
-  flex: 0 0 264px;
-  min-width: 0;
-  border-right: 1px solid var(--border);
-}
-
-.pb-pane {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.pb-pane > * {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-</style>

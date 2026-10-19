@@ -5,28 +5,38 @@
     :width="600"
     @close="emit('close')"
   >
-    <div class="ssp">
-      <div class="ssp-sub">{{ t('ssh.import.subtitle') }}</div>
+    <div class="flex flex-col gap-3">
+      <div class="text-sm text-muted-foreground">{{ t('ssh.import.subtitle') }}</div>
 
-      <div v-if="loading" class="ssp-state">{{ t('ssh.import.loading') }}</div>
-      <div v-else-if="!candidates.length" class="ssp-state">{{ t('ssh.import.empty') }}</div>
+      <div v-if="loading" class="py-4.5 text-center text-sm text-muted-foreground">
+        {{ t('ssh.import.loading') }}
+      </div>
+      <div v-else-if="!candidates.length" class="py-4.5 text-center text-sm text-muted-foreground">
+        {{ t('ssh.import.empty') }}
+      </div>
 
       <template v-else>
-        <button type="button" class="ssp-selectall" @click="toggleAll">
+        <Button variant="link" size="xs" class="h-auto self-start px-0 text-sm" @click="toggleAll">
           {{ allSelected ? t('ssh.import.deselectAll') : t('ssh.import.selectAll') }}
-        </button>
-        <div class="ssp-list">
-          <label v-for="c in candidates" :key="c.alias" class="ssp-item">
-            <input
-              type="checkbox"
-              class="ssp-check"
-              :checked="selected.has(c.alias)"
-              @change="toggle(c.alias)"
+        </Button>
+        <!-- List phẳng một khung viền, hàng chia bằng hairline (không chồng card đặc). -->
+        <div class="flex max-h-[48vh] flex-col divide-y overflow-y-auto rounded-lg border">
+          <label
+            v-for="c in candidates"
+            :key="c.alias"
+            class="flex cursor-pointer items-start gap-3 px-3 py-3 transition-colors hover:bg-accent"
+          >
+            <Checkbox
+              class="mt-0.5"
+              :model-value="selected.has(c.alias)"
+              @update:model-value="toggle(c.alias)"
             />
-            <span class="ssp-item-tx">
-              <span class="ssp-item-nm">{{ c.alias }}</span>
-              <span class="ssp-item-sub mono">{{ endpoint(c) }}</span>
-              <span v-if="c.proxyJump" class="ssp-item-sub mono">
+            <span class="flex min-w-0 flex-col gap-1">
+              <span class="text-sm font-semibold break-all text-foreground">{{ c.alias }}</span>
+              <span class="font-mono text-xs break-all text-muted-foreground">
+                {{ endpoint(c) }}
+              </span>
+              <span v-if="c.proxyJump" class="font-mono text-xs break-all text-muted-foreground">
                 {{ t('ssh.import.viaJump', { jump: c.proxyJump }) }}
               </span>
             </span>
@@ -36,8 +46,10 @@
     </div>
 
     <template #footer>
-      <span class="ssp-count">{{ t('ssh.import.selectedCount', { n: selected.size }) }}</span>
-      <span style="flex: 1" />
+      <span class="text-sm text-muted-foreground">
+        {{ t('ssh.import.selectedCount', { n: selected.size }) }}
+      </span>
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!selected.size" variant="default" @click="confirm">
         {{ t('ssh.import.apply') }}
@@ -103,86 +115,3 @@ const confirm = () => {
   if (selected.value.size) emit('confirm', [...selected.value])
 }
 </script>
-
-<style scoped>
-.ssp {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.ssp-sub {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-.ssp-state {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  text-align: center;
-  padding: 18px 0;
-}
-.ssp-selectall {
-  align-self: flex-start;
-  background: transparent;
-  border: 0;
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  padding: 2px 0;
-}
-/* Flat hairline list — one bordered surface, rows split by a 1px divider (not a
-   stack of filled cards), matching the reference's dense list idiom. */
-.ssp-list {
-  display: flex;
-  flex-direction: column;
-  max-height: 48vh;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.ssp-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 11px 12px;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.ssp-item + .ssp-item {
-  border-top: 1px solid var(--border);
-}
-.ssp-item:hover {
-  background: var(--bgHover);
-}
-.ssp-check {
-  margin-top: 3px;
-  flex: 0 0 auto;
-  accent-color: var(--accent);
-}
-.ssp-item-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.ssp-item-nm {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-  word-break: break-all;
-}
-.ssp-item-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.ssp-count {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-</style>

@@ -1,13 +1,16 @@
 <template>
-  <div class="msgswrap">
+  <div class="relative flex min-h-0 flex-1 flex-col">
     <!-- Fold control: one click collapses every open step/cluster in the
          transcript, the next click expands them all back. Hidden until the
-         session actually has messages to fold. -->
-    <Transition name="fadepop">
-      <button
+         session actually has messages to fold. Chip nổi mờ trên nội dung, góc
+         trên-phải; "on" = mọi step đang mở → wash sáng lên. -->
+    <Transition v-bind="FADEPOP">
+      <Button
         v-if="messages.length"
-        class="foldbtn"
-        :class="{ on: allExpanded }"
+        variant="outline"
+        size="iconSm"
+        class="absolute top-2.5 right-4 z-4 bg-popover text-muted-foreground shadow-sm hover:text-foreground hover:opacity-100 motion-reduce:transition-none"
+        :class="allExpanded ? 'bg-accent text-accent-foreground opacity-100' : 'opacity-70'"
         :title="
           allExpanded
             ? t('sessions.transcript.fold.collapse')
@@ -16,37 +19,49 @@
         :aria-pressed="allExpanded"
         @click="toggleFold"
       >
-        <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="foldv" class="size-3.5" />
+      </Button>
     </Transition>
     <!-- Chapter menu (#24): only once the model marked at least two phases — a
          table of contents with one entry is noise, not navigation. -->
-    <Transition name="fadepop">
+    <Transition v-bind="FADEPOP">
       <SessionChapterNav v-if="chapters.length > 1" :chapters="chapters" />
     </Transition>
-    <div ref="msgsEl" class="msgs" @scroll="onScroll">
+    <!-- Scrollport của transcript, lề ngang `--padX` chung với composer/ngăn kéo câu hỏi. -->
+    <div
+      ref="msgsEl"
+      class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-(--padX) py-5"
+      @scroll="onScroll"
+    >
       <SessionTranscriptSkeleton v-if="loading && !messages.length" />
       <SessionWelcome v-else-if="!messages.length" />
       <template v-else>
-        <!-- Centered message column (ProtoTranscript: mx-auto max-w-[860px] px-5
-             py-4 gap-5). `.msgs` stays the scrollport with the shared --padX
-             gutter; the column caps at 860px. All windowing logic is unchanged —
-             same sentinel, same TransitionGroup, same keys. -->
-        <div class="msgcol">
+        <!-- Centered message column (ProtoTranscript: căn giữa, trần 860px, px-5
+             py-4 gap-5). The scrollport above keeps the shared --padX gutter; the
+             column caps at 860px. Scroll/windowing reads the scrollport — this
+             wrapper is its only flex item so scrollHeight/scrollTop are unchanged.
+             All windowing logic is unchanged — same sentinel, same TransitionGroup,
+             same keys. -->
+        <div class="mx-auto flex w-full max-w-215 flex-col gap-5">
           <!-- Only the most recent turns mount on open — a long session's history is
                heavy to render (markdown + highlight + mermaid per message), so mounting
                all of it made switching sessions janky. Older turns reveal on demand as
                the user scrolls up (auto sentinel), or all at once via jump-to-top. -->
           <LoadMoreSentinel
             v-if="hiddenCount > 0"
-            class="loadolder"
+            class="mt-2 self-center"
             :remaining="hiddenCount"
             auto
             @load="loadOlder"
           />
           <!-- No `appear`: opening a session shows its history instantly; only turns
-               that arrive afterwards (user send / assistant reply) fade + rise in. -->
-          <TransitionGroup tag="div" name="mi" class="milist">
+               that arrive afterwards (user send / assistant reply) fade + rise in
+               (mờ → rõ + trồi 8px, 0.26s). Hai message cách nhau 20px. -->
+          <TransitionGroup
+            tag="div"
+            enter-active-class="animate-in fade-in-0 slide-in-from-bottom-2 duration-260 motion-reduce:animate-none"
+            class="flex w-full flex-col gap-5"
+          >
             <SessionMessageItem
               v-for="row in visible"
               :key="row.i"
@@ -60,75 +75,80 @@
                cycling status word + elapsed, shown below the in-flight turn while the
                model is actively generating (hidden when parked on a question/permission
                gate — SessionMessageItem shows "Waiting…" for that). -->
-          <SessionProcessingIndicator
-            v-if="working"
-            :started-at="workingStartedAt"
-            class="msgind"
-          />
+          <SessionProcessingIndicator v-if="working" :started-at="workingStartedAt" />
         </div>
       </template>
     </div>
-    <!-- Nhảy giữa các câu hỏi của user: ↑ câu trước · vị trí n/N · ↓ câu sau. Đứng
-         riêng, cao hơn cụm lên-đầu/xuống-cuối một khoảng cố định, để không bị đẩy
-         lên xuống khi hai nút kia hiện/ẩn theo mép cuộn. -->
-    <Transition name="fadepop">
-      <div
-        v-if="userIdx.length > 1"
-        class="qnav"
-        role="group"
-        :aria-label="t('sessions.transcript.qnav.label')"
+    <!-- Cột nút nổi góc dưới-phải — MỘT cột flex cho cả hai cụm để chúng không bao
+         giờ đè nhau (trước đây hai khối neo `bottom-*` riêng, tính theo rem nên lệch
+         khi cỡ chữ gốc không phải 16px). Mọi nút cùng một kiểu: tròn, viền, 32px.
+           1. Nhảy giữa các câu hỏi của user: ↑ câu trước · n/N · ↓ câu sau.
+           2. Lên đầu / xuống cuối: LUÔN giữ chỗ (chỉ mờ + tắt click khi không có chỗ
+              để đi) nên cụm 1 đứng yên, không bị đẩy lên xuống theo mép cuộn. -->
+    <div
+      class="pointer-events-none absolute right-4 bottom-4 z-4 flex flex-col items-center gap-1.5"
+    >
+      <Transition v-bind="FADEPOP">
+        <div
+          v-if="userIdx.length > 1"
+          class="pointer-events-auto flex w-ctrl-sm flex-col items-center rounded-full border bg-popover py-0.5 shadow-sm"
+          role="group"
+          :aria-label="t('sessions.transcript.qnav.label')"
+        >
+          <Button
+            variant="ghost"
+            size="iconSm"
+            :class="QNAV_BTN"
+            type="button"
+            :disabled="prevQ === null"
+            :title="t('sessions.transcript.qnav.prev')"
+            :aria-label="t('sessions.transcript.qnav.prev')"
+            @click="jumpQuestion(-1)"
+          >
+            <ArrowUp />
+          </Button>
+          <span
+            class="text-xs text-muted-foreground tabular-nums select-none"
+            :title="t('sessions.transcript.qnav.pos', { n: qPos || '–', total: userIdx.length })"
+          >
+            {{ qPos || '–' }}/{{ userIdx.length }}
+          </span>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            :class="QNAV_BTN"
+            type="button"
+            :disabled="nextQ === null"
+            :title="t('sessions.transcript.qnav.next')"
+            :aria-label="t('sessions.transcript.qnav.next')"
+            @click="jumpQuestion(1)"
+          >
+            <ArrowDown />
+          </Button>
+        </div>
+      </Transition>
+      <Button
+        variant="outline"
+        size="iconMd"
+        :class="[JUMP_BTN, atTop && JUMP_OFF]"
+        :title="t('sessions.transcript.scrollTop')"
+        :aria-hidden="atTop || undefined"
+        :tabindex="atTop ? -1 : undefined"
+        @click="jumpTop"
       >
-        <button
-          class="qbtn"
-          type="button"
-          :disabled="prevQ === null"
-          :title="t('sessions.transcript.qnav.prev')"
-          :aria-label="t('sessions.transcript.qnav.prev')"
-          @click="jumpQuestion(-1)"
-        >
-          <ArrowUp :size="14" />
-        </button>
-        <span
-          class="qpos"
-          :title="t('sessions.transcript.qnav.pos', { n: qPos || '–', total: userIdx.length })"
-        >
-          {{ qPos || '–' }}/{{ userIdx.length }}
-        </span>
-        <button
-          class="qbtn"
-          type="button"
-          :disabled="nextQ === null"
-          :title="t('sessions.transcript.qnav.next')"
-          :aria-label="t('sessions.transcript.qnav.next')"
-          @click="jumpQuestion(1)"
-        >
-          <ArrowDown :size="14" />
-        </button>
-      </div>
-    </Transition>
-    <!-- Jump-to-top / jump-to-bottom: each shows only when there's somewhere to go
-         in that direction (both hidden when the transcript doesn't overflow). -->
-    <div class="scrolljump">
-      <Transition name="fadepop">
-        <button
-          v-if="!atTop"
-          class="sjbtn"
-          :title="t('sessions.transcript.scrollTop')"
-          @click="jumpTop"
-        >
-          <Icon name="chev" class="up" style="width: var(--icon-md); height: var(--icon-md)" />
-        </button>
-      </Transition>
-      <Transition name="fadepop">
-        <button
-          v-if="!atBottom"
-          class="sjbtn"
-          :title="t('sessions.transcript.scrollBottom')"
-          @click="jumpBottom"
-        >
-          <Icon name="chev" style="width: var(--icon-md); height: var(--icon-md)" />
-        </button>
-      </Transition>
+        <Icon name="chev" class="size-4 rotate-180" />
+      </Button>
+      <Button
+        variant="outline"
+        size="iconMd"
+        :class="[JUMP_BTN, atBottom && JUMP_OFF]"
+        :title="t('sessions.transcript.scrollBottom')"
+        :aria-hidden="atBottom || undefined"
+        :tabindex="atBottom ? -1 : undefined"
+        @click="jumpBottom"
+      >
+        <Icon name="chev" class="size-4" />
+      </Button>
     </div>
   </div>
 </template>
@@ -159,6 +179,22 @@ const props = defineProps<{
   readonly?: boolean
 }>()
 const { t } = useI18n()
+
+// Nút nổi (fold / nhảy): mờ + co nhẹ khi hiện/ẩn thay vì bật cứng; ra nhanh hơn vào.
+const FADEPOP = {
+  enterActiveClass:
+    'animate-in fade-in-0 zoom-in-85 duration-160 ease-out motion-reduce:animate-none',
+  leaveActiveClass:
+    'animate-out fade-out-0 zoom-out-85 duration-100 ease-in motion-reduce:animate-none',
+} as const
+// Nút lên đầu / xuống cuối: tròn, viền, nền popover — cùng khung 32px với cụm qnav.
+const JUMP_BTN =
+  'pointer-events-auto rounded-full bg-popover text-muted-foreground shadow-sm transition-[opacity,scale] duration-150 hover:text-foreground active:scale-92 motion-reduce:transition-none'
+// Không có chỗ để đi: mờ hẳn + bỏ click nhưng VẪN giữ chỗ trong cột.
+const JUMP_OFF = 'pointer-events-none scale-85 opacity-0'
+// ↑/↓ trong cụm qnav: tròn, icon size-4 như nút lên đầu / xuống cuối.
+const QNAV_BTN =
+  'size-ctrl-xs rounded-full text-muted-foreground hover:text-foreground active:scale-92 disabled:opacity-35 [&_svg]:size-4'
 
 // ── "Working" state for the session-level ProcessingIndicator ──
 // Derived from the last assistant message (mirrors SessionMessageItem's byline logic,
@@ -301,7 +337,7 @@ function measureQuestions(): void {
   // Một lần nhảy đặt câu hỏi ở mép trên + 12px ⇒ vùng [0, Q_EDGE] là "đang đứng ở câu
   // này": không tính là câu trước cũng không là câu sau, nếu không bấm ↓ lần nữa sẽ
   // nhảy lại đúng câu đang đứng.
-  for (const row of el.querySelectorAll<HTMLElement>('.urow[data-mi]')) {
+  for (const row of el.querySelectorAll<HTMLElement>('[data-role="user"][data-mi]')) {
     const i = Number(row.dataset.mi)
     const top = row.getBoundingClientRect().top - viewTop
     // Ở đáy thì câu cuối không lên được tới mép trên — vẫn coi là "đang ở" nếu nó
@@ -335,7 +371,7 @@ async function jumpQuestion(dir: -1 | 1): Promise<void> {
   lastJump = { target, at: Date.now() }
   await revealMessage(target)
   const el = msgsEl.value
-  const row = el?.querySelector<HTMLElement>(`.urow[data-mi="${target}"]`)
+  const row = el?.querySelector<HTMLElement>(`[data-role="user"][data-mi="${target}"]`)
   if (!el || !row) return
   const delta = row.getBoundingClientRect().top - el.getBoundingClientRect().top - 12
   el.scrollTo({ top: el.scrollTop + delta, behavior: 'smooth' })
@@ -469,235 +505,3 @@ onUnmounted(() => {
   unregisterRevealer = null
 })
 </script>
-
-<style scoped>
-.msgswrap {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* Floating collapse-all / expand-all toggle, top-right of the transcript — một
-   chip popover mờ trên nội dung; "on" = toàn bộ step đang mở → wash sáng lên
-   (idiom `bg-accent text-accent-foreground` của proto). */
-.foldbtn {
-  position: absolute;
-  top: 10px;
-  right: 16px;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-sm);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  opacity: 0.72;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.foldbtn:hover {
-  opacity: 1;
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.foldbtn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.foldbtn.on {
-  opacity: 1;
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-@media (prefers-reduced-motion: reduce) {
-  .foldbtn {
-    transition: none;
-  }
-}
-/* Floating jump controls, stacked at the transcript's bottom-right — pill tròn,
-   hover = accent-wash trung tính (giống ghost button). */
-.scrolljump {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sjbtn {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-pill);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-}
-.sjbtn:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.sjbtn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.sjbtn .up {
-  transform: rotate(180deg);
-}
-.sjbtn {
-  transition:
-    border-color 0.12s ease,
-    color 0.12s ease,
-    background 0.12s ease,
-    transform 0.1s ease;
-}
-.sjbtn:active {
-  transform: scale(0.92);
-}
-
-/* Nhảy giữa các câu hỏi — pill dọc cùng ngôn ngữ với `.sjbtn`, neo CỐ ĐỊNH phía trên
-   cụm lên-đầu/xuống-cuối (2 nút 32px + gap 6px + lề 10px) để không nhảy chỗ khi
-   hai nút đó hiện/ẩn. */
-.qnav {
-  position: absolute;
-  right: 16px;
-  bottom: 96px;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 32px;
-  padding: 2px 0;
-  border-radius: var(--r-pill);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-.qbtn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-pill);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    color 0.12s ease,
-    background 0.12s ease,
-    transform 0.1s ease;
-}
-.qbtn:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.qbtn:active:not(:disabled) {
-  transform: scale(0.92);
-}
-.qbtn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.qbtn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.qpos {
-  font-size: 10px; /* design-token-ok: nhãn đếm n/N phải vừa pill rộng 32px */
-  line-height: 14px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-  user-select: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .qbtn {
-    transition: none;
-  }
-}
-
-/* Load-older sentinel sits centered above the windowed transcript (align-self is a
-   no-op if .msgs isn't a flex column — harmless either way). */
-.loadolder {
-  align-self: center;
-  margin-top: 8px;
-}
-
-/* Cột message căn giữa theo proto (`mx-auto max-w-[860px] px-5 py-4 gap-5`):
-   `.msgs` giữ scrollport + gutter `--padX` chung của cột chat, `.msgcol` chỉ giới
-   hạn bề rộng nội dung. Scroll/windowing đọc `.msgs` — wrapper này là flex item
-   duy nhất của nó nên scrollHeight/scrollTop không đổi. */
-.msgcol {
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-/* Chỉ số "đang soạn" neo sát mép trái cột — header message giờ là hàng riêng,
-   body tràn full width nên không còn cột avatar để thụt vào (proto `pl-9` bỏ). */
-.msgind {
-  margin-left: 0;
-}
-/* New-turn enter: a freshly appended message fades + rises into place. Gap giữa
-   hai message = 20px (proto `gap-5` trên cột). */
-.milist {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  width: 100%;
-}
-.mi-enter-active {
-  transition:
-    opacity 0.26s ease,
-    transform 0.26s ease;
-}
-.mi-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-/* Floating controls (fold / jump): fade + slight scale on show/hide instead of a
-   hard pop. Exit is quicker than enter, per the motion guidelines. */
-.fadepop-enter-active {
-  transition:
-    opacity 0.16s ease-out,
-    transform 0.16s ease-out;
-}
-.fadepop-leave-active {
-  transition:
-    opacity 0.1s ease-in,
-    transform 0.1s ease-in;
-}
-.fadepop-enter-from,
-.fadepop-leave-to {
-  opacity: 0;
-  transform: scale(0.85);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mi-enter-active,
-  .fadepop-enter-active,
-  .fadepop-leave-active,
-  .sjbtn {
-    transition: none;
-  }
-  .mi-enter-from,
-  .fadepop-enter-from,
-  .fadepop-leave-to {
-    opacity: 1;
-    transform: none;
-  }
-}
-</style>

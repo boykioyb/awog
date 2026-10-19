@@ -1,8 +1,23 @@
 <template>
-  <div ref="scrollEl" class="ctl-log" :style="{ maxHeight: `${maxHeightRem}rem` }">
-    <div v-for="(line, i) in lines" :key="i" class="ctl-line" :class="`ctl-${line.level}`">
-      <span class="ctl-gutter mono">{{ gutter(line.level) }}</span>
-      <span class="ctl-msg mono">{{ line.message }}</span>
+  <div
+    ref="scrollEl"
+    class="flex flex-col gap-0.5 overflow-y-auto rounded-md border bg-sidebar px-3 py-2"
+    :style="{ maxHeight: `${maxHeightRem}rem` }"
+  >
+    <!-- Log lệnh/stderr là nội dung người dùng copy ⇒ mono. -->
+    <div
+      v-for="(line, i) in lines"
+      :key="i"
+      class="flex gap-2 font-mono text-xs break-words"
+      :class="LEVEL_CLASS[line.level]"
+    >
+      <span
+        class="w-3 flex-none text-center select-none"
+        :class="line.level !== 'error' && 'text-faint'"
+      >
+        {{ gutter(line.level) }}
+      </span>
+      <span class="min-w-0 flex-1 whitespace-pre-wrap">{{ line.message }}</span>
     </div>
   </div>
 </template>
@@ -26,6 +41,13 @@ const props = withDefaults(
 
 const scrollEl = useTemplateRef<HTMLElement>('scrollEl')
 
+// info mờ · stderr xám · error đỏ (cả gutter lẫn message).
+const LEVEL_CLASS: Record<SourceLogLevel, string> = {
+  info: 'text-dim',
+  stderr: 'text-muted-foreground',
+  error: 'text-destructive',
+}
+
 function gutter(level: SourceLogLevel): string {
   if (level === 'stderr') return '2'
   if (level === 'error') return '✕'
@@ -44,45 +66,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.ctl-log {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-  border: 1px solid var(--border);
-  overflow-y: auto;
-}
-.ctl-line {
-  display: flex;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  word-break: break-word;
-}
-.ctl-gutter {
-  flex: 0 0 auto;
-  width: 12px;
-  text-align: center;
-  color: var(--textFaint);
-  user-select: none;
-}
-.ctl-msg {
-  flex: 1;
-  min-width: 0;
-  white-space: pre-wrap;
-}
-.ctl-info .ctl-msg {
-  color: var(--textDim);
-}
-.ctl-stderr .ctl-msg {
-  color: var(--textMuted);
-}
-.ctl-error .ctl-gutter,
-.ctl-error .ctl-msg {
-  color: var(--danger);
-}
-</style>

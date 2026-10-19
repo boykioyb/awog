@@ -1,9 +1,13 @@
 <template>
-  <div class="clipane" :style="{ '--clipane-bg': paneBg }">
+  <!-- relative: dock cho SshAppearancePanel (absolute right). -->
+  <div class="relative flex min-h-0 flex-1 flex-col bg-background">
     <!-- Không có cầu engine (browser-dev) hoặc phiên chưa persist (chưa có
          engineId → openCli không có gì để gắn) → trạng thái trống. -->
-    <div v-if="!canRun" class="empty" style="padding: 30px">
-      <div class="et">{{ unavailableMsg }}</div>
+    <div
+      v-if="!canRun"
+      class="flex flex-1 flex-col items-center justify-center gap-3.5 p-7.5 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ unavailableMsg }}</div>
     </div>
 
     <template v-else>
@@ -16,16 +20,26 @@
       <!-- Lỗi spawn (phiên bận / runtime không hỗ trợ / thiếu binary) hiện TRONG
            thân pane — thanh trên vẫn sống nên người dùng chọn CLI khác để thử lại
            hoặc quay về chat, thay vì bị kẹt trên một màn hình lỗi. -->
-      <div v-if="errorMsg" class="empty" style="padding: 30px">
-        <div class="et">{{ errorMsg }}</div>
+      <div
+        v-if="errorMsg"
+        class="flex flex-1 flex-col items-center justify-center gap-3.5 p-7.5 text-center text-dim"
+      >
+        <div class="text-lg text-muted-foreground">{{ errorMsg }}</div>
       </div>
       <!-- Khung xterm giữ mount suốt (v-show ở cha) nên PTY sống qua các lần đổi
            chỗ chat ↔ CLI. Container phải tồn tại kể cả lúc có errorMsg vì xterm
            đã mở vào nó — v-show chứ không v-if. Padding đặt ở WRAPPER, tuyệt đối
-           không ở `.clibox`: FitAddon đo clientHeight BAO GỒM padding, nên gutter
-           trên chính box đo sẽ làm hàng cuối tràn vào vùng đệm và bị cắt glyph. -->
-      <div v-show="!errorMsg" class="cliwrap">
-        <div ref="box" class="clibox" />
+           không ở box `ref="box"`: FitAddon đo clientHeight BAO GỒM padding, nên gutter
+           trên chính box đo sẽ làm hàng cuối tràn vào vùng đệm và bị cắt glyph.
+           Gutter đáy rộng hơn các cạnh khác: hàng cuối của TUI nằm sát mép pane → bị
+           status bar app lấn nếu không chừa chỗ. Nền = nền theme terminal (dữ liệu
+           Appearance, không phải token app) nên đi qua `:style`. -->
+      <div
+        v-show="!errorMsg"
+        class="min-h-0 flex-1 pt-1.5 pr-0.5 pb-9 pl-2.5"
+        :style="{ background: paneBg }"
+      >
+        <div ref="box" class="h-full min-h-0" />
       </div>
     </template>
   </div>
@@ -120,7 +134,9 @@ const cssVar = (name: string, fallback: string): string => {
   const v = getComputedStyle(document.body).getPropertyValue(name).trim()
   return v || fallback
 }
+// theme-ok: đổi theme family = đổi bộ token màu ⇒ vẽ lại bảng màu xterm
 const { family: themeFamily } = useThemeFamily()
+// theme-ok: theo dõi đổi theme để vẽ lại bảng màu xterm
 const { isDark } = useTheme()
 const appearance = useTerminalAppearanceStore()
 
@@ -138,11 +154,12 @@ const SLIDER_COLORS: ITheme = {
 const resolveTheme = (): ITheme => ({
   ...SLIDER_COLORS,
   ...(appearance.theme ?? {
+    // hex-ok: giá trị dự phòng khi xterm đọc var lúc chưa có style — xterm cần chuỗi màu thật
     background: cssVar('--termBg', cssVar('--background', '#0d0d0d')),
-    foreground: cssVar('--termText', cssVar('--foreground', '#e5e5e5')),
-    cursor: cssVar('--primary', '#3b82f6'),
-    selectionBackground: cssVar('--primary', '#3b82f6'),
-    selectionForeground: cssVar('--primary-foreground', '#ffffff'),
+    foreground: cssVar('--termText', cssVar('--foreground', '#e5e5e5')), // hex-ok: dự phòng cho xterm
+    cursor: cssVar('--primary', '#3b82f6'), // hex-ok: dự phòng cho xterm
+    selectionBackground: cssVar('--primary', '#3b82f6'), // hex-ok: dự phòng cho xterm
+    selectionForeground: cssVar('--primary-foreground', '#ffffff'), // hex-ok: dự phòng cho xterm
   }),
 })
 
@@ -386,28 +403,3 @@ onBeforeUnmount(() => {
   emit('linked', { attached: false, linked: false })
 })
 </script>
-
-<style scoped>
-.clipane {
-  position: relative; /* dock cho SshAppearancePanel (absolute right) */
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  background: var(--background);
-}
-/* Wrapper mang gutter — đáy rộng hơn các cạnh khác: hàng cuối của TUI nằm sát
-   mép pane → text bị status bar app lấn/cắt nếu không chừa chỗ. `.clibox` bên
-   trong KHÔNG có padding: nó là vùng FitAddon đo, clientHeight gồm cả padding sẽ
-   xếp hàng cuối vào vùng đệm và cắt ngang glyph. */
-.cliwrap {
-  flex: 1;
-  min-height: 0;
-  padding: 6px 2px 36px 10px;
-  background: var(--clipane-bg, var(--background));
-}
-.clibox {
-  height: 100%;
-  min-height: 0;
-}
-</style>

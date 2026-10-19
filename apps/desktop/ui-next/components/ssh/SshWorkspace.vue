@@ -1,71 +1,93 @@
 <template>
-  <div class="sshx">
+  <div class="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
     <!-- Top tab strip: a persistent Hosts tab + one tab per open terminal + a
          trailing "＋" that focuses the Hosts tab. -->
-    <div class="sshx-tabs" role="tablist" :aria-label="t('ssh.nav.hosts')">
-      <button
-        class="sshx-tab sshx-tab-hosts"
-        :class="{ active: store.activeTab === 'hosts' }"
+    <div
+      class="flex shrink-0 items-center gap-0.5 overflow-x-auto px-2 py-1.5"
+      role="tablist"
+      :aria-label="t('ssh.nav.hosts')"
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        :class="[TAB, { [TAB_ON]: store.activeTab === 'hosts' }]"
         role="tab"
         :aria-selected="store.activeTab === 'hosts'"
         :title="t('ssh.nav.hosts')"
         @click="store.setActiveTab('hosts')"
       >
-        <Icon name="conn" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span class="sshx-tab-label">{{ t('ssh.nav.hosts') }}</span>
-      </button>
+        <Icon name="conn" />
+        <span class="truncate">{{ t('ssh.nav.hosts') }}</span>
+      </Button>
 
-      <button
+      <Button
         v-for="tab in store.terminalTabs"
         :key="tab.id"
-        class="sshx-tab"
-        :class="{ active: store.activeTab === tab.id }"
+        variant="ghost"
+        size="sm"
+        :class="[TAB, { [TAB_ON]: store.activeTab === tab.id }]"
         role="tab"
         :aria-selected="store.activeTab === tab.id"
         :title="tabLabels[tab.id]"
         @click="store.setActiveTab(tab.id)"
       >
-        <span class="sshx-tab-dot" :style="tabDot(tab.hostId)" />
-        <span class="sshx-tab-label">{{ tabLabels[tab.id] }}</span>
+        <!-- Màu chấm theo host (HSL dữ liệu, không phải token theme). -->
+        <span class="size-2.25 shrink-0 rounded-full" :style="tabDot(tab.hostId)" />
+        <span class="truncate">{{ tabLabels[tab.id] }}</span>
+        <!-- span role=button: không được lồng nút trong nút (tab đã là nút). -->
         <span
-          class="sshx-tab-x"
+          class="inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           role="button"
           :title="t('ssh.terminal.close')"
           :aria-label="t('ssh.terminal.close')"
           @click.stop="store.closeTerminalTab(tab.id)"
         >
-          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="x" />
         </span>
-      </button>
+      </Button>
 
-      <button
-        class="sshx-tab-add"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-muted-foreground"
         :title="t('ssh.tab.new')"
         :aria-label="t('ssh.tab.new')"
         @click="store.setSection('hosts')"
       >
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="plus" />
+      </Button>
 
-      <button
-        class="sshx-appearance-toggle"
-        :class="{ on: appearanceOpen }"
+      <!-- Appearance toggle ghim ở mép phải dải tab. -->
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="ml-auto shrink-0 border border-transparent text-muted-foreground"
+        :class="{
+          'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary':
+            appearanceOpen,
+        }"
         :title="t('ssh.appearance.title')"
         :aria-label="t('ssh.appearance.title')"
         :aria-pressed="appearanceOpen"
         @click="appearanceOpen = !appearanceOpen"
       >
-        <Icon name="palette" style="width: var(--icon-md); height: var(--icon-md)" />
-      </button>
+        <Icon name="palette" class="size-4!" />
+      </Button>
     </div>
+    <Separator />
 
     <!-- Stage: the Hosts management view + every terminal tab live here, overlaid;
          only the active one is shown. Terminal tabs stay MOUNTED (v-show, never
          v-if) so switching tabs never disconnects a live SSH shell. -->
-    <div class="sshx-stage">
-      <div v-show="store.activeTab === 'hosts'" class="sshx-manage">
+    <div class="relative min-h-0 flex-1">
+      <!-- Manage view và từng tab terminal xếp chồng absolute để tab đang hiện luôn có
+           đủ chiều cao stage (terminal cần chiều cao xác định). -->
+      <div
+        v-show="store.activeTab === 'hosts'"
+        class="absolute inset-0 flex min-h-0 overflow-hidden"
+      >
         <SshSidebar />
-        <div class="sshx-section">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <SshHostGrid
             v-if="store.sshSection === 'hosts'"
             :hosts="hosts"
@@ -103,38 +125,48 @@
         v-for="tab in store.terminalTabs"
         v-show="store.activeTab === tab.id"
         :key="tab.id"
-        class="sshx-term"
+        class="absolute inset-0 flex flex-col bg-background"
       >
         <!-- Per-tab toolbar: host name + user@host, plus an SFTP toggle. The tab's
              close lives on the top tab bar, so it's not repeated here. -->
-        <div class="sshx-tbar">
-          <span class="sshx-tbar-dot" :style="tabDot(tab.hostId)" />
-          <span class="sshx-tbar-name">{{ tabHostName(tab.hostId) }}</span>
-          <span class="sshx-tbar-sub mono">{{ tabUserHost(tab.hostId) }}</span>
-          <div class="sshx-tbar-actions">
-            <button
-              class="sshx-tbar-btn"
-              :class="{ on: activeDock[tab.id] === 'snippets' }"
+        <div class="flex shrink-0 items-center gap-2 px-3 py-1.5">
+          <span class="size-2.25 shrink-0 rounded-full" :style="tabDot(tab.hostId)" />
+          <span class="shrink-0 text-sm font-medium text-foreground">
+            {{ tabHostName(tab.hostId) }}
+          </span>
+          <span class="min-w-0 truncate font-mono text-xs text-muted-foreground">
+            {{ tabUserHost(tab.hostId) }}
+          </span>
+          <div class="ml-auto inline-flex shrink-0 items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="xs"
+              class="gap-1.5 px-2.5 text-sm text-muted-foreground"
+              :class="{ [DOCK_ON]: activeDock[tab.id] === 'snippets' }"
               :title="t('ssh.nav.snippets')"
               :aria-label="t('ssh.nav.snippets')"
               @click="toggleDock(tab.id, 'snippets')"
             >
-              <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="commands" />
               <span>{{ t('ssh.nav.snippets') }}</span>
-            </button>
-            <button
-              class="sshx-tbar-btn"
-              :class="{ on: activeDock[tab.id] === 'session' }"
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              class="gap-1.5 px-2.5 text-sm text-muted-foreground"
+              :class="{ [DOCK_ON]: activeDock[tab.id] === 'session' }"
               :title="t('ssh.session.copilotTitle')"
               :aria-label="t('ssh.session.copilotTitle')"
               @click="toggleDock(tab.id, 'session')"
             >
-              <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="sessions" />
               <span>{{ t('ssh.tterm.session') }}</span>
-            </button>
-            <button
-              class="sshx-tbar-btn"
-              :class="{ on: activeDock[tab.id] === 'sftp' }"
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              class="gap-1.5 px-2.5 text-sm text-muted-foreground disabled:pointer-events-auto disabled:cursor-not-allowed"
+              :class="{ [DOCK_ON]: activeDock[tab.id] === 'sftp' }"
               :disabled="!store.connIdForHost(tab.hostId) && activeDock[tab.id] !== 'sftp'"
               :title="
                 store.connIdForHost(tab.hostId)
@@ -144,18 +176,20 @@
               :aria-label="t('ssh.section.sftp')"
               @click="toggleDock(tab.id, 'sftp')"
             >
-              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="folder" />
               <span>{{ t('ssh.tterm.sftp') }}</span>
-            </button>
+            </Button>
           </div>
         </div>
+
+        <Separator />
 
         <!-- Body: terminal fills alone, or splits terminal (top ~58%) + SFTP
              browser (bottom ~42%) when toggled. The terminal stays MOUNTED the
              whole time — only the shell container's flex-basis changes, which its
              ResizeObserver picks up to refit (never v-if on SshTerminal). -->
-        <div class="sshx-tbody" :class="{ split: !!activeDock[tab.id] }">
-          <div class="sshx-tshell">
+        <div class="flex min-h-0 flex-1" :class="activeDock[tab.id] ? 'flex-row' : 'flex-col'">
+          <div class="min-h-0 min-w-0 flex-auto">
             <SshTerminal
               :host-id="tab.hostId"
               :visible="store.activeTab === tab.id"
@@ -165,21 +199,26 @@
           <!-- One of three right-docked panels (mutually exclusive): SFTP browser,
                co-pilot session, or the snippets library. Each shares the splitter. -->
           <template v-if="activeDock[tab.id]">
+            <!-- Splitter kéo dọc: hairline 1px giữa vùng nắm 7px. -->
             <div
-              class="sshx-tsplit"
+              class="group flex w-1.75 shrink-0 cursor-col-resize justify-center self-stretch"
               role="separator"
               aria-orientation="vertical"
               :title="t('ssh.tterm.resize')"
               @pointerdown="startResize(tab.id, $event)"
-            />
-            <div class="sshx-tside" :style="sideStyle(tab.id)">
+            >
+              <div class="w-px bg-border transition-colors group-hover:bg-primary" />
+            </div>
+            <div class="min-h-0 min-w-0 shrink-0 grow-0 overflow-hidden" :style="sideStyle(tab.id)">
               <template v-if="activeDock[tab.id] === 'sftp'">
                 <SshSftpBrowser
                   v-if="store.connIdForHost(tab.hostId)"
                   :conn-id="store.connIdForHost(tab.hostId) ?? ''"
                   @close="activeDock[tab.id] = null"
                 />
-                <div v-else class="sshx-tsftp-note">{{ t('ssh.tterm.connectToBrowse') }}</div>
+                <div v-else class="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {{ t('ssh.tterm.connectToBrowse') }}
+                </div>
               </template>
               <SshSessionPanel
                 v-else-if="activeDock[tab.id] === 'session'"
@@ -243,6 +282,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Class lặp của dải tab + nút dock. Đang chọn = accent-tint (không nền xám).
+const TAB = 'max-w-55 shrink-0 gap-2 px-2.5 text-sm font-medium text-muted-foreground'
+const TAB_ON = 'bg-selected text-primary hover:bg-selected hover:text-primary'
+const DOCK_ON =
+  'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary'
 const store = useSshStore()
 
 // Terminal appearance drawer visibility — local to this shell (renderer-only).
@@ -324,281 +369,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.sshx {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* ── Top tab strip ─────────────────────────────────────────────────────────── */
-.sshx-tabs {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex: 0 0 auto;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-}
-.sshx-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  max-width: 220px;
-  padding: 6px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  line-height: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshx-tab:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshx-tab.active {
-  background: var(--bgActive);
-  color: var(--accent);
-}
-.sshx-tab-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sshx-tab-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: var(--r-xs);
-  flex: 0 0 auto;
-}
-.sshx-tab-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.sshx-tab-x:hover {
-  background: var(--dangerBg, var(--bgHover));
-  color: var(--danger);
-}
-.sshx-tab-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshx-tab-add:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-/* Appearance toggle pinned to the right end of the tab strip. */
-.sshx-appearance-toggle {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
-}
-.sshx-appearance-toggle:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshx-appearance-toggle.on {
-  background: var(--accentDim);
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.sshx-tab:focus-visible,
-.sshx-tab-add:focus-visible,
-.sshx-appearance-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-/* ── Stage ─────────────────────────────────────────────────────────────────── */
-.sshx-stage {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-/* Both the manage view and each terminal tab are absolutely stacked so the active
-   one always gets the full stage height (terminals need a definite height). */
-.sshx-manage,
-.sshx-term {
-  position: absolute;
-  inset: 0;
-}
-.sshx-manage {
-  display: flex;
-  min-height: 0;
-  overflow: hidden;
-}
-.sshx-section {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* A flex column: a slim per-tab toolbar over the body. The body hands the
-   WorkspaceTerminal (`.wsterm`, height:100%) a definite-height container in both
-   states (fills alone, or a 58% flex-basis when split) so it always refits. */
-.sshx-term {
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-}
-.sshx-tbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.sshx-tbar-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: var(--r-xs);
-  flex: 0 0 auto;
-}
-.sshx-tbar-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-  flex: 0 0 auto;
-}
-.sshx-tbar-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sshx-tbar-actions {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-.sshx-tbar-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
-}
-.sshx-tbar-btn:hover:not(:disabled) {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-.sshx-tbar-btn.on {
-  background: var(--accentDim);
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.sshx-tbar-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.sshx-tbar-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.sshx-tbody {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* Split = terminal LEFT (grows), SFTP browser / co-pilot session RIGHT (fixed px
-   width from sideStyle, drag the splitter to resize). */
-.sshx-tbody.split {
-  flex-direction: row;
-}
-.sshx-tshell {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-/* Draggable vertical splitter: a 1px hairline centered in a 7px grab zone. */
-.sshx-tsplit {
-  flex: 0 0 auto;
-  width: 7px;
-  align-self: stretch;
-  cursor: col-resize;
-  background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
-  transition: background-color 0.12s;
-}
-.sshx-tsplit:hover {
-  background: linear-gradient(var(--accent), var(--accent)) center / 1px 100% no-repeat;
-}
-.sshx-tside {
-  flex: 0 0 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-.sshx-tsftp-note {
-  padding: 24px 12px;
-  text-align: center;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-</style>

@@ -1,10 +1,15 @@
 <template>
-  <div class="field" :class="{ block }">
-    <div class="fl">
-      <div class="fn">
+  <!-- data-set-row / data-set-label: hook cho SettingsModal (⌘K cuộn tới đúng dòng). -->
+  <div
+    data-set-row
+    class="flex border-t py-3 first-of-type:border-t-0"
+    :class="block ? 'flex-col items-stretch gap-2 [&>*:last-child]:w-full' : 'items-center gap-4'"
+  >
+    <div class="min-w-0 flex-1">
+      <div data-set-label class="text-base font-medium">
         <slot name="name">{{ name }}</slot>
       </div>
-      <div v-if="desc || $slots.desc" class="fd">
+      <div v-if="desc || $slots.desc" class="mt-0.5 text-sm text-muted-foreground">
         <slot name="desc">{{ desc }}</slot>
       </div>
     </div>
@@ -13,9 +18,8 @@
 </template>
 
 <script setup lang="ts">
-// One settings row — ports the fld(name, desc, ctrl) helper (.field > .fl > .fn/.fd + control).
-// The control goes in the default slot; name/desc accept slots for inline markup.
-// `block` stacks the control full-width under the label (for textareas / pickers).
+// Một dòng cài đặt: nhãn + mô tả muted bên trái, control ở default slot bên phải.
+// `block` xếp control xuống dưới nhãn và kéo full-width (textarea / picker).
 withDefaults(
   defineProps<{
     name?: string
@@ -25,14 +29,3 @@ withDefaults(
   { name: '', desc: '', block: false },
 )
 </script>
-
-<style scoped>
-.field.block {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-}
-.field.block > :deep(*:last-child) {
-  width: 100%;
-}
-</style>

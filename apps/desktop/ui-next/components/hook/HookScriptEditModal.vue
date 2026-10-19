@@ -6,13 +6,13 @@
     :width="640"
     @close="emit('cancel')"
   >
-    <div class="hse">
-      <div class="hse-hint">{{ t('hooks.scriptEdit.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('hooks.scriptEdit.hint') }}</div>
 
-      <div v-if="content === null" class="hse-promptbox">
-        <textarea
+      <div v-if="content === null">
+        <Textarea
           v-model="prompt"
-          class="hse-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('hooks.scriptEdit.placeholder')"
@@ -20,9 +20,11 @@
         />
       </div>
 
-      <div v-if="error" class="hse-err">{{ error }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
 
-      <div v-if="content !== null" class="hse-preview">
+      <div v-if="content !== null" class="h-80 overflow-hidden rounded-md border">
         <MonacoViewer :value="content" language="shell" read-only />
       </div>
     </div>
@@ -39,7 +41,10 @@
         variant="default"
         @click="onGenerate"
       >
-        <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+        <Icon
+          :name="isGenerating ? 'refresh' : 'sparkles'"
+          :class="{ 'animate-spin': isGenerating }"
+        />
         {{ isGenerating ? t('hooks.scriptEdit.generating') : t('hooks.scriptEdit.generate') }}
       </Button>
       <Button v-else variant="default" @click="onApply">
@@ -123,57 +128,3 @@ const onApply = () => {
   if (content.value !== null) emit('apply', content.value)
 }
 </script>
-
-<style scoped>
-.hse {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.hse-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.hse-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.hse-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.hse-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.hse-preview {
-  height: 320px;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-.spin {
-  animation: hse-spin 0.9s linear infinite;
-}
-@keyframes hse-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

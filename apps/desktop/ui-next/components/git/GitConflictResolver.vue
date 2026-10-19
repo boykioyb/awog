@@ -1,14 +1,22 @@
 <template>
-  <div class="cres">
+  <div class="flex h-full min-h-0 flex-col">
     <!-- Toolbar: filename + progress chip + take-all + Mark resolved -->
-    <div class="dh">
-      <span class="dt mono" style="font-size: var(--fs-sm)">
-        <span class="dtname" :title="path">{{ baseName }}</span>
+    <!-- Header cao cố định: hairline bằng inset shadow để không ăn 1px chiều cao. -->
+    <div
+      class="flex h-12.5 flex-none items-center gap-2.5 px-5.5 shadow-[inset_0_-1px_0_var(--color-border)]"
+    >
+      <!-- mono-ok: tên file -->
+      <span class="flex min-w-0 items-center font-mono text-sm font-semibold">
+        <span class="truncate" :title="path">{{ baseName }}</span>
       </span>
-      <span v-if="mode === 'text'" class="cchip">
+      <Badge
+        v-if="mode === 'text'"
+        variant="secondary"
+        class="flex-none rounded-sm px-1.5 py-0 font-normal tabular-nums"
+      >
         {{ t('git.conflict.chosenCount', { chosen, total }) }}
-      </span>
-      <span style="flex: 1" />
+      </Badge>
+      <span class="flex-1" />
       <template v-if="mode === 'text'">
         <Button variant="outline" size="sm" type="button" @click="pickAll('ours')">
           {{ t('git.conflict.takeAllOurs') }}
@@ -23,10 +31,13 @@
       </template>
     </div>
 
-    <div class="dscroll cscroll">
+    <div class="flex-1 overflow-y-auto p-3">
       <!-- Inline error (desync / gone) — keep resolver open, offer reload (CR-13) -->
-      <div v-if="errorKey" class="cerr">
-        <span>{{ t(errorKey) }}</span>
+      <div
+        v-if="errorKey"
+        class="mb-3 flex items-center gap-2.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive"
+      >
+        <span class="flex-1">{{ t(errorKey) }}</span>
         <Button variant="outline" size="sm" type="button" @click="load">
           {{ t('git.conflict.reload') }}
         </Button>
@@ -50,9 +61,9 @@
       </template>
 
       <!-- Binary mode: whole-side pick (CR-09) -->
-      <div v-else-if="mode === 'binary'" class="cfb">
-        <p class="cfbmsg">{{ t('git.conflict.binary.title') }}</p>
-        <div class="cfbactions">
+      <div v-else-if="mode === 'binary'" class="rounded-md border p-4">
+        <p class="mb-3 text-muted-foreground">{{ t('git.conflict.binary.title') }}</p>
+        <div class="flex flex-wrap gap-2">
           <Button
             variant="outline"
             type="button"
@@ -73,9 +84,9 @@
       </div>
 
       <!-- Encoding fallback: external editor + mark staged (CR-10) -->
-      <div v-else-if="mode === 'encoding'" class="cfb">
-        <p class="cfbmsg">{{ t('git.conflict.encoding.title') }}</p>
-        <div class="cfbactions">
+      <div v-else-if="mode === 'encoding'" class="rounded-md border p-4">
+        <p class="mb-3 text-muted-foreground">{{ t('git.conflict.encoding.title') }}</p>
+        <div class="flex flex-wrap gap-2">
           <Button variant="outline" type="button" @click="openExternal">
             {{ t('git.conflict.encoding.openExternal') }}
           </Button>
@@ -89,9 +100,9 @@
       </div>
 
       <!-- File no longer in conflict / changed (ENOENT etc.) -->
-      <div v-else-if="mode === 'gone'" class="cfb">
-        <p class="cfbmsg">{{ t('git.conflict.error.gone') }}</p>
-        <div class="cfbactions">
+      <div v-else-if="mode === 'gone'" class="rounded-md border p-4">
+        <p class="mb-3 text-muted-foreground">{{ t('git.conflict.error.gone') }}</p>
+        <div class="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" type="button" @click="load">
             {{ t('git.conflict.reload') }}
           </Button>
@@ -99,8 +110,8 @@
       </div>
 
       <!-- Loading -->
-      <div v-else class="cfb">
-        <p class="cfbmsg">…</p>
+      <div v-else class="rounded-md border p-4">
+        <p class="mb-3 text-muted-foreground">…</p>
       </div>
     </div>
   </div>
@@ -112,6 +123,7 @@
 // store.loadConflictFile, then renders one of four modes: text (per-block ours/
 // theirs), binary (whole-side pick), encoding fallback (external editor), or gone.
 // All state + handlers live in useConflictResolver(); this SFC is template + bind.
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
 import { baseNameOf } from './git-types'
 import { useConflictResolver } from '~/composables/useConflictResolver'
@@ -150,54 +162,3 @@ const {
 
 const baseName = computed(() => baseNameOf(props.path))
 </script>
-
-<style scoped>
-.cres {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-}
-.cchip {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border-radius: var(--r-xs);
-  background: var(--secondary);
-  color: var(--secondary-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-.cscroll {
-  padding: 12px;
-  overflow-y: auto;
-}
-.cerr {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  border-radius: var(--r-sm);
-  color: var(--destructive);
-  background: color-mix(in oklab, var(--destructive) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--destructive) 40%, transparent);
-}
-.cerr span {
-  flex: 1;
-}
-.cfb {
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-.cfbmsg {
-  color: var(--muted-foreground);
-  margin-bottom: 12px;
-}
-.cfbactions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-</style>

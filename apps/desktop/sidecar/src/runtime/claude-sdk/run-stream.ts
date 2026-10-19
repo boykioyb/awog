@@ -760,7 +760,7 @@ export async function runStreamClaude(args: RunNonStreamArgs, cb: StreamCallback
     // handler với AgentTool của Pi, nên khử bí mật + hàng rào nonce là một bản
     // duy nhất. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat — đúng điều
     // kiện `filter.chatSession` mà nhánh Pi dùng.
-    [TERMINAL_MCP_SERVER]: buildTerminalToolsSdkServer(args.cwd ?? process.cwd()),
+    [TERMINAL_MCP_SERVER]: buildTerminalToolsSdkServer(args.cwd ?? process.cwd(), args.sessionId),
     // Chỉ mục symbol + đồ thị import (docs/features/code-index.md) →
     // mcp__awogcode__code_index. Vô điều kiện, đúng như nhánh Pi cấp nó
     // (runtime/tools/index.ts): chỉ ĐỌC, và chỉ mục dựng LƯỜI ở lần gọi đầu nên

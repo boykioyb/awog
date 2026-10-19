@@ -1,45 +1,61 @@
 <template>
-  <div class="asn">
-    <p class="asn-sub">{{ t('infra.import.sso.naming.title') }}</p>
+  <!-- mono-ok (các ô/nhãn font-mono dưới đây): region, tên profile, account id, role là
+       định danh dùng thẳng ở `--profile`/`~/.aws/config`. -->
+  <div class="flex min-h-0 flex-col gap-2.5">
+    <p class="m-0 text-sm text-dim">{{ t('infra.import.sso.naming.title') }}</p>
 
-    <div class="asn-field">
-      <label class="asn-label">{{ t('infra.import.sso.naming.region') }}</label>
+    <div class="flex max-w-65 flex-col gap-1.5">
+      <Label class="text-xs font-semibold text-foreground">
+        {{ t('infra.import.sso.naming.region') }}
+      </Label>
       <Input
         v-model="region"
         :placeholder="t('infra.import.sso.naming.regionPh')"
         spellcheck="false"
-        class="mono"
+        class="font-mono"
       />
     </div>
 
-    <div class="asn-toggle" @click="overwrite = !overwrite">
-      <span class="tog2 sm" :class="{ off: !overwrite }" />
+    <div
+      class="inline-flex cursor-pointer items-center gap-2 self-start text-sm text-foreground select-none"
+      @click="overwrite = !overwrite"
+    >
+      <Switch :checked="overwrite" @click.stop @update:checked="overwrite = $event" />
       <span>{{ t('infra.import.sso.naming.overwrite') }}</span>
     </div>
-    <div class="asn-hint">{{ t('infra.import.sso.naming.overwriteHint') }}</div>
+    <div class="-mt-1.5 text-xs text-dim">{{ t('infra.import.sso.naming.overwriteHint') }}</div>
 
-    <div class="asn-table">
-      <div class="asn-head">
+    <div class="flex max-h-[38vh] flex-col overflow-y-auto rounded-lg border">
+      <div
+        class="grid grid-cols-[1.2fr_1.4fr_0.8fr] items-center gap-2.5 bg-muted px-3 py-2 text-xs text-dim"
+      >
         <span>{{ t('infra.import.sso.naming.colProfile') }}</span>
         <span>{{ t('infra.import.sso.naming.colAccount') }}</span>
         <span>{{ t('infra.import.sso.naming.colRole') }}</span>
       </div>
-      <div v-for="row in rows" :key="rowKey(row)" class="asn-row">
-        <div class="asn-row-main">
+      <div v-for="row in rows" :key="rowKey(row)" class="border-t first:border-t-0">
+        <div class="grid grid-cols-[1.2fr_1.4fr_0.8fr] items-center gap-2.5 px-3 py-2">
           <Input
-            :class="{ 'has-err': !!rowError(row) }"
+            :class="{ 'border-destructive focus-visible:ring-destructive': !!rowError(row) }"
             :model-value="row.name"
             spellcheck="false"
-            class="mono"
+            class="h-ctrl-sm min-w-0 font-mono"
             @update:model-value="emit('set-name', rowKey(row), $event)"
           />
-          <span class="asn-acc mono" :title="`${row.accountName} · ${row.accountId}`">
+          <span
+            class="min-w-0 truncate font-mono text-xs text-dim"
+            :title="`${row.accountName} · ${row.accountId}`"
+          >
             {{ row.accountName }} · {{ row.accountId }}
           </span>
-          <span class="asn-role mono">{{ row.roleName }}</span>
+          <span class="min-w-0 truncate font-mono text-xs text-dim">{{ row.roleName }}</span>
         </div>
-        <div v-if="rowError(row)" class="asn-msg err">{{ rowError(row) }}</div>
-        <div v-else-if="rowWarning(row)" class="asn-msg warn">{{ rowWarning(row) }}</div>
+        <div v-if="rowError(row)" class="px-3 pb-2 text-xs text-destructive">
+          {{ rowError(row) }}
+        </div>
+        <div v-else-if="rowWarning(row)" class="px-3 pb-2 text-xs text-warning">
+          {{ rowWarning(row) }}
+        </div>
       </div>
     </div>
   </div>
@@ -110,133 +126,3 @@ function rowWarning(row: NamingRow): string {
   return ''
 }
 </script>
-
-<style scoped>
-.asn {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-}
-.asn-sub {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.asn-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: 260px;
-}
-.asn-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.asn-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.asn-input:focus {
-  border-color: var(--accent);
-}
-.asn-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  align-self: flex-start;
-  cursor: pointer;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.asn-hint {
-  margin-top: -6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.asn-table {
-  display: flex;
-  flex-direction: column;
-  max-height: 38vh;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.asn-head,
-.asn-row-main {
-  display: grid;
-  grid-template-columns: 1.2fr 1.4fr 0.8fr;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 12px;
-}
-.asn-head {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  background: var(--bgHover);
-}
-.asn-row + .asn-row {
-  border-top: 1px solid var(--border);
-}
-.asn-name-input {
-  width: 100%;
-  min-width: 0;
-  padding: 6px 9px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.asn-name-input:focus {
-  border-color: var(--accent);
-}
-.asn-name-input.has-err,
-.asn-name-input.has-err:focus {
-  border-color: var(--danger);
-}
-.asn-acc {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.asn-role {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.asn-msg {
-  padding: 0 12px 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.asn-msg.err {
-  color: var(--danger);
-}
-.asn-msg.warn {
-  color: var(--amber);
-}
-</style>

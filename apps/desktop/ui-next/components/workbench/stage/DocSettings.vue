@@ -2,10 +2,9 @@
   <!-- Doc 'settings' — Settings NHÚNG (không modal): nav 2 cột trái theo nhóm
        + SettingsPane của section đang chọn. Section sống trong `doc.nav` nên
        KeepAlive khôi phục đúng chỗ đã mở và DocTabs/store giữ được trạng thái. -->
-  <div class="setdoc flex min-h-0 flex-1">
-    <aside
-      class="w-[190px] flex-none overflow-y-auto border-r border-[var(--border)] bg-[var(--bgPanel)] px-2 py-2.5"
-    >
+  <!-- `.setpane` (SettingsPane) chiếm trọn stage thay vì giữ max-width của modal. -->
+  <div class="flex min-h-0 flex-1 [&_.setpane]:h-full [&_.setpane]:max-w-none">
+    <aside class="w-47.5 flex-none overflow-y-auto border-r border-border bg-sidebar px-2 py-2.5">
       <SettingsNav :groups="SETTINGS_GROUPS" :active="active" @select="onSelect" />
     </aside>
     <div class="min-w-0 flex-1 overflow-y-auto">
@@ -38,12 +37,3 @@ function onSelect(id: SettingsSectionId) {
   active.value = id
 }
 </script>
-
-<style scoped>
-/* SettingsPane render thẳng `.setpane` của modal — cho nó chiếm trọn stage thay
-   vì giữ max-width của modal. Tailwind không emit :deep() → scoped còn lại. */
-.setdoc :deep(.setpane) {
-  max-width: none;
-  height: 100%;
-}
-</style>

@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="commands">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="commands">
     <LibraryView
       :items="commands"
       :item-key="commandKey"
@@ -15,20 +15,24 @@
       @imported="onImported"
     >
       <template #row="{ item: c }">
-        <div class="lrow" :style="{ opacity: c.enabled ? 1 : 0.55 }">
-          <span class="ttl mono">/{{ c.name }}</span>
-          <span
-            class="tag"
-            :class="{ acc: (c.source ?? 'global') === 'project' }"
-            style="padding: 1px 6px"
+        <div class="flex items-center gap-2" :class="{ 'opacity-55': !c.enabled }">
+          <!-- font-mono: tên lệnh slash là thứ người dùng gõ lại vào composer. -->
+          <span class="min-w-0 flex-1 truncate font-mono text-base font-medium">/{{ c.name }}</span>
+          <Badge
+            variant="outline"
+            :class="
+              (c.source ?? 'global') === 'project'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'text-muted-foreground'
+            "
           >
             {{ t('commands.tier.' + (c.source ?? 'global')) }}
-          </span>
-          <span v-if="c.readOnly" class="tag mono" style="padding: 1px 6px">
-            <Icon name="lock" style="width: 10px; height: 10px" />
-          </span>
+          </Badge>
+          <Badge v-if="c.readOnly" variant="outline" class="text-muted-foreground">
+            <Icon name="lock" class="size-2.5" />
+          </Badge>
         </div>
-        <div class="sub">{{ c.description || '—' }}</div>
+        <div class="mt-1 truncate text-sm text-muted-foreground">{{ c.description || '—' }}</div>
       </template>
 
       <template #detail="{ item: c }">

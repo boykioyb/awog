@@ -1,76 +1,116 @@
 <template>
-  <div class="cdd">
-    <button type="button" class="cdd-back" @click="emit('back')">
-      <Icon name="chev-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div class="flex flex-col gap-2.5">
+    <Button
+      variant="ghost"
+      size="xs"
+      class="gap-1 self-start pl-1 font-normal text-muted-foreground [&_svg]:size-3.5"
+      @click="emit('back')"
+    >
+      <Icon name="chev-left" />
       {{ t('connectionsDiscover.detail.back') }}
-    </button>
+    </Button>
 
-    <div class="cdd-head">
-      <span class="cdd-nm">{{ entry.title }}</span>
-      <span class="tag" :class="installBadgeClass">{{ installBadge }}</span>
-      <span v-if="entry.version" class="tag">{{ entry.version }}</span>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-lg font-semibold text-foreground">{{ entry.title }}</span>
+      <Badge variant="outline" :class="installBadgeClass">{{ installBadge }}</Badge>
+      <Badge v-if="entry.version" variant="secondary">{{ entry.version }}</Badge>
     </div>
-    <p v-if="entry.description" class="cdd-desc">{{ entry.description }}</p>
-    <p class="cdd-id mono">{{ entry.name }}</p>
+    <p v-if="entry.description" class="m-0 text-sm leading-relaxed text-muted-foreground">
+      {{ entry.description }}
+    </p>
+    <!-- Tên gói registry là định danh kỹ thuật ⇒ mono. -->
+    <p class="m-0 font-mono text-xs break-all text-dim">{{ entry.name }}</p>
 
     <!-- Cảnh báo đọc-trước-khi-đồng-ý. Đây là điểm người dùng nhìn thấy CHÍNH XÁC
          thứ sẽ chạy; không có bước nào trước đó ghi hay khởi chạy gì. -->
-    <p class="cdd-warn">{{ t('connectionsDiscover.detail.review') }}</p>
+    <p
+      class="m-0 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-warning"
+    >
+      {{ t('connectionsDiscover.detail.review') }}
+    </p>
 
     <template v-if="entry.install.kind === 'remote'">
-      <div class="cdd-row">
-        <span class="cdd-k">{{ t('connectionsDiscover.detail.transport') }}</span>
-        <span class="cdd-v mono">{{ entry.install.transport }}</span>
+      <div class="grid grid-cols-[8rem_1fr] items-baseline gap-2.5">
+        <span class="text-xs text-muted-foreground">
+          {{ t('connectionsDiscover.detail.transport') }}
+        </span>
+        <span class="font-mono text-sm break-all text-foreground">
+          {{ entry.install.transport }}
+        </span>
       </div>
-      <div class="cdd-row">
-        <span class="cdd-k">{{ t('connectionsDiscover.detail.url') }}</span>
-        <span class="cdd-v mono">{{ entry.install.url }}</span>
+      <div class="grid grid-cols-[8rem_1fr] items-baseline gap-2.5">
+        <span class="text-xs text-muted-foreground">{{ t('connectionsDiscover.detail.url') }}</span>
+        <span class="font-mono text-sm break-all text-foreground">{{ entry.install.url }}</span>
       </div>
     </template>
 
     <template v-else-if="entry.install.kind === 'stdio'">
-      <div class="cdd-row">
-        <span class="cdd-k">{{ t('connectionsDiscover.detail.command') }}</span>
+      <div class="grid grid-cols-[8rem_1fr] items-baseline gap-2.5">
+        <span class="text-xs text-muted-foreground">
+          {{ t('connectionsDiscover.detail.command') }}
+        </span>
         <!-- mono-ok: dòng lệnh thật sự sẽ chạy — người dùng copy được vào terminal -->
-        <span class="cdd-v mono">{{ commandLine }}</span>
+        <span class="font-mono text-sm break-all text-foreground">{{ commandLine }}</span>
       </div>
-      <div v-if="entry.install.envKeys.length" class="cdd-row">
-        <span class="cdd-k">{{ t('connectionsDiscover.detail.env') }}</span>
-        <span class="cdd-v">
-          <span v-for="k in entry.install.envKeys" :key="k" class="tag mono cdd-envk">{{ k }}</span>
-          <span class="cdd-note">{{ t('connectionsDiscover.detail.envNote') }}</span>
+      <div
+        v-if="entry.install.envKeys.length"
+        class="grid grid-cols-[8rem_1fr] items-baseline gap-2.5"
+      >
+        <span class="text-xs text-muted-foreground">{{ t('connectionsDiscover.detail.env') }}</span>
+        <span class="flex flex-wrap items-baseline gap-1.5 text-sm break-all text-foreground">
+          <Badge
+            v-for="k in entry.install.envKeys"
+            :key="k"
+            variant="secondary"
+            class="font-mono text-muted-foreground"
+          >
+            {{ k }}
+          </Badge>
+          <span class="text-xs leading-relaxed text-muted-foreground">
+            {{ t('connectionsDiscover.detail.envNote') }}
+          </span>
         </span>
       </div>
     </template>
 
-    <p v-else class="cdd-unsupported">
+    <p v-else class="m-0 text-sm leading-relaxed text-muted-foreground">
       {{ t('connectionsDiscover.detail.unsupported', { reason: entry.install.reason }) }}
     </p>
 
-    <div v-if="entry.secretFields.length" class="cdd-row">
-      <span class="cdd-k">{{ t('connectionsDiscover.detail.secrets') }}</span>
-      <span class="cdd-v">
-        <span v-for="k in entry.secretFields" :key="k" class="tag warn mono cdd-envk">{{ k }}</span>
+    <div v-if="entry.secretFields.length" class="grid grid-cols-[8rem_1fr] items-baseline gap-2.5">
+      <span class="text-xs text-muted-foreground">
+        {{ t('connectionsDiscover.detail.secrets') }}
+      </span>
+      <span class="flex flex-wrap items-baseline gap-1.5 text-sm break-all text-foreground">
+        <Badge v-for="k in entry.secretFields" :key="k" variant="warning" class="font-mono">
+          {{ k }}
+        </Badge>
       </span>
     </div>
 
-    <div v-if="repoUrl" class="cdd-row">
-      <span class="cdd-k">{{ t('connectionsDiscover.detail.repo') }}</span>
-      <button type="button" class="cdd-link mono" @click="openRepo">
+    <div v-if="repoUrl" class="grid grid-cols-[8rem_1fr] items-baseline gap-2.5">
+      <span class="text-xs text-muted-foreground">{{ t('connectionsDiscover.detail.repo') }}</span>
+      <Button
+        variant="link"
+        class="h-auto justify-start gap-1 p-0 text-left font-mono font-normal break-all whitespace-normal [&_svg]:size-3"
+        @click="openRepo"
+      >
         {{ repoUrl }}
-        <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <Icon name="external" />
+      </Button>
     </div>
 
-    <div class="cdd-actions">
-      <span class="cdd-hint">{{ t('connectionsDiscover.detail.verifyHint') }}</span>
-      <div v-if="installable" class="cdd-btns">
-        <button type="button" class="cdd-link" @click="emit('use', entry.id)">
+    <div class="flex items-center justify-between gap-3 border-t pt-2.5">
+      <span class="text-xs leading-relaxed text-muted-foreground">
+        {{ t('connectionsDiscover.detail.verifyHint') }}
+      </span>
+      <div v-if="installable" class="flex flex-none items-center gap-3">
+        <Button variant="link" class="h-auto p-0 font-normal" @click="emit('use', entry.id)">
           {{ t('connectionsDiscover.detail.customize') }}
-        </button>
-        <button type="button" class="cdd-use" @click="emit('connect', entry)">
+        </Button>
+        <Button variant="default" @click="emit('connect', entry)">
           {{ t('connectionsDiscover.detail.connect') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -110,8 +150,11 @@ const installBadge = computed(() => {
   if (kind === 'stdio') return t('connectionsDiscover.badge.stdio')
   return t('connectionsDiscover.badge.unsupported')
 })
+// Không cài được = cảnh báo vàng; cài được = accent-tint của brand.
 const installBadgeClass = computed(() =>
-  props.entry.install.kind === 'unsupported' ? 'warn' : 'acc',
+  props.entry.install.kind === 'unsupported'
+    ? 'border-transparent bg-warning/15 text-warning'
+    : 'border-selected-border bg-selected text-primary',
 )
 
 // Dòng lệnh hiển thị = đúng những gì sẽ được spawn dạng mảng (không qua shell).
@@ -136,147 +179,3 @@ const openRepo = () => {
   if (repoUrl.value) void useLinkOpen().openLink(repoUrl.value)
 }
 </script>
-
-<style scoped>
-.cdd {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.cdd-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  padding: 4px 8px 4px 4px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.cdd-back:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.cdd-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.cdd-nm {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-  color: var(--text);
-}
-.cdd-desc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-  margin: 0;
-}
-.cdd-id {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  margin: 0;
-  word-break: break-all;
-}
-.cdd-warn {
-  margin: 0;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-}
-.cdd-row {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 10px;
-  align-items: baseline;
-}
-.cdd-k {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.cdd-v {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: baseline;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  word-break: break-all;
-}
-.cdd-envk {
-  color: var(--textMuted);
-}
-.cdd-note {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.cdd-unsupported {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-}
-.cdd-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: left;
-  cursor: pointer;
-  word-break: break-all;
-}
-.cdd-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.cdd-btns {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
-}
-.cdd-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.cdd-use {
-  flex: 0 0 auto;
-  padding: 7px 13px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-.cdd-use:hover {
-  background: var(--bgHover);
-}
-</style>

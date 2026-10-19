@@ -1,34 +1,41 @@
 <template>
-  <aside class="iah icard">
-    <div class="iah-head">
-      <span class="iah-title">{{ t('infra.monitoring.alarm.history') }}</span>
-      <button
-        type="button"
-        class="iah-x"
+  <!-- Da card dùng chung của khu hạ tầng — Card shadcn, không tự khai viền/nền/bóng. -->
+  <Card class="min-h-0 gap-1 overflow-y-auto px-3 py-2.5">
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-base font-semibold">{{ t('infra.monitoring.alarm.history') }}</span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-dim"
         :title="t('infra.monitoring.alarm.cancel')"
         :aria-label="t('infra.monitoring.alarm.cancel')"
         @click="emit('close')"
       >
-        <Icon name="x" class="iah-ic" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </div>
 
-    <code class="iah-name">{{ name }}</code>
+    <!-- mono-ok: tên alarm là định danh người dùng copy sang AWS CLI/console -->
+    <code class="font-mono text-xs break-all text-muted-foreground">{{ name }}</code>
 
-    <p v-if="loading" class="ihint">{{ t('infra.monitoring.loading') }}</p>
-    <p v-else-if="entries.length === 0" class="ihint">
+    <p v-if="loading" class="mt-1.5 text-xs text-faint">{{ t('infra.monitoring.loading') }}</p>
+    <p v-else-if="entries.length === 0" class="mt-1.5 text-xs text-faint">
       {{ t('infra.monitoring.alarm.historyEmpty') }}
     </p>
-    <ol v-else class="iah-list">
-      <li v-for="(e, i) in entries" :key="`${e.type}${String(i)}`" class="iah-row">
-        <span class="iah-at">{{ atOf(e.at) }}</span>
-        <span class="iah-type">{{ e.type }}</span>
+    <ol v-else class="mt-1 flex list-none flex-col gap-1.5 p-0">
+      <li
+        v-for="(e, i) in entries"
+        :key="`${e.type}${String(i)}`"
+        class="grid grid-cols-[auto_auto_1fr] items-baseline gap-1.5 border-b pb-1.5 last:border-b-0 last:pb-0"
+      >
+        <span class="text-xs text-faint tabular-nums">{{ atOf(e.at) }}</span>
+        <span class="text-xs text-dim">{{ e.type }}</span>
         <!-- Lý do của AWS là văn xuôi dài; nó là NỘI DUNG của mục này, không phải
              chú thích, nên nó được xuống dòng thay vì bị cắt bằng ellipsis. -->
-        <span class="iah-sum">{{ e.summary }}</span>
+        <span class="text-xs break-words text-muted-foreground">{{ e.summary }}</span>
       </li>
     </ol>
-  </aside>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -53,103 +60,3 @@ function atOf(at: number | null): string {
   return at === null ? '—' : formatAxisTime(at, 86400)
 }
 </script>
-
-<style scoped>
-.iah {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 10px 12px;
-  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — xem app-shell.css. Bốn khối
-     của màn này TỪNG tự khai lại cùng một bộ, với ba nền khác nhau (`--bgSubtle`,
-     `--bgEl`), nên chúng đọc ra thành ba loại bề mặt trong cùng một màn. */
-}
-
-.iah-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.iah-title {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 650;
-}
-
-.iah-x {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-
-.iah-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-
-.iah-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.iah-name {
-  /* mono-ok: tên alarm là định danh người dùng copy sang AWS CLI/console */
-  font-family: var(--code);
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  word-break: break-all;
-}
-
-.iah-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.iah-row {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 6px;
-  align-items: baseline;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-
-.iah-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.iah-at {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.iah-type {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.iah-sum {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  word-break: break-word;
-}
-</style>

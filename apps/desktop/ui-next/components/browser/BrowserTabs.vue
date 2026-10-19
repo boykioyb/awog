@@ -1,13 +1,15 @@
 <template>
   <!-- Tab strip — cuộn NGANG, không bao giờ bóp nhóm nút cạnh nó. Chip gồm:
        favicon (hoặc spinner khi loading, hoặc globe fallback) + tên + nút ×. -->
-  <div class="bch-tablist">
-    <button
+  <div class="flex min-w-0 flex-auto items-center gap-1 overflow-x-auto">
+    <!-- Tab đang chọn = accent-tint (bg-selected + viền), không nền xám đặc. -->
+    <Button
       v-for="tab in tabs"
       :key="tab.tabId"
-      type="button"
-      class="bch-tab"
-      :class="{ on: tab.tabId === activeTabId }"
+      variant="ghost"
+      size="xs"
+      class="group max-w-45 flex-none justify-start gap-1.5 border border-transparent px-2 font-normal text-muted-foreground hover:text-foreground [&_svg]:size-3"
+      :class="tab.tabId === activeTabId && 'border-selected-border bg-selected text-foreground'"
       :title="tab.url || tabLabel(tab)"
       @click="emit('select-tab', tab.tabId)"
       @contextmenu="emit('tab-menu', { tab, ev: $event })"
@@ -16,34 +18,37 @@
       <Icon
         v-if="tab.loading"
         name="refresh"
-        class="bch-spin"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
+        class="animate-spin text-faint motion-reduce:animate-none"
       />
       <img
         v-else-if="faviconOf(tab)"
-        class="bch-fav"
+        class="size-3 shrink-0 rounded-sm"
         :src="faviconOf(tab)"
         alt=""
         draggable="false"
         @error="onFavError(tab)"
       />
-      <Icon
-        v-else
-        name="globe"
-        class="bch-favicon"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
-      />
-      <span class="bch-tabname">{{ tabLabel(tab) }}</span>
-      <span class="x" @click.stop="emit('close-tab', tab.tabId)">×</span>
-    </button>
-    <button
-      type="button"
-      class="bch-act"
+      <Icon v-else name="globe" class="text-faint" />
+      <span class="truncate">{{ tabLabel(tab) }}</span>
+      <!-- × là span trong nút tab (không lồng nút trong nút): hộp vuông 16px để hover
+           không méo theo glyph. Chỉ hiện khi hover/focus tab. -->
+      <span
+        class="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-sm opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 hover:bg-muted hover:text-foreground hover:opacity-100!"
+        @click.stop="emit('close-tab', tab.tabId)"
+      >
+        ×
+      </span>
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="shrink-0 text-muted-foreground"
       :title="t('sessions.workspace.browser.newTab')"
+      :aria-label="t('sessions.workspace.browser.newTab')"
       @click="emit('new-tab')"
     >
-      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
+      <Icon name="plus" />
+    </Button>
   </div>
 </template>
 
@@ -89,120 +94,3 @@ const onFavError = (tab: AwogBrowserTab): void => {
   if (f && !favFailed.value.includes(f)) favFailed.value = [...favFailed.value, f]
 }
 </script>
-
-<style scoped>
-.bch-tablist {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  overflow-x: auto;
-}
-/* Tab đang chọn = accent-tint (không nền xám đặc — quy ước segmented control). */
-.bch-tab {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 180px;
-  padding: 4px 8px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.bch-tab:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.bch-tab.on {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  color: var(--text);
-}
-.bch-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* Favicon 12px — kích thước đọc được mà không phá nhịp chip; spinner cùng chỗ. */
-.bch-fav {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  border-radius: var(--r-xs);
-  flex-shrink: 0;
-}
-.bch-favicon {
-  color: var(--textFaint);
-  flex-shrink: 0;
-}
-.bch-tabname {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bch-tab .x {
-  /* Hộp vuông 16px tròn đều — không thì hover bg co theo glyph × (chữ hẹp, box
-     cao) nhìn như cục xám bị méo. line-height = box để glyph canh giữa;
-     padding đáy 1px bù glyph × nằm hơi cao. */
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-sm);
-  line-height: 16px;
-  padding-bottom: 1px;
-  opacity: 0;
-  color: var(--textDim);
-}
-.bch-tab:hover .x,
-.bch-tab:focus-visible .x {
-  opacity: 0.7;
-}
-.bch-tab .x:hover {
-  opacity: 1;
-  background: var(--bgActive);
-  color: var(--text);
-}
-.bch-act {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.bch-act:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.bch-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.bch-spin {
-  animation: bch-spin 1s linear infinite;
-  color: var(--textFaint);
-  flex-shrink: 0;
-}
-@keyframes bch-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bch-spin {
-    animation: none;
-  }
-}
-</style>

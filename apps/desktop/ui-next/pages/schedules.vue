@@ -15,6 +15,7 @@
             :style="{ background: s.enabled ? 'var(--accent)' : 'var(--textFaint)' }"
           />
           <span class="ttl">{{ s.name }}</span>
+          <span v-if="s.proposedBy" class="tag acc">{{ t('schedules.state.proposed') }}</span>
           <span class="tag">{{ describeTrigger(s.trigger, t) }}</span>
           <span v-if="s.lastStatus" class="tag" :class="{ acc: s.lastStatus === 'ok' }">
             {{ t('schedules.status.' + s.lastStatus) }}
@@ -28,9 +29,10 @@
           :schedule="s"
           @edit="openEditor(s)"
           @delete="pendingDelete = s"
-          @toggle="store.toggleSchedule(s.id)"
+          @toggle="s.proposedBy ? openEditor(s) : store.toggleSchedule(s.id)"
           @run="onRunNow(s)"
           @open-session="(sid) => store.openRunSession(sid, s.name)"
+          @open-run="(runId) => (openRun = { scheduleId: s.id, runId })"
         />
       </template>
     </LibraryView>
@@ -40,6 +42,15 @@
       :schedule="editTarget"
       @save="onSave"
       @cancel="editorOpen = false"
+    />
+
+    <ScheduleRunModal
+      v-if="openRunSchedule"
+      :open="!!openRun"
+      :schedule="openRunSchedule"
+      :run-id="openRun?.runId ?? null"
+      @close="openRun = null"
+      @open-session="(sid) => store.openRunSession(sid, openRunSchedule!.name)"
     />
 
     <LibraryConfirmDelete
@@ -58,11 +69,12 @@
 // Bộ đếm giờ KHÔNG ở đây: nó nằm ở Electron main và bấm cò qua sidecar, nên
 // trang này chạy hay không chạy cũng không ảnh hưởng tới lịch. Trang chỉ đọc
 // store và làm CRUD.
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import LibraryView from '~/components/library/LibraryView.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import ScheduleDetail from '~/components/schedule/ScheduleDetail.vue'
 import ScheduleEditor from '~/components/schedule/ScheduleEditor.vue'
+import ScheduleRunModal from '~/components/schedule/ScheduleRunModal.vue'
 import { describeTrigger, formatWhen, searchTextOf } from '~/components/schedule/schedule-format'
 import { useSchedulesStore, type Schedule, type ScheduleInput } from '~/stores/schedules'
 
@@ -76,6 +88,12 @@ const pendingDelete = ref<Schedule | null>(null)
 
 // The page's own toast queue is gone — notifications go to the app-wide one.
 const { add: toast } = useToast()
+// Lượt chạy đang mở trong modal chi tiết. Lịch tra lại từ store theo id để modal thấy
+// lượt đang chạy cập nhật (store nạp lại theo `schedules.changed`).
+const openRun = ref<{ scheduleId: string; runId: string } | null>(null)
+const openRunSchedule = computed(
+  () => schedules.value.find((x) => x.id === openRun.value?.scheduleId) ?? null,
+)
 
 onMounted(() => void store.loadSchedules())
 

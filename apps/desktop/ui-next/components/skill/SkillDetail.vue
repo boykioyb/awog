@@ -1,61 +1,88 @@
 <template>
-  <div class="skd">
-    <div class="dh">
-      <div class="skd-icn">{{ skill.icon || '✦' }}</div>
-      <div class="dt">{{ skill.name }}</div>
-      <span class="tag mono">/{{ skill.id }}</span>
-      <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
-      <span style="flex: 1" />
-      <Button
-        :class="{ on: showCheck }"
-        :title="showCheck ? t('skillsEval.close') : t('skillsEval.open')"
-        class="skd-act"
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-12.5 flex-none items-center gap-2.5 border-b px-5.5">
+      <div class="grid size-6.5 flex-none place-items-center rounded-sm border bg-muted text-sm">
+        {{ skill.icon || '✦' }}
+      </div>
+      <div class="min-w-0 truncate text-lg font-semibold">{{ skill.name }}</div>
+      <!-- mono-ok: lệnh slash của skill -->
+      <Badge variant="outline" class="font-mono text-muted-foreground">/{{ skill.id }}</Badge>
+      <Badge
         variant="outline"
-        size="iconMd"
+        :class="isProject ? 'border-primary/45 bg-primary/8 text-primary' : 'text-muted-foreground'"
+        :title="sourcePath"
+      >
+        {{ sourceLabel }}
+      </Badge>
+      <span class="flex-1" />
+      <!-- Nút đang bật = accent-tint (không dùng nền xám). -->
+      <Button
+        :class="{ 'border-selected-border bg-selected text-primary': showCheck }"
+        :title="showCheck ? t('skillsEval.close') : t('skillsEval.open')"
+        variant="outline"
+        size="iconSm"
         @click="showCheck = !showCheck"
       >
-        <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="scan" />
       </Button>
       <Button
         :title="t('skills.detail.edit')"
-        class="skd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('edit')"
       >
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="edit" />
       </Button>
       <Button
         :title="t('skills.detail.duplicate')"
-        class="skd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('duplicate')"
       >
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="copy" />
       </Button>
       <Button
         :title="t('skills.detail.delete')"
-        class="skd-act skd-danger"
+        class="hover:border-destructive hover:text-destructive"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="trash" />
       </Button>
     </div>
 
-    <div class="dscroll">
-      <p class="skd-desc">{{ skill.description }}</p>
+    <div class="flex-1 overflow-y-auto p-5.5">
+      <p class="m-0 text-base leading-(--lh-prose) text-muted-foreground">
+        {{ skill.description }}
+      </p>
 
-      <div v-if="hasMetaChips" class="skd-chips">
-        <span v-for="g in skill.globs ?? []" :key="`g-${g}`" class="chip mono">glob: {{ g }}</span>
-        <span v-for="tool in skill.alwaysAllow ?? []" :key="`a-${tool}`" class="chip">
+      <div v-if="hasMetaChips" class="mt-3.5 flex flex-wrap gap-1.5">
+        <!-- mono-ok: glob path -->
+        <Badge
+          v-for="g in skill.globs ?? []"
+          :key="`g-${g}`"
+          variant="outline"
+          class="font-mono text-muted-foreground"
+        >
+          glob: {{ g }}
+        </Badge>
+        <Badge
+          v-for="tool in skill.alwaysAllow ?? []"
+          :key="`a-${tool}`"
+          variant="outline"
+          class="text-muted-foreground"
+        >
           allow: {{ tool }}
-        </span>
-        <span v-for="src in skill.requiredSources ?? []" :key="`s-${src}`" class="chip">
+        </Badge>
+        <Badge
+          v-for="src in skill.requiredSources ?? []"
+          :key="`s-${src}`"
+          variant="outline"
+          class="text-muted-foreground"
+        >
           source: {{ src }}
-        </span>
+        </Badge>
       </div>
 
       <!-- Bảng kiểm tra remount theo skill: state (doctor + ca kiểm) thuộc về
@@ -81,9 +108,8 @@
 </template>
 
 <script setup lang="ts">
-// Skill detail pane — port of the old UI SkillDetail logic, rendered in
-// prototype CSS (.dh header + .dscroll body, matching agents/connections detail
-// markup). Header actions (edit / duplicate / delete) emit to the page;
+// Skill detail pane — port of the old UI SkillDetail logic: header cố định +
+// thân cuộn, cùng bố cục với detail của agents/connections. Header actions (edit / duplicate / delete) emit to the page;
 // LibraryMarkdownBody renders the SKILL.md body with an LLM-edit trigger.
 import { computed, ref } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
@@ -130,50 +156,3 @@ const hasMetaChips = computed(
     (props.skill.requiredSources?.length ?? 0) > 0,
 )
 </script>
-
-<style scoped>
-.skd {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.skd-icn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  flex: 0 0 auto;
-}
-.skd-act {
-  width: 28px;
-  height: 28px;
-}
-/* Nút đang bật = accent-tint (không dùng nền xám --bgActive). */
-.skd-act.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.skd-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.skd-desc {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-prose);
-  margin: 0;
-}
-.skd-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 14px;
-}
-</style>

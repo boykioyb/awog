@@ -1,12 +1,12 @@
 <template>
-  <div class="obw">
-    <div class="obw-hero">
-      <Icon name="sparkles" />
+  <div class="flex flex-col items-center text-center">
+    <div class="mb-3.5 grid size-14 place-items-center rounded-xl bg-selected text-primary">
+      <Icon name="sparkles" class="size-7" />
     </div>
-    <p class="obw-sub">{{ t('onboarding.welcome.subtitle') }}</p>
-    <ul class="obw-points">
-      <li v-for="p in points" :key="p">
-        <Icon name="check" class="obw-tick" />
+    <p class="mb-4.5 text-lg text-muted-foreground">{{ t('onboarding.welcome.subtitle') }}</p>
+    <ul class="m-0 flex w-full max-w-95 list-none flex-col gap-3 p-0 text-left">
+      <li v-for="p in points" :key="p" class="flex items-start gap-2.5 text-foreground">
+        <Icon name="check" class="mt-0.5 shrink-0 text-primary" />
         <span>{{ p }}</span>
       </li>
     </ul>
@@ -25,53 +25,3 @@ const points = computed(() => [
   t('onboarding.welcome.point3'),
 ])
 </script>
-
-<style scoped>
-.obw {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-.obw-hero {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--r-card);
-  display: grid;
-  place-items: center;
-  background: var(--accentDim);
-  color: var(--accent);
-  margin-bottom: 14px;
-}
-.obw-hero :deep(svg) {
-  width: 28px;
-  height: 28px;
-}
-.obw-sub {
-  font-size: 1.05em;
-  color: var(--textMuted);
-  margin-bottom: 18px;
-}
-.obw-points {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  text-align: left;
-  width: 100%;
-  max-width: 380px;
-}
-.obw-points li {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  color: var(--text);
-}
-.obw-tick {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--accent);
-}
-</style>

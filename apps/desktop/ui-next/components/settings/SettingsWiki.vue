@@ -18,14 +18,14 @@
     </SettingsField>
 
     <SettingsField :name="t('settings.wiki.cost.name')" :desc="t('settings.wiki.cost.desc')">
-      <span class="chip">
+      <Badge variant="outline" class="text-muted-foreground">
         {{ t('settings.wiki.cost.value', { pages: wiki.contextPageCount, chars: chars }) }}
-      </span>
+      </Badge>
     </SettingsField>
 
     <SettingsField :name="t('settings.wiki.open.name')" :desc="t('settings.wiki.open.desc')">
       <Button variant="outline" size="sm" @click="goWiki">
-        <Icon name="book" :size="13" />
+        <Icon name="book" class="size-3.5" />
         {{ t('settings.wiki.open.action') }}
       </Button>
     </SettingsField>
@@ -41,7 +41,6 @@ import { computed, onMounted } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useWikiStore } from '~/stores/wiki'
 import { useSettingsModal } from '~/composables/useSettingsModal'
-import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

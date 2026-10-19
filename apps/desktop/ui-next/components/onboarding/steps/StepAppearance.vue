@@ -1,39 +1,20 @@
 <template>
-  <div class="obap">
-    <p class="ob-lead">{{ t('onboarding.appearance.desc') }}</p>
+  <div class="flex flex-col gap-4.5">
+    <p class="text-muted-foreground">{{ t('onboarding.appearance.desc') }}</p>
 
-    <div class="obap-field">
-      <span class="obap-label">{{ t('onboarding.appearance.theme') }}</span>
-      <div class="seg">
-        <span :class="{ on: isDark }" @click="ensureDark(true)">
-          {{ t('onboarding.appearance.themeDark') }}
-        </span>
-        <span :class="{ on: !isDark }" @click="ensureDark(false)">
-          {{ t('onboarding.appearance.themeLight') }}
-        </span>
-      </div>
+    <div class="flex flex-col gap-2">
+      <span class="text-sm text-faint">{{ t('onboarding.appearance.theme') }}</span>
+      <SettingsSeg v-model="themeMode" :options="themeOptions" />
     </div>
 
-    <div class="obap-field">
-      <span class="obap-label">{{ t('onboarding.appearance.accent') }}</span>
-      <div class="swatches">
-        <span
-          v-for="h in accents"
-          :key="h"
-          class="sw"
-          :class="{ on: h === accent }"
-          :style="{ background: h }"
-          @click="setAccent(h)"
-        />
-      </div>
+    <div class="flex flex-col gap-2">
+      <span class="text-sm text-faint">{{ t('onboarding.appearance.accent') }}</span>
+      <SettingsAccentSwatches :label="t('onboarding.appearance.accent')" />
     </div>
 
-    <div class="obap-field">
-      <span class="obap-label">{{ t('onboarding.appearance.language') }}</span>
-      <div class="seg">
-        <span :class="{ on: locale === 'vi' }" @click="setLocale('vi')">Tiếng Việt</span>
-        <span :class="{ on: locale === 'en' }" @click="setLocale('en')">English</span>
-      </div>
+    <div class="flex flex-col gap-2">
+      <span class="text-sm text-faint">{{ t('onboarding.appearance.language') }}</span>
+      <SettingsSeg v-model="language" :options="LANGUAGE_OPTIONS" />
     </div>
   </div>
 </template>
@@ -41,35 +22,34 @@
 <script setup lang="ts">
 // Appearance step — reuses the live theme/locale composables so choices apply
 // instantly and persist exactly like the Settings → Appearance panel. Accent
-// presets mirror that panel's palette.
-const { t, locale, setLocale } = useI18n()
-const { accent, setAccent, isDark, toggleTheme } = useTheme()
+// presets come from the same SettingsAccentSwatches.
+import { computed } from 'vue'
+import type { Locale } from '~/composables/useI18n'
 
-const accents = ['#10b981', '#60a5fa', '#a78bfa', '#f59e0b', '#f43f5e', '#22d3ee', '#fafafa']
+const { t, locale, setLocale } = useI18n()
+// theme-ok: chỉ đọc/ghi trạng thái theme, không tô màu
+const { isDark, toggleTheme } = useTheme()
 
 const ensureDark = (dark: boolean) => {
   if (dark !== isDark.value) toggleTheme()
 }
-</script>
 
-<style scoped>
-.obap {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.ob-lead {
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.obap-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.obap-label {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-</style>
+const themeOptions = computed(() => [
+  { label: t('onboarding.appearance.themeDark'), value: 'dark' },
+  { label: t('onboarding.appearance.themeLight'), value: 'light' },
+])
+const themeMode = computed<string>({
+  get: () => (isDark.value ? 'dark' : 'light'),
+  set: (value) => ensureDark(value === 'dark'),
+})
+
+// Tên ngôn ngữ để nguyên chữ gốc (không dịch) — giá trị lưu là mã locale.
+const LANGUAGE_OPTIONS = [
+  { label: 'Tiếng Việt', value: 'vi' },
+  { label: 'English', value: 'en' },
+]
+const language = computed<string>({
+  get: () => locale.value,
+  set: (value) => setLocale(value as Locale),
+})
+</script>

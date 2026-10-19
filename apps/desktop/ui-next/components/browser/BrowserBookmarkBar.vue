@@ -3,49 +3,61 @@
        mở bề mặt nổi chồng lên trang) — xem prefetchBrowserFrame. -->
   <div
     ref="rowEl"
-    class="bmb"
+    class="relative flex min-h-ctrl-xs shrink-0 items-center gap-1 overflow-hidden px-2 py-0.5 shadow-[inset_0_-1px_0_var(--color-border)]"
     @contextmenu.self.prevent
     @pointerenter="prefetchBrowserFrame"
     @pointerdown="prefetchBrowserFrame"
   >
     <!-- Hàng ĐO: cùng chip nhưng ẩn + ngoài luồng, để biết bề rộng thật của từng chip mà
-         không phải render rồi cắt. Kết quả → `visibleCount`; phần còn lại vào menu ». -->
-    <div ref="measureEl" class="bmb-measure" aria-hidden="true">
-      <span v-for="n in items" :key="n.id" class="bmb-chip">
-        <Icon :name="n.kind === 'folder' ? 'folder' : 'bookmark'" class="bmb-ic" />
-        <span class="bmb-label">{{ labelOf(n) }}</span>
-        <Icon v-if="n.kind === 'folder'" name="chev" class="bmb-ic bmb-down" />
+         không phải render rồi cắt. Kết quả → `visibleCount`; phần còn lại vào menu ».
+         Class chip ở đây PHẢI khớp chip thật bên dưới (gap/padding/cỡ chữ/max-w), lệch
+         là phép đo sai. -->
+    <div
+      ref="measureEl"
+      class="pointer-events-none invisible absolute top-0 left-0 flex gap-1"
+      aria-hidden="true"
+    >
+      <span
+        v-for="n in items"
+        :key="n.id"
+        class="flex max-w-37.5 flex-none items-center gap-1.5 px-2 py-0.5 text-xs"
+      >
+        <Icon :name="n.kind === 'folder' ? 'folder' : 'bookmark'" class="size-3 flex-none" />
+        <span class="truncate">{{ labelOf(n) }}</span>
+        <Icon v-if="n.kind === 'folder'" name="chev" class="size-2.5 flex-none" />
       </span>
     </div>
 
     <template v-if="items.length">
-      <button
+      <!-- Trang đang xem = accent-tint (bg-selected), không fill xám. -->
+      <Button
         v-for="n in shown"
         :key="n.id"
-        type="button"
-        class="bmb-chip"
-        :class="{ on: n.kind === 'url' && sameUrl(n.url, currentUrl) }"
+        variant="ghost"
+        class="h-auto max-w-37.5 flex-none gap-1.5 px-2 py-0.5 text-xs font-normal text-muted-foreground hover:text-foreground [&_svg]:size-3 [&_svg]:text-faint"
+        :class="n.kind === 'url' && sameUrl(n.url, currentUrl) && 'bg-selected text-foreground'"
         :title="n.kind === 'url' ? n.url : n.title"
         @click="onChipClick(n, $event)"
         @auxclick.middle.prevent="n.kind === 'url' && emit('open', n.url, 'new')"
         @contextmenu.prevent="openCtx($event, n)"
       >
-        <Icon :name="n.kind === 'folder' ? 'folder' : 'bookmark'" class="bmb-ic" />
-        <span class="bmb-label">{{ labelOf(n) }}</span>
-        <Icon v-if="n.kind === 'folder'" name="chev" class="bmb-ic bmb-down" />
-      </button>
-      <button
+        <Icon :name="n.kind === 'folder' ? 'folder' : 'bookmark'" />
+        <span class="truncate">{{ labelOf(n) }}</span>
+        <!-- px-ok: caret nhỏ cạnh nhãn thư mục (10px), `!` để thắng [&_svg]:size-3 của nút. -->
+        <Icon v-if="n.kind === 'folder'" name="chev" class="size-2.5!" />
+      </Button>
+      <Button
         v-if="hiddenItems.length"
-        type="button"
-        class="bmb-chip bmb-more"
+        variant="ghost"
+        class="h-auto flex-none px-2 py-0.5 text-xs font-normal text-muted-foreground hover:text-foreground"
         :title="t('browser.bookmarks.more')"
         :aria-label="t('browser.bookmarks.more')"
         @click.stop="openMore"
       >
         <span aria-hidden="true">»</span>
-      </button>
+      </Button>
     </template>
-    <span v-else class="bmb-hint">{{ t('browser.bookmarks.emptyHint') }}</span>
+    <span v-else class="truncate text-xs text-faint">{{ t('browser.bookmarks.emptyHint') }}</span>
 
     <AppContextMenu
       :open="menu !== null"
@@ -268,80 +280,3 @@ const onSelect = (id: string): void => {
   }
 }
 </script>
-
-<style scoped>
-.bmb {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 2px 8px;
-  overflow: hidden;
-  flex-shrink: 0;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.bmb-measure {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: flex;
-  gap: 4px;
-  visibility: hidden;
-  pointer-events: none;
-}
-.bmb-chip {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 150px;
-  padding: 2px 7px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.bmb-chip:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-/* Trang đang xem = accent-tint, đúng quy ước selection (không fill xám). */
-.bmb-chip.on {
-  background: var(--accentDim);
-  color: var(--text);
-}
-.bmb-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.bmb-ic {
-  flex: 0 0 auto;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--textFaint);
-}
-.bmb-down {
-  width: 10px; /* design-token-ok: caret nhỏ cạnh nhãn thư mục */
-  height: 10px; /* design-token-ok: caret nhỏ cạnh nhãn thư mục */
-}
-.bmb-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bmb-more {
-  padding: 2px 8px;
-}
-.bmb-hint {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-</style>

@@ -1,61 +1,95 @@
 <template>
-  <div class="insp wfinsp">
+  <div class="w-65 shrink-0 overflow-y-auto border-l bg-sidebar p-4">
     <template v-if="node && agent">
-      <div class="sech">{{ t('workflow.inspector.node') }}</div>
-      <div class="wfi-agent">
-        <span class="wfn-badge">{{ roleBadge }}</span>
-        <div class="wfi-agent-meta">
-          <div class="wfi-agent-name">{{ agent.name }}</div>
-          <div class="wfi-agent-id mono">{{ node.id }}</div>
+      <div class="mt-5 mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('workflow.inspector.node') }}
+      </div>
+      <div class="flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5">
+        <span
+          class="grid size-5.5 shrink-0 place-items-center rounded-sm bg-selected text-xs font-semibold text-primary"
+        >
+          {{ roleBadge }}
+        </span>
+        <div class="min-w-0">
+          <div class="truncate text-sm font-medium text-foreground">{{ agent.name }}</div>
+          <div class="mt-0.5 font-mono text-xs text-dim">{{ node.id }}</div>
         </div>
       </div>
 
-      <div class="sech">{{ t('workflow.inspector.skill') }}</div>
+      <div class="mt-5 mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('workflow.inspector.skill') }}
+      </div>
       <AppSelect
         :model-value="node.skillId || ''"
         :options="skillOptions"
         width="100%"
         @update:model-value="onSkill"
       />
-      <div v-if="skill" class="wfi-skill-desc">{{ skill.description }}</div>
+      <div v-if="skill" class="mt-1.5 text-sm text-dim">{{ skill.description }}</div>
 
-      <div class="sech">{{ t('workflow.inspector.outputs') }}</div>
-      <div class="wfi-outs">
-        <div v-for="(out, i) in node.outputs" :key="i" class="wfi-out-row">
-          <Input :model-value="out" class="mono" @update:model-value="updateOutput(i, $event)" />
+      <div class="mt-5 mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('workflow.inspector.outputs') }}
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <div v-for="(out, i) in node.outputs" :key="i" class="flex items-center gap-1.5">
+          <Input
+            :model-value="out"
+            class="font-mono"
+            @update:model-value="updateOutput(i, $event)"
+          />
           <Button
             :title="t('common.delete')"
-            class="wfi-del"
+            class="shrink-0 hover:border-transparent hover:bg-destructive/10 hover:text-destructive"
             variant="outline"
-            size="iconMd"
+            size="iconSm"
             @click="removeOutput(i)"
           >
-            <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="x" class="size-3" />
           </Button>
         </div>
-        <button class="wfi-add" @click="addOutput">
-          <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <Button
+          variant="ghost"
+          size="xs"
+          class="self-start px-0.5 text-sm font-normal text-dim hover:bg-transparent hover:text-foreground"
+          @click="addOutput"
+        >
+          <Icon name="plus" class="size-3" />
           {{ t('workflow.inspector.addOutput') }}
-        </button>
+        </Button>
       </div>
 
-      <div class="sech">{{ t('workflow.inspector.approval') }}</div>
-      <label class="wfi-chk">
-        <input type="checkbox" :checked="node.approval" @change="onApproval" />
+      <div class="mt-5 mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('workflow.inspector.approval') }}
+      </div>
+      <label class="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+        <Checkbox :model-value="node.approval" @update:model-value="onApproval($event === true)" />
         <span>{{ t('workflow.inspector.approvalLabel') }}</span>
       </label>
-      <div class="wfi-hint">{{ t('workflow.inspector.approvalHint') }}</div>
+      <div class="mt-1 ml-6 text-xs text-dim">{{ t('workflow.inspector.approvalHint') }}</div>
 
-      <div class="sech">{{ t('workflow.inspector.gate') }}</div>
-      <label class="wfi-chk" :class="{ 'wfi-chk-disabled': !canGate }">
-        <input type="checkbox" :checked="!!node.gate" :disabled="!canGate" @change="onGateToggle" />
+      <div class="mt-5 mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('workflow.inspector.gate') }}
+      </div>
+      <label
+        class="flex items-center gap-2 text-sm text-foreground"
+        :class="canGate ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+      >
+        <Checkbox
+          :model-value="!!node.gate"
+          :disabled="!canGate"
+          @update:model-value="onGateToggle($event === true)"
+        />
         <span>{{ t('workflow.inspector.gateLabel') }}</span>
       </label>
-      <div v-if="!canGate" class="wfi-hint">{{ t('workflow.inspector.gateNoAncestors') }}</div>
+      <div v-if="!canGate" class="mt-1 ml-6 text-xs text-dim">
+        {{ t('workflow.inspector.gateNoAncestors') }}
+      </div>
       <template v-else-if="node.gate">
-        <div class="wfi-hint">{{ t('workflow.inspector.gateHint') }}</div>
-        <div class="wfi-gate-field">
-          <div class="wfi-gate-lbl">{{ t('workflow.inspector.gateTarget') }}</div>
+        <div class="mt-1 ml-6 text-xs text-dim">{{ t('workflow.inspector.gateHint') }}</div>
+        <div class="mt-2">
+          <div class="mb-1 text-xs font-medium text-dim">
+            {{ t('workflow.inspector.gateTarget') }}
+          </div>
           <AppSelect
             :model-value="node.gate.onFailTarget"
             :options="gateTargetOptions"
@@ -63,27 +97,32 @@
             @update:model-value="onGateTarget"
           />
         </div>
-        <div class="wfi-gate-field">
-          <div class="wfi-gate-lbl">{{ t('workflow.inspector.gateMaxIter') }}</div>
+        <div class="mt-2">
+          <div class="mb-1 text-xs font-medium text-dim">
+            {{ t('workflow.inspector.gateMaxIter') }}
+          </div>
           <Input
             type="number"
             min="1"
             max="10"
             :model-value="node.gate.maxIterations"
-            class="mono wfi-gate-num"
+            class="w-18 tabular-nums"
             @update:model-value="onGateMaxIter($event)"
           />
         </div>
-        <label class="wfi-chk wfi-gate-auto">
-          <input type="checkbox" :checked="node.gate.auto" @change="onGateAuto" />
+        <label class="mt-2.5 flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            :model-value="node.gate.auto"
+            @update:model-value="onGateAuto($event === true)"
+          />
           <span>{{ t('workflow.inspector.gateAuto') }}</span>
         </label>
-        <div class="wfi-hint">{{ t('workflow.inspector.gateAutoHint') }}</div>
+        <div class="mt-1 ml-6 text-xs text-dim">{{ t('workflow.inspector.gateAutoHint') }}</div>
       </template>
     </template>
 
-    <div v-else class="wfi-empty">
-      <Icon name="panel" style="width: 18px; height: 18px" />
+    <div v-else class="flex flex-col items-center gap-3 px-3 py-10 text-center text-sm text-dim">
+      <Icon name="panel" class="size-4.5" />
       <div>{{ t('workflow.inspector.empty') }}</div>
     </div>
   </div>
@@ -152,9 +191,9 @@ const addOutput = () => {
   emit('update:node', { ...props.node, outputs: [...props.node.outputs, 'new_artifact.md'] })
 }
 
-const onApproval = (e: Event) => {
+const onApproval = (checked: boolean) => {
   if (!props.node) return
-  emit('update:node', { ...props.node, approval: (e.target as HTMLInputElement).checked })
+  emit('update:node', { ...props.node, approval: checked })
 }
 
 // --- gate (ADR 0056) -------------------------------------------------------
@@ -165,9 +204,9 @@ const gateTargetOptions = computed<AppSelectOption[]>(() =>
   props.gateTargets.map((g) => ({ value: g.id, label: g.label })),
 )
 
-const onGateToggle = (e: Event) => {
+const onGateToggle = (checked: boolean) => {
   if (!props.node) return
-  if ((e.target as HTMLInputElement).checked) {
+  if (checked) {
     const target = props.gateTargets[0]?.id
     if (!target) return
     const gate: NodeGate = { onFailTarget: target, maxIterations: 3, auto: true }
@@ -191,158 +230,5 @@ const onGateMaxIter = (value: string) => {
   patchGate({ maxIterations: n })
 }
 
-const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement).checked })
+const onGateAuto = (checked: boolean) => patchGate({ auto: checked })
 </script>
-
-<style scoped>
-.wfinsp {
-  flex: 0 0 260px;
-}
-.wfi-agent {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 10px 12px;
-}
-.wfn-badge {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  background: var(--accentDim);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-.wfi-agent-meta {
-  min-width: 0;
-}
-.wfi-agent-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wfi-agent-id {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  margin-top: 2px;
-}
-.wfi-skill-desc {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  margin-top: 6px;
-  line-height: var(--lh-sm);
-}
-.wfi-outs {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.wfi-out-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.wfi-inp {
-  flex: 1;
-  min-width: 0;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 6px 9px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  outline: none;
-}
-.wfi-inp:focus {
-  border-color: var(--borderStrong);
-}
-.wfi-del {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-}
-.wfi-del:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-  border-color: transparent;
-}
-.wfi-add {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  background: transparent;
-  border: 0;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  padding: 4px 2px;
-}
-.wfi-add:hover {
-  color: var(--text);
-}
-.wfi-chk {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-}
-.wfi-chk input {
-  accent-color: var(--accent);
-}
-.wfi-chk-disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.wfi-gate-field {
-  margin-top: 8px;
-}
-.wfi-gate-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--textDim);
-  margin-bottom: 4px;
-}
-.wfi-gate-num {
-  width: 72px;
-}
-.wfi-gate-auto {
-  margin-top: 10px;
-}
-.wfi-hint {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  margin-top: 5px;
-  margin-left: 22px;
-  line-height: var(--lh-sm);
-}
-.wfi-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  color: var(--textDim);
-  text-align: center;
-  padding: 40px 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

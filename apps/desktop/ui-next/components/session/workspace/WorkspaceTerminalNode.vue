@@ -2,54 +2,84 @@
   <!-- Leaf → one pane box. For a tab with a single pane this renders exactly the
        pre-grid box (no grip / close / drop overlay, plain `flex: 1 1 0`) so existing
        consumers stay byte-identical. Grip + close + drop overlay only appear once a
-       tab has been split (paneCount > 1). -->
+       tab has been split (paneCount > 1).
+       NO padding on the box: xterm's FitAddon measures its clientHeight (padding
+       INCLUSIVE) — padding would add a row that renders into it and gets clipped. The
+       gutter lives on the parent layer in WorkspaceTerminal (not measured), which also
+       paints the terminal bg behind this box.
+       `.wsterm-box` là hook: WorkspaceTerminal tìm hộp của pane bằng closest('.wsterm-box'). -->
   <div
     v-if="leaf"
     :ref="(el) => leaf && ctx.setContainer(leaf.paneId, el)"
-    class="wsterm-box"
+    class="wsterm-box group/pane relative min-h-0 min-w-0 flex-[1_1_0] overflow-hidden"
     :class="{
-      'pane-active': multi && leaf.paneId === ctx.activePaneId(tabId),
-      'pane-dragging': ctx.isDragSource(leaf.paneId),
+      'ring-1 ring-primary ring-inset': multi && leaf.paneId === ctx.activePaneId(tabId),
+      'opacity-55': ctx.isDragSource(leaf.paneId),
     }"
     :data-pane-id="leaf.paneId"
     @mousedown="ctx.setActivePane(tabId, leaf.paneId)"
   >
-    <div v-if="multi" class="wsterm-pane-tools">
-      <button
-        class="wsterm-pane-grip"
+    <!-- Per-pane controls (drag handle + close) — hover-revealed, never over the
+         terminal body so xterm keeps its own mouse; one floating chip. `right-4.5`
+         clears xterm's 14px scrollbar gutter (what FitAddon reserves) so the thumb
+         stays grabbable; z-12 sits above xterm's own scrollbar (z 11). Hidden ≠ inert:
+         pointer-events off while invisible so the corner keeps text selection. -->
+    <div
+      v-if="multi"
+      class="pointer-events-none absolute top-1 right-4.5 z-12 flex gap-0.5 rounded-sm border border-border bg-popover p-0.5 opacity-0 shadow-sm transition-opacity group-hover/pane:pointer-events-auto group-hover/pane:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+    >
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="h-5.5 w-5.5 cursor-grab text-muted-foreground active:cursor-grabbing [&_svg]:size-3.5"
         :title="t('sessions.workspace.terminal.dragPane')"
         :aria-label="t('sessions.workspace.terminal.dragPane')"
         @mousedown.stop
         @pointerdown.stop="ctx.onGripDown(tabId, leaf!.paneId, $event)"
       >
-        <Move class="size-3.5" />
-      </button>
-      <button
-        class="wsterm-pane-close"
+        <Move />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="h-5.5 w-5.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive [&_svg]:size-3.5"
         :title="t('sessions.workspace.terminal.closePane')"
         :aria-label="t('sessions.workspace.terminal.closePane')"
         @mousedown.stop
         @click="ctx.closePane(tabId, leaf!.paneId)"
       >
-        <X class="size-3.5" />
-      </button>
+        <X />
+      </Button>
     </div>
 
     <!-- Drop-zone overlay — shown only on the leaf currently under a dragged pane.
-         The band marks where the drop will land (edge = split, center = swap). -->
-    <div v-if="dropZone" class="wsterm-drop">
-      <div class="wsterm-drop-band" :class="dropZone" />
+         Purely visual (pointer-events off so hit-testing sees the box underneath);
+         the band marks where the drop will land (edge = split, center = swap). -->
+    <div v-if="dropZone" class="pointer-events-none absolute inset-0 z-7">
+      <div
+        class="absolute rounded-sm border border-primary bg-primary/20"
+        :class="DROP_BAND[dropZone]"
+      />
     </div>
   </div>
 
   <!-- Split → a flex row/col of children, each sized by `flex-grow: sizes[i]`, with a
-       draggable 1px splitter between adjacent children. -->
-  <div v-else-if="split" class="wsterm-split" :class="split.dir">
+       draggable 1px splitter between adjacent children (grab target widened past the
+       line by a ::before, without taking layout space). -->
+  <div
+    v-else-if="split"
+    class="relative flex min-h-0 min-w-0 flex-[1_1_0]"
+    :class="split.dir === 'row' ? 'flex-row' : 'flex-col'"
+  >
     <template v-for="(child, i) in split.children" :key="nodeKey(child)">
       <div
         v-if="i > 0"
-        class="wsterm-splitter"
-        :class="split.dir"
+        class="relative z-4 flex-none bg-border before:absolute before:content-['']"
+        :class="
+          split.dir === 'row'
+            ? 'w-px cursor-col-resize before:inset-y-0 before:-inset-x-0.75'
+            : 'h-px cursor-row-resize before:inset-x-0 before:-inset-y-0.75'
+        "
         role="separator"
         :aria-orientation="split.dir === 'row' ? 'vertical' : 'horizontal'"
         @pointerdown="ctx.onSplitterDown(split!, i, $event)"
@@ -231,189 +261,17 @@ const split = computed(() => (props.node.kind === 'split' ? props.node : null))
 const multi = computed(() => ctx.paneCount(props.tabId) > 1)
 const dropZone = computed(() => (leaf.value ? ctx.dragTargetZone(leaf.value.paneId) : null))
 
+// Vị trí dải tô của drop-zone: mép = split về phía đó, giữa = đổi chỗ hai pane.
+const DROP_BAND: Record<DropZone, string> = {
+  left: 'inset-y-0 left-0 w-1/3',
+  right: 'inset-y-0 right-0 w-1/3',
+  top: 'inset-x-0 top-0 h-1/3',
+  bottom: 'inset-x-0 bottom-0 h-1/3',
+  center: 'inset-[20%]',
+}
+
 // Stable-per-content key: a leaf keys on its pane; a split keys on the set of panes
 // it holds so pure resizes (same panes) never remount, while structural changes do.
 const nodeKey = (node: LayoutNode): string =>
   node.kind === 'leaf' ? `l:${node.paneId}` : `s:${collectPaneIds(node).join('|')}`
 </script>
-
-<style scoped>
-/* One pane. `flex: 1 1 0` (grow overridden inline by the parent split's size weight)
-   + min-0 so it can shrink below xterm's intrinsic size. Identical to the pre-grid
-   box for a lone leaf. */
-.wsterm-box {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  /* NO padding here: xterm's FitAddon measures this box's clientHeight (padding
-     INCLUSIVE), so padding is consumed by the fit — it adds an extra row that renders
-     into the padding and gets clipped by overflow:hidden. The breathing-room gutter
-     lives on the parent `.wsterm-panes` (which xterm does NOT measure). */
-  background: var(--wsterm-bg, var(--background));
-}
-.wsterm-box.pane-active {
-  box-shadow: inset 0 0 0 1px var(--primary);
-}
-.wsterm-box.pane-dragging {
-  opacity: 0.55;
-}
-
-/* Split container: lays children along one axis; children are sized via inline
-   flex-grow weights, splitters take a fixed 1px. */
-.wsterm-split {
-  position: relative;
-  display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-}
-.wsterm-split.row {
-  flex-direction: row;
-}
-.wsterm-split.col {
-  flex-direction: column;
-}
-
-.wsterm-splitter {
-  position: relative;
-  z-index: 4;
-  flex: 0 0 1px;
-  background: var(--border);
-}
-.wsterm-splitter.row {
-  cursor: col-resize;
-}
-.wsterm-splitter.col {
-  cursor: row-resize;
-}
-/* Widen the grab target past the 1px line without taking layout space. */
-.wsterm-splitter.row::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -3px;
-  right: -3px;
-}
-.wsterm-splitter.col::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -3px;
-  bottom: -3px;
-}
-
-/* Per-pane controls (drag handle + close) — hover-revealed, never over the terminal
-   body so xterm keeps its own mouse. Rendered as one floating chip: over live output
-   two naked 18px squares were hard to read AND hard to hit. */
-.wsterm-pane-tools {
-  position: absolute;
-  top: 4px;
-  /* Clear of xterm's scrollbar gutter (14px — exactly what FitAddon reserves on the
-     right, `overviewRuler.width || 14`). Sitting ON that gutter, the chip covered the
-     top of the scroll track, so the thumb could not be grabbed where it rests when
-     the buffer is scrolled to the bottom. */
-  right: 18px;
-  /* Above xterm's own scrollbar (z-index 11 inside `.xterm`, which is not a stacking
-     context — at 6 the slider painted straight over these buttons). */
-  z-index: 12;
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--popover);
-  box-shadow: var(--shadow-sm);
-  opacity: 0;
-  /* Hidden ≠ inert: at opacity 0 the buttons still hit-tested, swallowing clicks and
-     text selection in the pane's top-right corner. */
-  pointer-events: none;
-  transition: opacity 0.12s;
-}
-.wsterm-box:hover .wsterm-pane-tools,
-.wsterm-pane-tools:focus-within {
-  opacity: 1;
-  pointer-events: auto;
-}
-.wsterm-pane-grip,
-.wsterm-pane-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* 22px = the dock header's button size (.gterm-btn) — same house target. */
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.wsterm-pane-grip {
-  cursor: grab;
-}
-.wsterm-pane-grip:active {
-  cursor: grabbing;
-}
-.wsterm-pane-grip:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.wsterm-pane-close:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-.wsterm-pane-grip:focus-visible,
-.wsterm-pane-close:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -1px;
-}
-
-/* Drop-zone overlay — purely visual (pointer-events off so hit-testing sees the box
-   underneath). The band tints the edge/center the drop will target. */
-.wsterm-drop {
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  pointer-events: none;
-}
-.wsterm-drop-band {
-  position: absolute;
-  border-radius: var(--r-xs);
-  background: color-mix(in srgb, var(--primary) 22%, transparent);
-  border: 1px solid var(--primary);
-}
-.wsterm-drop-band.left {
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 33%;
-}
-.wsterm-drop-band.right {
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 33%;
-}
-.wsterm-drop-band.top {
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 33%;
-}
-.wsterm-drop-band.bottom {
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 33%;
-}
-.wsterm-drop-band.center {
-  inset: 20%;
-}
-</style>

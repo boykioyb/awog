@@ -3,7 +3,7 @@
     <br v-if="seg.type === 'br'" />
     <a
       v-else-if="seg.type === 'link'"
-      class="msglink"
+      class="cursor-pointer break-words text-primary underline underline-offset-2 hover:decoration-2"
       :href="seg.value"
       target="_blank"
       rel="noopener noreferrer"
@@ -11,6 +11,9 @@
     >
       {{ seg.value }}
     </a>
+    <!-- Link trong bong bóng: màu primary + gạch chân; URL dài thì xuống dòng thay vì
+         tràn. Path đọc như tham chiếu file (mono như inline code, mono-ok: path người
+         dùng copy được); ref comment GitHub gạch chấm = nhảy ra ngoài. -->
     <!-- Bare file path → chip opening the shared PreviewModal (absolute paths
          outside the workspace preview via their own parent dir — see
          useFilePreview.absScope). Only emitted when a file-preview host exists
@@ -19,7 +22,7 @@
          "could not load" when the file is gone — no fake-chip gate needed here. -->
     <a
       v-else-if="seg.type === 'path'"
-      class="msglink msgpath"
+      class="cursor-pointer break-words text-primary underline underline-offset-2 hover:decoration-2 font-mono text-[0.92em] decoration-dotted"
       role="button"
       :title="seg.value"
       @click.prevent="openPath(seg.value)"
@@ -30,7 +33,7 @@
          gh.commentUrl rồi mở browser (xem useGhCommentLink). -->
     <a
       v-else-if="seg.type === 'ghc'"
-      class="msglink msggh"
+      class="cursor-pointer break-words text-primary underline underline-offset-2 hover:decoration-2 decoration-dotted hover:decoration-solid"
       role="button"
       :title="t('github.comment.open', { id: seg.ghId ?? '' })"
       @click.prevent="openGh?.(seg.ghId!)"
@@ -142,32 +145,3 @@ const segments = computed<Seg[]>(() => {
   return out
 })
 </script>
-
-<style scoped>
-/* Inline link inside a message bubble — primary color + underline (proto link
-   idiom, readable on the wash bubble in both themes). Long URLs wrap rather than
-   overflow the bubble. */
-.msglink {
-  color: var(--primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  word-break: break-word;
-  cursor: pointer;
-}
-.msglink:hover {
-  text-decoration-thickness: 2px;
-}
-/* Path chips read as file references, not external URLs — mono like inline code. */
-.msgpath {
-  font-family: var(--code);
-  font-size: 0.92em;
-  text-decoration-style: dotted;
-}
-/* GitHub comment refs — dotted underline marks an external jump. */
-.msggh {
-  text-decoration-style: dotted;
-}
-.msggh:hover {
-  text-decoration-style: solid;
-}
-</style>

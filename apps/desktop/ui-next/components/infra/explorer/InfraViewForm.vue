@@ -1,55 +1,52 @@
 <template>
   <!-- Form nhỏ ở cấp VIEW (task 3.6): tạo bucket, tạo "thư mục", tải lên, presign.
-       Dùng khuôn overlay `.ovl.on` + Teleport của app để cùng một ngôn ngữ hình
-       ảnh với mọi hộp thoại khác. -->
-  <Teleport to="body">
-    <div class="ovl on" @click.self="$emit('close')">
-      <div class="ixf" role="dialog" aria-modal="true">
-        <header class="ixf-hd">
-          <Icon name="plus" />
-          <span class="ixf-title">{{ t(form.label) }}</span>
-          <Button type="button" variant="outline" size="sm" @click="$emit('close')">
-            <Icon name="x" />
-          </Button>
-        </header>
+       Dùng `Dialog` của app để cùng một ngôn ngữ hình ảnh với mọi hộp thoại khác;
+       Esc / bấm nền / nút ✕ (DialogContent tự vẽ) đều phát `close`. -->
+  <Dialog :open="true" @update:open="(v: boolean) => !v && $emit('close')">
+    <DialogContent class="flex w-[calc(100vw-2rem)] max-w-105 flex-col gap-2.5 px-4 pt-3.5 pb-3">
+      <DialogHeader class="flex-row items-center gap-2 pr-8 text-muted-foreground">
+        <Icon name="plus" />
+        <DialogTitle class="flex-1 text-base font-semibold text-foreground">
+          {{ t(form.label) }}
+        </DialogTitle>
+      </DialogHeader>
 
-        <!-- Hậu quả bằng lời người, TRƯỚC các ô nhập (ADR 0088 §5). -->
-        <p class="ixf-consequence">{{ t(form.consequence) }}</p>
+      <!-- Hậu quả bằng lời người, TRƯỚC các ô nhập (ADR 0088 §5). -->
+      <DialogDescription class="text-sm">{{ t(form.consequence) }}</DialogDescription>
 
-        <label v-for="f in form.fields" :key="f.key" class="ixf-field">
-          <span class="ixf-lbl">
-            {{ t(f.label) }}
-            <span v-if="f.required" class="ixf-req">*</span>
-          </span>
-          <Input
-            v-model="values[f.key]"
-            :placeholder="f.placeholder ?? ''"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </label>
+      <label v-for="f in form.fields" :key="f.key" class="flex flex-col gap-1">
+        <span class="text-xs text-dim">
+          {{ t(f.label) }}
+          <span v-if="f.required" class="ml-0.5 text-destructive">*</span>
+        </span>
+        <Input
+          v-model="values[f.key]"
+          :placeholder="f.placeholder ?? ''"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
 
-        <!-- Lớp phá huỷ: gõ lại đúng giá trị để mở khoá. Việc kiểm tra thật nằm ở
-             sidecar (`__typeName`), đây chỉ là chỗ để người dùng bày tỏ ý định. -->
-        <label v-if="typeNameField" class="ixf-field">
-          <span class="ixf-lbl">
-            {{ t('infra.explorer.confirm.typeName', { value: expected }) }}
-          </span>
-          <Input v-model="typed" autocomplete="off" spellcheck="false" />
-        </label>
+      <!-- Lớp phá huỷ: gõ lại đúng giá trị để mở khoá. Việc kiểm tra thật nằm ở
+           sidecar (`__typeName`), đây chỉ là chỗ để người dùng bày tỏ ý định. -->
+      <label v-if="typeNameField" class="flex flex-col gap-1">
+        <span class="text-xs text-dim">
+          {{ t('infra.explorer.confirm.typeName', { value: expected }) }}
+        </span>
+        <Input v-model="typed" autocomplete="off" spellcheck="false" />
+      </label>
 
-        <footer class="ixf-ft">
-          <span class="ixf-missing">{{ missingLabel }}</span>
-          <Button type="button" variant="outline" @click="$emit('close')">
-            {{ t('common.cancel') }}
-          </Button>
-          <Button type="button" :disabled="!ready || busy" variant="default" @click="submit">
-            {{ t(form.label) }}
-          </Button>
-        </footer>
-      </div>
-    </div>
-  </Teleport>
+      <DialogFooter class="items-center gap-2 pt-1 sm:justify-start">
+        <span class="flex-1 text-xs text-warning">{{ missingLabel }}</span>
+        <Button type="button" variant="outline" @click="$emit('close')">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button type="button" :disabled="!ready || busy" variant="default" @click="submit">
+          {{ t(form.label) }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -93,87 +90,3 @@ function submit(): void {
   emit('submit', out)
 }
 </script>
-
-<style scoped>
-.ixf {
-  width: min(420px, calc(100vw - 32px));
-  margin-top: 4vh;
-  padding: 14px 16px 12px;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  background: var(--bgEl);
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ixf-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--textMuted);
-}
-
-.ixf-title {
-  flex: 1;
-  color: var(--text);
-  font-weight: 650;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-
-.ixf-consequence {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.ixf-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ixf-lbl {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.ixf-req {
-  color: var(--red);
-  margin-left: 3px;
-}
-
-.ixf-input {
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-
-.ixf-input:focus {
-  border-color: var(--accentBorder);
-}
-
-.ixf-ft {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-.ixf-missing {
-  flex: 1;
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-</style>

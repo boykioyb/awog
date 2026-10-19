@@ -5,28 +5,23 @@
     :width="640"
     @close="emit('close')"
   >
-    <div class="cap">
+    <div class="flex flex-col gap-4">
       <!-- Hai khu: catalog tĩnh có sẵn (luôn dùng được, kể cả offline) và khu
            Khám phá lấy danh sách động từ MCP Registry (gói #38). Tab Khám phá chỉ
-           được mount khi người dùng bấm vào — không có request nào chạy ngầm. -->
-      <div class="cap-tabs">
-        <button
-          type="button"
-          class="cap-tab"
-          :class="{ on: tab === 'presets' }"
-          @click="tab = 'presets'"
-        >
-          {{ t('connectionsDiscover.tab.presets') }}
-        </button>
-        <button
-          type="button"
-          class="cap-tab"
-          :class="{ on: tab === 'discover' }"
-          @click="openDiscover"
-        >
-          {{ t('connectionsDiscover.tab.discover') }}
-        </button>
-      </div>
+           được mount khi người dùng bấm vào — không có request nào chạy ngầm.
+           Chỉ dùng Tabs cho dải chọn: nội dung bên dưới giữ v-if/v-show riêng để
+           Khám phá mount lười rồi giữ nguyên. -->
+      <Tabs
+        :model-value="tab"
+        @update:model-value="
+          (v: string | number) => (v === 'discover' ? openDiscover() : (tab = 'presets'))
+        "
+      >
+        <TabsList>
+          <TabsTrigger value="presets">{{ t('connectionsDiscover.tab.presets') }}</TabsTrigger>
+          <TabsTrigger value="discover">{{ t('connectionsDiscover.tab.discover') }}</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <ConnectionDiscoverPanel
         v-if="discoverMounted"
@@ -35,50 +30,75 @@
         @quick="(id, entry) => emit('quick', id, entry)"
       />
 
-      <div v-show="tab === 'presets'" class="cap-presets">
+      <div v-show="tab === 'presets'" class="flex flex-col gap-4">
         <!-- Two "how do you want to start" options: hand-build, or describe with AI. -->
-        <div class="cap-quick">
-          <button type="button" class="cap-opt" @click="emit('scratch')">
-            <span class="cap-opt-ic">
-              <Icon name="plus" style="width: var(--icon-md); height: var(--icon-md)" />
+        <div class="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            class="h-auto justify-start gap-3 rounded-lg p-3 text-left font-normal hover:border-primary"
+            @click="emit('scratch')"
+          >
+            <span
+              class="grid size-8 flex-none place-items-center rounded-md border bg-muted text-muted-foreground"
+            >
+              <Icon name="plus" />
             </span>
-            <span class="cap-opt-tx">
-              <span class="cap-opt-t">{{ t('connections.picker.scratch') }}</span>
-              <span class="cap-opt-s">{{ t('connections.picker.scratchSub') }}</span>
+            <span class="flex min-w-0 flex-col gap-0.5 whitespace-normal">
+              <span class="text-sm font-semibold text-foreground">
+                {{ t('connections.picker.scratch') }}
+              </span>
+              <span class="text-xs text-muted-foreground">
+                {{ t('connections.picker.scratchSub') }}
+              </span>
             </span>
-          </button>
-          <button type="button" class="cap-opt" @click="emit('ai')">
-            <span class="cap-opt-ic accent">
-              <Icon name="sparkles" style="width: var(--icon-md); height: var(--icon-md)" />
+          </Button>
+          <Button
+            variant="outline"
+            class="h-auto justify-start gap-3 rounded-lg p-3 text-left font-normal hover:border-primary"
+            @click="emit('ai')"
+          >
+            <span
+              class="grid size-8 flex-none place-items-center rounded-md border bg-muted text-primary"
+            >
+              <Icon name="sparkles" />
             </span>
-            <span class="cap-opt-tx">
-              <span class="cap-opt-t">{{ t('connections.picker.ai') }}</span>
-              <span class="cap-opt-s">{{ t('connections.picker.aiSub') }}</span>
+            <span class="flex min-w-0 flex-col gap-0.5 whitespace-normal">
+              <span class="text-sm font-semibold text-foreground">
+                {{ t('connections.picker.ai') }}
+              </span>
+              <span class="text-xs text-muted-foreground">{{ t('connections.picker.aiSub') }}</span>
             </span>
-          </button>
+          </Button>
         </div>
 
         <!-- Catalog of common providers → pre-filled config. -->
-        <div class="cap-seplbl">{{ t('connections.picker.orPick') }}</div>
-        <div class="cap-grid">
-          <button
+        <Separator />
+        <div class="-mt-2 text-xs font-medium text-muted-foreground">
+          {{ t('connections.picker.orPick') }}
+        </div>
+        <div class="grid grid-cols-2 gap-2.5">
+          <Button
             v-for="p in presets"
             :key="p.id"
-            type="button"
-            class="cap-card"
+            variant="outline"
+            class="h-auto items-start justify-start gap-3 rounded-lg px-3 py-2.5 text-left font-normal hover:border-primary"
             @click="emit('quick', p.id)"
           >
             <SourceAvatar :source="pseudoSource(p)" size="md" />
-            <span class="cap-card-tx">
-              <span class="cap-card-nm">
+            <span class="flex min-w-0 flex-col gap-1 whitespace-normal">
+              <span class="flex items-center gap-2 text-sm font-semibold text-foreground">
                 {{ p.name }}
-                <span class="tag cap-card-badge">{{ t('connections.typeBadge.' + p.type) }}</span>
+                <Badge variant="secondary" class="px-1.5 py-0 uppercase">
+                  {{ t('connections.typeBadge.' + p.type) }}
+                </Badge>
               </span>
-              <span class="cap-card-tl">{{ p.tagline }}</span>
+              <span class="text-xs text-muted-foreground">{{ p.tagline }}</span>
             </span>
-          </button>
+          </Button>
         </div>
-        <div v-if="!presets.length" class="cap-empty">{{ t('connections.picker.empty') }}</div>
+        <div v-if="!presets.length" class="py-3 text-center text-sm text-muted-foreground">
+          {{ t('connections.picker.empty') }}
+        </div>
       </div>
     </div>
   </LibraryEntityModal>
@@ -150,159 +170,3 @@ function pseudoSource(p: SourcePresetMeta): Source {
   return { ...base, type: 'mcp', mcp: {} }
 }
 </script>
-
-<style scoped>
-.cap {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.cap-presets {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.cap-tabs {
-  display: flex;
-  gap: 6px;
-  border-bottom: 1px solid var(--border);
-}
-.cap-tab {
-  padding: 6px 11px 8px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: -1px;
-}
-.cap-tab:hover {
-  color: var(--text);
-}
-.cap-tab.on {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-.cap-quick {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.cap-opt {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-.cap-opt:hover {
-  border-color: var(--accent);
-  background: var(--bgHover);
-}
-.cap-opt-ic {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  border-radius: var(--r-sm);
-  background: var(--bgActive);
-  color: var(--textMuted);
-  border: 1px solid var(--border);
-}
-.cap-opt-ic.accent {
-  color: var(--accent);
-}
-.cap-opt-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.cap-opt-t {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.cap-opt-s {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-xs);
-}
-.cap-seplbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-  padding-top: 2px;
-  border-top: 1px solid var(--border);
-  margin-top: -2px;
-}
-.cap-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.cap-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 11px 12px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-.cap-card:hover {
-  border-color: var(--accent);
-  background: var(--bgHover);
-}
-.cap-card-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.cap-card-nm {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.cap-card-badge {
-  font-size: 12px;
-  line-height: 18px;
-  padding: 1px 6px;
-  text-transform: uppercase;
-}
-.cap-card-tl {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-xs);
-}
-.cap-empty {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  text-align: center;
-  padding: 12px 0;
-}
-</style>

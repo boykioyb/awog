@@ -1,16 +1,19 @@
 <template>
-  <div class="mvwrap">
-    <div ref="hostRef" class="mvhost" />
+  <div class="relative size-full">
+    <div ref="hostRef" class="size-full bg-card" />
     <!-- Heavy Monaco bundle loads async on mount; cover the blank host with a
          spinner until the editor is created (the bundle can take a beat). -->
-    <div v-if="!ready && !loadError" class="mvloading">
-      <span class="mvspin" />
+    <div v-if="!ready && !loadError" class="absolute inset-0 grid place-items-center bg-card">
+      <span class="size-5.5 animate-spin rounded-full border-2 border-border border-t-primary" />
     </div>
     <!-- Bundle failed to fetch (e.g. a Vite dev re-optimize race). Surface it with
          a retry instead of an unhandled mount error + an endless spinner. -->
-    <div v-else-if="loadError" class="mverror">
+    <div
+      v-else-if="loadError"
+      class="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-card p-4 text-center text-dim"
+    >
       <p>{{ t('common.preview.monacoLoadFailed') }}</p>
-      <button type="button" class="mvretry" @click="retry">{{ t('common.retry') }}</button>
+      <Button variant="outline" size="sm" @click="retry">{{ t('common.retry') }}</Button>
     </div>
   </div>
 </template>
@@ -51,6 +54,7 @@ const emit = defineEmits<{
   save: []
 }>()
 
+// theme-ok: chọn theme dark/light cho Monaco
 const { isDark } = useTheme()
 const { current, hydrate, loadThemeData } = useMonacoTheme()
 const { t } = useI18n()
@@ -243,62 +247,3 @@ onBeforeUnmount(() => {
   editor.value = null
 })
 </script>
-
-<style scoped>
-.mvwrap {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-.mvhost {
-  width: 100%;
-  height: 100%;
-  background: var(--bgEl);
-}
-/* Loading overlay shown until the editor is created (covers the blank host). */
-.mvloading {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: var(--bgEl);
-}
-.mvspin {
-  width: 22px;
-  height: 22px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: mv-spin 0.8s linear infinite;
-}
-/* Bundle-load failure state (same footprint as the loading overlay). */
-.mverror {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  text-align: center;
-  background: var(--bgEl);
-  color: var(--textDim);
-}
-.mvretry {
-  padding: 5px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-.mvretry:hover {
-  background: var(--bgHover);
-}
-@keyframes mv-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

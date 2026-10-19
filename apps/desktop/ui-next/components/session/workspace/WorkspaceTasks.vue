@@ -1,7 +1,12 @@
 <template>
   <div class="h-full min-h-0 overflow-y-auto">
-    <div v-if="!entries.length && !shellEntries.length" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.tasks.placeholder') }}</div>
+    <div
+      v-if="!entries.length && !shellEntries.length"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">
+        {{ t('sessions.workspace.tasks.placeholder') }}
+      </div>
     </div>
 
     <div v-else class="flex flex-col gap-3 p-3">
@@ -32,7 +37,7 @@
           v-for="entry in entries"
           :key="entry.id"
           variant="outline"
-          class="h-auto p-0 flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-accent"
+          class="h-auto w-full justify-start gap-2.5 rounded-lg border-border bg-card px-3 py-2 text-left font-normal [&_svg]:size-3.5"
           @click="openTask(entry.id)"
         >
           <Workflow class="size-3.5 shrink-0 text-muted-foreground" />

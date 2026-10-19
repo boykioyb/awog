@@ -1,73 +1,81 @@
 <template>
-  <footer class="statusbar">
+  <!-- Status bar toàn app (footer kiểu VSCode). z-82: nổi trên nội dung trang + panel
+       workspace trong phiên (≤81) để popover/tooltip mở lên không bị che; modal
+       (100+) vẫn thắng. Hairline trên cùng là Separator nằm đè (absolute) chứ không
+       phải border — border ăn 1px của hộp 26px và đẩy chip 20px vào nửa pixel. -->
+  <footer
+    class="relative z-82 flex h-(--statusbar-h) shrink-0 items-center justify-between gap-3 bg-sidebar pr-2 pl-2.5 text-dim"
+  >
+    <Separator class="absolute inset-x-0 top-0" />
     <!-- Plan-usage donuts pinned to the LEFT edge. -->
-    <div class="sb-cluster sb-usage">
-      <StatusUsage />
-    </div>
+    <StatusUsage class="shrink-0" />
 
     <!-- Session-context chips hug the RIGHT; shown only while viewing a session
-         (the active session drives branch / context / project / config). -->
-    <div class="sb-cluster sb-session">
+         (the active session drives branch / context / project / config).
+         Không `overflow-hidden` ở cụm này — popover của chip mở LÊN trên thanh;
+         thay vì cắt, các chip thông tin tự co và nhãn tự cắt `…`. -->
+    <div class="flex min-w-0 shrink items-center gap-1">
       <template v-if="active">
         <!-- Informational chips: these give up width first (labels ellipsis) so the
              Files + Terminal toggles below never get pushed off the window edge. -->
-        <div class="sb-info">
+        <div class="flex min-w-0 shrink items-center gap-1">
           <StatusBranch :session="active" />
-          <span class="sb-div" />
+          <Separator orientation="vertical" class="mx-0.5 h-3.5!" />
           <StatusContext :session="active" />
-          <span class="sb-div" />
+          <Separator orientation="vertical" class="mx-0.5 h-3.5!" />
           <!-- Quick-view project. Đợt §3.4 từng bỏ chip này vì tên project lặp lại
                lần thứ ba (tab strip · header · status bar) — nhưng đó là lập luận về
                CHUỖI LẶP, còn cái mất đi là một HÀNH ĐỘNG dùng hằng ngày. Trả lại;
                hàng "Mở project" trong context-menu của tab giữ làm đường thứ hai. -->
-          <button
-            class="sb-item"
+          <StatusChip
             :title="t('statusbar.project.open')"
             @click="projectModal.open(active.project)"
           >
-            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="sb-proj">{{ projName }}</span>
-          </button>
-          <span class="sb-div" />
-          <!-- Chip cấu hình set-once: account · style. Model + effort là per-turn
-               nên nằm trong composer footer (proto), không lặp lại ở đây. -->
+            <Icon name="folder" />
+            <span class="max-w-40 truncate">{{ projName }}</span>
+          </StatusChip>
+          <Separator orientation="vertical" class="mx-0.5 h-3.5!" />
+          <!-- Chip cấu hình set-once: style. Model + effort là per-turn nên nằm
+               trong composer footer (proto), không lặp lại ở đây. -->
           <StatusConfig :session="active" />
         </div>
-        <span class="sb-div" />
+        <Separator orientation="vertical" class="mx-0.5 h-3.5!" />
         <!-- Files + Browser. §3.4 từng chuyển hai cái này vào `Views ▾` với lý do
              "chúng là view, không phải trạng thái" — đúng về phân loại, sai về thực
              tế dùng: đây là hai khung bật/tắt liên tục, và một cú bấm ở mép cửa sổ
-             không thay được bằng hai cú bấm qua menu. Trả lại. -->
-        <button
-          class="sb-item sb-ico"
-          :class="{ 'sb-on': wpViews.includes('Files') }"
+             không thay được bằng hai cú bấm qua menu. Trả lại.
+             Nút CHỈ-ICON: icon đã tự nói, `title` là tên cho tooltip + screen reader;
+             chữ chỉ giữ ở chip mà chữ CHÍNH LÀ dữ liệu (branch, project, style). -->
+        <StatusChip
+          class="shrink-0 px-1"
+          :active="wpViews.includes('Files')"
           :title="t('statusbar.workspaceFiles')"
           @click="wpToggle('Files')"
         >
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="folder" />
+        </StatusChip>
         <!-- Browser (ADR 0086) — Chromium nhúng của agent, mở như một khung panel. -->
-        <button
-          class="sb-item sb-ico"
-          :class="{ 'sb-on': wpViews.includes('Browser') }"
+        <StatusChip
+          class="shrink-0 px-1"
+          :active="wpViews.includes('Browser')"
           :title="t('statusbar.workspaceBrowser')"
           @click="wpToggle('Browser')"
         >
-          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <span class="sb-div" />
+          <Icon name="globe" />
+        </StatusChip>
+        <Separator orientation="vertical" class="mx-0.5 h-3.5!" />
       </template>
 
       <!-- Global terminal toggle — ALWAYS visible (every page, with or without a
            session). Opens the app-wide terminal dock (cwd = home). -->
-      <button
-        class="sb-item sb-ico"
-        :class="{ 'sb-on': gtOpen }"
+      <StatusChip
+        class="shrink-0 px-1"
+        :active="gtOpen"
         :title="t('statusbar.terminalGlobal')"
         @click="gtToggle"
       >
-        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="commands" />
+      </StatusChip>
     </div>
   </footer>
 </template>
@@ -99,149 +107,3 @@ const { isOpen: gtOpen, toggle: gtToggle } = useGlobalTerminal()
 const active = computed(() => (route.path.startsWith('/workbench') ? sessions.active : null))
 const projName = computed(() => (active.value ? projectName(active.value.project) : ''))
 </script>
-
-<style scoped>
-.statusbar {
-  flex: 0 0 var(--statusbar-h);
-  height: var(--statusbar-h);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 8px 0 10px;
-  /* Drawn as an inset shadow, not a border: a border comes out of the content box and
-     left 25px inside a 26px bar, centring 20px children at 3.5. */
-  box-shadow: inset 0 1px 0 var(--border);
-  background: var(--sidebar);
-  color: var(--textDim);
-  /* Sit above page content + the in-session workspace panel (≤81) so the upward
-     popovers/tooltips are never clipped; modals (100+) still win. */
-  position: relative;
-  z-index: 82;
-}
-.sb-cluster {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-/* Donuts hug the left edge; session chips hug the right (justify-content:
-   space-between on .statusbar splits them to opposite edges). */
-.sb-usage {
-  flex: 0 0 auto;
-}
-.sb-session {
-  flex: 0 1 auto;
-  min-width: 0;
-  /* No `overflow: hidden` here — the chip popovers open UPWARD (above the bar) and
-     an overflow clip on this cluster would hide them. Instead of clipping, the
-     informational chips (.sb-info) shrink and their labels self-truncate, so the
-     row stays bounded and the Files + Terminal toggles stay pinned at the edge. */
-}
-/* Shrinkable informational-chip region (branch / context / project / config). It
-   yields width first when the bar is narrow; the sibling Files + Terminal toggles
-   below never shrink, so Terminal is always reachable. */
-.sb-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-/* Files + Terminal toggles (and their separators) hold their full width — they are
-   the last things allowed to disappear. */
-.sb-session > .sb-item,
-.sb-session > .sb-div {
-  flex: 0 0 auto;
-}
-/* Let each chip inside the info region shrink below its content width so the text
-   labels ellipsis-truncate instead of overflowing past the window edge. Icons keep
-   their fixed size (no min-width override); only the labels give way. */
-.statusbar :deep(.sb-info .sb-wrap),
-.statusbar :deep(.sb-info .sb-cfg),
-.statusbar :deep(.sb-info .sb-item),
-.statusbar :deep(.sb-info .sb-branch),
-.statusbar :deep(.sb-info .sb-cfg-lbl),
-.statusbar :deep(.sb-info .sb-proj) {
-  min-width: 0;
-}
-/* The context chip is short + fixed ("274k/1.00M") and has no ellipsis, so keep it
-   from shrinking to avoid clipping the numbers mid-digit. */
-.statusbar :deep(.sb-info .sb-wrap:has(> .ctxmini)) {
-  flex: 0 0 auto;
-}
-.sb-div {
-  width: 1px;
-  height: 14px;
-  background: var(--border);
-  margin: 0 2px;
-  flex: 0 0 auto;
-}
-/* Shared compact status-bar item (chrome — fixed 12px like the tray popover, not
-   the body 1em scale). Sub-components reuse this class. */
-.statusbar :deep(.sb-item) {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 20px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-.statusbar :deep(.sb-item:hover) {
-  color: var(--foreground);
-  background: var(--accent-wash);
-}
-.statusbar :deep(.sb-item:focus-visible) {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-/* Nút CHỈ-ICON ở mép phải (Files · Browser · Terminal).
-   Ba nút này bỏ nhãn chữ vì icon đã tự nói (thư mục / quả cầu / dấu nhắc lệnh), và
-   `title` vẫn là tên gọi cho tooltip lẫn screen reader — cùng quy ước icon-only mà
-   header của các *Detail.vue dùng. Chữ chỉ giữ ở những chip mà chữ CHÍNH LÀ dữ liệu
-   (branch, project, model, account, effort, style): ở đó không icon nào thay được.
-   Padding đối xứng + bỏ gap để ô bấm vuông thay vì lệch về phía nhãn đã mất. */
-.statusbar :deep(.sb-item.sb-ico) {
-  gap: 0;
-  padding: 0 5px;
-}
-/* Active workspace toggle (the view is open) — accent-tinted like the prototype's
-   "on" chips, no solid gray fill. --accentDim/--primary = the AWOG brand tint
-   (a toggle-on state, not list selection — those use --accent-wash). */
-.sb-item.sb-on {
-  color: var(--primary);
-  background: var(--accentDim);
-}
-/* Dirty-count badge on the branch chip. */
-.statusbar :deep(.sb-badge) {
-  min-width: 16px;
-  height: 14px;
-  padding: 0 4px;
-  border-radius: var(--r-pill);
-  background: var(--accentDim);
-  color: var(--primary);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  line-height: 18px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.sb-proj {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>

@@ -14,13 +14,18 @@
     </SettingsField>
 
     <!-- Mesh status + pair CTA -->
-    <div class="dev-status">
-      <span class="dev-badge" :style="badgeStyle">
-        <span class="dev-dot" :style="{ background: dotColor }" />
+    <div class="flex items-center gap-2.5 pt-1 pb-3">
+      <Badge
+        :variant="isLive ? 'success' : 'outline'"
+        class="rounded-md px-2.5 py-1 text-sm"
+        :class="{ 'bg-accent text-dim': !isLive }"
+      >
+        <span class="size-2 shrink-0 rounded-full" :class="isLive ? 'bg-success' : 'bg-faint'" />
         {{ statusLabel }}
-      </span>
-      <code v-if="enabled && connected && host" class="dev-host">{{ host }}</code>
-      <span style="flex: 1" />
+      </Badge>
+      <!-- mono-ok: IP mesh -->
+      <code v-if="enabled && connected && host" class="font-mono text-sm text-dim">{{ host }}</code>
+      <span class="flex-1" />
       <Button
         :disabled="!enabled || !connected || pairingBusy"
         :title="t('settings.devices.pairNew')"
@@ -28,60 +33,74 @@
         size="sm"
         @click="createPairing"
       >
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="plus" class="size-3.5" />
         {{ t('settings.devices.pairNew') }}
       </Button>
     </div>
 
-    <!-- Off banner — informational, not a problem to fix. -->
-    <div v-if="!enabled" class="dev-banner off">
-      <Icon
-        name="alert"
-        style="width: var(--icon-md); height: var(--icon-md)"
-        class="dev-banner-icon"
-      />
-      <div>
-        <div class="dev-banner-title">{{ t('settings.devices.offTitle') }}</div>
-        <div class="dev-banner-hint">{{ t('settings.devices.offHint') }}</div>
-      </div>
-    </div>
+    <!-- Off banner — informational, not a problem to fix (neutral, không màu cảnh báo). -->
+    <Alert v-if="!enabled" class="mb-3.5 bg-muted">
+      <Icon name="alert" class="text-faint" />
+      <AlertTitle class="line-clamp-none text-base font-semibold text-foreground">
+        {{ t('settings.devices.offTitle') }}
+      </AlertTitle>
+      <AlertDescription class="text-base">{{ t('settings.devices.offHint') }}</AlertDescription>
+    </Alert>
 
     <!-- Disconnected banner -->
-    <div v-else-if="!connected" class="dev-banner">
-      <Icon
-        name="alert"
-        style="width: var(--icon-md); height: var(--icon-md)"
-        class="dev-banner-icon"
-      />
-      <div>
-        <div class="dev-banner-title">{{ t('settings.devices.meshDisconnected') }}</div>
-        <div class="dev-banner-hint">{{ t('settings.devices.installHint') }}</div>
-      </div>
-    </div>
+    <Alert v-else-if="!connected" class="mb-3.5 border-warning/40 bg-warning/10">
+      <Icon name="alert" class="text-warning" />
+      <AlertTitle class="line-clamp-none text-base font-semibold text-foreground">
+        {{ t('settings.devices.meshDisconnected') }}
+      </AlertTitle>
+      <AlertDescription class="text-base">
+        {{ t('settings.devices.installHint') }}
+      </AlertDescription>
+    </Alert>
 
     <!-- NetBird setup guide: expanded while disconnected, collapsible for reference once connected. -->
-    <details class="dev-guide" :open="enabled && !connected">
-      <summary class="dev-guide-sum">{{ t('settings.devices.guide.title') }}</summary>
-      <ol class="dev-guide-steps">
-        <li>
-          {{ t('settings.devices.guide.step1') }}
-          <button type="button" class="dev-guide-link" @click="openNetbird">netbird.io</button>
-        </li>
-        <li>{{ t('settings.devices.guide.step2') }}</li>
-        <li>{{ t('settings.devices.guide.step3') }}</li>
-        <li>{{ t('settings.devices.guide.step4') }}</li>
-      </ol>
-      <div class="dev-guide-tip">{{ t('settings.devices.guide.tip') }}</div>
-    </details>
+    <Collapsible v-model:open="guideOpen" class="mb-3.5 rounded-lg border bg-muted px-3.5 py-2.5">
+      <CollapsibleTrigger
+        class="flex w-full cursor-pointer items-center gap-1.5 text-left text-base font-semibold text-foreground"
+      >
+        <Icon
+          name="chev"
+          class="size-3 shrink-0 transition-transform"
+          :class="{ 'rotate-90': guideOpen }"
+        />
+        {{ t('settings.devices.guide.title') }}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ol class="mt-2.5 mb-0 flex list-decimal flex-col gap-2 pl-5">
+          <li class="text-base text-muted-foreground">
+            {{ t('settings.devices.guide.step1') }}
+            <Button variant="link" class="h-auto p-0 text-base underline" @click="openNetbird">
+              netbird.io
+            </Button>
+          </li>
+          <li class="text-base text-muted-foreground">{{ t('settings.devices.guide.step2') }}</li>
+          <li class="text-base text-muted-foreground">{{ t('settings.devices.guide.step3') }}</li>
+          <li class="text-base text-muted-foreground">{{ t('settings.devices.guide.step4') }}</li>
+        </ol>
+        <div class="mt-2.5 text-sm text-faint">{{ t('settings.devices.guide.tip') }}</div>
+      </CollapsibleContent>
+    </Collapsible>
 
     <!-- How an already-paired device gets back in (URL + QR, no pairing code). -->
     <SettingsDeviceAccess v-if="enabled && connected && host" :host="host" :port="port" />
 
     <!-- Empty state -->
-    <div v-if="!devices.length" class="dev-empty">
-      <Icon name="smartphone" style="width: 28px; height: 28px" class="dev-empty-icon" />
-      <div class="dev-empty-title">{{ t('settings.devices.empty.title') }}</div>
-      <div class="dev-empty-body">{{ t('settings.devices.empty.body') }}</div>
+    <div
+      v-if="!devices.length"
+      class="flex flex-col items-center gap-2 rounded-lg border border-dashed px-5 py-9 text-center"
+    >
+      <Icon name="smartphone" class="mb-1 size-7 text-faint" />
+      <div class="text-lg font-semibold text-foreground">
+        {{ t('settings.devices.empty.title') }}
+      </div>
+      <div class="mb-1.5 max-w-80 text-base text-muted-foreground">
+        {{ t('settings.devices.empty.body') }}
+      </div>
       <Button
         :disabled="!enabled || !connected || pairingBusy"
         :title="t('settings.devices.pairNew')"
@@ -94,29 +113,38 @@
     </div>
 
     <!-- Device list -->
-    <ul v-else class="dev-list">
-      <li v-for="d in devices" :key="d.id" class="dev-row">
-        <div class="dev-row-main">
-          <span class="dev-row-label">{{ d.label }}</span>
-          <div class="dev-row-meta">
-            <span class="dev-chip">{{ platformLabel(d.platform) }}</span>
-            <span class="dev-meta">
+    <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
+      <li
+        v-for="d in devices"
+        :key="d.id"
+        class="flex items-center gap-3 rounded-lg border bg-muted px-3 py-2.5"
+      >
+        <div class="min-w-0 flex-1">
+          <span class="text-base font-semibold text-foreground">{{ d.label }}</span>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" class="rounded-sm text-dim">
+              {{ platformLabel(d.platform) }}
+            </Badge>
+            <span class="text-sm text-faint">
               {{ t('settings.devices.pairedAt', { when: formatRelativeAgo(d.pairedAt, t, now) }) }}
             </span>
-            <span v-if="d.lastSeenAt" class="dev-meta">
+            <span v-if="d.lastSeenAt" class="text-sm text-faint">
               {{
                 t('settings.devices.lastSeen', { when: formatRelativeAgo(d.lastSeenAt, t, now) })
               }}
             </span>
           </div>
         </div>
-        <button
-          class="dev-revoke p-1.5 rounded transition"
+        <Button
+          variant="ghost"
+          size="iconMd"
+          class="shrink-0 text-dim hover:bg-destructive/10 hover:text-destructive"
           :title="t('settings.devices.revoke')"
+          :aria-label="t('settings.devices.revoke')"
           @click="revokeDevice(d)"
         >
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="trash" class="size-3.5" />
+        </Button>
       </li>
     </ul>
 
@@ -130,12 +158,11 @@
 // useRemoteGateway; this component is the thin view (status badge, banner, list,
 // empty state) plus a per-platform label + status colors. Browser-dev (no bridge)
 // simply shows the disconnected state — every action is a no-op.
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import SettingsDeviceAccess from '~/components/settings/SettingsDeviceAccess.vue'
 import SettingsDevicePairModal from '~/components/settings/SettingsDevicePairModal.vue'
 import { useRemoteGateway } from '~/composables/useRemoteGateway'
 import { formatRelativeAgo } from '~/utils/relative-time'
-import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const now = useNow()
@@ -178,11 +205,15 @@ const statusLabel = computed(() => {
   if (!enabled.value) return t('settings.devices.off')
   return connected.value ? t('settings.devices.meshConnected') : t('settings.devices.disconnected')
 })
-const dotColor = computed(() => (isLive.value ? 'var(--green)' : 'var(--textFaint)'))
-const badgeStyle = computed(() =>
-  isLive.value
-    ? { color: 'var(--green)', background: 'var(--addBg)', borderColor: 'var(--addBg)' }
-    : { color: 'var(--textDim)', background: 'var(--bgHover)', borderColor: 'var(--border)' },
+
+// Hướng dẫn NetBird mở sẵn khi đã bật mà chưa có mesh; người dùng vẫn tự mở/đóng được.
+// Đồng bộ lại mỗi khi trạng thái đó đổi (như `:open` của <details> trước đây).
+const guideOpen = ref(enabled.value && !connected.value)
+watch(
+  () => enabled.value && !connected.value,
+  (v) => {
+    guideOpen.value = v
+  },
 )
 
 // Known platform ids get a friendly label; anything else shows raw (fail-soft).
@@ -192,198 +223,3 @@ function platformLabel(platform: string): string {
   return label === key ? platform : label
 }
 </script>
-
-<style scoped>
-.dev-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 0 12px;
-}
-.dev-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 5px 10px;
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
-  font-weight: 550;
-}
-.dev-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.dev-host {
-  /* mono-ok: mesh IP */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.dev-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  margin-bottom: 14px;
-}
-/* Remote control switched off is a state, not a fault — neutral, not amber. */
-.dev-banner.off {
-  border-color: var(--border);
-  background: var(--bgSubtle);
-}
-.dev-banner-icon {
-  color: var(--amber);
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-.dev-banner.off .dev-banner-icon {
-  color: var(--textFaint);
-}
-.dev-banner-title {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.dev-banner-hint {
-  margin-top: 3px;
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.dev-guide {
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgSubtle);
-  padding: 10px 14px;
-}
-.dev-guide-sum {
-  cursor: pointer;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.dev-guide-steps {
-  margin: 10px 0 0;
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.dev-guide-steps li {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.dev-guide-link {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  text-decoration: underline;
-}
-.dev-guide-tip {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--textFaint);
-  line-height: 18px;
-}
-.dev-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 36px 20px;
-  border-radius: var(--r-btn);
-  border: 1px dashed var(--border);
-  text-align: center;
-}
-.dev-empty-icon {
-  color: var(--textFaint);
-  margin-bottom: 4px;
-}
-.dev-empty-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-  color: var(--text);
-}
-.dev-empty-body {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-  max-width: 320px;
-  margin-bottom: 6px;
-}
-.dev-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.dev-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  background: var(--bgSubtle);
-}
-.dev-row-main {
-  flex: 1;
-  min-width: 0;
-}
-.dev-row-label {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-.dev-row-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-.dev-chip {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-}
-.dev-meta {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.dev-revoke {
-  flex: 0 0 auto;
-  color: var(--textDim);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-.dev-revoke:hover {
-  color: var(--danger);
-  background: var(--dangerBg);
-}
-</style>

@@ -6,17 +6,15 @@
     :width="560"
     @close="emit('cancel')"
   >
-    <div class="hpc">
-      <div class="hpc-hint">{{ t('hooks.creator.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('hooks.creator.hint') }}</div>
 
-      <div class="hpc-field">
-        <LibraryScopePicker v-model="scope" :projects="projects" />
-      </div>
+      <LibraryScopePicker v-model="scope" :projects="projects" />
 
-      <div v-if="!draft" class="hpc-promptbox">
-        <textarea
+      <div v-if="!draft">
+        <Textarea
           v-model="prompt"
-          class="hpc-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('hooks.creator.placeholder')"
@@ -24,19 +22,29 @@
         />
       </div>
 
-      <div v-if="error" class="hpc-err">{{ error }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
 
-      <div v-if="draft" class="hpc-preview">
-        <div class="hpc-prow">
-          <span class="hpc-pname">{{ draft.name }}</span>
-          <span class="tag mono">{{ draft.event }}</span>
-          <span class="tag" :class="{ acc: draft.runMode === 'blocking' }">
+      <div v-if="draft" class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-sm font-medium text-foreground">{{ draft.name }}</span>
+          <Badge variant="secondary" class="font-mono">{{ draft.event }}</Badge>
+          <Badge
+            variant="secondary"
+            :class="{ 'border-primary/45 bg-primary/8 text-primary': draft.runMode === 'blocking' }"
+          >
             {{ draft.runMode }}
-          </span>
+          </Badge>
         </div>
-        <div class="hpc-pdesc">{{ draft.description }}</div>
-        <pre class="codeblk hpc-cmd">{{ draft.command }}</pre>
-        <div v-if="matcherText" class="hpc-matcher mono">matcher: {{ matcherText }}</div>
+        <div class="text-sm text-muted-foreground">{{ draft.description }}</div>
+        <!-- mono-ok: lệnh shell của hook -->
+        <pre
+          class="m-0 whitespace-pre-wrap break-words rounded-lg border bg-muted p-3 font-mono text-sm leading-(--lh-prose) text-muted-foreground"
+          >{{ draft.command }}</pre
+        >
+        <!-- mono-ok: matcher -->
+        <div v-if="matcherText" class="font-mono text-xs text-dim">matcher: {{ matcherText }}</div>
       </div>
     </div>
 
@@ -44,7 +52,10 @@
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <template v-if="!draft">
         <Button :disabled="isGenerating || !prompt.trim()" variant="default" @click="onGenerate">
-          <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+          <Icon
+            :name="isGenerating ? 'refresh' : 'sparkles'"
+            :class="{ 'animate-spin': isGenerating }"
+          />
           {{ isGenerating ? t('hooks.creator.generating') : t('hooks.creator.generate') }}
         </Button>
       </template>
@@ -188,92 +199,3 @@ const onEditDetails = () => {
   if (draft.value) emit('edit-manually', toHook(draft.value))
 }
 </script>
-
-<style scoped>
-.hpc {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.hpc-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.hpc-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.hpc-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.hpc-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.hpc-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.hpc-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 12px;
-}
-.hpc-prow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.hpc-pname {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  font-weight: 550;
-}
-.hpc-pdesc {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-}
-.hpc-cmd {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.hpc-matcher {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.spin {
-  animation: hpc-spin 0.9s linear infinite;
-}
-@keyframes hpc-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

@@ -1,5 +1,9 @@
 <template>
-  <ul :class="cn('flex w-full flex-col gap-0.5', props.class)">
+  <ul
+    data-slot="sidebar-menu"
+    data-sidebar="menu"
+    :class="cn('flex w-full min-w-0 flex-col gap-1', props.class)"
+  >
     <slot />
   </ul>
 </template>
@@ -8,5 +12,7 @@
 import type { HTMLAttributes } from 'vue'
 import { cn } from '~/lib/utils'
 
-const props = defineProps<{ class?: HTMLAttributes['class'] }>()
+const props = defineProps<{
+  class?: HTMLAttributes['class']
+}>()
 </script>

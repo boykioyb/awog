@@ -9,30 +9,51 @@
 
        Một trạng thái duy nhất vẫn vẽ nguyên vòng: vòng tròn liền ĐÚNG NGHĨA "tất
        cả pod cùng một trạng thái", không phải một lỗi vẽ. -->
-  <div class="ikrd">
-    <svg class="ikrd-svg" :viewBox="`0 0 ${BOX} ${BOX}`" role="img" :aria-label="label">
-      <circle class="ikrd-track" :cx="C" :cy="C" :r="R" />
+  <div class="flex flex-wrap items-center gap-4">
+    <!-- Cung bắt đầu ở 12 giờ, không phải 3 giờ — người đọc quen đọc vòng từ đỉnh. -->
+    <svg
+      class="size-30 shrink-0 -rotate-90"
+      :viewBox="`0 0 ${BOX} ${BOX}`"
+      role="img"
+      :aria-label="label"
+    >
+      <circle class="fill-none stroke-border" :stroke-width="STROKE" :cx="C" :cy="C" :r="R" />
       <circle
         v-for="arc in arcs"
         :key="arc.status"
-        class="ikrd-arc"
-        :class="`seg-${arc.rate}`"
+        class="fill-none"
+        :class="RATE_STROKE[arc.rate]"
+        :stroke-width="STROKE"
         :cx="C"
         :cy="C"
         :r="R"
         :stroke-dasharray="`${arc.len} ${CIRC - arc.len}`"
         :stroke-dashoffset="-arc.start"
       />
-      <text class="ikrd-n" :x="C" :y="C" text-anchor="middle" dominant-baseline="central">
+      <!-- Chữ nằm trong SVG đã xoay −90° ⇒ phải xoay ngược lại, nếu không số tổng
+           nằm dọc. Cỡ chữ là thuộc tính SVG trong viewBox 120 — scale theo SVG chứ
+           không theo Appearance. -->
+      <text
+        class="origin-center rotate-90 fill-foreground font-semibold"
+        :x="C"
+        :y="C"
+        font-size="22"
+        text-anchor="middle"
+        dominant-baseline="central"
+      >
         {{ total }}
       </text>
     </svg>
-    <ul class="ikrd-legend">
-      <li v-for="arc in arcs" :key="arc.status" class="ikrd-leg">
-        <span class="ikrd-dot" :class="`seg-${arc.rate}`" />
-        <span class="ikrd-name" :title="arc.status">{{ arc.status }}</span>
-        <b class="ikrd-v">{{ arc.n }}</b>
-        <span class="ikrd-pct">{{ arc.pct }}%</span>
+    <ul class="flex min-w-0 flex-col gap-1">
+      <li
+        v-for="arc in arcs"
+        :key="arc.status"
+        class="grid grid-cols-[0.5rem_minmax(0,1fr)_auto_auto] items-center gap-2 text-xs"
+      >
+        <span class="size-2 rounded-full" :class="RATE_BG[arc.rate]" />
+        <span class="truncate text-muted-foreground" :title="arc.status">{{ arc.status }}</span>
+        <b class="font-semibold text-foreground tabular-nums">{{ arc.n }}</b>
+        <span class="text-faint tabular-nums">{{ arc.pct }}%</span>
       </li>
     </ul>
   </div>
@@ -49,6 +70,21 @@ const BOX = 120
 const C = BOX / 2
 const R = 44
 const CIRC = 2 * Math.PI * R
+/** Bề dày nét vòng (đơn vị viewBox). */
+const STROKE = 16
+
+const RATE_STROKE: Record<string, string> = {
+  ok: 'stroke-success',
+  warn: 'stroke-warning',
+  bad: 'stroke-destructive',
+  unknown: 'stroke-faint',
+}
+const RATE_BG: Record<string, string> = {
+  ok: 'bg-success',
+  warn: 'bg-warning',
+  bad: 'bg-destructive',
+  unknown: 'bg-faint',
+}
 
 const total = computed(() => props.statuses.reduce((acc, s) => acc + s.n, 0))
 
@@ -72,96 +108,3 @@ const arcs = computed(() => {
   })
 })
 </script>
-
-<style scoped>
-.ikrd {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.ikrd-svg {
-  flex: 0 0 auto;
-  width: 120px;
-  height: 120px;
-  /* Cung bắt đầu ở 12 giờ, không phải 3 giờ — người đọc quen đọc vòng từ đỉnh. */
-  transform: rotate(-90deg);
-}
-.ikrd-track {
-  fill: none;
-  stroke: var(--bgActive);
-  stroke-width: 16;
-}
-.ikrd-arc {
-  fill: none;
-  stroke-width: 16;
-}
-.ikrd-arc.seg-ok {
-  stroke: var(--green);
-}
-.ikrd-arc.seg-warn {
-  stroke: var(--amber);
-}
-.ikrd-arc.seg-bad {
-  stroke: var(--danger);
-}
-.ikrd-arc.seg-unknown {
-  stroke: var(--textFaint);
-}
-/* Chữ nằm trong SVG đã xoay −90° ⇒ phải xoay ngược lại, nếu không số tổng nằm dọc. */
-.ikrd-n {
-  transform: rotate(90deg);
-  transform-origin: center;
-  fill: var(--text);
-  font-size: 22px; /* design-token-ok: cỡ chữ TRONG viewBox 120, scale theo SVG chứ không theo Appearance */
-  font-weight: 600;
-}
-.ikrd-legend {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.ikrd-leg {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.ikrd-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-full);
-}
-.ikrd-dot.seg-ok {
-  background: var(--green);
-}
-.ikrd-dot.seg-warn {
-  background: var(--amber);
-}
-.ikrd-dot.seg-bad {
-  background: var(--danger);
-}
-.ikrd-dot.seg-unknown {
-  background: var(--textFaint);
-}
-.ikrd-name {
-  color: var(--textMuted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ikrd-v {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.ikrd-pct {
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-</style>

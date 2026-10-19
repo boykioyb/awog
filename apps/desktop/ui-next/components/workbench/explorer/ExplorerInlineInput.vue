@@ -2,7 +2,10 @@
   <!-- Hàng input inline trong cây explorer (New File/Folder + Rename).
        Enter/blur commit, Esc huỷ; khi trùng tên `error` bật → viền đỏ, giữ
        focus cho sửa tiếp. -->
-  <div class="my-0.5 flex h-[26px] items-center gap-1 pr-1.5" :style="{ paddingLeft: pad + 'px' }">
+  <div
+    class="my-0.5 flex h-[var(--lh-xl)] items-center gap-1 pr-1.5"
+    :style="{ paddingLeft: pad + 'px' }"
+  >
     <component :is="icon" :size="14" class="flex-none text-[color:var(--textFaint)]" />
     <!-- `min-h-0`: prototype.css ép input không-type min-height = --ctrl-h (36px)
          cho mọi control — reset để `h-5` thắng (VS Code: inline rename gọn,

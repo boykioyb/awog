@@ -6,15 +6,15 @@
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="flex h-11 flex-none items-center px-2 shadow-[inset_0_-1px_0_var(--border)]">
       <span
-        class="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-[var(--r-xs)] border bg-[color:var(--bgInput)] px-2.5 text-[color:var(--textFaint)] transition-colors"
-        :class="searching ? 'border-[color:var(--accentBorder)]' : 'border-[color:var(--border)]'"
+        class="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-sm border bg-muted px-2.5 text-faint transition-colors"
+        :class="searching ? 'border-selected-border' : 'border-border'"
       >
         <Icon name="search" class="size-4 flex-none" />
         <Input
           ref="inputEl"
           v-model="query"
           unstyled
-          class="min-h-0 min-w-0 flex-1 border-none text-sm text-[color:var(--text)] placeholder:text-[color:var(--textFaint)]"
+          class="min-h-0 min-w-0 flex-1 border-none text-sm text-foreground placeholder:text-faint"
           placeholder="Tìm file…"
           autocomplete="off"
           spellcheck="false"
@@ -25,24 +25,29 @@
           @keydown.enter.prevent="openActive"
           @keydown.esc.stop.prevent="onEsc"
         />
-        <button
+        <Button
           v-if="query"
-          type="button"
-          class="flex flex-none text-[color:var(--textFaint)] hover:text-[color:var(--text)]"
+          variant="ghost"
+          size="iconSm"
+          class="size-auto flex-none p-0 text-faint hover:bg-transparent hover:text-foreground"
           title="Xoá chữ tìm"
           @mousedown.prevent
           @click="query = ''"
         >
           <X :size="14" />
-        </button>
+        </Button>
       </span>
       <!-- Nhóm nút trượt ẩn khi đang tìm: max-width + opacity để ô tìm giãn mượt,
            không nhảy layout. `inert` khi ẩn ⇒ Tab không rơi vào nút vô hình. -->
-      <div class="fv-actions" :class="{ 'is-hidden': searching }" :inert="searching || undefined">
+      <div
+        class="flex flex-none items-center gap-1 overflow-hidden transition-[max-width,opacity,margin-left] duration-200 motion-reduce:transition-none"
+        :class="searching ? 'pointer-events-none ml-0 max-w-0 opacity-0' : 'ml-1 max-w-40'"
+        :inert="searching || undefined"
+      >
         <Button
           variant="ghost"
           size="iconSm"
-          class="size-6 text-[color:var(--textDim)] hover:text-[color:var(--text)]"
+          class="size-6 text-dim hover:text-foreground"
           title="New file"
           @click="exp.startCreate(false)"
         >
@@ -51,7 +56,7 @@
         <Button
           variant="ghost"
           size="iconSm"
-          class="size-6 text-[color:var(--textDim)] hover:text-[color:var(--text)]"
+          class="size-6 text-dim hover:text-foreground"
           title="New folder"
           @click="exp.startCreate(true)"
         >
@@ -60,7 +65,7 @@
         <Button
           variant="ghost"
           size="iconSm"
-          class="size-6 text-[color:var(--textDim)] hover:text-[color:var(--text)]"
+          class="size-6 text-dim hover:text-foreground"
           title="Refresh explorer"
           @click="exp.refreshAll"
         >
@@ -69,7 +74,7 @@
         <Button
           variant="ghost"
           size="iconSm"
-          class="size-6 text-[color:var(--textDim)] hover:text-[color:var(--text)]"
+          class="size-6 text-dim hover:text-foreground"
           title="Reveal active file in tree"
           @click="exp.revealActiveDoc"
         >
@@ -78,7 +83,7 @@
         <Button
           variant="ghost"
           size="iconSm"
-          class="size-6 text-[color:var(--textDim)] hover:text-[color:var(--text)]"
+          class="size-6 text-dim hover:text-foreground"
           title="Collapse all folders"
           @click="collapse"
         >
@@ -89,43 +94,43 @@
 
     <!-- Kết quả tìm (thay cây khi có chữ). -->
     <div v-if="query.trim()" class="flex min-h-0 flex-1 flex-col overflow-y-auto py-1 text-sm">
-      <div v-if="loading" class="px-3 py-2 text-[color:var(--textFaint)]">
-        Đang lập chỉ mục file…
-      </div>
-      <div v-else-if="failed && !results.length" class="px-3 py-2 text-[color:var(--textFaint)]">
+      <div v-if="loading" class="px-3 py-2 text-faint">Đang lập chỉ mục file…</div>
+      <div v-else-if="failed && !results.length" class="px-3 py-2 text-faint">
         Không đọc được danh sách file của project
       </div>
-      <div v-else-if="!results.length" class="px-3 py-2 text-[color:var(--textFaint)]">
-        Không có file nào khớp
-      </div>
+      <div v-else-if="!results.length" class="px-3 py-2 text-faint">Không có file nào khớp</div>
       <div
         v-for="(h, i) in results"
         :key="h.path"
-        class="fv-hit"
-        :class="{ on: i === activeIdx }"
+        class="flex h-6 cursor-pointer items-center gap-1.5 whitespace-nowrap px-2.5"
+        :class="
+          i === activeIdx
+            ? 'bg-selected text-foreground shadow-[inset_2px_0_0_var(--color-primary)]'
+            : 'text-muted-foreground'
+        "
         :title="h.path"
         :data-fv-hit="i"
         @mousedown.prevent
         @mouseenter="activeIdx = i"
         @click="open(h.path)"
       >
-        <FileText :size="14" class="flex-none text-[color:var(--textDim)]" />
-        <span class="fv-name">
+        <FileText :size="14" class="flex-none text-dim" />
+        <span class="max-w-[70%] flex-none truncate">
           <template v-for="(seg, si) in nameSegs(h)" :key="si">
-            <b v-if="seg.match">{{ seg.text }}</b>
+            <b v-if="seg.match" class="font-semibold text-primary">{{ seg.text }}</b>
             <template v-else>{{ seg.text }}</template>
           </template>
         </span>
-        <span v-if="h.dir" class="fv-dir">{{ h.dir }}</span>
+        <span v-if="h.dir" class="min-w-0 truncate text-xs text-faint">{{ h.dir }}</span>
       </div>
-      <div v-if="truncated" class="px-3 py-1.5 text-xs text-[color:var(--textFaint)]">
+      <div v-if="truncated" class="px-3 py-1.5 text-xs text-faint">
         Project lớn — chỉ tìm trong 20.000 file đầu.
       </div>
     </div>
 
     <div v-else class="flex min-h-0 flex-1 flex-col overflow-y-auto pb-7 pt-1 text-sm">
       <div
-        class="flex h-[22px] flex-none cursor-default select-none items-center gap-[5px] px-2 text-xs font-[640] text-[color:var(--textDim)]"
+        class="flex h-5.5 flex-none cursor-default select-none items-center gap-1 px-2 text-xs font-semibold text-dim"
       >
         <ChevronDown :size="10" />
         {{ projectName }}
@@ -204,63 +209,3 @@ function onEsc(): void {
   else inputEl.value?.blur()
 }
 </script>
-
-<style scoped>
-.fv-actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  max-width: 160px;
-  margin-left: 4px;
-  overflow: hidden;
-  transition:
-    max-width 0.18s ease,
-    opacity 0.14s ease,
-    margin-left 0.18s ease;
-}
-.fv-actions.is-hidden {
-  max-width: 0;
-  margin-left: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .fv-actions {
-    transition: none;
-  }
-}
-.fv-hit {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  cursor: pointer;
-  color: var(--textMuted);
-  white-space: nowrap;
-}
-.fv-hit.on {
-  background: var(--accentDim);
-  color: var(--text);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.fv-name {
-  flex: none;
-  max-width: 70%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.fv-name b {
-  color: var(--accent);
-  font-weight: 600;
-}
-.fv-dir {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-</style>

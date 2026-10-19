@@ -4,7 +4,7 @@
 //
 // Sống trong components/schedule/ và được import tường minh: nó là helper của
 // đúng một feature, không phải composable dùng chung toàn app.
-import type { Schedule, ScheduleTrigger } from '~/stores/schedules'
+import type { Schedule, ScheduleRunStatus, ScheduleTrigger } from '~/stores/schedules'
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
 
@@ -40,11 +40,21 @@ export function formatWhen(iso: string, locale: string): string {
   })
 }
 
+// Màu chấm trạng thái một lượt chạy — dùng chung cho danh sách lịch sử và modal chi tiết.
+export function statusColor(status: ScheduleRunStatus): string {
+  if (status === 'ok') return 'var(--accent)'
+  if (status === 'error') return 'var(--danger)'
+  if (status === 'running') return 'var(--amber)'
+  return 'var(--textFaint)'
+}
+
 // Text mà ô tìm kiếm của LibraryView quét.
 export function searchTextOf(s: Schedule): string {
   const job =
     s.job.kind === 'session-prompt'
       ? `${s.job.prompt} ${s.job.title ?? ''}`
-      : `${s.job.title} ${s.job.workflowId}`
+      : s.job.kind === 'command'
+        ? `${s.job.program} ${s.job.args.join(' ')}`
+        : `${s.job.title} ${s.job.workflowId}`
   return `${s.name} ${s.id} ${job}`
 }

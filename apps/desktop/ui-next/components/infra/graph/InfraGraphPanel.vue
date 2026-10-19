@@ -2,48 +2,71 @@
   <!-- Panel chi tiết của node đang chọn: thuộc tính resolver trả về + nút MỞ RỘNG
        đúng node này một bước ("dựng dần", hợp đồng §6). Read-only: panel không có
        hành động ghi nào — graph không có nút ghi. -->
-  <aside class="igp">
-    <header class="igp-hd">
-      <span class="igp-ico">
-        <Icon :name="icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <aside class="flex w-75 min-w-65 flex-col overflow-hidden border-l bg-sidebar">
+    <header class="flex items-center gap-2 border-b px-3 py-2">
+      <span class="grid size-5.5 shrink-0 place-items-center rounded-sm bg-selected text-primary">
+        <Icon :name="icon" class="size-3.5" />
       </span>
-      <span class="igp-ttl" :title="node.label">{{ node.label }}</span>
-      <button
-        class="igp-x"
+      <span
+        class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
+        :title="node.label"
+      >
+        {{ node.label }}
+      </span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim"
         type="button"
         :title="t('infra.graph.panel.close')"
+        :aria-label="t('infra.graph.panel.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </header>
 
-    <div class="igp-chips">
-      <span class="chip">{{ node.service }}</span>
-      <span v-if="node.region" class="chip">{{ node.region }}</span>
-      <span v-if="isRoot" class="chip root">{{ t('infra.graph.node.root') }}</span>
-      <span v-if="node.inferred" class="chip inf">{{ t('infra.graph.node.inferred') }}</span>
+    <div class="flex flex-wrap gap-1 px-3 pt-2">
+      <Badge variant="outline" class="text-muted-foreground">{{ node.service }}</Badge>
+      <Badge v-if="node.region" variant="outline" class="text-muted-foreground">
+        {{ node.region }}
+      </Badge>
+      <Badge v-if="isRoot" variant="outline" class="border-selected-border text-primary">
+        {{ t('infra.graph.node.root') }}
+      </Badge>
+      <Badge v-if="node.inferred" variant="outline" class="border-warning text-warning">
+        {{ t('infra.graph.node.inferred') }}
+      </Badge>
     </div>
 
-    <p v-if="node.kind === 'external'" class="igp-note warn">
+    <p
+      v-if="node.kind === 'external'"
+      class="mx-3 mt-2 rounded-md border bg-muted px-2 py-1.5 text-xs text-muted-foreground"
+    >
       {{ t('infra.graph.panel.externalNote') }}
     </p>
-    <p v-else-if="node.inferred" class="igp-note warn">
+    <p
+      v-else-if="node.inferred"
+      class="mx-3 mt-2 rounded-md border bg-muted px-2 py-1.5 text-xs text-muted-foreground"
+    >
       {{ t('infra.graph.panel.inferredNote') }}
     </p>
 
-    <div class="igp-sec">
-      <div class="igp-lbl">{{ t('infra.graph.panel.detail') }}</div>
-      <dl v-if="entries.length" class="igp-dl">
+    <div class="min-h-0 flex-1 overflow-auto px-3 py-2.5">
+      <div class="mb-1.5 text-xs text-faint">{{ t('infra.graph.panel.detail') }}</div>
+      <dl
+        v-if="entries.length"
+        class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs"
+      >
         <template v-for="[key, value] in entries" :key="key">
-          <dt>{{ key }}</dt>
-          <dd>{{ value }}</dd>
+          <dt class="break-words text-dim">{{ key }}</dt>
+          <dd class="break-words text-foreground">{{ value }}</dd>
         </template>
       </dl>
-      <p v-else class="igp-empty">{{ t('infra.graph.panel.noDetail') }}</p>
+      <p v-else class="text-xs text-dim">{{ t('infra.graph.panel.noDetail') }}</p>
     </div>
 
-    <footer class="igp-ft">
+    <footer class="border-t px-3 py-2">
       <!-- G4, nửa đầu: node → nhóm log. Nút CHỈ hiện khi sidecar suy được nhóm
            (`logGroup` vắng mặt = không suy được); mời người dùng sang màn Logs với
            một tên nhóm đoán bừa sẽ mở ra một màn trống, và cái trống đó đọc như
@@ -56,7 +79,7 @@
         size="sm"
         @click="emit('open-logs', node.logGroup)"
       >
-        <Icon name="table" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="table" />
         {{ t('infra.graph.panel.openLogs') }}
       </Button>
       <Button
@@ -70,12 +93,11 @@
       >
         <Icon
           :name="expanding ? 'refresh' : 'plus'"
-          :class="{ spin: expanding }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          :class="{ 'motion-safe:animate-spin': expanding }"
         />
         {{ expanding ? t('infra.graph.node.expanding') : t('infra.graph.node.expand') }}
       </Button>
-      <p v-else class="igp-empty">{{ t('infra.graph.node.noExpand') }}</p>
+      <p v-else class="text-xs text-dim">{{ t('infra.graph.node.noExpand') }}</p>
     </footer>
   </aside>
 </template>
@@ -104,158 +126,3 @@ const { t } = useI18n()
 const icon = computed(() => graphServiceIcon(props.node.service))
 const entries = computed(() => Object.entries(props.node.detail))
 </script>
-
-<style scoped>
-.igp {
-  display: flex;
-  flex-direction: column;
-  width: 300px;
-  min-width: 260px;
-  border-left: 1px solid var(--border);
-  background: var(--bgPanel);
-  overflow: hidden;
-}
-
-.igp-hd {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 11px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.igp-ico {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  background: var(--accentDim);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-
-.igp-ttl {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.igp-x {
-  padding: 6px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-}
-
-.igp-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-
-.igp-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 9px 11px 0;
-}
-
-.chip.root {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-
-.chip.inf {
-  color: var(--amber);
-  border-color: var(--amber);
-}
-
-.igp-note {
-  margin: 9px 11px 0;
-  padding: 7px 9px;
-  border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.igp-note.warn {
-  border: 1px solid var(--border);
-  background: var(--bgSubtle);
-  color: var(--textMuted);
-}
-
-.igp-sec {
-  padding: 10px 11px;
-  overflow: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.igp-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  margin-bottom: 6px;
-}
-
-.igp-dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 4px 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.igp-dl dt {
-  color: var(--textDim);
-  word-break: break-word;
-}
-
-.igp-dl dd {
-  margin: 0;
-  color: var(--text);
-  word-break: break-word;
-}
-
-.igp-empty {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.igp-ft {
-  padding: 9px 11px;
-  box-shadow: inset 0 1px 0 var(--border);
-}
-
-/* Cùng khuôn với `.iad-spin` của InfraAccountsDetail.vue — `.spin` không phải class
-   toàn cục nên SFC tự khai keyframes. */
-.spin {
-  animation: igp-spin 0.8s linear infinite;
-}
-
-@keyframes igp-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-</style>

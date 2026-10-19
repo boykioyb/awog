@@ -1,25 +1,27 @@
 <template>
-  <div class="wsi flex flex-col" :class="{ dock: compact }">
+  <!-- `compact` = biến thể dock dưới: grid 2 cột, hàng gọn; trang session giữ nguyên. -->
+  <div :class="compact ? 'grid grid-cols-2 gap-x-5 text-sm' : 'flex flex-col'">
     <div
       v-for="row in infoRows"
       :key="row.k"
-      class="wsi-row flex items-baseline gap-2.5 border-b border-border py-1.5"
+      class="flex items-baseline gap-2.5 border-b border-border"
+      :class="compact ? 'py-0.5' : 'py-1.5'"
     >
       <span class="w-24 shrink-0 text-dim">{{ row.k }}</span>
       <a
         v-if="row.href"
-        class="min-w-0 font-mono text-info no-underline [overflow-wrap:anywhere]"
+        class="min-w-0 font-mono text-info no-underline wrap-anywhere"
         :href="row.href"
         target="_blank"
         rel="noopener"
       >
         {{ row.v }}
       </a>
-      <span v-else class="min-w-0 font-mono [overflow-wrap:anywhere]">{{ row.v }}</span>
+      <span v-else class="min-w-0 font-mono wrap-anywhere">{{ row.v }}</span>
     </div>
 
     <!-- Context files: attachments + pinned working-set fed into the model. -->
-    <div class="wsi-ctx mt-3.5">
+    <div :class="compact ? 'col-span-full mt-1.5' : 'mt-3.5'">
       <div class="mb-1.5 flex items-center gap-1.5 text-sm text-dim">
         {{ t('sessions.info.contextFiles') }}
         <span v-if="contextFiles.length" class="text-sm tabular-nums text-faint">
@@ -29,9 +31,8 @@
       <Button
         v-for="f in contextFiles"
         :key="f.key"
-        variant="outline"
-        type="button"
-        class="h-auto p-0 flex w-full items-center gap-2 border-b border-border px-1 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+        variant="ghost"
+        class="h-auto w-full justify-start gap-2 rounded-none border-b border-border px-1 py-1.5 text-left font-normal text-foreground [&_svg]:size-3"
         :title="'path' in f ? f.path : f.name"
         @click="openContextFile(f)"
       >
@@ -54,7 +55,7 @@
     </div>
 
     <!-- Media · links · docs: everything that flowed through the transcript. -->
-    <WorkspaceInfoMedia :session="session" />
+    <WorkspaceInfoMedia :session="session" :class="{ 'col-span-full': compact }" />
   </div>
 </template>
 
@@ -137,24 +138,3 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   return rows
 })
 </script>
-
-<style scoped>
-/* Dock variant — grid 2 cột, hàng gọn; trang session giữ nguyên. */
-.wsi.dock {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: 20px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wsi.dock > .wsi-row {
-  padding: 3px 0;
-}
-.wsi.dock > .wsi-ctx,
-.wsi.dock > :deep(*) {
-  grid-column: 1 / -1;
-}
-.wsi.dock .wsi-ctx {
-  margin-top: 6px;
-}
-</style>

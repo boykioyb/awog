@@ -10,38 +10,38 @@
        đây là tự khoá đường vào. Máy KHÔNG có `~/.kube/config` thì vẫn không thấy
        chip nào — luật "không chiếm pixel cho tính năng người dùng không dùng"
        vẫn đúng ở đó. -->
-  <span v-if="visible" class="iwrap">
-    <button
-      ref="chipEl"
-      type="button"
-      class="ctxchip"
-      :class="{ on: open, acc: !pinned }"
+  <span v-if="visible" class="relative inline-flex min-w-0 shrink">
+    <SessionCtxChip
+      ref="chipRef"
+      icon="k8s"
+      :label="clusterLabel ?? ''"
+      :sub="chipSub"
+      chev
+      :on="open"
+      :acc="!pinned"
       :title="t('infra.k8s.chip.title')"
       @click.stop="open = !open"
-    >
-      <Icon name="k8s" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="ctxchip-lbl">{{ clusterLabel }}</span>
-      <span v-if="chipSub" class="ctxchip-sub">{{ chipSub }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+    />
 
     <Teleport to="body">
-      <div v-if="open" class="ibackdrop" @click="open = false" />
-      <div v-if="open" ref="popEl" class="pop ipop" :style="popStyle" @click.stop>
-        <div class="pl">{{ t('infra.k8s.pop.title') }}</div>
+      <div v-if="open" class="fixed inset-0 z-40" @click="open = false" />
+      <SessionCtxPop v-if="open" ref="popRef" class="w-74" :style="popStyle" @click.stop>
+        <div class="mb-2 flex justify-between text-sm text-dim">{{ t('infra.k8s.pop.title') }}</div>
 
         <!-- Công tắc on/off của tool kubectl cho phiên (2026-09-15). Tắt = xoá
              context/namespace của phiên; bật = chọn sẵn context hiện hành. -->
-        <div class="itoggle">
-          <span class="itoggle-lbl">{{ t('infra.toggle.k8s') }}</span>
+        <div class="flex items-center justify-between gap-2.5">
+          <span class="text-sm text-foreground">{{ t('infra.toggle.k8s') }}</span>
           <SettingsTog :model-value="pinned" @update:model-value="setEnabled" />
         </div>
-        <p v-if="!pinned" class="ihint">{{ t('infra.toggle.k8sHint') }}</p>
+        <p v-if="!pinned" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+          {{ t('infra.toggle.k8sHint') }}
+        </p>
 
         <template v-if="pinned">
           <!-- 1 · Context. Đây là giá trị DUY NHẤT đi vào `--context`. -->
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.k8s.context.label') }}</div>
+          <div class="mt-3">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.k8s.context.label') }}</div>
             <AppSelect
               :model-value="effective.cluster ?? ''"
               :options="contextOptions"
@@ -49,10 +49,16 @@
               width="100%"
               @update:model-value="onCluster"
             />
-            <p v-if="loading" class="ihint">{{ t('infra.k8s.context.loading') }}</p>
-            <p v-else-if="loadError" class="ierr">{{ loadError }}</p>
-            <p v-else-if="!contexts.length" class="ihint">{{ t('infra.k8s.context.empty') }}</p>
-            <p v-else-if="pathsLabel" class="ihint">
+            <p v-if="loading" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.k8s.context.loading') }}
+            </p>
+            <p v-else-if="loadError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+              {{ loadError }}
+            </p>
+            <p v-else-if="!contexts.length" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.k8s.context.empty') }}
+            </p>
+            <p v-else-if="pathsLabel" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
               {{ t('infra.k8s.context.from', { path: pathsLabel }) }}
             </p>
           </div>
@@ -60,8 +66,8 @@
           <!-- 2 · Namespace. Ô GÕ TỰ do: namespace là dữ liệu của cluster, không
              suy được từ kubeconfig, và AppSelect không nhận giá trị ngoài danh
              sách. Rỗng = "để kubectl quyết" (namespace khai trong context). -->
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.k8s.namespace.label') }}</div>
+          <div class="mt-3">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.k8s.namespace.label') }}</div>
             <Input
               :model-value="namespaceDraft"
               spellcheck="false"
@@ -71,26 +77,33 @@
               @blur="commitNamespace"
               @update:model-value="namespaceDraft = $event"
             />
-            <p class="ihint">{{ t('infra.k8s.namespace.note') }}</p>
+            <p class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.k8s.namespace.note') }}
+            </p>
           </div>
 
           <!-- 3 · Đích thật sự: tên cluster + API server + user. Chỉ ĐỌC, và chỉ
              metadata — token/cert của user không bao giờ rời kubeconfig. -->
-          <div v-if="selected" class="iout">
-            <div v-if="selected.cluster" class="iout-row">
-              <span class="iout-k">{{ t('infra.k8s.cluster') }}</span>
-              <span class="iout-v">{{ selected.cluster }}</span>
+          <div v-if="selected" class="mt-2.5 grid gap-1">
+            <div v-if="selected.cluster" class="flex gap-2 text-xs leading-4.5">
+              <span class="shrink-0 text-faint">{{ t('infra.k8s.cluster') }}</span>
+              <span class="min-w-0 font-mono break-all text-foreground">
+                {{ selected.cluster }}
+              </span>
             </div>
-            <div v-if="selected.server" class="iout-row">
-              <span class="iout-k">{{ t('infra.k8s.server') }}</span>
-              <span class="iout-v">{{ selected.server }}</span>
+            <div v-if="selected.server" class="flex gap-2 text-xs leading-4.5">
+              <span class="shrink-0 text-faint">{{ t('infra.k8s.server') }}</span>
+              <span class="min-w-0 font-mono break-all text-foreground">{{ selected.server }}</span>
             </div>
-            <div v-if="selected.user" class="iout-row">
-              <span class="iout-k">{{ t('infra.k8s.user') }}</span>
-              <span class="iout-v">{{ selected.user }}</span>
+            <div v-if="selected.user" class="flex gap-2 text-xs leading-4.5">
+              <span class="shrink-0 text-faint">{{ t('infra.k8s.user') }}</span>
+              <span class="min-w-0 font-mono break-all text-foreground">{{ selected.user }}</span>
             </div>
           </div>
-          <p v-if="!selected && effective.cluster" class="ihint">
+          <p
+            v-if="!selected && effective.cluster"
+            class="mt-1.5 mb-0 text-xs leading-4.5 text-faint"
+          >
             {{ t('infra.k8s.unknownContext') }}
           </p>
 
@@ -99,9 +112,11 @@
              này là đường sửa bằng một cú bấm. -->
           <InfraToolBinaryHint tool="kubectl" />
 
-          <p v-if="saveError" class="ierr">{{ saveError }}</p>
+          <p v-if="saveError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+            {{ saveError }}
+          </p>
         </template>
-      </div>
+      </SessionCtxPop>
     </Teleport>
   </span>
 </template>
@@ -136,8 +151,12 @@ type KubeContextEntry = {
 const open = ref(false)
 // Chip đứng trên hàng header `.dh`, có thể sát mép phải — neo `fixed` + kẹp
 // viewport thay vì `absolute` trong `.iwrap`.
-const chipEl = ref<HTMLElement | null>(null)
-const popEl = ref<HTMLElement | null>(null)
+// Chip + popover là component (Button / SessionCtxPop) ⇒ template ref là instance,
+// phần tử DOM nằm ở `$el`.
+const chipRef = useTemplateRef<{ $el: HTMLElement }>('chipRef')
+const popRef = useTemplateRef<{ $el: HTMLElement }>('popRef')
+const chipEl = computed(() => chipRef.value?.$el ?? null)
+const popEl = computed(() => popRef.value?.$el ?? null)
 const { style: popStyle } = usePopoverAnchor(chipEl, popEl, open)
 
 const loading = ref(false)

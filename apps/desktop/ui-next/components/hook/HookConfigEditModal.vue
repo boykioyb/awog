@@ -6,13 +6,13 @@
     :width="520"
     @close="emit('cancel')"
   >
-    <div class="hce">
-      <div class="hce-hint">{{ t('hooks.configEdit.hint') }}</div>
+    <div class="flex flex-col gap-3.5">
+      <div class="text-sm text-dim">{{ t('hooks.configEdit.hint') }}</div>
 
-      <div v-if="!draft" class="hce-promptbox">
-        <textarea
+      <div v-if="!draft">
+        <Textarea
           v-model="prompt"
-          class="hce-ta"
+          class="min-h-16 resize-y"
           rows="3"
           :disabled="isGenerating"
           :placeholder="t('hooks.configEdit.placeholder')"
@@ -20,15 +20,23 @@
         />
       </div>
 
-      <div v-if="error" class="hce-err">{{ error }}</div>
+      <Alert v-if="error" variant="destructive" class="border-destructive">
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
 
-      <div v-if="draft" class="hce-preview">
-        <div class="hce-prow">
-          <span class="tag mono hce-acc">{{ draft.event }}</span>
-          <span class="tag">{{ draft.runMode }}</span>
+      <div v-if="draft" class="flex flex-col gap-2 rounded-lg border bg-muted p-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- mono-ok: tên event hook -->
+          <Badge variant="secondary" class="font-mono text-primary">{{ draft.event }}</Badge>
+          <Badge variant="secondary">{{ draft.runMode }}</Badge>
         </div>
-        <pre class="codeblk hce-cmd">{{ draft.command }}</pre>
-        <div v-if="matcherText" class="hce-matcher mono">matcher: {{ matcherText }}</div>
+        <!-- mono-ok: lệnh shell của hook -->
+        <pre
+          class="m-0 whitespace-pre-wrap break-words rounded-lg border bg-muted p-3 font-mono text-sm leading-(--lh-prose) text-muted-foreground"
+          >{{ draft.command }}</pre
+        >
+        <!-- mono-ok: matcher -->
+        <div v-if="matcherText" class="font-mono text-xs text-dim">matcher: {{ matcherText }}</div>
       </div>
     </div>
 
@@ -44,7 +52,10 @@
         variant="default"
         @click="onGenerate"
       >
-        <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
+        <Icon
+          :name="isGenerating ? 'refresh' : 'sparkles'"
+          :class="{ 'animate-spin': isGenerating }"
+        />
         {{ isGenerating ? t('hooks.configEdit.generating') : t('hooks.configEdit.generate') }}
       </Button>
       <Button v-else variant="default" @click="onApply">
@@ -133,79 +144,3 @@ const onApply = () => {
   if (draft.value) emit('apply', draft.value)
 }
 </script>
-
-<style scoped>
-.hce {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.hce-hint {
-  font-size: var(--fs-sm);
-  color: var(--textDim);
-  line-height: var(--lh-md);
-}
-.hce-promptbox {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-}
-.hce-ta {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  outline: none;
-  resize: vertical;
-  min-height: 4rem;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  font-family: var(--sans);
-}
-.hce-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--bgInput);
-  border: 1px solid var(--danger);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.hce-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 12px;
-}
-.hce-prow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.hce-acc {
-  color: var(--accent);
-}
-.hce-cmd {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.hce-matcher {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.spin {
-  animation: hce-spin 0.9s linear infinite;
-}
-@keyframes hce-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

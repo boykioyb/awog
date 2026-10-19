@@ -1,13 +1,19 @@
 <template>
   <div class="flex h-full min-h-0 flex-col">
     <!-- Unavailable / no-root (browser-dev or unknown project). -->
-    <div v-if="!ready" class="empty" style="padding: 30px">
-      <div class="et">{{ unavailableMsg }}</div>
+    <div
+      v-if="!ready"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ unavailableMsg }}</div>
     </div>
 
     <!-- No previewable artifacts produced by this session yet. -->
-    <div v-else-if="!artifacts.length" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.preview.empty') }}</div>
+    <div
+      v-else-if="!artifacts.length"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.preview.empty') }}</div>
     </div>
 
     <template v-else>
@@ -17,21 +23,22 @@
         v-if="artifacts.length > 1"
         class="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border p-1.5"
       >
-        <button
+        <Button
           v-for="(a, i) in artifacts"
           :key="a"
-          type="button"
+          variant="ghost"
+          size="xs"
           :class="[
-            'max-w-40 shrink-0 truncate rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors',
+            'block max-w-40 shrink-0 truncate',
             i === selectedIdx
-              ? 'bg-accent text-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              ? 'bg-selected text-foreground hover:bg-selected'
+              : 'text-muted-foreground hover:text-foreground',
           ]"
           :title="a"
           @click="selectedIdx = i"
         >
           {{ baseName(a) }}
-        </button>
+        </Button>
       </div>
 
       <!-- Path header + (for html/pdf) an "open in browser" action for full fidelity. -->
@@ -45,8 +52,8 @@
         <Button
           v-if="selectedKind !== 'markdown'"
           variant="ghost"
-          type="button"
-          class="h-auto p-0 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          size="iconSm"
+          class="shrink-0 text-muted-foreground"
           :title="t('sessions.workspace.preview.openExternal')"
           :aria-label="t('sessions.workspace.preview.openExternal')"
           @click="openExternal"
@@ -57,28 +64,39 @@
 
       <!-- Body: markdown renders inline + scrolls; html/pdf fill the body edge-to-edge. -->
       <div class="flex min-h-0 flex-1 flex-col">
-        <div v-if="loading" class="empty" style="padding: 24px">
-          <div class="et">{{ t('sessions.preview.loading') }}</div>
+        <div
+          v-if="loading"
+          class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-dim"
+        >
+          <div class="text-lg text-muted-foreground">{{ t('sessions.preview.loading') }}</div>
         </div>
-        <div v-else-if="loadError" class="empty" style="padding: 24px">
-          <div class="et">{{ t('sessions.workspace.files.openFailed') }}</div>
+        <div
+          v-else-if="loadError"
+          class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-dim"
+        >
+          <div class="text-lg text-muted-foreground">
+            {{ t('sessions.workspace.files.openFailed') }}
+          </div>
         </div>
-        <div v-else-if="tooLarge" class="empty" style="padding: 24px">
-          <div class="et">{{ t('sessions.preview.tooLarge') }}</div>
-          <Button
-            variant="outline"
-            type="button"
-            class="h-auto p-0 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-            @click="openExternal"
-          >
+        <div
+          v-else-if="tooLarge"
+          class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-dim"
+        >
+          <div class="text-lg text-muted-foreground">{{ t('sessions.preview.tooLarge') }}</div>
+          <Button variant="outline" size="xs" @click="openExternal">
             {{ t('sessions.workspace.preview.openExternal') }}
           </Button>
         </div>
 
         <!-- Markdown — rendered with the same pipeline as the transcript. -->
         <div v-else-if="selectedKind === 'markdown'" class="min-h-0 flex-1 overflow-y-auto p-4">
-          <div v-if="!content.trim()" class="empty" style="padding: 24px">
-            <div class="et">{{ t('sessions.workspace.preview.noContent') }}</div>
+          <div
+            v-if="!content.trim()"
+            class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-dim"
+          >
+            <div class="text-lg text-muted-foreground">
+              {{ t('sessions.workspace.preview.noContent') }}
+            </div>
           </div>
           <SessionTextBlock v-else :text="content" />
         </div>

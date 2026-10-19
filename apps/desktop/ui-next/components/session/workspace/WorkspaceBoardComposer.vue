@@ -1,18 +1,24 @@
 <template>
-  <!-- Ô giao việc của board — clone của SessionComposer ở mức lõi: cùng card
-       .cbox, textarea .ci, chip đính kèm .att, thanh .cbar (menu `+` → Attach /
-       chèn `/` / `@`) và hai menu autocomplete thật. Không có mode/model/queue
-       vì đây là giao việc một lần, không phải lượt chat của phiên đang mở. -->
-  <div class="bcomp">
+  <!-- Ô giao việc của board — clone của SessionComposer ở mức lõi: cùng card,
+       textarea, chip đính kèm, thanh dưới (menu `+` → Attach / chèn `/` / `@`) và
+       hai menu autocomplete thật. Không có mode/model/queue vì đây là giao việc
+       một lần, không phải lượt chat của phiên đang mở. -->
+  <div>
+    <!-- Grip kéo đổi chiều cao ô nhập (pointerdown → onResize). -->
     <div
-      class="cresize"
-      :class="{ drag: resizing }"
+      class="group/rs mx-auto -mt-0.5 mb-px flex h-2 cursor-ns-resize items-center justify-center"
       :title="t('sessions.composer.resize')"
       @pointerdown="onResize"
-    />
+    >
+      <span
+        class="h-0.75 w-8.5 rounded-full transition-colors"
+        :class="resizing ? 'bg-primary' : 'bg-border group-hover/rs:bg-primary'"
+      />
+    </div>
+    <!-- Card nổi giữa các field của modal; kéo file vào thì viền đứt nét primary. -->
     <div
-      class="cbox"
-      :class="{ dragover }"
+      class="w-full rounded-xl border border-input bg-background shadow-sm focus-within:ring-1 focus-within:ring-ring"
+      :class="{ 'outline-2 -outline-offset-5 outline-primary outline-dashed': dragover }"
       @dragover.prevent="dragover = true"
       @dragleave.self="dragover = false"
       @drop.prevent="onDrop"
@@ -33,26 +39,39 @@
         @hover="(i) => (acIndex = i)"
       />
 
-      <!-- Notice thoáng (vd. dán bị cắt) — cùng khuôn .cmdnotice của session. -->
-      <div v-if="commandNotice" class="cmdnotice">{{ commandNotice }}</div>
+      <!-- Notice thoáng (vd. dán bị cắt) — cùng khuôn notice của session composer. -->
+      <div
+        v-if="commandNotice"
+        class="mx-2.5 mt-2 rounded-md border border-border bg-muted px-2.5 py-1 text-sm text-muted-foreground"
+      >
+        {{ commandNotice }}
+      </div>
 
       <!-- Chip đính kèm ngay trên textarea — cùng markup SessionComposer. -->
-      <div v-if="attachments.length" class="attc pattc">
+      <div v-if="attachments.length" class="flex flex-wrap gap-1.5 px-2.5 pt-2">
         <span
           v-for="(a, i) in visibleAtt"
           :key="i"
-          class="att"
+          :class="[ATT_CHIP, 'group/att bg-muted/40 hover:bg-accent', a.img ? 'pl-1' : 'pl-2']"
           :title="t('sessions.attachment.preview')"
-          :style="{ cursor: 'pointer', paddingLeft: a.img ? '5px' : undefined }"
           @click="previewAtt(i)"
         >
-          <img v-if="a.img && a.src" :src="a.src" class="attthumb" :alt="a.name" />
-          <span v-else-if="a.img" class="thumb" />
-          <Folder v-else-if="a.folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <FileText v-else style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <span class="attn">{{ a.name }}</span>
+          <img
+            v-if="a.img && a.src"
+            :src="a.src"
+            class="size-4.5 flex-none rounded-sm object-cover"
+            :alt="a.name"
+          />
           <span
-            class="x"
+            v-else-if="a.img"
+            class="size-4 flex-none rounded-sm bg-linear-135 from-info to-lavender"
+          />
+          <Folder v-else-if="a.folder" class="size-3" />
+          <FileText v-else class="size-3" />
+          <span class="max-w-42 truncate">{{ a.name }}</span>
+          <!-- Nút gỡ nổi ở góc chip, chỉ hiện khi hover/focus chip. -->
+          <span
+            class="absolute -top-2 -right-2 inline-flex size-4 scale-85 items-center justify-center rounded-full border border-border bg-popover text-sm leading-3 text-muted-foreground opacity-0 group-focus-within/att:scale-100 group-focus-within/att:opacity-100 group-hover/att:scale-100 group-hover/att:opacity-100 hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
             :title="t('sessions.attachment.remove')"
             @click.stop="emit('remove-att', i)"
           >
@@ -61,7 +80,7 @@
         </span>
         <span
           v-if="overflowCount"
-          class="att attmore"
+          :class="[ATT_CHIP, 'border-dashed bg-transparent pl-2 font-medium']"
           :title="t('sessions.attachment.allTitle', { n: attachments.length })"
           @click="showAllAtt = !showAllAtt"
         >
@@ -69,10 +88,12 @@
         </span>
       </div>
 
+      <!-- Textarea thô (không phải `Textarea`): grow()/onResize ghi style.height thẳng
+           lên element qua ref `ta`. -->
       <textarea
         ref="ta"
         v-model="draft"
-        class="ci"
+        class="block max-h-[40vh] min-h-13 w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2 font-sans text-base text-foreground outline-none placeholder:text-muted-foreground"
         rows="1"
         :disabled="disabled"
         :placeholder="placeholder"
@@ -84,7 +105,7 @@
         @paste="onPaste"
       />
 
-      <div class="cbar">
+      <div class="flex flex-nowrap items-center gap-1 px-2 pb-2">
         <!-- Menu `+` y hệt session: Attach mở file picker, `/` và `@` gõ sẵn
              trigger để menu autocomplete tự mở — một nguồn duy nhất. -->
         <DropdownMenu>
@@ -92,7 +113,6 @@
             <Button
               variant="ghost"
               size="iconSm"
-              class="cico"
               :title="t('sessions.composer.attach')"
               :aria-label="t('sessions.composer.attach')"
             >
@@ -108,25 +128,26 @@
             <DropdownMenuSeparator />
             <DropdownMenuLabel>{{ t('sessions.composer.insert') }}</DropdownMenuLabel>
             <DropdownMenuItem @click="insertSlash">
-              <span class="cmat">/</span>
+              <span class="w-4 flex-none text-center text-muted-foreground">/</span>
               {{ t('sessions.composer.slashCommands') }}
             </DropdownMenuItem>
             <DropdownMenuItem @click="insertMention">
-              <span class="cmat">@</span>
+              <span class="w-4 flex-none text-center text-muted-foreground">@</span>
               {{ t('sessions.composer.mentionTitle') }}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <span class="csep" />
-        <span class="grow1" />
-        <span class="ccount">{{ draft.length }}</span>
+        <Separator orientation="vertical" class="mx-1 h-4" />
+        <span class="flex-1" />
+        <span class="mr-1 flex-none text-sm tabular-nums text-muted-foreground">
+          {{ draft.length }}
+        </span>
         <!-- Nút send — chỉ bề mặt CHAT (thread) truyền `show-send`; ô brief của
              tab General không có vì dispatch là nút "Giao việc" ở footer modal. -->
         <Button
           v-if="showSend"
           :disabled="disabled || !hasContent"
           :title="t('sessions.composer.send')"
-          class="cicon"
           variant="default"
           size="iconSm"
           @click="submit"
@@ -168,11 +189,16 @@ import type { MentionRow, SlashItem } from '../session-composer-commands'
 import SessionSlashMenu from '../SessionSlashMenu.vue'
 import SessionMentionMenu from '../SessionMentionMenu.vue'
 import Button from '~/components/ui/button/Button.vue'
+
 import {
   expandCommandBody,
   findInvocableCommand,
   parseSlashInvocation,
 } from '~/utils/slash-command'
+
+// Khung chip đính kèm (cả chip "+N"): viền mảnh, bo, chữ nhỏ; nền/hover riêng từng loại.
+const ATT_CHIP =
+  'relative flex cursor-pointer items-center gap-2 rounded-lg border border-border py-1 pr-2 text-xs tabular-nums text-muted-foreground hover:border-input hover:text-foreground'
 
 const props = withDefaults(
   defineProps<{
@@ -626,16 +652,3 @@ defineExpose({
   expanded,
 })
 </script>
-
-<style scoped>
-/* Frame ngoài: bỏ border-top/padding của `.composer` (đó là strip đáy màn
-   session) — trong modal, card .cbox tự nổi giữa các field. Chiều cao ta do
-   grow()/onResize ghi inline, giống session. */
-.bcomp .cbox {
-  max-width: none;
-}
-.bcomp .cbox.dragover {
-  outline: 2px dashed var(--accent);
-  outline-offset: -5px;
-}
-</style>

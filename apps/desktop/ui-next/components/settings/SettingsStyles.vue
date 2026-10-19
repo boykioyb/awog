@@ -2,94 +2,138 @@
   <div>
     <SettingsPaneHeader :title="t('settingsStyles.heading')" />
 
-    <p class="styintro" :style="{ color: 'var(--textDim)' }">
+    <p class="mt-1.5 mb-2.5 text-sm text-dim">
       {{ t('settingsStyles.intro') }}
-      <span class="stypath">{{ globalDir }}</span>
+      <!-- mono-ok: đường dẫn thư mục, người dùng copy thẳng vào terminal -->
+      <span class="font-mono text-xs">{{ globalDir }}</span>
     </p>
 
-    <div class="styhead">
-      <div class="sech">{{ t('settingsStyles.mine.heading') }}</div>
+    <div class="mt-4.5 mb-1.5 flex items-center justify-between">
+      <div data-set-label class="text-xs font-medium text-muted-foreground">
+        {{ t('settingsStyles.mine.heading') }}
+      </div>
       <Button variant="outline" size="sm" @click="startCreate()">
         <Icon name="plus" />
         {{ t('settingsStyles.mine.add') }}
       </Button>
     </div>
 
-    <div v-if="lastError" class="styerr" :style="{ color: 'var(--danger)' }">{{ lastError }}</div>
+    <div v-if="lastError" class="py-1 text-sm text-destructive">{{ lastError }}</div>
 
-    <div v-if="styles.length === 0" class="styempty" :style="{ color: 'var(--textFaint)' }">
+    <div v-if="styles.length === 0" class="px-0.5 py-2.5 text-base text-faint">
       {{ t('settingsStyles.mine.empty') }}
     </div>
 
-    <div v-for="style in sortedStyles" :key="outputStyleKey(style)" class="styrow">
-      <button
-        class="styexpand"
+    <div
+      v-for="style in sortedStyles"
+      :key="outputStyleKey(style)"
+      class="flex items-start gap-2 border-t py-1.5"
+    >
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim"
         :title="t('settingsStyles.preview')"
+        :aria-label="t('settingsStyles.preview')"
         @click="toggle(outputStyleKey(style))"
       >
         <Icon :name="expandedKey === outputStyleKey(style) ? 'eye-off' : 'eye'" />
-      </button>
-      <div class="stytext">
-        <div class="styname">
+      </Button>
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-1.5 text-base">
           {{ style.name }}
-          <span class="tag">{{ style.id }}</span>
-          <span v-if="style.source === 'project'" class="tag acc" style="padding: 1px 6px">
+          <Badge variant="outline" class="text-muted-foreground">{{ style.id }}</Badge>
+          <Badge
+            v-if="style.source === 'project'"
+            variant="outline"
+            class="border-primary/45 bg-primary/10 text-primary"
+          >
             {{ projectLabel(style.projectId) }}
-          </span>
-          <span
+          </Badge>
+          <Badge
             v-if="shadowedBuiltInIds.has(style.id)"
-            class="tag"
+            variant="outline"
+            class="text-muted-foreground"
             :title="t('settingsStyles.overrides.hint')"
           >
             {{ t('settingsStyles.overrides.tag') }}
-          </span>
+          </Badge>
         </div>
-        <div class="stydesc" :style="{ color: 'var(--textDim)' }">{{ style.description }}</div>
-        <pre v-if="expandedKey === outputStyleKey(style)" class="stybody">{{ style.body }}</pre>
+        <div class="truncate text-sm text-dim">{{ style.description }}</div>
+        <!-- mono-ok: nội dung style là prompt thô, người dùng copy vào file style -->
+        <pre
+          v-if="expandedKey === outputStyleKey(style)"
+          class="mt-1.5 mb-0.5 rounded-md border bg-background p-2 font-mono text-xs break-words whitespace-pre-wrap text-dim"
+          >{{ style.body }}</pre
+        >
       </div>
-      <button class="stybtn" :title="t('common.edit')" @click="startEdit(style)">
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim"
+        :title="t('common.edit')"
+        :aria-label="t('common.edit')"
+        @click="startEdit(style)"
+      >
         <Icon name="edit" />
-      </button>
-      <button class="stybtn danger" :title="t('common.delete')" @click="onDelete(style)">
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim hover:bg-destructive/10 hover:text-destructive"
+        :title="t('common.delete')"
+        :aria-label="t('common.delete')"
+        @click="onDelete(style)"
+      >
         <Icon name="trash" />
-      </button>
+      </Button>
     </div>
 
     <!-- Trình soạn dùng chung cho tạo mới + sửa. -->
-    <div v-if="draft" class="styeditor">
-      <div class="styfields">
-        <label class="styfield">
-          <span class="sech">{{ t('settingsStyles.editor.id') }}</span>
+    <div v-if="draft" class="mt-3 flex flex-col gap-2 rounded-md border p-2.5">
+      <div class="flex gap-2">
+        <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span class="text-xs font-medium text-muted-foreground">
+            {{ t('settingsStyles.editor.id') }}
+          </span>
           <Input v-model="draft.id" :disabled="draft.mode === 'update'" class="flex-1" />
         </label>
-        <label class="styfield">
-          <span class="sech">{{ t('settingsStyles.editor.name') }}</span>
+        <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span class="text-xs font-medium text-muted-foreground">
+            {{ t('settingsStyles.editor.name') }}
+          </span>
           <Input v-model="draft.name" class="flex-1" />
         </label>
       </div>
-      <label v-if="draft.mode === 'create'" class="styfield">
-        <span class="sech">{{ t('settingsStyles.editor.scope') }}</span>
+      <label v-if="draft.mode === 'create'" class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-xs font-medium text-muted-foreground">
+          {{ t('settingsStyles.editor.scope') }}
+        </span>
         <AppSelect v-model="draft.scope" :options="scopeOptions" />
       </label>
-      <label class="styfield">
-        <span class="sech">{{ t('settingsStyles.editor.description') }}</span>
+      <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-xs font-medium text-muted-foreground">
+          {{ t('settingsStyles.editor.description') }}
+        </span>
         <Input
           v-model="draft.description"
           :placeholder="t('settingsStyles.editor.descriptionHint')"
           class="flex-1"
         />
       </label>
-      <label class="styfield">
-        <span class="sech">{{ t('settingsStyles.editor.body') }}</span>
-        <textarea
+      <label class="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span class="text-xs font-medium text-muted-foreground">
+          {{ t('settingsStyles.editor.body') }}
+        </span>
+        <Textarea
           v-model="draft.body"
-          class="keyinp stybodyinput resize-y min-h-[8rem]"
+          class="min-h-32 resize-y text-sm"
           :placeholder="t('settingsStyles.editor.bodyHint')"
         />
       </label>
-      <div class="styeditor-actions">
-        <span v-if="idError" :style="{ color: 'var(--danger)' }">{{ idError }}</span>
-        <span v-else-if="idTaken" :style="{ color: 'var(--textDim)' }">
+      <div class="flex items-center justify-end gap-2 text-sm">
+        <span v-if="idError" class="text-destructive">{{ idError }}</span>
+        <span v-else-if="idTaken" class="text-dim">
           {{ t('settingsStyles.editor.overrideNote') }}
         </span>
         <Button variant="outline" size="sm" @click="draft = null">{{ t('common.cancel') }}</Button>
@@ -99,40 +143,58 @@
       </div>
     </div>
 
-    <div class="styhead">
-      <div class="sech">{{ t('settingsStyles.builtIn.heading') }}</div>
+    <div class="mt-4.5 mb-1.5 flex items-center justify-between">
+      <div data-set-label class="text-xs font-medium text-muted-foreground">
+        {{ t('settingsStyles.builtIn.heading') }}
+      </div>
     </div>
-    <p class="styintro" :style="{ color: 'var(--textFaint)' }">
+    <p class="mt-1.5 mb-2.5 text-sm text-faint">
       {{ t('settingsStyles.builtIn.desc') }}
     </p>
 
-    <div v-for="style in builtIn" :key="style.id" class="styrow">
-      <button class="styexpand" :title="t('settingsStyles.preview')" @click="toggle(style.id)">
+    <div v-for="style in builtIn" :key="style.id" class="flex items-start gap-2 border-t py-1.5">
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim"
+        :title="t('settingsStyles.preview')"
+        :aria-label="t('settingsStyles.preview')"
+        @click="toggle(style.id)"
+      >
         <Icon :name="expandedKey === style.id ? 'eye-off' : 'eye'" />
-      </button>
-      <div class="stytext">
-        <div class="styname">
-          <span class="tag">{{ style.id }}</span>
-          <span
+      </Button>
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-1.5 text-base">
+          <Badge variant="outline" class="text-muted-foreground">{{ style.id }}</Badge>
+          <Badge
             v-if="shadowedBuiltInIds.has(style.id)"
-            class="tag acc"
+            variant="outline"
+            class="border-primary/45 bg-primary/10 text-primary"
             :title="t('settingsStyles.overrides.hint')"
           >
             {{ t('settingsStyles.builtIn.shadowed') }}
-          </span>
+          </Badge>
         </div>
-        <div v-if="expandedKey !== style.id" class="stydesc" :style="{ color: 'var(--textDim)' }">
+        <div v-if="expandedKey !== style.id" class="truncate text-sm text-dim">
           {{ style.directive }}
         </div>
-        <pre v-else class="stybody">{{ style.directive }}</pre>
+        <!-- mono-ok: directive là văn bản prompt thô, người dùng copy vào file style -->
+        <pre
+          v-else
+          class="mt-1.5 mb-0.5 rounded-md border bg-background p-2 font-mono text-xs break-words whitespace-pre-wrap text-dim"
+          >{{ style.directive }}</pre
+        >
       </div>
-      <button
-        class="stybtn"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-dim"
         :title="t('settingsStyles.builtIn.copy')"
+        :aria-label="t('settingsStyles.builtIn.copy')"
         @click="startCopy(style.id, style.directive)"
       >
         <Icon name="copy" />
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -147,7 +209,6 @@ import AppSelect from '~/components/common/AppSelect.vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useConfirm } from '~/composables/useConfirm'
 import { outputStyleKey, useOutputStyles, type OutputStyle } from '~/composables/useOutputStyles'
-import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
@@ -295,122 +356,3 @@ onMounted(async () => {
   await loadStyles(projectsStore.projects.map((p) => p.id))
 })
 </script>
-
-<style scoped>
-.styintro {
-  margin: 6px 0 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-.stypath {
-  /* mono-ok: đường dẫn thư mục, người dùng copy thẳng vào terminal */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.styhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 18px 0 6px;
-}
-.styerr {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  padding: 4px 0;
-}
-.styempty {
-  padding: 10px 2px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.styrow {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
-  border-top: 1px solid var(--border);
-}
-.stytext {
-  flex: 1;
-  min-width: 0;
-}
-.styname {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.stydesc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.stybody {
-  margin: 6px 0 2px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--textDim);
-  /* mono-ok: directive là văn bản prompt thô, người dùng copy vào file style */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-md);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.stybtn,
-.styexpand {
-  padding: 5px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.stybtn:hover,
-.styexpand:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.stybtn.danger:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-.styeditor {
-  margin-top: 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.styfields {
-  display: flex;
-  gap: 8px;
-}
-.styfield {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-.styeditor-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.stybodyinput {
-  line-height: var(--lh-md);
-}
-</style>

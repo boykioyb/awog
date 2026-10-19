@@ -1,35 +1,54 @@
 <template>
-  <section class="page on" data-page="home">
-    <div class="scroll">
-      <div class="bento">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="home">
+    <div class="flex-1 overflow-y-auto p-5">
+      <div class="grid grid-cols-1 gap-3.5 sm:grid-cols-6 lg:grid-cols-12">
         <!-- Needs attention (sessions awaiting reply/permission + tasks awaiting approval) -->
-        <div class="tile c8">
-          <div class="th">
-            <Icon name="clock" />
-            <span class="tt">{{ t('home.attention.title') }}</span>
-            <span class="ct">{{ t('home.attention.count', { n: attentionItems.length }) }}</span>
+        <Card class="min-w-0 gap-0 p-4 sm:col-span-6 lg:col-span-8">
+          <div class="mb-3 flex items-center gap-2">
+            <Icon name="clock" class="text-muted-foreground" />
+            <span class="text-sm text-muted-foreground">{{ t('home.attention.title') }}</span>
+            <span class="ml-auto text-xs text-faint tabular-nums">
+              {{ t('home.attention.count', { n: attentionItems.length }) }}
+            </span>
           </div>
-          <div v-if="!attentionReady" class="hmHint" :style="hintStyle">{{ loadingLabel }}</div>
-          <div v-else-if="!attentionItems.length" class="hmHint" :style="hintStyle">
+          <div v-if="!attentionReady" class="py-1.5 text-sm text-faint">{{ loadingLabel }}</div>
+          <div v-else-if="!attentionItems.length" class="py-1.5 text-sm text-faint">
             {{ t('home.attention.empty') }}
           </div>
-          <div v-else class="await">
-            <div v-for="item in attentionItems" :key="item.id" class="acard hot">
-              <span class="aic"><Icon :name="attentionIcon(item.kind)" /></span>
-              <div class="bd">
-                <div class="t1">{{ item.title }}</div>
-                <div class="t2">{{ item.sub }}</div>
+          <div v-else class="flex flex-col gap-2">
+            <div
+              v-for="item in attentionItems"
+              :key="item.id"
+              class="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5"
+            >
+              <span
+                class="grid size-7 shrink-0 place-items-center rounded-md bg-warning/20 text-warning"
+              >
+                <Icon :name="attentionIcon(item.kind)" class="size-3.5" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="mb-0.5 truncate text-base font-semibold">{{ item.title }}</div>
+                <div class="truncate text-sm text-muted-foreground">{{ item.sub }}</div>
               </div>
-              <span class="act" @click="navigateTo(item.to)">{{ actionLabel(item.action) }}</span>
+              <Button
+                variant="outline"
+                size="xs"
+                class="shrink-0 border-selected-border text-primary"
+                @click="navigateTo(item.to)"
+              >
+                {{ actionLabel(item.action) }}
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
 
         <!-- Running stat -->
-        <div class="tile c4 stat">
-          <div class="lbl">{{ t('home.running.label') }}</div>
-          <div class="big" style="color: var(--accent)">{{ runningCount.total }}</div>
-          <div class="sub">
+        <Card class="min-w-0 gap-0 p-4 sm:col-span-3 lg:col-span-4">
+          <div class="mb-2 text-xs text-muted-foreground">{{ t('home.running.label') }}</div>
+          <div class="text-2xl font-semibold tracking-tight text-primary">
+            {{ runningCount.total }}
+          </div>
+          <div class="mt-auto pt-2 text-xs text-faint tabular-nums">
             {{
               t('home.running.summary', {
                 tasks: runningCount.tasks,
@@ -38,41 +57,48 @@
               })
             }}
           </div>
-        </div>
+        </Card>
 
         <!-- Running tasks -->
-        <div class="tile c7">
-          <div class="th">
-            <Icon name="play" />
-            <span class="tt">{{ t('home.running.title') }}</span>
-            <span class="ct">
-              <a @click="navigateTo('/tasks')">{{ t('home.openTasks') }}</a>
+        <Card class="min-w-0 gap-0 p-4 sm:col-span-6 lg:col-span-7">
+          <div class="mb-3 flex items-center gap-2">
+            <Icon name="play" class="text-muted-foreground" />
+            <span class="text-sm text-muted-foreground">{{ t('home.running.title') }}</span>
+            <span class="ml-auto text-xs text-faint tabular-nums">
+              <Button variant="link" size="xs" class="h-auto p-0" @click="navigateTo('/tasks')">
+                {{ t('home.openTasks') }}
+              </Button>
             </span>
           </div>
-          <div v-if="!tasks.loaded" class="hmHint" :style="hintStyle">{{ loadingLabel }}</div>
+          <div v-if="!tasks.loaded" class="py-1.5 text-sm text-faint">{{ loadingLabel }}</div>
           <div
             v-else-if="!runningTaskRows.length && !runningSessionRows.length"
-            class="hmHint"
-            :style="hintStyle"
+            class="py-1.5 text-sm text-faint"
           >
             {{ t('home.running.empty') }}
           </div>
-          <div v-else class="run">
-            <div v-for="row in runningTaskRows" :key="row.task.id" class="ritem">
-              <div class="rh">
-                <span class="pulse" />
-                <span class="nm">{{ row.task.title }}</span>
-                <span class="who">{{ row.progress.currentAgentId ?? '' }}</span>
+          <div v-else class="flex flex-col gap-3">
+            <div v-for="row in runningTaskRows" :key="row.task.id">
+              <div class="mb-1.5 flex items-center gap-2">
+                <span
+                  class="size-2 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
+                />
+                <span class="truncate text-base font-semibold">{{ row.task.title }}</span>
+                <span class="ml-auto shrink-0 text-sm text-muted-foreground">
+                  {{ row.progress.currentAgentId ?? '' }}
+                </span>
               </div>
-              <div class="ph">
+              <div class="mb-2 text-sm text-muted-foreground">
                 {{ t('home.running.node') }}
-                <b>{{ row.progress.doneNodes }}/{{ row.progress.totalNodes }}</b>
+                <b class="font-medium">
+                  {{ row.progress.doneNodes }}/{{ row.progress.totalNodes }}
+                </b>
                 <template v-if="row.progress.currentSkill">
                   · "{{ row.progress.currentSkill }}"
                 </template>
               </div>
-              <div class="bar"><i :style="{ width: row.progress.pct + '%' }" /></div>
-              <div class="mt">
+              <Progress :model-value="row.progress.pct" class="h-1.5" />
+              <div class="mt-1.5 flex justify-between text-xs text-faint tabular-nums">
                 <span>{{ t('home.running.elapsed', { time: elapsed(row.task.createdAt) }) }}</span>
                 <span>{{ row.progress.pct }}%</span>
               </div>
@@ -81,92 +107,112 @@
             <div
               v-for="s in runningSessionRows"
               :key="'ses-' + s.id"
-              class="ritem"
-              style="cursor: pointer"
+              class="cursor-pointer"
               @click="openSession(s.id)"
             >
-              <div class="rh">
-                <span class="pulse" />
-                <span class="nm">{{ s.title }}</span>
-                <span class="who">{{ s.model }}</span>
+              <div class="mb-1.5 flex items-center gap-2">
+                <span
+                  class="size-2 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
+                />
+                <span class="truncate text-base font-semibold">{{ s.title }}</span>
+                <span class="ml-auto shrink-0 text-sm text-muted-foreground">{{ s.model }}</span>
               </div>
-              <div class="ph">
+              <div class="text-sm text-muted-foreground">
                 {{ t('home.running.session', { project: projectName(s.project) }) }}
               </div>
             </div>
           </div>
-        </div>
+        </Card>
 
         <!-- Activity sparkline -->
-        <div class="tile c5">
-          <div class="th">
-            <Icon name="act" />
-            <span class="tt">{{ t('home.activity.title') }}</span>
-            <span class="ct">
-              <a @click="openActivity()">{{ t('home.open') }}</a>
+        <Card class="min-w-0 gap-0 p-4 sm:col-span-6 lg:col-span-5">
+          <div class="mb-3 flex items-center gap-2">
+            <Icon name="act" class="text-muted-foreground" />
+            <span class="text-sm text-muted-foreground">{{ t('home.activity.title') }}</span>
+            <span class="ml-auto text-xs text-faint tabular-nums">
+              <Button variant="link" size="xs" class="h-auto p-0" @click="openActivity()">
+                {{ t('home.open') }}
+              </Button>
             </span>
           </div>
-          <div v-if="!sparkline.length" class="hmHint" :style="hintStyle">
+          <div v-if="!sparkline.length" class="py-1.5 text-sm text-faint">
             {{ t('home.activity.empty') }}
           </div>
           <template v-else>
-            <div class="spark">
+            <div class="mt-1 flex h-14 items-end gap-1">
               <i
                 v-for="(bar, i) in sparkline"
                 :key="i"
-                :class="{ hi: bar.hi }"
+                class="min-h-0.5 flex-1 rounded-t-sm bg-primary"
+                :class="bar.hi ? 'opacity-85' : 'opacity-40'"
                 :style="{ height: bar.height + '%' }"
               />
             </div>
-            <div class="usage">
-              <span class="u1">
+            <div class="mt-3 flex items-baseline justify-between">
+              <span class="text-xl font-semibold">
                 {{ formatTokens(usage.today) }}
-                <span style="font-size: var(--fs-xs); color: var(--textDim); font-weight: 500">
+                <span class="text-xs font-medium text-muted-foreground">
                   {{ t('home.activity.today') }}
                 </span>
               </span>
-              <span class="u2">{{ deltaLabel }}</span>
+              <span class="text-xs text-muted-foreground tabular-nums">{{ deltaLabel }}</span>
             </div>
           </template>
-        </div>
+        </Card>
 
         <!-- Provider rate limits (real % quota from account.usage; empty accounts hide themselves) -->
-        <div class="tile c12">
-          <div class="th">
-            <Icon name="act" />
-            <span class="tt">{{ t('home.rateLimit.title') }}</span>
-            <span class="ct">
-              <a @click="openActivity()">{{ t('home.open') }}</a>
+        <Card class="min-w-0 gap-0 p-4 sm:col-span-6 lg:col-span-12">
+          <div class="mb-3 flex items-center gap-2">
+            <Icon name="act" class="text-muted-foreground" />
+            <span class="text-sm text-muted-foreground">{{ t('home.rateLimit.title') }}</span>
+            <span class="ml-auto text-xs text-faint tabular-nums">
+              <Button variant="link" size="xs" class="h-auto p-0" @click="openActivity()">
+                {{ t('home.open') }}
+              </Button>
             </span>
           </div>
-          <div v-if="!rateLimitAccounts.length" class="hmHint" :style="hintStyle">
+          <div v-if="!rateLimitAccounts.length" class="py-1.5 text-sm text-faint">
             {{ t('home.rateLimit.empty') }}
           </div>
-          <div v-else class="rlcards">
+          <!-- Mỗi account một card đầy đủ như trang Activity — auto-fill để tile rộng
+               xếp các card cạnh nhau. -->
+          <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-3.5">
             <ActivityRateLimit v-for="acc in rateLimitAccounts" :key="acc.id" :account="acc" />
           </div>
-        </div>
+        </Card>
 
         <!-- Recent sessions -->
-        <div class="tile c12">
-          <div class="th">
-            <Icon name="sessions" />
-            <span class="tt">{{ t('home.recent.title') }}</span>
-            <span class="ct">
-              <a @click="navigateTo('/workbench')">{{ t('home.all') }}</a>
+        <Card class="min-w-0 gap-0 p-4 sm:col-span-6 lg:col-span-12">
+          <div class="mb-3 flex items-center gap-2">
+            <Icon name="sessions" class="text-muted-foreground" />
+            <span class="text-sm text-muted-foreground">{{ t('home.recent.title') }}</span>
+            <span class="ml-auto text-xs text-faint tabular-nums">
+              <Button variant="link" size="xs" class="h-auto p-0" @click="navigateTo('/workbench')">
+                {{ t('home.all') }}
+              </Button>
             </span>
           </div>
-          <div v-if="!recentSessions.length" class="hmHint" :style="hintStyle">
+          <div v-if="!recentSessions.length" class="py-1.5 text-sm text-faint">
             {{ t('home.recent.empty') }}
           </div>
-          <div v-for="s in recentSessions" v-else :key="s.id" class="rs" @click="openSession(s.id)">
-            <span class="si" :style="{ background: sessionDot(s.status) }" />
-            <span class="st1">{{ s.title }}</span>
-            <span class="tag">{{ projectName(s.project) }}</span>
-            <span class="tag">{{ s.model }}</span>
-            <span class="sw">{{ sessionStatusLabel(s.status, s.when) }}</span>
+          <div
+            v-for="s in recentSessions"
+            v-else
+            :key="s.id"
+            class="flex cursor-pointer items-center gap-3 border-t py-2 transition-colors hover:bg-accent"
+            @click="openSession(s.id)"
+          >
+            <span class="size-2 shrink-0 rounded-full" :class="sessionDot(s.status)" />
+            <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ s.title }}</span>
+            <Badge variant="outline" class="text-muted-foreground">
+              {{ projectName(s.project) }}
+            </Badge>
+            <Badge variant="outline" class="text-muted-foreground">{{ s.model }}</Badge>
+            <span class="shrink-0 text-xs whitespace-nowrap text-faint tabular-nums">
+              {{ sessionStatusLabel(s.status, s.when) }}
+            </span>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   </section>
@@ -210,13 +256,6 @@ const {
 } = useHomeDashboard()
 
 const loadingLabel = computed(() => t('home.time.now'))
-
-// Muted inline hint (loading / empty) — theme-driven, no new CSS class.
-const hintStyle = {
-  color: 'var(--textFaint)',
-  fontSize: '0.9231rem',
-  padding: '6px 0',
-} as const
 
 // Attention queue is "ready" once both source stores have a first load. Sessions
 // hydrate async over IPC; tasks gate on `loaded`.
@@ -272,25 +311,14 @@ function elapsed(iso: string): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 
+// Chấm trạng thái ở hàng phiên gần đây — class màu ngữ nghĩa.
 const sessionDot = (status: SessionStatus): string =>
   status === 'streaming'
-    ? 'var(--accent)'
-    : status === 'awaiting'
-      ? 'var(--amber)'
-      : status === 'error'
-        ? 'var(--amber)'
-        : 'var(--textFaint)'
+    ? 'bg-primary'
+    : status === 'awaiting' || status === 'error'
+      ? 'bg-warning'
+      : 'bg-faint'
 
 const sessionStatusLabel = (status: SessionStatus, when: string): string =>
   t(`home.recent.status.${status}`, { when })
 </script>
-
-<style scoped>
-/* Provider rate-limit tile: one full card per account, same as the Activity page
-   (.actrl grid) — auto-fill so wide tiles lay cards side by side. */
-.rlcards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
-}
-</style>

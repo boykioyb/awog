@@ -1,6 +1,6 @@
 <template>
-  <section class="page on" data-page="infra">
-    <div class="infra-shell">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="infra">
+    <div class="flex h-full w-full min-w-0 flex-col">
       <!-- ĐIỀU HƯỚNG HAI TẦNG (2026-09-15). Trước đó là MỘT hàng 12 tab phẳng —
            ở cỡ cửa sổ thường nó xuống hai dòng, và hàng thứ hai trông như một
            thanh khác chứ không phải phần tiếp của thanh thứ nhất.
@@ -29,22 +29,20 @@
       <!-- Hàng trên của trang: nhóm (bên trái) + thanh ngữ cảnh AWS (bên phải).
            Thanh ngữ cảnh nằm NGOÀI `role="tablist"`: nó không phải một tab, và
            nhét một control khác loại vào trong tablist là nói dối screen reader. -->
-      <div class="infra-top">
-        <div class="infra-sections" role="tablist" :aria-label="t('infra.nav.label')">
-          <button
-            v-for="g in GROUPS"
-            :key="g.id"
-            class="infra-section-tab"
-            :class="{ active: activeGroup === g.id }"
-            type="button"
-            role="tab"
-            :aria-selected="activeGroup === g.id"
-            @click="selectGroup(g.id)"
-          >
-            <Icon :name="GROUP_ICONS[g.id]" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t(`infra.nav.${g.id}`) }}
-          </button>
-        </div>
+      <!-- `flex-wrap`: ở cửa sổ hẹp sáu nhóm chiếm gần hết hàng — thanh ngữ cảnh xuống
+           dòng dưới, đường kẻ dưới cùng vẫn là của cả hàng. -->
+      <div class="flex shrink-0 flex-wrap items-center gap-1 gap-y-2 border-b px-4 pt-2.5 pb-2">
+        <Tabs
+          :model-value="activeGroup"
+          @update:model-value="(v) => selectGroup(v as InfraGroupId)"
+        >
+          <TabsList class="h-auto min-w-0 flex-wrap" :aria-label="t('infra.nav.label')">
+            <TabsTrigger v-for="g in GROUPS" :key="g.id" :value="g.id">
+              <Icon :name="GROUP_ICONS[g.id]" />
+              {{ t(`infra.nav.${g.id}`) }}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         <!-- Đơn giản / Chuyên sâu — MỘT công tắc, một lựa chọn nhớ chung cho cả khu
              (`useInfraMode`, kèm luật Đọc-được / Chính-xác).
@@ -55,24 +53,24 @@
              màn không có định danh máy nào để rút gọn, nên ở đó nó là một cái nút
              bấm không làm gì. Lựa chọn vẫn dùng chung và vẫn được nhớ; chỉ cái
              CONTROL là đi theo nơi nó có tác dụng. -->
-        <div
+        <ToggleGroup
           v-if="MODE_TABS.includes(tab)"
-          class="seg infra-mode"
-          role="tablist"
+          type="single"
+          variant="outline"
+          size="sm"
+          :model-value="mode"
           :aria-label="t('infra.mode.label')"
+          @update:model-value="onMode"
         >
-          <span
+          <ToggleGroupItem
             v-for="m in ['simple', 'expert'] as const"
             :key="m"
-            :class="{ on: mode === m }"
-            role="tab"
-            :aria-selected="mode === m"
+            :value="m"
             :title="t(`infra.mode.${m}Why`)"
-            @click="setMode(m)"
           >
             {{ t(`infra.mode.${m}`) }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
 
         <!-- Tài khoản + region dùng cho MỌI thứ bên dưới (bảng tài nguyên, danh
              mục, Logs, Kubernetes). Đặt ở hàng tab vì đây là chỗ duy nhất trên
@@ -89,30 +87,39 @@
         />
       </div>
 
-      <!-- Tầng 2. Chỉ tồn tại khi nhóm có nhiều hơn một màn — xem comment trên. -->
-      <div
+      <!-- Tầng 2. Chỉ tồn tại khi nhóm có nhiều hơn một màn — xem comment trên.
+           Khác tầng 1 về THỨ BẬC: tầng trên là segmented, tầng này là chữ + gạch chân
+           accent (không nền xám cho mục đang chọn). -->
+      <Tabs
         v-if="subTabs.length > 1"
-        class="infra-subs"
-        role="tablist"
-        :aria-label="t(`infra.nav.${activeGroup}`)"
+        :model-value="tab"
+        class="shrink-0 border-b px-4 pt-1.5"
+        @update:model-value="(v) => selectTab(v as InfraTab)"
       >
-        <button
-          v-for="item in subTabs"
-          :key="item"
-          class="infra-sub-tab"
-          :class="{ active: tab === item }"
-          type="button"
-          role="tab"
-          :aria-selected="tab === item"
-          @click="selectTab(item)"
+        <TabsList
+          class="-mb-px h-auto flex-wrap justify-start gap-0.5 rounded-none bg-transparent p-0"
+          :aria-label="t(`infra.nav.${activeGroup}`)"
         >
-          <Icon :name="TAB_ICONS[item]" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          {{ t(`infra.tab.${item}`) }}
-        </button>
-      </div>
+          <TabsTrigger
+            v-for="item in subTabs"
+            :key="item"
+            :value="item"
+            class="gap-1.5 rounded-none border-b-2 border-transparent px-2.5 pt-1.5 pb-2 text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none [&_svg]:size-3"
+          >
+            <Icon :name="TAB_ICONS[item]" />
+            {{ t(`infra.tab.${item}`) }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <div class="infra-body">
-        <div v-show="tab === 'overview'" class="infra-pane">
+      <div class="flex min-h-0 flex-1">
+        <!-- Mỗi pane là một <div> BỌC lấp hết chỗ, phần tử gốc của khung bên trong
+             (`*:`) lấp pane và tự cuộn. KHÔNG gắn class pane thẳng lên component con:
+             nó sẽ đè `display` của chính khung đó (Explorer là grid hai cột). -->
+        <div
+          v-show="tab === 'overview'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraOverview @open-logs="onOpenLogs" />
         </div>
 
@@ -120,7 +127,10 @@
              danh mục nhường chỗ cho bảng của chính khung Explorer — cột dịch vụ đã
              ghim vẫn nguyên ở bên trái. Hai mặt nằm trong cùng một tab nên không có
              cú nhảy tab nào ở giữa. -->
-        <div v-show="tab === 'services'" class="infra-pane">
+        <div
+          v-show="tab === 'services'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraServicesCatalog
             v-if="servicesMounted"
             v-show="catalogOpen"
@@ -154,15 +164,26 @@
              lười như Logs/CICD/K8s — và cũng không cần: `useInfraGraph` cố ý không
              tự chạy (không `onMounted`/`watch` nào gọi resolver sau lưng người dùng),
              nên mount sẵn không tốn một lệnh CLI nào cho tới cú bấm đầu tiên. -->
-        <div v-show="tab === 'graph'" class="infra-pane">
+        <div
+          v-show="tab === 'graph'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraGraph @open-logs="onOpenNodeLogs" />
         </div>
 
-        <div v-if="auditMounted" v-show="tab === 'audit'" class="infra-pane">
+        <div
+          v-if="auditMounted"
+          v-show="tab === 'audit'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraAuditLog />
         </div>
 
-        <div v-if="logsMounted" v-show="tab === 'logs'" class="infra-pane">
+        <div
+          v-if="logsMounted"
+          v-show="tab === 'logs'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraLogs :seed="logsSeed" />
         </div>
 
@@ -172,7 +193,11 @@
              cố ý không tự nạp (mỗi lượt nạp là một lô `get-metric-data` tính tiền
              theo số metric × số điểm), nhưng nó VẪN đăng ký một watcher nhận khoảng
              gieo từ Logs, và watcher đó chỉ sống khi màn này đã mount. -->
-        <div v-if="monitoringMounted" v-show="tab === 'monitoring'" class="infra-pane">
+        <div
+          v-if="monitoringMounted"
+          v-show="tab === 'monitoring'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraMonitoring />
         </div>
 
@@ -182,20 +207,32 @@
         <!-- Ba tab con dùng CHUNG một instance: `useInfraCost()` là singleton cấp
              module nên tách thành ba instance cũng vẫn một kho, nhưng một instance
              thì cổng kiểm tài khoản và chip câu hỏi chỉ tồn tại một bản. -->
-        <div v-if="costMounted" v-show="COST_TABS.includes(tab)" class="infra-pane">
+        <div
+          v-if="costMounted"
+          v-show="COST_TABS.includes(tab)"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraCost :view="costView" />
         </div>
 
         <!-- Tab "Kế hoạch" — playbook. Đứng trong nhóm Thay đổi vì nó là thứ TẠO RA
              thay đổi, cạnh Triển khai · Nhật ký · Báo cáo. Trước 2026-09-15 là trang
              riêng `/playbooks` trên nav rail. -->
-        <div v-if="playbooksMounted" v-show="tab === 'playbooks'" class="infra-pane">
+        <div
+          v-if="playbooksMounted"
+          v-show="tab === 'playbooks'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraPlaybooks />
         </div>
 
         <!-- Tab "Báo cáo" (Mốc 6, 6.6): danh mục bốn loại. Mount lười vì màn này
              hỏi sidecar danh mục ngay khi mount; không có tab thì không có lời gọi. -->
-        <div v-if="reportsMounted" v-show="tab === 'reports'" class="infra-pane">
+        <div
+          v-if="reportsMounted"
+          v-show="tab === 'reports'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraReports />
         </div>
 
@@ -203,15 +240,26 @@
              · CodeBuild · Amplify. Mount lười cùng lý do với Logs: mở `/infra`
              không được chạy `gh run list` cho mọi dự án và vài lệnh `aws` chỉ vì
              tab tồn tại. Nó cũng KHÔNG tự làm mới — chỉ nạp khi mở tab hoặc bấm ↻. -->
-        <div v-if="deliveryMounted" v-show="tab === 'delivery'" class="infra-pane">
+        <div
+          v-if="deliveryMounted"
+          v-show="tab === 'delivery'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraCicd @open-logs="onOpenCicdLogs" />
         </div>
 
-        <div v-if="k8sMounted" v-show="tab === 'kubernetes'" class="infra-pane">
+        <div
+          v-if="k8sMounted"
+          v-show="tab === 'kubernetes'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraKubernetes />
         </div>
 
-        <div v-show="tab === 'accounts'" class="infra-pane">
+        <div
+          v-show="tab === 'accounts'"
+          class="flex min-w-0 flex-1 flex-col *:min-h-0 *:min-w-0 *:flex-1"
+        >
           <InfraAccounts
             v-model:search="search"
             :profiles="profiles"
@@ -321,6 +369,12 @@ import type { LogsSeed } from '~/composables/useInfraLogs'
 
 const { t } = useI18n()
 const { mode, setMode } = useInfraMode()
+
+// ToggleGroup single trả `undefined` khi bấm lại mục đang chọn — bỏ qua để luôn
+// còn đúng một chế độ (như segment cũ).
+function onMode(v: unknown): void {
+  if (v === 'simple' || v === 'expert') setMode(v)
+}
 
 // Ba mục của thanh section. `overview` đứng đầu và là mặc định: `/infra` trả lời
 // "mọi thứ có ổn không" trước khi trả lời "có những tài khoản nào"
@@ -719,138 +773,3 @@ function onRelogin(name: string): void {
   openConsoleLogin(name)
 }
 </script>
-
-<style scoped>
-.infra-shell {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-}
-
-/* Hàng trên: tab + thanh ngữ cảnh. `flex-wrap` vì ở cửa sổ hẹp (720px) sáu tab
-   đã chiếm gần hết hàng — thanh ngữ cảnh xuống dòng dưới, và đường kẻ dưới cùng
-   vẫn là của cả hàng. */
-.infra-top {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* Đáy phải có đệm: tab đang chọn có nền + viền riêng, sát đường kẻ dưới thì
-     pill dính vào đường phân cách và trông như bị cắt chân. */
-  padding: 10px 16px 8px;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.infra-sections {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.infra-section-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: var(--r-btn);
-  background: transparent;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  /* 550/650 chứ không phải 400 kế thừa từ `body`: ở 12px, độ đậm mảnh làm nhãn
-     tab khó đọc trên nền tối (ảnh chụp 2026-09-14: "text trên tab hơi mỏng khó
-     đọc"). Đây là dãy độ đậm có sẵn của app — `.li .ttl` dùng 550, `.iov-title`
-     dùng 650 — nên tab vẫn nằm trong hệ, không phải một cỡ mới. */
-  font-weight: 550;
-  cursor: default;
-}
-
-.infra-section-tab.active {
-  color: var(--text);
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  font-weight: 650;
-}
-
-/* Tầng 2. Khác tầng 1 về THỨ BẬC chứ không chỉ về cỡ: tầng trên là pill accent-tint,
-   tầng này là chữ + gạch chân accent. Dùng lại pill ở đây thì hai hàng trông ngang
-   hàng nhau và người đọc không biết cái nào chứa cái nào.
-
-   KHÔNG dùng nền xám cho mục đang chọn (.claude/rules/nuxt-vue.md §UI patterns) — màu
-   accent + thanh 2px là luật chọn của cả app. */
-.infra-subs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-wrap: wrap;
-  padding: 6px 16px 0;
-  flex: 0 0 auto;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.infra-sub-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 10px 7px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  cursor: default;
-}
-
-.infra-sub-tab:hover {
-  color: var(--text);
-}
-
-.infra-sub-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-  font-weight: 650;
-}
-
-.infra-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-/* Mỗi pane lấp hết chỗ còn lại của .infra-body và tự quản vùng cuộn của nó.
-
-   LUÔN là một <div> BỌC, KHÔNG bao giờ gắn thẳng class này lên component con: Vue
-   đưa scope-id của cha xuống phần tử gốc của component con, nên `.infra-pane` sẽ
-   ĐÈ `display` của chính khung đó. Đo được trên khung Explorer — `.ixe` là grid
-   hai cột, bị ép thành flex-column nên cột "Dịch vụ đã ghim" chảy xuống nằm trên
-   bảng (ảnh chụp 2026-09-14). */
-.infra-pane {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Phần tử gốc của khung bên trong lấp hết pane và tự cuộn. */
-.infra-pane > * {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* Bóng của nút và skin card của bảng KHÔNG khai ở đây nữa — chúng là quy tắc toàn
-   app (`.btn` ở prototype.css, `.tblcard` ở app-shell.css) sau khi người dùng chốt
-   "áp dụng theo hướng global cho toàn bộ app" (2026-09-15). Bản cũ khoanh vùng bằng
-   `.infra-shell :deep(.btn)` vì khi đó đổi `.btn` toàn cục là ngoài phạm vi yêu cầu;
-   phạm vi ấy nay đã đổi. Giữ lại một bản sao ở đây sẽ thành định nghĩa thứ hai về
-   "nút nổi" — hai chỗ để sửa, hai chỗ để lệch. */
-</style>

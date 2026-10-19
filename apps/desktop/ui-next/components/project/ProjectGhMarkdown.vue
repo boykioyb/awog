@@ -57,6 +57,8 @@ function setSegHtml(el: unknown, html: string): void {
 </script>
 
 <style scoped>
+/* style-ok: prose cho HTML markdown render bằng innerHTML (useMarkdown) — class Tailwind
+   không gắn được vào DOM sinh ra. */
 /* Inherit the drawer's .ghmd typography (font-size/line-height); add the inline
    prose styling the markdown needs. Colors via theme tokens only. */
 /* Gap between segments (a prose run ↔ a diagram); within a run, the prose rules below

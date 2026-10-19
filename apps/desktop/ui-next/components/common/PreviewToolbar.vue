@@ -1,276 +1,351 @@
 <template>
-  <!-- collapsed → a small round icon docked in the corner, out of the content -->
-  <button
+  <!-- collapsed → a small round icon docked in the corner, out of the content. Cùng góc
+       với nhà của thanh nên ẩn/hiện xảy ra tại chỗ. -->
+  <Button
     v-if="collapsed"
-    class="pvbardock"
+    variant="outline"
+    size="iconMd"
+    class="absolute right-4.5 bottom-4.5 z-5 rounded-full bg-popover text-muted-foreground shadow-md [&_svg]:size-3.5"
     :title="t('common.preview.showToolbar')"
     :aria-label="t('common.preview.showToolbar')"
     @click="collapsed = false"
   >
-    <SlidersHorizontal :size="14" />
-  </button>
+    <SlidersHorizontal />
+  </Button>
 
-  <div v-else ref="barRef" class="pvbar" :class="{ dragging }" :style="barStyle">
+  <!-- Thanh điều khiển nổi — nhà ở góc phải-dưới của card (kéo được), tránh cột đọc ở
+       giữa và control giữa của video. -->
+  <div
+    v-else
+    ref="barRef"
+    class="absolute right-4.5 bottom-4.5 z-5 flex items-center gap-1 rounded-lg border bg-popover px-2 py-1 shadow-md select-none"
+    :class="{ 'cursor-grabbing': dragging }"
+    :style="barStyle"
+  >
     <!-- drag handle: grab to reposition the bar so it never blocks content -->
-    <button
-      class="pvtb grip"
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="touch-none"
+      :class="[TB, dragging ? 'cursor-grabbing' : 'cursor-grab']"
       :title="t('common.preview.dragMove')"
       :aria-label="t('common.preview.dragMove')"
       @pointerdown="startDrag"
     >
-      <GripVertical :size="14" />
-    </button>
-    <span class="pvsep" />
+      <GripVertical />
+    </Button>
+    <Separator orientation="vertical" :class="SEP" />
 
-    <!-- transient action feedback (copied / saved / error) -->
-    <div v-if="actionMsg" class="pvmsg" :class="{ err: actionErr }">{{ actionMsg }}</div>
+    <!-- transient action feedback (copied / saved / error), nổi phía trên thanh -->
+    <div
+      v-if="actionMsg"
+      class="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 rounded-md border bg-popover px-3 py-1 text-xs whitespace-nowrap text-popover-foreground shadow-md"
+      :class="{ 'border-destructive/40 text-destructive': actionErr }"
+    >
+      {{ actionMsg }}
+    </div>
 
     <!-- image: gallery step (siblings in the same folder) / zoom / rotate / flip -->
     <template v-if="item?.kind === 'image'">
       <template v-if="canStepImages">
-        <button
-          class="pvtb"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="TB"
           :title="t('common.preview.prevImage')"
           :aria-label="t('common.preview.prevImage')"
           @click="stepImage(-1)"
         >
-          <ChevronLeft :size="14" />
-        </button>
-        <span class="pvz">{{ galleryLabel }}</span>
-        <button
-          class="pvtb"
+          <ChevronLeft />
+        </Button>
+        <span :class="LABEL">{{ galleryLabel }}</span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="TB"
           :title="t('common.preview.nextImage')"
           :aria-label="t('common.preview.nextImage')"
           @click="stepImage(1)"
         >
-          <ChevronRight :size="14" />
-        </button>
-        <span class="pvsep" />
+          <ChevronRight />
+        </Button>
+        <Separator orientation="vertical" :class="SEP" />
       </template>
-      <button
-        class="pvtb"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.zoomOut')"
         :aria-label="t('common.zoomOut')"
         @click="zoomBy(-0.2)"
       >
-        <ZoomOut :size="14" />
-      </button>
-      <span class="pvz">{{ Math.round(scale * 100) }}%</span>
-      <button
-        class="pvtb"
+        <ZoomOut />
+      </Button>
+      <span :class="LABEL">{{ Math.round(scale * 100) }}%</span>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.zoomIn')"
         :aria-label="t('common.zoomIn')"
         @click="zoomBy(0.2)"
       >
-        <ZoomIn :size="14" />
-      </button>
+        <ZoomIn />
+      </Button>
       <!-- fit ≠ 100%: the CSS already contains an oversized image at scale 1, so fit is
            what scales a SMALL image up to fill the frame (and re-centers either way). -->
-      <button
-        class="pvtb"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.fit')"
         :aria-label="t('common.fit')"
         @click="fitImage()"
       >
-        <Scan :size="14" />
-      </button>
-      <button
-        class="pvtb"
+        <Scan />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.zoomReset')"
         :aria-label="t('common.zoomReset')"
         @click="resetView()"
       >
-        <Maximize2 :size="14" />
-      </button>
-      <span class="pvsep" />
-      <button
-        class="pvtb"
+        <Maximize2 />
+      </Button>
+      <Separator orientation="vertical" :class="SEP" />
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.rotateLeft')"
         :aria-label="t('common.rotateLeft')"
         @click="rotate -= 90"
       >
-        <RotateCcw :size="14" />
-      </button>
-      <button
-        class="pvtb"
+        <RotateCcw />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.rotateRight')"
         :aria-label="t('common.rotateRight')"
         @click="rotate += 90"
       >
-        <RotateCw :size="14" />
-      </button>
-      <span class="pvsep" />
-      <button
-        class="pvtb"
+        <RotateCw />
+      </Button>
+      <Separator orientation="vertical" :class="SEP" />
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.flipH')"
         :aria-label="t('common.flipH')"
         @click="flipH = !flipH"
       >
-        <FlipHorizontal2 :size="14" />
-      </button>
-      <button
-        class="pvtb"
+        <FlipHorizontal2 />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.flipV')"
         :aria-label="t('common.flipV')"
         @click="flipV = !flipV"
       >
-        <FlipVertical2 :size="14" />
-      </button>
+        <FlipVertical2 />
+      </Button>
     </template>
 
     <!-- markdown: reading-width stepper only — render/raw lives in the header's
          segmented control and copy in the header copy button (proto layout). -->
     <template v-else-if="item?.kind === 'markdown'">
       <template v-if="view === 'render'">
-        <button
-          class="pvtb"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="TB"
           :title="t('common.widthNarrower')"
           :aria-label="t('common.widthNarrower')"
           @click="stepWidth(-1)"
         >
-          <FoldHorizontal :size="14" />
-        </button>
-        <span class="pvz">{{ widthLabel }}</span>
-        <button
-          class="pvtb"
+          <FoldHorizontal />
+        </Button>
+        <span :class="LABEL">{{ widthLabel }}</span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="TB"
           :title="t('common.widthWider')"
           :aria-label="t('common.widthWider')"
           @click="stepWidth(1)"
         >
-          <UnfoldHorizontal :size="14" />
-        </button>
+          <UnfoldHorizontal />
+        </Button>
       </template>
     </template>
 
-    <!-- theme picker — only when the Monaco viewer is showing (code / raw markdown) -->
+    <!-- theme picker — only when the Monaco viewer is showing (code / raw markdown).
+         Menu mở LÊN + căn phải: nhà của thanh là góc phải, menu mọc sang phải sẽ bị mép
+         card cắt. z-490: nổi trên PreviewModal (`.pvovl` 480). -->
     <template v-if="showCode">
-      <span class="pvsep" />
-      <div class="pvdd">
-        <button class="pvtb wide" :title="t('common.preview.theme')" @click="toggle('theme')">
-          <Icon name="palette" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="pvz auto">{{ currentThemeLabel }}</span>
-        </button>
-        <!-- right-aligned: the bar's home is the right corner, so a dropdown growing
-             rightwards would be clipped by the card's edge. -->
-        <div v-if="open === 'theme'" class="pvmenu up right" @click.stop>
-          <template v-for="g in themeGroups" :key="g.key">
-            <div v-if="g.items.length" class="pvmhd">{{ t(`common.preview.group.${g.key}`) }}</div>
-            <button
+      <Separator orientation="vertical" :class="SEP" />
+      <DropdownMenu
+        :open="open === 'theme'"
+        @update:open="(v: boolean) => (open = v ? 'theme' : null)"
+      >
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="ghost"
+            size="xs"
+            :class="[TB, 'w-auto gap-1 px-2 font-normal']"
+            :title="t('common.preview.theme')"
+          >
+            <Icon name="palette" />
+            <span class="text-xs tabular-nums">{{ currentThemeLabel }}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="end" :class="MENU">
+          <template v-for="(g, gi) in themeGroups" :key="g.key">
+            <template v-if="g.items.length">
+              <DropdownMenuSeparator v-if="gi > 0" />
+              <DropdownMenuLabel>{{ t(`common.preview.group.${g.key}`) }}</DropdownMenuLabel>
+            </template>
+            <DropdownMenuItem
               v-for="opt in g.items"
               :key="opt.id"
-              class="pvmi"
-              :class="{ on: current === opt.id }"
-              @click="pickTheme(opt.id)"
+              :class="{ 'text-primary': current === opt.id }"
+              @select="pickTheme(opt.id)"
             >
-              <Icon
-                v-if="current === opt.id"
-                name="check"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-              <span v-else class="pvmidot" />
+              <Icon v-if="current === opt.id" name="check" class="text-primary!" />
+              <span v-else class="size-4 flex-none" />
               {{ opt.id === FOLLOW_APP ? t('common.preview.followApp') : opt.label }}
-            </button>
+            </DropdownMenuItem>
           </template>
-        </div>
-      </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </template>
 
     <!-- reload — every workspace preview: the file (or the folder's tree) can be rewritten
          on disk under the same path, and nothing else would make the modal look again. An
          in-memory attachment has no file to re-read, so canReload hides it there. -->
     <template v-if="canReload">
-      <span class="pvsep" />
-      <button
-        class="pvtb"
+      <Separator orientation="vertical" :class="SEP" />
+      <Button
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
         :title="t('common.reload')"
         :aria-label="t('common.reload')"
         @click="reload()"
       >
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="refresh" />
+      </Button>
     </template>
 
     <!-- edit / save -->
     <template v-if="isEditableFile">
-      <span class="pvsep" />
-      <button v-if="!editMode" class="pvtb" :title="t('common.preview.edit')" @click="startEdit()">
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      <Separator orientation="vertical" :class="SEP" />
+      <Button
+        v-if="!editMode"
+        variant="ghost"
+        size="iconSm"
+        :class="TB"
+        :title="t('common.preview.edit')"
+        @click="startEdit()"
+      >
+        <Icon name="edit" />
+      </Button>
       <template v-else>
-        <button
-          class="pvtb"
-          :class="{ on: dirty }"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="[TB, { 'bg-accent text-accent-foreground': dirty }]"
           :title="t('common.preview.save')"
           @click="save()"
         >
-          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button class="pvtb" :title="t('common.cancel')" @click="cancelEdit()">
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="save" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          :class="TB"
+          :title="t('common.cancel')"
+          @click="cancelEdit()"
+        >
+          <Icon name="x" />
+        </Button>
       </template>
     </template>
 
     <!-- actions menu (workspace-file ops + add-to-chat) -->
     <template v-if="hasWorkspaceFile || canAddToChat">
-      <span class="pvsep" />
-      <div class="pvdd">
-        <button class="pvtb" :title="t('common.preview.actions')" @click="toggle('menu')">
-          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <div v-if="open === 'menu'" class="pvmenu up right" @click.stop>
-          <button v-if="canAddToChat" class="pvmi" @click="run(addToChat)">
-            <Icon name="clip" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Separator orientation="vertical" :class="SEP" />
+      <DropdownMenu
+        :open="open === 'menu'"
+        @update:open="(v: boolean) => (open = v ? 'menu' : null)"
+      >
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="iconSm" :class="TB" :title="t('common.preview.actions')">
+            <Icon name="dots" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="end" :class="MENU">
+          <DropdownMenuItem v-if="canAddToChat" @select="run(addToChat)">
+            <Icon name="clip" />
             {{ t('common.preview.addToChat') }}
-          </button>
+          </DropdownMenuItem>
           <template v-if="hasWorkspaceFile">
-            <div v-if="canAddToChat" class="pvmsep" />
-            <button class="pvmi" @click="run(reveal)">
-              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <DropdownMenuSeparator v-if="canAddToChat" />
+            <DropdownMenuItem @select="run(reveal)">
+              <Icon name="folder" />
               {{ t('common.preview.reveal') }}
-            </button>
-            <button v-if="canMutateFile" class="pvmi" @click="run(openInBrowser)">
-              <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="canMutateFile" @select="run(openInBrowser)">
+              <Icon name="globe" />
               {{ t('common.preview.openBrowser') }}
-            </button>
-            <button class="pvmi" @click="run(copyPath)">
-              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="run(copyPath)">
+              <Icon name="copy" />
               {{ t('common.preview.copyPath') }}
-            </button>
+            </DropdownMenuItem>
             <template v-if="canMutateFile">
-              <div class="pvmsep" />
-              <button class="pvmi" @click="run(() => openRename('rename'))">
-                <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <DropdownMenuSeparator />
+              <DropdownMenuItem @select="run(() => openRename('rename'))">
+                <Icon name="edit" />
                 {{ t('common.preview.rename') }}
-              </button>
-              <button class="pvmi" @click="run(() => openRename('move'))">
-                <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="run(() => openRename('move'))">
+                <Icon name="move" />
                 {{ t('common.preview.move') }}
-              </button>
-              <div class="pvmsep" />
-              <button class="pvmi danger" @click="run(askDelete)">
-                <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                class="text-destructive focus:bg-destructive/10 focus:text-destructive [&_svg]:text-destructive"
+                @select="run(askDelete)"
+              >
+                <Icon name="trash" />
                 {{ t('common.delete') }}
-              </button>
+              </DropdownMenuItem>
             </template>
           </template>
-        </div>
-      </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </template>
 
     <!-- collapse the whole bar to a corner icon (persisted) -->
-    <span class="pvsep" />
-    <button
-      class="pvtb"
+    <Separator orientation="vertical" :class="SEP" />
+    <Button
+      variant="ghost"
+      size="iconSm"
+      :class="TB"
       :title="t('common.preview.hideToolbar')"
       :aria-label="t('common.preview.hideToolbar')"
       @click="collapse()"
     >
-      <EyeOff :size="14" />
-    </button>
-
-    <!-- click-away backdrop for whichever dropdown is open -->
-    <div v-if="open" class="pvddback" @click="open = null" />
+      <EyeOff />
+    </Button>
   </div>
 </template>
 
@@ -343,10 +418,14 @@ const { widthValue, stepWidth } = props.ctrl.outline
 
 const { themes, current, setTheme } = useMonacoTheme()
 
+// Class dùng chung: nút icon ghost (h-7, glyph 14px), nhãn số, vạch ngăn, menu nổi.
+const TB = 'text-muted-foreground'
+const LABEL = 'min-w-10 text-center text-xs text-muted-foreground tabular-nums'
+const SEP = 'mx-0.5 h-4'
+const MENU = 'z-490 max-h-[60vh] min-w-47 overflow-y-auto'
+
+// Dropdown nào đang mở — kéo thanh / thu gọn thì đóng luôn.
 const open = ref<'theme' | 'menu' | null>(null)
-function toggle(which: 'theme' | 'menu') {
-  open.value = open.value === which ? null : which
-}
 // Run a menu action then close the dropdown.
 function run(fn: () => void) {
   open.value = null
@@ -501,201 +580,3 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 </script>
-
-<style scoped>
-/* Floating control bar — docked at the card's bottom-right corner (draggable). */
-.pvbar {
-  position: absolute;
-  /* Corner home — same corner as the collapsed icon (.pvbardock), so hide/show happens in
-     place, and clear of the centered reading column + a video's own centered controls. */
-  right: 18px;
-  bottom: 18px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 8px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-md);
-  user-select: none;
-}
-/* drag handle + active drag cursor */
-.pvtb.grip {
-  cursor: grab;
-  touch-action: none;
-}
-.pvbar.dragging {
-  cursor: grabbing;
-}
-.pvbar.dragging .pvtb.grip {
-  cursor: grabbing;
-}
-/* collapsed: small round icon docked bottom-right, out of the reading column */
-.pvbardock {
-  position: absolute;
-  bottom: 18px;
-  right: 18px;
-  z-index: 5;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: var(--muted-foreground);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-}
-.pvbardock:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-/* Icon button — ghost iconSm (h-7, rounded-md, 14px glyph), the same family the
-   proto toolbars (ProtoMermaid) and the workspace panel use. */
-.pvtb {
-  display: grid;
-  grid-auto-flow: column;
-  place-items: center;
-  gap: 4px;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 7px;
-  border-radius: var(--r-sm); /* rounded-md */
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.pvtb.wide {
-  padding: 0 8px;
-}
-.pvtb:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.pvtb.on {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.pvz {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  min-width: 40px;
-  text-align: center;
-}
-.pvz.auto {
-  min-width: 0;
-  color: inherit;
-}
-.pvsep {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  margin: 0 2px;
-}
-
-/* dropdown (theme picker / actions) — shadcn popover menu. */
-.pvdd {
-  position: relative;
-  display: flex;
-}
-.pvmenu {
-  position: absolute;
-  z-index: 7;
-  min-width: 188px;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 4px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  box-shadow: var(--shadow-md);
-}
-.pvmenu.up {
-  bottom: calc(100% + 8px);
-}
-.pvmenu.right {
-  right: 0;
-}
-/* Group header — uppercase micro-label. */
-.pvmhd {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  padding: 6px 8px 3px;
-}
-.pvmi {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 28px; /* h-7 */
-  padding: 0 8px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--popover-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  text-align: left;
-}
-.pvmi:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.pvmi.on {
-  color: var(--primary);
-}
-.pvmi.danger {
-  color: var(--destructive);
-}
-.pvmi.danger:hover {
-  background: rgb(from var(--destructive) r g b / 0.1);
-  color: var(--destructive);
-}
-.pvmidot {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-/* shadcn separator: h-px, my-1, edge-to-edge against the p-1 menu pad. */
-.pvmsep {
-  height: 1px;
-  background: var(--border);
-  margin: 4px -4px;
-}
-.pvddback {
-  position: fixed;
-  inset: 0;
-  z-index: 6;
-  cursor: default;
-}
-
-/* transient action feedback pill, floating above the bar */
-.pvmsg {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  padding: 5px 11px;
-  border-radius: var(--r-sm); /* rounded-md */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-}
-.pvmsg.err {
-  color: var(--destructive);
-  border-color: rgb(from var(--destructive) r g b / 0.42);
-}
-</style>

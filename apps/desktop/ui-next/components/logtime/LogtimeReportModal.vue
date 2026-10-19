@@ -1,72 +1,91 @@
 <template>
-  <Teleport to="body">
-    <div v-if="reportOpen" class="ovl on ltrp-ovl" @click.self="reportOpen = false">
-      <div
-        class="ltrp-card"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('logtime.report.title')"
-      >
-        <div class="ltrp-head">
-          <div>
-            <div class="ltrp-title">{{ t('logtime.report.title') }}</div>
-            <div class="ltrp-sub">{{ longDateOf(date) }}</div>
-          </div>
-          <span class="ltrp-sp" />
-          <button class="ltrp-x" :title="t('common.close')" @click="reportOpen = false">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+  <Dialog :open="reportOpen" @update:open="(v) => !v && (reportOpen = false)">
+    <DialogContent
+      class="flex max-h-[calc(100vh-48px)] w-full max-w-170 flex-col gap-0 overflow-hidden border-input bg-sidebar p-0 sm:max-w-170 sm:rounded-2xl"
+      :aria-label="t('logtime.report.title')"
+    >
+      <DialogHeader class="flex-none border-b px-4 py-3 pr-12">
+        <DialogTitle class="text-lg font-semibold">{{ t('logtime.report.title') }}</DialogTitle>
+        <DialogDescription class="text-xs text-dim">{{ longDateOf(date) }}</DialogDescription>
+      </DialogHeader>
+
+      <div class="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3.5">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span class="text-sm text-dim">{{ t('logtime.report.form') }}</span>
+          <ToggleGroup
+            type="single"
+            :spacing="1"
+            class="rounded-lg bg-muted p-0.5"
+            :model-value="reportForm"
+            @update:model-value="pickForm"
+          >
+            <ToggleGroupItem
+              value="brief"
+              class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+            >
+              {{ t('logtime.report.form.brief') }}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="markdown"
+              class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+            >
+              {{ t('logtime.report.form.markdown') }}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="json"
+              class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+            >
+              {{ t('logtime.report.form.json') }}
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
-        <div class="ltrp-body">
-          <div class="ltrp-opt">
-            <span class="ltrp-lbl">{{ t('logtime.report.form') }}</span>
-            <div class="seg">
-              <span :class="{ on: reportForm === 'brief' }" @click="setReportForm('brief')">
-                {{ t('logtime.report.form.brief') }}
+        <!--
+          Dạng JSON chỉ chứa những dòng SẼ gửi đi được, nên nó ngắn hơn ngày.
+          Không nói ra thì người dùng chép 5 dòng của một ngày 7 dòng mà tưởng
+          đã đủ — đây là lời cảnh báo chứ không phải trang trí.
+        -->
+        <div
+          v-if="report.excluded.length > 0"
+          class="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-muted-foreground"
+        >
+          <Icon name="alert" class="size-3.5 shrink-0 text-warning" />
+          <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <span>{{ t('logtime.report.excluded', { n: report.excluded.length }) }}</span>
+            <!-- Một dòng bị loại = một hàng: tên dự án + note co lại, nhãn lý do đứng yên. -->
+            <div
+              v-for="(x, i) in report.excluded"
+              :key="i"
+              class="flex min-w-0 items-baseline gap-2"
+            >
+              <span class="min-w-0 flex-1 truncate text-dim">
+                {{ x.line.project }} — {{ x.line.note }}
               </span>
-              <span :class="{ on: reportForm === 'markdown' }" @click="setReportForm('markdown')">
-                {{ t('logtime.report.form.markdown') }}
-              </span>
-              <span :class="{ on: reportForm === 'json' }" @click="setReportForm('json')">
-                {{ t('logtime.report.form.json') }}
-              </span>
+              <span class="shrink-0 text-xs text-dim">{{ t(REASON_KEY[x.reason]) }}</span>
             </div>
           </div>
-
-          <!--
-            Dạng JSON chỉ chứa những dòng SẼ gửi đi được, nên nó ngắn hơn ngày.
-            Không nói ra thì người dùng chép 5 dòng của một ngày 7 dòng mà tưởng
-            đã đủ — đây là lời cảnh báo chứ không phải trang trí.
-          -->
-          <div v-if="report.excluded.length > 0" class="ltrp-warn bad">
-            <Icon name="alert" class="ltrp-warnic" />
-            <div class="ltrp-exwrap">
-              <span>{{ t('logtime.report.excluded', { n: report.excluded.length }) }}</span>
-              <div v-for="(x, i) in report.excluded" :key="i" class="ltrp-exrow">
-                <span class="ltrp-exn">{{ x.line.project }} — {{ x.line.note }}</span>
-                <span class="ltrp-exr">{{ t(REASON_KEY[x.reason]) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <pre class="ltrp-code">{{ report.text }}</pre>
         </div>
 
-        <div class="ltrp-foot">
-          <span class="ltrp-hint">{{ t('logtime.report.hint') }}</span>
-          <span class="ltrp-sp" />
-          <Button type="button" variant="outline" @click="reportOpen = false">
-            {{ t('common.close') }}
-          </Button>
-          <Button type="button" variant="default" @click="copyReport">
-            <Icon name="copy" />
-            {{ t('logtime.report.copy') }}
-          </Button>
-        </div>
+        <!-- Báo cáo để chép ra ngoài (chat/PR/wiki) ⇒ mono hợp lệ. -->
+        <pre
+          class="overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-sm leading-relaxed break-words whitespace-pre-wrap text-muted-foreground"
+          >{{ report.text }}</pre
+        >
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex flex-none flex-wrap items-center gap-2 border-t px-4 py-3">
+        <span class="text-xs text-dim">{{ t('logtime.report.hint') }}</span>
+        <span class="flex-1" />
+        <Button type="button" variant="outline" @click="reportOpen = false">
+          {{ t('common.close') }}
+        </Button>
+        <Button type="button" variant="default" @click="copyReport">
+          <Icon name="copy" />
+          {{ t('logtime.report.copy') }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -75,6 +94,7 @@
 // Cố ý KHÔNG có nút gửi: hộp này chỉ ĐỌC và CHÉP. Ghi lên PMS vẫn là một đường
 // duy nhất qua `LogtimePushModal` (hai bước, có ô tích) — thêm một nút gửi thứ hai
 // ở đây là nhân đôi cổng xác nhận cho cùng một thao tác.
+import type { AcceptableValue } from 'reka-ui'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import type { ReportExclusion } from '~/utils/logtime-report'
@@ -92,159 +112,10 @@ const REASON_KEY: Record<ReportExclusion, string> = {
 const { t } = useI18n()
 const { reportOpen, reportForm, report, date, longDateOf, setReportForm, copyReport } =
   useLogtimeManager()
-</script>
 
-<style scoped>
-.ltrp-ovl {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+// ToggleGroup single cho bấm lại mục đang bật để bỏ chọn (emit rỗng) — dạng báo cáo
+// luôn phải có một giá trị nên bỏ qua lần bỏ chọn đó.
+const pickForm = (v: AcceptableValue | AcceptableValue[]) => {
+  if (v === 'brief' || v === 'markdown' || v === 'json') setReportForm(v)
 }
-.ltrp-card {
-  background: var(--bgPanel);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-panel);
-  box-shadow: var(--shadow-lg);
-  width: 100%;
-  max-width: 680px;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.ltrp-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-  flex: 0 0 auto;
-}
-.ltrp-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-}
-.ltrp-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ltrp-sp {
-  flex: 1;
-}
-.ltrp-x {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: none;
-  color: var(--textDim);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.ltrp-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ltrp-body {
-  padding: 14px 16px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.ltrp-opt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.ltrp-lbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.ltrp-warn {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  border: 1px solid var(--amberBorder);
-  background: var(--amberDim);
-  border-radius: var(--r-btn);
-  padding: 10px 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.ltrp-warn.bad {
-  border-color: var(--dangerBorder);
-  background: var(--dangerBg);
-}
-.ltrp-warnic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--amber);
-}
-.ltrp-exwrap {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-/* Một dòng bị loại = một hàng: tên dự án + note co lại, nhãn lý do đứng yên. */
-.ltrp-exrow {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.ltrp-exn {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--textDim);
-}
-.ltrp-exr {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ltrp-code {
-  margin: 0;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-  font-family: var(--code); /* mono-ok: báo cáo để chép ra ngoài (chat/PR/wiki) */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.ltrp-foot {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  padding: 11px 16px;
-  box-shadow: inset 0 1px 0 var(--border);
-  flex: 0 0 auto;
-}
-.ltrp-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>
+</script>

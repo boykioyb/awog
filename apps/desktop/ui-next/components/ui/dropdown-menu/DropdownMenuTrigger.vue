@@ -1,5 +1,5 @@
 <template>
-  <DropdownMenuTrigger v-bind="$attrs" class="outline-none">
+  <DropdownMenuTrigger v-bind="$attrs" class="outline-hidden">
     <slot />
   </DropdownMenuTrigger>
 </template>

@@ -1,51 +1,71 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on" @click.self="emit('close')">
-      <div class="bsm-card" role="dialog" aria-modal="true">
-        <div class="bsm-head">
-          <Icon name="shield" class="icn" />
-          <span class="bsm-title">{{ t('browser.sites.title') }}</span>
-          <button class="bsm-x" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" class="icn" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+  <!-- Dialog shadcn: `[role="dialog"][data-state="open"]` nằm trong OVERLAYS của
+       useEmbeddedBrowser nên trang web nhường chỗ khi hộp mở. -->
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="max-h-[86vh] max-w-115 gap-3.5 overflow-y-auto p-4.5">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2 pr-6 text-lg font-normal">
+          <Icon name="shield" class="size-4" />
+          {{ t('browser.sites.title') }}
+        </DialogTitle>
+        <DialogDescription class="text-sm leading-relaxed text-muted-foreground">
+          {{ t('browser.sites.desc') }}
+        </DialogDescription>
+      </DialogHeader>
 
-        <p class="bsm-desc">{{ t('browser.sites.desc') }}</p>
-
-        <div class="bsm-row">
-          <span class="bsm-label">{{ t('browser.sites.mode') }}</span>
-          <AppSelect v-model="modeModel" :options="modeOptions" width="100%" :disabled="busy" />
-        </div>
-
-        <div class="bsm-row">
-          <span class="bsm-label">{{ t('browser.sites.hosts') }}</span>
-          <form class="bsm-add" @submit.prevent="onAdd">
-            <Input
-              v-model="draft"
-              type="text"
-              spellcheck="false"
-              :placeholder="t('browser.sites.placeholder')"
-            />
-            <button type="submit" class="bsm-btn" :disabled="!normalizedDraft || busy">
-              {{ t('browser.sites.add') }}
-            </button>
-          </form>
-
-          <div v-if="!hosts.length" class="bsm-empty">{{ t('browser.sites.empty') }}</div>
-          <ul v-else class="bsm-hosts">
-            <li v-for="host in hosts" :key="host" class="bsm-host">
-              <span class="bsm-hostname">{{ host }}</span>
-              <button class="bsm-x" :title="t('browser.sites.remove')" @click="onRemove(host)">
-                <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        <div v-if="error" class="bsm-err">{{ error }}</div>
+      <div class="flex flex-col gap-1.5 text-sm text-muted-foreground">
+        <span>{{ t('browser.sites.mode') }}</span>
+        <AppSelect v-model="modeModel" :options="modeOptions" width="100%" :disabled="busy" />
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex flex-col gap-1.5 text-sm text-muted-foreground">
+        <span>{{ t('browser.sites.hosts') }}</span>
+        <form class="flex items-center gap-1.5" @submit.prevent="onAdd">
+          <Input
+            v-model="draft"
+            type="text"
+            spellcheck="false"
+            :placeholder="t('browser.sites.placeholder')"
+          />
+          <Button type="submit" variant="outline" :disabled="!normalizedDraft || busy">
+            {{ t('browser.sites.add') }}
+          </Button>
+        </form>
+
+        <div v-if="!hosts.length" class="rounded-md border bg-muted px-2.5 py-2 text-faint">
+          {{ t('browser.sites.empty') }}
+        </div>
+        <ul v-else class="flex max-h-55 flex-col gap-1 overflow-y-auto">
+          <li
+            v-for="host in hosts"
+            :key="host"
+            class="flex items-center gap-2 rounded-md border bg-muted py-1 pr-1.5 pl-2.5"
+          >
+            <!-- Host là chuỗi kỹ thuật người dùng copy-paste ⇒ mono. -->
+            <span class="flex-1 truncate font-mono text-foreground">{{ host }}</span>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="text-muted-foreground [&_svg]:size-3"
+              :title="t('browser.sites.remove')"
+              :aria-label="t('browser.sites.remove')"
+              @click="onRemove(host)"
+            >
+              <Icon name="x" />
+            </Button>
+          </li>
+        </ul>
+      </div>
+
+      <Alert
+        v-if="error"
+        variant="destructive"
+        class="border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs"
+      >
+        <AlertDescription>{{ error }}</AlertDescription>
+      </Alert>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -163,133 +183,3 @@ useEscToClose(
   () => emit('close'),
 )
 </script>
-
-<style scoped>
-.bsm-card {
-  width: min(460px, 92vw);
-  max-height: 86vh;
-  overflow-y: auto;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.bsm-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.bsm-title {
-  flex: 1;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  color: var(--text);
-}
-.bsm-x {
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-}
-.bsm-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.bsm-desc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.bsm-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.bsm-add {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.bsm-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 6px 10px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.bsm-input:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
-.bsm-btn {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  border-radius: var(--r-btn);
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.bsm-btn:hover:not(:disabled) {
-  border-color: var(--accentBorder);
-}
-.bsm-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.bsm-empty {
-  padding: 8px 10px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textFaint);
-}
-.bsm-hosts {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-.bsm-host {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 6px 5px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.bsm-hostname {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: host là chuỗi kỹ thuật người dùng copy-paste */
-}
-.bsm-err {
-  padding: 8px 10px;
-  border-radius: var(--r-btn);
-  background: var(--dangerBg);
-  color: var(--danger);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-</style>

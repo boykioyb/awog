@@ -3,29 +3,47 @@
        Đặt qua Teleport để nó sống ngoài mọi trang, cùng chỗ với dock thu nhỏ.
        Khi đóng, nó chỉ là một viên tròn; khi mở, nó là một phiên thu nhỏ thật. -->
   <Teleport to="body">
-    <div class="ixb" :style="{ bottom: offset }">
+    <div class="fixed right-4 z-96 flex flex-col items-end" :style="{ bottom: offset }">
       <!-- ── Viên tròn khi đóng ─────────────────────────────────────────── -->
-      <button
+      <Button
         v-if="!open"
-        class="ixb-fab"
+        variant="outline"
+        size="icon"
+        class="size-ctrl-lg rounded-full bg-card text-muted-foreground shadow-md hover:text-foreground"
         type="button"
         :title="t('infra.bubble.open')"
+        :aria-label="t('infra.bubble.open')"
         @click="openBubble"
       >
         <Icon name="message" />
-      </button>
+      </Button>
 
       <!-- ── Khung phiên thu nhỏ khi mở ─────────────────────────────────── -->
-      <section v-else class="ixb-panel" :aria-label="t('infra.bubble.title')">
-        <header class="ixb-hd">
-          <span class="ixb-dot" :class="tone" />
-          <span class="ixb-ttl">{{ session?.title || t('infra.bubble.title') }}</span>
+      <section
+        v-else
+        class="flex max-h-[min(520px,calc(100vh-140px))] w-[min(360px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-input bg-card shadow-lg"
+        :aria-label="t('infra.bubble.title')"
+      >
+        <header class="flex items-center gap-1.5 border-b py-1.5 pr-2 pl-2.5">
+          <span
+            class="size-2 flex-none rounded-full"
+            :class="{
+              'bg-faint': tone === 'idle',
+              'bg-primary': tone === 'running',
+              'bg-warning': tone === 'attention',
+              'bg-destructive': tone === 'error',
+            }"
+          />
+          <span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+            {{ session?.title || t('infra.bubble.title') }}
+          </span>
           <!-- "Danh sách" ↔ "Hội thoại": hai mặt của cùng một khung. -->
           <Button
             type="button"
             :title="pane === 'chat' ? t('infra.bubble.sessions') : t('infra.bubble.chat')"
-            variant="outline"
-            size="sm"
+            :aria-label="pane === 'chat' ? t('infra.bubble.sessions') : t('infra.bubble.chat')"
+            variant="ghost"
+            size="iconSm"
             @click="setPane(pane === 'chat' ? 'list' : 'chat')"
           >
             <Icon :name="pane === 'chat' ? 'listul' : 'message'" />
@@ -34,8 +52,9 @@
           <Button
             type="button"
             :title="t('infra.bubble.expand')"
-            variant="outline"
-            size="sm"
+            :aria-label="t('infra.bubble.expand')"
+            variant="ghost"
+            size="iconSm"
             @click="expand"
           >
             <Icon name="maximize" />
@@ -43,8 +62,9 @@
           <Button
             type="button"
             :title="t('infra.bubble.close')"
-            variant="outline"
-            size="sm"
+            :aria-label="t('infra.bubble.close')"
+            variant="ghost"
+            size="iconSm"
             @click="closeBubble"
           >
             <Icon name="x" />
@@ -56,12 +76,17 @@
         <!-- Tên thư mục, không phải đường dẫn tuyệt đối: khung rộng 360px nên
              `/Users/…/Projects/awog-infra` LUÔN bị cắt, và phần bị cắt lại đúng là
              phần mang tin (tên ở cuối). Đường đầy đủ nằm ở `title`. -->
-        <p class="ixb-path" :title="workspacePath">
-          <Icon name="folder" />
+        <p
+          class="m-0 flex items-center gap-1 truncate border-b px-2.5 py-1 text-xs text-faint"
+          :title="workspacePath"
+        >
+          <Icon name="folder" class="size-3.5 flex-none" />
           {{ workspaceName || t('infra.bubble.provisioning') }}
         </p>
 
-        <p v-if="provisionError" class="ixb-err">{{ provisionError }}</p>
+        <p v-if="provisionError" class="m-0 px-2.5 py-1.5 text-xs text-destructive">
+          {{ provisionError }}
+        </p>
 
         <template v-if="pane === 'list'">
           <InfraBubbleSessions
@@ -72,10 +97,11 @@
         </template>
         <template v-else>
           <InfraBubbleTranscript :messages="session?.msgs ?? []" />
-          <form class="ixb-composer" @submit.prevent="send">
-            <textarea
+          <form class="flex items-end gap-1.5 border-t px-2 py-1.5" @submit.prevent="send">
+            <!-- resize-none: ô soạn tin của bong bóng, cao cố định 2 dòng như composer. -->
+            <Textarea
               v-model="draft"
-              class="ixb-input"
+              class="min-h-0 min-w-0 flex-1 resize-none px-2 py-1.5"
               rows="2"
               :placeholder="t('infra.bubble.placeholder')"
               :disabled="busy"
@@ -85,7 +111,7 @@
               <Icon name="stop" />
               {{ t('infra.bubble.stop') }}
             </Button>
-            <Button v-else type="submit" :disabled="!draft.trim()" variant="default" size="sm">
+            <Button v-else type="submit" :disabled="!draft.trim()" variant="default" size="iconMd">
               <Icon name="send" />
             </Button>
           </form>
@@ -164,133 +190,3 @@ function stop(): void {
   if (id != null) void sessions.cancel(id)
 }
 </script>
-
-<style scoped>
-.ixb {
-  position: fixed;
-  right: 16px;
-  z-index: 96;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.ixb-fab {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-pill);
-  background: var(--bgEl);
-  color: var(--textMuted);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-}
-
-.ixb-fab:hover {
-  color: var(--text);
-}
-
-.ixb-panel {
-  width: min(360px, calc(100vw - 32px));
-  max-height: min(520px, calc(100vh - 140px));
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  background: var(--bgEl);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-
-.ixb-hd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 8px 7px 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.ixb-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-pill);
-  background: var(--textFaint);
-  flex: 0 0 auto;
-}
-
-.ixb-dot.running {
-  background: var(--accent);
-}
-
-.ixb-dot.attention {
-  background: var(--amber);
-}
-
-.ixb-dot.error {
-  background: var(--red);
-}
-
-.ixb-ttl {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-weight: 550;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.ixb-path {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ixb-err {
-  margin: 0;
-  padding: 6px 10px;
-  color: var(--red);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.ixb-composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 7px 8px;
-  border-top: 1px solid var(--border);
-}
-
-.ixb-input {
-  flex: 1;
-  min-width: 0;
-  resize: none;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-
-.ixb-input:focus {
-  border-color: var(--accentBorder);
-}
-</style>

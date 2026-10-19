@@ -1,5 +1,5 @@
 <template>
-  <div class="cap-tab cap-sec">
+  <div :class="[CAP_TAB, CAP_SEC]">
     <CaptureBodyView
       :body="entry.responseBody"
       :mime-type="entry.mimeType"
@@ -13,6 +13,7 @@
 import { computed } from 'vue'
 import type { CaptureEntry } from '~/types/network-capture'
 import CaptureBodyView from './CaptureBodyView.vue'
+import { CAP_SEC, CAP_TAB } from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()

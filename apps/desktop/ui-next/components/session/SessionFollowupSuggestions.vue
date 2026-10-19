@@ -1,15 +1,19 @@
 <template>
-  <div v-if="visible" class="fups">
-    <button
+  <!-- Follow-up prompt chips — outline pills on the hover wash; sparkles icon marks
+       them as model-authored. -->
+  <div v-if="visible" class="mt-0.5 flex flex-wrap gap-1.5">
+    <Button
       v-for="(o, i) in block.options"
       :key="i"
-      class="fup"
+      variant="outline"
+      size="sm"
+      class="max-w-full justify-start gap-1.5 text-base font-normal text-muted-foreground hover:border-ring hover:text-foreground motion-reduce:transition-none"
       :title="t('sessionsSurfaces.followups.use')"
       @click="use(o)"
     >
-      <Icon name="sparkles" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="fuptext">{{ o }}</span>
-    </button>
+      <Icon name="sparkles" class="size-3 shrink-0 text-primary" />
+      <span class="truncate">{{ o }}</span>
+    </Button>
   </div>
 </template>
 
@@ -42,51 +46,3 @@ function use(text: string): void {
   store.seedComposer(text, scope.sessionId.value)
 }
 </script>
-
-<style scoped>
-/* Follow-up prompt chips — outline pills on the hover wash; sparkles icon marks
-   them as model-authored. */
-.fups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-}
-.fup {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 18px;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-.fup:hover {
-  background: var(--accent-wash);
-  border-color: var(--ring);
-  color: var(--foreground);
-}
-.fup .icn {
-  flex: 0 0 auto;
-  color: var(--primary);
-}
-.fuptext {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@media (prefers-reduced-motion: reduce) {
-  .fup {
-    transition: none;
-  }
-}
-</style>

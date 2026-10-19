@@ -5,22 +5,40 @@
          phải tới được interceptor của useLinkOpen (nó re-anchor card theo link
          mới), chứ không được "đóng như click-ra-ngoài" — nếu scrim hứng click,
          bấm link lần 2 sẽ đóng card (lỗi thật). Dismiss ngoài-card đã chuyển
-         sang listener cấp document (onDocDismiss) bên dưới. -->
-    <div v-if="pending" class="lop-scrim">
-      <div class="lop" :style="style" role="dialog" aria-modal="true" @click.stop>
-        <div class="lop-url" :title="pending.url">{{ pending.url }}</div>
-        <button class="lop-row" @click="pick('app')">
-          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+         sang listener cấp document (onDocDismiss) bên dưới.
+         z-560 phải đứng ĐẦU thang overlay (ftovl 470 < pvovl 480 < select 490 <
+         lbox 540): câu hỏi "mở link ở đâu" được hỏi TỪ mọi mặt, kể cả bên trong
+         PreviewModal. no-drag: card có thể nằm trên thanh kéo cửa sổ. -->
+    <!-- hook-ok: `.lop-scrim` nằm trong OVERLAYS (useEmbeddedBrowser.ts) + NESTED_OVERLAYS (SlackModal) -->
+    <div v-if="pending" :class="SCRIM">
+      <!-- `lop` là hook: onDocDismiss dò `closest('.lop')` để biết click nằm trong card. -->
+      <div
+        class="lop pointer-events-auto fixed flex w-67 flex-col gap-0.5 rounded-lg border bg-popover p-1.5 text-popover-foreground shadow-md"
+        :style="style"
+        role="dialog"
+        aria-modal="true"
+        @click.stop
+      >
+        <!-- mono: URL là chữ người dùng có thể so từng ký tự / copy -->
+        <div class="truncate px-2 pt-1 pb-1.5 font-mono text-xs text-dim" :title="pending.url">
+          {{ pending.url }}
+        </div>
+        <Button variant="ghost" size="sm" :class="ROW" @click="pick('app')">
+          <Icon name="globe" />
           <span>{{ t('link.openInApp') }}</span>
-        </button>
-        <button class="lop-row" @click="pick('external')">
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </Button>
+        <Button variant="ghost" size="sm" :class="ROW" @click="pick('external')">
+          <Icon name="external" />
           <span>{{ t('link.openExternal') }}</span>
-        </button>
-        <label class="lop-remember">
-          <input v-model="remember" type="checkbox" />
+        </Button>
+        <Separator class="mt-0.5" />
+        <Label class="cursor-pointer gap-2 px-2 pt-1.5 pb-1 text-xs font-normal text-dim">
+          <Checkbox
+            :model-value="remember"
+            @update:model-value="(v: boolean | 'indeterminate') => (remember = v === true)"
+          />
           <span>{{ t('link.remember') }}</span>
-        </label>
+        </Label>
       </div>
     </div>
   </Teleport>
@@ -40,6 +58,10 @@ const { t } = useI18n()
 const { pending, resolvePending, cancelPending, installInterceptor } = useLinkOpen()
 
 const remember = ref(false)
+
+// Hook `lop-scrim` (OVERLAYS) + lớp định vị vô hình không hứng click.
+const SCRIM = 'lop-scrim pointer-events-none fixed inset-0 z-560 [-webkit-app-region:no-drag]'
+const ROW = 'justify-start gap-2 px-2 text-sm font-normal [&_svg]:size-3.5'
 
 // Keep the card on screen when the link sits near the right/bottom edge.
 const CARD_W = 268
@@ -97,69 +119,3 @@ onUnmounted(() => {
   document.removeEventListener('contextmenu', onDocDismiss)
 })
 </script>
-
-<style scoped>
-/* Scrim vô hình + không hứng click: chỉ là lớp ĐỊNH VỊ cho card. Dismiss đi qua
-   listener document. z-index phải đứng ĐẦU thang overlay (ftovl 470 < pvovl 480
-   < select 490 < lbox 540): câu hỏi "mở link ở đâu" được hỏi TỪ mọi mặt, kể cả
-   bên trong PreviewModal — dưới nó thì user bấm link mà không thấy gì hỏi. */
-.lop-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 560;
-  pointer-events: none;
-}
-.lop {
-  position: fixed;
-  pointer-events: auto;
-  width: 268px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
-  box-shadow: var(--shadow-md);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.lop-url {
-  padding: 5px 8px 7px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* mono-ok: a URL is copy-pasteable text the user may compare character by character */
-  font-family: var(--code);
-}
-.lop-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  text-align: left;
-}
-.lop-row:hover {
-  background: var(--bgHover);
-}
-.lop-remember {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 8px 4px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-  border-top: 1px solid var(--border);
-  margin-top: 3px;
-}
-</style>

@@ -10,7 +10,7 @@
     :lock-scrim="saving"
     @close="onRequestClose"
   >
-    <div class="ape">
+    <div class="flex flex-col gap-4">
       <!-- credential_process CHỈ ĐỌC ở v1 (luật cứng #3) — không có đường ghi
            nào cho lệnh này, nên form không hiện ra, chỉ chỉ dẫn sửa trực tiếp. -->
       <AwsProfileEditorProcessView v-if="isProcessProfile" />
@@ -18,12 +18,9 @@
       <!-- Sau khi lưu xong: đề nghị NGAY kiểm tra danh tính (STS) thay vì cho
            sửa tiếp trong cùng modal — tránh đè một lần ghi khác lên bản vừa
            commit trước khi người dùng kịp xem kết quả. -->
-      <div v-else-if="savedProfile" class="ape-post">
-        <div class="ape-post-head">
-          <Icon
-            name="check"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
+      <div v-else-if="savedProfile" class="flex flex-col gap-3.5">
+        <div class="flex items-center gap-2 text-base font-semibold text-foreground">
+          <Icon name="check" class="size-3.5 text-primary" />
           <span>{{ t('infra.editor.saved', { name: savedProfile.name }) }}</span>
         </div>
 
@@ -36,29 +33,30 @@
 
       <!-- Form theo kiểu (static/sso/assume-role) — process không tới được
            đây, và sau khi lưu thành công nhánh trên thay chỗ form này. -->
-      <div v-else class="ape-form">
+      <div v-else class="flex flex-col gap-4">
         <!-- Chú giải cho dấu `*` ở các nhãn bên dưới — đứng TRƯỚC ô đầu tiên để
              người dùng biết quy ước trước khi gặp dấu đầu tiên. Không cần điều
              kiện hiện/ẩn: ô Tên luôn có dấu ở mọi lượt (form dùng chung cho cả
              tạo mới và sửa), nên dòng này không bao giờ thừa. -->
-        <div class="ape-legend">{{ t('infra.editor.requiredLegend') }}</div>
+        <div class="-mb-2 text-xs text-dim">{{ t('infra.editor.requiredLegend') }}</div>
 
-        <div class="ape-field">
-          <label class="ape-label">
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
             {{ t('infra.editor.name') }}
-            <span class="ape-req" aria-hidden="true">*</span>
-          </label>
+            <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+          </Label>
+          <!-- mono-ok: tên profile là identifier copy-paste vào --profile của CLI. -->
           <Input
             v-model.trim="name"
             spellcheck="false"
             autocomplete="off"
             :placeholder="t('infra.editor.namePh')"
-            class="mono"
+            class="font-mono"
           />
-          <div v-if="name.trim() && !nameValid" class="ape-error">
+          <div v-if="name.trim() && !nameValid" class="text-xs text-destructive">
             {{ t('infra.editor.nameInvalid') }}
           </div>
-          <div v-else-if="collidesWithOther" class="ape-warn">
+          <div v-else-if="collidesWithOther" class="text-xs text-warning">
             {{ t('infra.editor.nameCollides') }}
           </div>
         </div>
@@ -66,26 +64,31 @@
         <!-- Profile `login`: KHÔNG có ô đổi kiểu. Đổi nó sang static nghĩa là bỏ
              phiên Console để chạy bằng khoá dài hạn — sidecar từ chối
              (`LOGIN_READONLY`), nên ở đây cũng không được mời. -->
-        <div v-if="!isLoginProfile" class="ape-field">
-          <label class="ape-label">{{ t('infra.editor.kind') }}</label>
-          <div class="seg ape-seg">
-            <span :class="{ on: kind === 'static' }" @click="kind = 'static'">
-              {{ t('infra.editor.kindStatic') }}
-            </span>
-            <span :class="{ on: kind === 'sso' }" @click="kind = 'sso'">
-              {{ t('infra.editor.kindSso') }}
-            </span>
-            <span :class="{ on: kind === 'assume-role' }" @click="kind = 'assume-role'">
-              {{ t('infra.editor.kindAssumeRole') }}
-            </span>
-          </div>
+        <div v-if="!isLoginProfile" class="flex flex-col gap-1.5">
+          <Label class="text-xs font-semibold text-foreground">{{ t('infra.editor.kind') }}</Label>
+          <ToggleGroup
+            type="single"
+            :spacing="1"
+            class="self-start rounded-lg bg-muted p-0.5"
+            :model-value="kind"
+            @update:model-value="pickKind"
+          >
+            <ToggleGroupItem
+              v-for="k in KIND_OPTIONS"
+              :key="k.value"
+              :value="k.value"
+              class="h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+            >
+              {{ t(k.labelKey) }}
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
         <!-- "Vắng mặt = giữ nguyên" (S2a) — mọi ô bỏ trống lúc sửa không đụng
              giá trị hiện tại trên đĩa, kể cả những ô không prefill được (xem
              openIssues: sso_region/external_id/duration_seconds không có trên
              đường đọc `infra.contexts`). -->
-        <div v-if="isExisting && kind !== 'login'" class="ape-hint">
+        <div v-if="isExisting && kind !== 'login'" class="text-xs text-dim">
           {{ t('infra.editor.keepHint') }}
         </div>
 
@@ -140,10 +143,10 @@
            nhìn (đo được ở 860px: body clientHeight 622 < scrollHeight 674, đáy câu
            774 > đáy vùng cuộn 740): nút mờ mà không thấy vì sao. Cuộn hộ không ăn —
            modal tự focus ô Tên rồi kéo vùng cuộn về đầu (đo được: scrollTop 0). -->
-      <span v-if="regionMissing" class="ape-warn">
+      <span v-if="regionMissing" class="text-xs text-warning">
         {{ t('infra.editor.region.requiredFooter') }}
       </span>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <template v-if="isProcessProfile || savedProfile">
         <Button type="button" variant="default" @click="onRequestClose">
           {{ t('common.close') }}
@@ -162,7 +165,7 @@
           variant="outline"
           @click="onVerify"
         >
-          <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="shield" class="size-3.5" />
           {{
             identityChecking ? t('infra.editor.verify.running') : t('infra.editor.verify.action')
           }}
@@ -190,6 +193,7 @@
 //      đều emit('save') — vì tại thời điểm đó dữ liệu ĐÃ ghi, trang phải nạp
 //      lại danh sách. Trước bước 2, mọi cách đóng đều emit('cancel').
 import { computed, ref, watch } from 'vue'
+import type { AcceptableValue } from 'reka-ui'
 import AwsProfileEditorAssumeRoleFields from '~/components/infra/AwsProfileEditorAssumeRoleFields.vue'
 import AwsProfileEditorIdentityCheck from '~/components/infra/AwsProfileEditorIdentityCheck.vue'
 import AwsProfileEditorLoginFields from '~/components/infra/AwsProfileEditorLoginFields.vue'
@@ -243,6 +247,17 @@ const isLoginProfile = computed(() => props.profile?.kind === 'login')
 const name = ref('')
 const originalName = ref('')
 const kind = ref<AwsProfileWriteKind>('static')
+/** Ba kiểu ghi được của segmented control "Kiểu" (login/process không chọn được ở đây). */
+const KIND_OPTIONS = [
+  { value: 'static', labelKey: 'infra.editor.kindStatic' },
+  { value: 'sso', labelKey: 'infra.editor.kindSso' },
+  { value: 'assume-role', labelKey: 'infra.editor.kindAssumeRole' },
+] as const
+// ToggleGroup single cho bấm lại mục đang bật để bỏ chọn (emit rỗng) — segmented luôn
+// phải có một giá trị nên chỉ nhận đúng ba kiểu trên.
+function pickKind(v: AcceptableValue | AcceptableValue[]): void {
+  if (v === 'static' || v === 'sso' || v === 'assume-role') kind.value = v
+}
 
 const staticForm = ref(emptyStaticForm())
 /** Ô duy nhất của profile `login` mà AWOG ghi được (ngoài cái tên) — xem `assertLoginEdit`. */
@@ -819,94 +834,3 @@ function onRequestClose(): void {
   else emit('cancel')
 }
 </script>
-
-<style scoped>
-.ape {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.ape-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.ape-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ape-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.ape-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ape-input.mono {
-  /* mono-ok: tên profile là identifier copy-paste vào --profile của CLI. */
-  font-family: var(--code);
-}
-.ape-input:focus {
-  border-color: var(--accent);
-}
-.ape-seg {
-  align-self: flex-start;
-}
-.ape-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Dấu `*` bắt buộc — cùng vocabulary với `.sse-req` (SshEditor) / `.vpe-req`
-   (VpnEditor). Style scoped không với sang component con nên mỗi mảnh form khai
-   lại một bản. */
-.ape-req {
-  color: var(--danger);
-  font-weight: 700;
-}
-.ape-legend {
-  margin-bottom: -8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ape-warn {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--amber);
-}
-.ape-error {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--danger);
-}
-
-/* --- post-save (phần identity-check nằm ở AwsProfileEditorIdentityCheck.vue,
-   phần process-view nằm ở AwsProfileEditorProcessView.vue) --- */
-.ape-post {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.ape-post-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-  color: var(--text);
-}
-</style>

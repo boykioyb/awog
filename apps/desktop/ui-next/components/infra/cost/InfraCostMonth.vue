@@ -8,11 +8,11 @@
 
        Vỏ chung (tiêu đề · cổng kiểm tài khoản · chip câu hỏi) ở `InfraCost.vue`. -->
   <!-- ── 7.1 Chi phí ────────────────────────────────────────────────── -->
-  <section class="icst-sec">
-    <div class="icst-sec-hd">
-      <span class="icst-sec-ttl">{{ t('infra.cost.month.title') }}</span>
-      <span class="icst-hint">{{ t('infra.cost.month.priceWhy') }}</span>
-      <span class="icst-gap" />
+  <Card class="gap-2.5 px-3.5 py-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-base text-foreground">{{ t('infra.cost.month.title') }}</span>
+      <span class="text-xs text-faint">{{ t('infra.cost.month.priceWhy') }}</span>
+      <span class="flex-1" />
       <Button
         type="button"
         :disabled="summaryLoading"
@@ -21,7 +21,7 @@
         size="sm"
         @click="loadSummary(false)"
       >
-        <Icon name="play" class="icst-ic" />
+        <Icon name="play" class="size-3" />
         {{ t('infra.cost.month.load') }}
       </Button>
       <Button
@@ -32,79 +32,91 @@
         size="sm"
         @click="loadSummary(true)"
       >
-        <Icon name="refresh" class="icst-ic" :class="summaryLoading ? 'icst-spin' : ''" />
+        <Icon name="refresh" class="size-3" :class="summaryLoading ? 'animate-spin' : ''" />
         {{ t('infra.cost.month.reload') }}
       </Button>
     </div>
 
-    <p v-if="summaryError" class="ierr">{{ summaryError }}</p>
+    <p v-if="summaryError" class="m-0 text-xs text-destructive">{{ summaryError }}</p>
 
     <template v-if="summary">
-      <div class="icst-tiles">
-        <div class="icard icst-tile">
-          <span class="icst-tile-lbl">{{ t('infra.cost.tile.spent') }}</span>
-          <span class="icst-tile-val">{{ usd(summary.totalUsd) }}</span>
-          <span class="icst-tile-foot">{{ summary.periodStart }} → {{ summary.periodEnd }}</span>
-        </div>
-        <div class="icard icst-tile">
-          <span class="icst-tile-lbl">{{ t('infra.cost.tile.forecast') }}</span>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-2.5">
+        <Card class="gap-1 px-3 py-2.5">
+          <span class="text-xs text-dim">{{ t('infra.cost.tile.spent') }}</span>
+          <span class="text-xl text-foreground tabular-nums">{{ usd(summary.totalUsd) }}</span>
+          <span class="text-xs text-faint">
+            {{ summary.periodStart }} → {{ summary.periodEnd }}
+          </span>
+        </Card>
+        <Card class="gap-1 px-3 py-2.5">
+          <span class="text-xs text-dim">{{ t('infra.cost.tile.forecast') }}</span>
           <!-- Dự báo do AWS tính. Không có thì nói VÌ SAO, không hiện ô trống. -->
-          <span v-if="summary.forecastUsd !== null" class="icst-tile-val">
+          <span v-if="summary.forecastUsd !== null" class="text-xl text-foreground tabular-nums">
             {{ usd(summary.forecastUsd) }}
           </span>
-          <span v-else class="icst-tile-val ic-muted">—</span>
-          <span class="icst-tile-foot">
+          <span v-else class="text-xl text-faint tabular-nums">—</span>
+          <span class="text-xs text-faint">
             {{ summary.forecastError ?? t('infra.cost.tile.forecastWhy') }}
           </span>
-        </div>
-        <div class="icard icst-tile">
-          <span class="icst-tile-lbl">{{ t('infra.cost.tile.previous') }}</span>
-          <span class="icst-tile-val">{{ usd(summary.previousTotalUsd) }}</span>
-          <span class="icst-tile-foot" :class="deltaUsd > 0 ? 'icst-up' : 'icst-down'">
+        </Card>
+        <Card class="gap-1 px-3 py-2.5">
+          <span class="text-xs text-dim">{{ t('infra.cost.tile.previous') }}</span>
+          <span class="text-xl text-foreground tabular-nums">
+            {{ usd(summary.previousTotalUsd) }}
+          </span>
+          <span class="text-xs" :class="deltaUsd > 0 ? 'text-warning' : 'text-faint'">
             {{ deltaUsd >= 0 ? '+' : '' }}{{ usd(deltaUsd) }}
           </span>
-        </div>
-        <div class="icard icst-tile">
-          <span class="icst-tile-lbl">{{ t('infra.cost.tile.calls') }}</span>
-          <span class="icst-tile-val">{{ usd(summary.estimatedUsd) }}</span>
-          <span class="icst-tile-foot">
+        </Card>
+        <Card class="gap-1 px-3 py-2.5">
+          <span class="text-xs text-dim">{{ t('infra.cost.tile.calls') }}</span>
+          <span class="text-xl text-foreground tabular-nums">{{ usd(summary.estimatedUsd) }}</span>
+          <span class="text-xs text-faint">
             {{
               summary.calls === 0
                 ? t('infra.cost.tile.fromCache', { d: summary.asOf })
                 : t('infra.cost.tile.callCount', { n: summary.calls })
             }}
           </span>
-        </div>
+        </Card>
       </div>
 
-      <div class="icst-cols">
-        <div class="icst-col">
-          <span class="icst-col-ttl">{{ t('infra.cost.table.top') }}</span>
-          <ul class="icst-rows">
-            <li v-for="s in summary.services" :key="s.service" class="icst-row">
-              <span class="icst-row-name">{{ s.service }}</span>
-              <span class="icst-row-val tnum">{{ usd(s.amountUsd) }}</span>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-2.5">
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm text-dim">{{ t('infra.cost.table.top') }}</span>
+          <ul class="m-0 flex list-none flex-col gap-0.5 p-0">
+            <li
+              v-for="s in summary.services"
+              :key="s.service"
+              class="flex items-baseline gap-2 py-0.5 text-sm"
+            >
+              <span class="min-w-0 flex-1 truncate text-foreground">{{ s.service }}</span>
+              <span class="text-dim tabular-nums">{{ usd(s.amountUsd) }}</span>
             </li>
-            <li v-if="summary.services.length === 0" class="icst-empty">
+            <li v-if="summary.services.length === 0" class="m-0 text-xs text-faint">
               {{ t('infra.cost.table.none') }}
             </li>
           </ul>
         </div>
-        <div class="icst-col">
-          <span class="icst-col-ttl">{{ t('infra.cost.table.increases') }}</span>
-          <ul class="icst-rows">
-            <li v-for="s in summary.topIncreases" :key="s.service" class="icst-row">
-              <span class="icst-row-name">{{ s.service }}</span>
-              <span class="icst-row-val tnum ic-up">+{{ usd(s.deltaUsd) }}</span>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm text-dim">{{ t('infra.cost.table.increases') }}</span>
+          <ul class="m-0 flex list-none flex-col gap-0.5 p-0">
+            <li
+              v-for="s in summary.topIncreases"
+              :key="s.service"
+              class="flex items-baseline gap-2 py-0.5 text-sm"
+            >
+              <span class="min-w-0 flex-1 truncate text-foreground">{{ s.service }}</span>
+              <span class="text-dim tabular-nums">+{{ usd(s.deltaUsd) }}</span>
             </li>
-            <li v-if="summary.topIncreases.length === 0" class="icst-empty">
+            <li v-if="summary.topIncreases.length === 0" class="m-0 text-xs text-faint">
               {{ t('infra.cost.table.noIncrease') }}
             </li>
           </ul>
         </div>
       </div>
     </template>
-  </section>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -122,121 +134,3 @@ function usd(v: number): string {
   return `$${v.toFixed(2)}`
 }
 </script>
-
-<style scoped>
-/* Vỏ khối (`.icst-sec*`, `.icst-hint`, `.icst-ic`, `.icst-spin`) lặp ở cả ba tab con.
-   Cố ý: ba bản sao của bảy luật ngắn rẻ hơn một stylesheet dùng chung hoặc một
-   chuỗi `:deep()` từ component cha — và giữ mỗi tab con đọc được một mình. */
-
-.icst-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
-}
-
-.icst-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-}
-
-.icst-tile-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.icst-tile-val {
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-.icst-tile-foot {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.icst-up {
-  color: var(--amber);
-}
-
-.icst-down {
-  color: var(--textFaint);
-}
-
-.icst-cols {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
-}
-
-.icst-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.icst-col-ttl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-
-.icst-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.icst-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.icst-row-name {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.icst-row-val {
-  color: var(--textDim);
-}
-
-.icst-empty {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-.icst-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex-shrink: 0;
-}
-
-.icst-spin {
-  animation: icst-rot 1s linear infinite;
-}
-
-@keyframes icst-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

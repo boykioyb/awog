@@ -1,24 +1,31 @@
 <template>
   <!-- Bảng log kiểu JetBrains: graph · tiêu đề (+ chip HEAD/branch/tag) · tác giả · thời
        gian. ↑/↓ đổi commit đang chọn; cuộn tới cuối tự tải trang kế. Hàng là list item
-       (không phải control) nên dùng element thô được — workbench-ui.md. -->
+       (không phải control) nên dùng element thô được — workbench-ui.md. Hàng 26px (h-6.5)
+       = ROW_H của GitLogGraphCell: graph của các hàng liền nhau nối thành một. Hàng chọn
+       = accent-tint + thanh accent 2px (luật selection của app). -->
   <div
     ref="scrollEl"
-    class="min-h-0 flex-1 overflow-y-auto outline-none"
+    class="min-h-0 flex-1 overflow-y-auto outline-hidden"
     tabindex="0"
     @keydown.down.prevent="emit('step', 1)"
     @keydown.up.prevent="emit('step', -1)"
     @scroll.passive="onScroll"
   >
-    <div v-if="!rows.length && !loading" class="px-3 py-3 text-sm text-[var(--textFaint)]">
+    <div v-if="!rows.length && !loading" class="px-3 py-3 text-sm text-faint">
       {{ t('wb.gitlog.empty') }}
     </div>
     <div
       v-for="r in rows"
       :key="r.commit.sha ?? r.commit.h"
       :data-sha="r.commit.sha ?? r.commit.h"
-      class="glrow"
-      :class="{ on: (r.commit.sha ?? r.commit.h) === selected, 'pl-3': !r.graph || !graphWidth }"
+      class="flex h-6.5 cursor-pointer items-center gap-2 whitespace-nowrap pr-3 text-sm"
+      :class="[
+        (r.commit.sha ?? r.commit.h) === selected
+          ? 'bg-selected shadow-[inset_2px_0_0_var(--color-primary)]'
+          : 'hover:bg-accent',
+        { 'pl-3': !r.graph || !graphWidth },
+      ]"
       :title="r.commit.m"
       @click="emit('select', r.commit.sha ?? r.commit.h)"
     >
@@ -27,20 +34,21 @@
         <span
           v-for="rf in r.commit.refs ?? []"
           :key="`${rf.t}:${rf.n}`"
-          class="glref"
+          class="max-w-40 flex-none truncate rounded-sm border px-1 text-xs"
+          :class="REF_CLS[rf.t] ?? 'text-dim'"
           :data-t="rf.t"
           :title="rf.n"
         >
           {{ rf.t === 'head' ? 'HEAD' : rf.n }}
         </span>
-        <span class="truncate text-[var(--text)]">{{ r.commit.m }}</span>
+        <span class="truncate text-foreground">{{ r.commit.m }}</span>
       </span>
-      <span class="w-[132px] flex-none truncate text-[var(--textDim)]">{{ r.commit.a }}</span>
-      <span class="w-[84px] flex-none truncate text-right tabular-nums text-[var(--textFaint)]">
+      <span class="w-33 flex-none truncate text-dim">{{ r.commit.a }}</span>
+      <span class="w-21 flex-none truncate text-right tabular-nums text-faint">
         {{ r.commit.w }}
       </span>
     </div>
-    <div v-if="loading" class="px-3 py-2 text-xs text-[var(--textFaint)]">
+    <div v-if="loading" class="px-3 py-2 text-xs text-faint">
       {{ t('wb.gitlog.loading') }}
     </div>
   </div>
@@ -79,49 +87,11 @@ watch(
       ?.scrollIntoView({ block: 'nearest' })
   },
 )
-</script>
 
-<style scoped>
-/* Hàng 26px = ROW_H của GitLogGraphCell: graph của các hàng liền nhau nối thành một. */
-.glrow {
-  display: flex;
-  height: 26px;
-  cursor: pointer;
-  align-items: center;
-  gap: 8px;
-  padding-right: 12px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: nowrap;
+// Màu chip ref theo loại (HEAD / branch / tag).
+const REF_CLS: Record<string, string> = {
+  head: 'border-selected-border text-primary',
+  branch: 'text-success',
+  tag: 'text-warning',
 }
-.glrow:hover {
-  background: var(--bgHover);
-}
-/* Chọn = accent-tint + thanh accent 2px (luật selection của app). */
-.glrow.on {
-  background: var(--accentDim);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.glref {
-  flex: 0 0 auto;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.glref[data-t='head'] {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.glref[data-t='branch'] {
-  color: var(--success);
-}
-.glref[data-t='tag'] {
-  color: var(--warning);
-}
-</style>
+</script>

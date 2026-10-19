@@ -1,9 +1,9 @@
 <template>
-  <div class="ape-field">
-    <label class="ape-label">
+  <div class="flex flex-col gap-1.5">
+    <Label class="gap-1 text-xs font-semibold text-foreground">
       {{ label ?? t('infra.editor.region') }}
-      <span v-if="required" class="ape-req" aria-hidden="true">*</span>
-    </label>
+      <span v-if="required" class="font-semibold text-destructive" aria-hidden="true">*</span>
+    </Label>
     <AppSelect v-if="!manual" v-model="selected" :options="options" width="100%" />
     <Input
       v-else
@@ -11,13 +11,24 @@
       spellcheck="false"
       :placeholder="t('infra.editor.regionPh')"
     />
-    <div class="ape-hint ape-region-hint">
-      <span v-if="hint" :class="hintTone === 'warn' ? 'ape-region-warn' : 'ape-region-detected'">
+    <div class="flex items-baseline justify-between gap-2 text-xs text-dim">
+      <span
+        v-if="hint"
+        class="min-w-0 wrap-anywhere"
+        :class="hintTone === 'warn' ? 'text-warning' : undefined"
+      >
         {{ hint }}
       </span>
-      <button v-if="manual" type="button" class="ape-region-link" @click="manual = false">
+      <Button
+        v-if="manual"
+        type="button"
+        variant="link"
+        size="xs"
+        class="h-auto flex-none p-0"
+        @click="manual = false"
+      >
         {{ t('infra.editor.region.useList') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -103,74 +114,3 @@ const options = computed<AppSelectOption[]>(() => {
   return out
 })
 </script>
-
-<style scoped>
-/* Bốn class dưới đây lặp lại vocabulary của các form con khác trong cùng thư mục
-   (`AwsProfileEditorSsoFields.vue`…): style scoped của component cha KHÔNG với
-   tới phần tử bên trong component con, nên mỗi mảnh form phải tự khai. */
-.ape-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ape-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-/* Dấu `*` bắt buộc — cùng vocabulary với `.sse-req` (SshEditor) / `.vpe-req`
-   (VpnEditor), nhưng khai lại vì style scoped không với tới component khác. */
-.ape-req {
-  color: var(--danger);
-  font-weight: 700;
-}
-.ape-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ape-input:focus {
-  border-color: var(--accent);
-}
-.ape-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ape-region-hint {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.ape-region-detected {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.ape-region-warn {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--amber);
-}
-.ape-region-link {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--accent);
-  cursor: pointer;
-}
-.ape-region-link:hover {
-  text-decoration: underline;
-}
-</style>

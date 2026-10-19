@@ -5,24 +5,30 @@
     :width="640"
     @close="emit('cancel')"
   >
-    <div class="ske">
+    <div class="flex flex-col gap-4">
       <!-- Save location (tier) — locked once a skill exists (moving tiers = a new file). -->
-      <div class="ske-field">
-        <label class="ske-label">{{ t('skills.editor.saveLocation') }}</label>
-        <div class="ske-tiers">
-          <button
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('skills.editor.saveLocation') }}
+        </Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="self-start rounded-lg bg-muted p-0.5"
+          :model-value="draft.source"
+          :disabled="isExisting"
+          @update:model-value="(v) => v && (draft.source = v as SkillSource)"
+        >
+          <ToggleGroupItem
             v-for="opt in sourceOptions"
             :key="opt.value"
-            type="button"
-            class="chip ske-tier"
-            :class="{ on: draft.source === opt.value }"
-            :disabled="isExisting"
-            @click="draft.source = opt.value"
+            :value="opt.value"
+            :class="SEG_ITEM"
           >
             {{ opt.label }}
-          </button>
-        </div>
-        <div v-if="draft.source === 'project'" class="ske-project">
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <div v-if="draft.source === 'project'">
           <AppSelect
             v-model="draft.projectId"
             :options="projectOptions"
@@ -30,84 +36,107 @@
             width="100%"
           />
         </div>
-        <div class="ske-hint">{{ sourceHint }}</div>
+        <div class="text-xs text-dim">{{ sourceHint }}</div>
       </div>
 
-      <div class="ske-grid">
-        <div class="ske-field">
-          <label class="ske-label">{{ t('skills.editor.slug') }}</label>
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('skills.editor.slug') }}</Label>
           <Input
             :model-value="draft.id"
             placeholder="e.g. code-review"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
             @update:model-value="onSlugInput"
           />
-          <div class="ske-hint">
+          <div class="text-xs text-dim">
             {{ t('skills.editor.slugHint', { slug: draft.id || 'slug' }) }}
           </div>
         </div>
-        <div class="ske-field">
-          <label class="ske-label">{{ t('skills.editor.icon') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('skills.editor.icon') }}</Label>
           <Input v-model="draft.icon" placeholder="e.g. 🔍" />
         </div>
       </div>
 
-      <div class="ske-field">
-        <label class="ske-label">{{ t('skills.editor.name') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('skills.editor.name') }}</Label>
         <Input v-model="draft.name" :placeholder="t('skills.editor.namePh')" />
       </div>
 
-      <div class="ske-field">
-        <label class="ske-label">{{ t('skills.editor.description') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('skills.editor.description') }}
+        </Label>
+        <Textarea
           v-model="draft.description"
-          class="ske-input ske-ta"
+          class="min-h-12 resize-y"
           rows="2"
           :placeholder="t('skills.editor.descPh')"
         />
       </div>
 
-      <div class="ske-field">
-        <label class="ske-label">{{ t('skills.editor.body') }}</label>
-        <textarea
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('skills.editor.body') }}</Label>
+        <!-- mono-ok: nội dung dạng file/code người dùng sửa như code -->
+        <Textarea
           v-model="draft.body"
-          class="ske-input ske-ta mono"
+          class="min-h-12 resize-y font-mono"
           rows="12"
           :placeholder="t('skills.editor.bodyPh')"
         />
       </div>
 
-      <div class="ske-grid">
-        <div class="ske-field">
-          <label class="ske-label">{{ t('skills.editor.globs') }}</label>
-          <div class="ske-chips">
-            <span v-for="g in draft.globs" :key="g" class="chip mono">
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('skills.editor.globs') }}</Label>
+          <div class="flex flex-wrap gap-1">
+            <!-- mono-ok: glob path -->
+            <Badge
+              v-for="g in draft.globs"
+              :key="g"
+              variant="outline"
+              class="font-mono text-muted-foreground"
+            >
               {{ g }}
-              <button class="ske-chipx" @click="draft.globs = draft.globs.filter((x) => x !== g)">
-                <Icon name="x" style="width: 10px; height: 10px" />
-              </button>
-            </span>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="size-4 text-dim hover:bg-transparent hover:text-destructive"
+                @click="draft.globs = draft.globs.filter((x) => x !== g)"
+              >
+                <Icon name="x" class="size-2.5!" />
+              </Button>
+            </Badge>
           </div>
           <Input
             v-model="globInput"
             placeholder="e.g. *.test.ts (Enter)"
-            class="mono"
+            class="font-mono"
             @keydown.enter.prevent="addChip('globs', globInput, () => (globInput = ''))"
           />
         </div>
-        <div class="ske-field">
-          <label class="ske-label">{{ t('skills.editor.alwaysAllow') }}</label>
-          <div class="ske-chips">
-            <span v-for="tool in draft.alwaysAllow" :key="tool" class="chip">
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('skills.editor.alwaysAllow') }}
+          </Label>
+          <div class="flex flex-wrap gap-1">
+            <Badge
+              v-for="tool in draft.alwaysAllow"
+              :key="tool"
+              variant="outline"
+              class="text-muted-foreground"
+            >
               {{ tool }}
-              <button
-                class="ske-chipx"
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="size-4 text-dim hover:bg-transparent hover:text-destructive"
                 @click="draft.alwaysAllow = draft.alwaysAllow.filter((x) => x !== tool)"
               >
-                <Icon name="x" style="width: 10px; height: 10px" />
-              </button>
-            </span>
+                <Icon name="x" class="size-2.5!" />
+              </Button>
+            </Badge>
           </div>
           <Input
             v-model="allowInput"
@@ -117,18 +146,27 @@
         </div>
       </div>
 
-      <div class="ske-field">
-        <label class="ske-label">{{ t('skills.editor.requiredSources') }}</label>
-        <div class="ske-chips">
-          <span v-for="src in draft.requiredSources" :key="src" class="chip">
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">
+          {{ t('skills.editor.requiredSources') }}
+        </Label>
+        <div class="flex flex-wrap gap-1">
+          <Badge
+            v-for="src in draft.requiredSources"
+            :key="src"
+            variant="outline"
+            class="text-muted-foreground"
+          >
             {{ src }}
-            <button
-              class="ske-chipx"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="size-4 text-dim hover:bg-transparent hover:text-destructive"
               @click="draft.requiredSources = draft.requiredSources.filter((x) => x !== src)"
             >
-              <Icon name="x" style="width: 10px; height: 10px" />
-            </button>
-          </span>
+              <Icon name="x" class="size-2.5!" />
+            </Button>
+          </Badge>
         </div>
         <Input
           v-model="sourceInput"
@@ -148,8 +186,8 @@
 </template>
 
 <script setup lang="ts">
-// Skill form editor — port of the old UI SkillEditor logic, rendered in
-// prototype CSS inside LibraryEntityModal. Save-location tier is locked once the
+// Skill form editor — port of the old UI SkillEditor logic, rendered
+// inside LibraryEntityModal. Save-location tier is locked once the
 // skill exists; slug is sanitized to kebab-case. Emits a save payload carrying
 // the optional previousId for slug renames.
 import { computed, ref, watch } from 'vue'
@@ -171,6 +209,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Segmented control chọn tier (cùng kiểu LibraryMarkdownBody).
+const SEG_ITEM =
+  'h-6 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 const sourceOptions: { value: SkillSource; label: string }[] = [
   { value: 'global', label: '~/.awog/skills' },
@@ -311,90 +353,3 @@ const onSave = () => {
   emit('save', payload)
 }
 </script>
-
-<style scoped>
-.ske {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.ske-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.ske-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ske-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.ske-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.ske-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — allowed-tools / path */
-  font-family: var(--code);
-}
-.ske-input:focus {
-  border-color: var(--accent);
-}
-.ske-ta {
-  resize: vertical;
-  min-height: 3rem;
-  line-height: var(--lh-md);
-}
-.ske-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ske-tiers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.ske-tier {
-  cursor: pointer;
-  background: var(--bgInput);
-}
-.ske-tier.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.ske-tier:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.ske-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.ske-chipx {
-  display: inline-flex;
-  border: 0;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 0;
-}
-.ske-chipx:hover {
-  color: var(--danger);
-}
-</style>

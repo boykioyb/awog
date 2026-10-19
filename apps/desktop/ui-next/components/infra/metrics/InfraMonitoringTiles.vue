@@ -1,20 +1,20 @@
 <template>
-  <div class="imt">
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
     <div
       v-for="tile in tiles"
       :key="tile.key"
-      class="tile imt-t"
-      :class="{ off: tile.state === 'unavailable' }"
+      class="flex min-w-0 flex-col gap-0.5 rounded-xl border bg-card px-3 py-2.5 shadow-sm"
+      :class="{ 'border-dashed': tile.state === 'unavailable' }"
     >
-      <span class="imt-k">{{ tile.label }}</span>
-      <span class="imt-v">{{ tile.value }}</span>
+      <span class="text-xs text-dim">{{ tile.label }}</span>
+      <span class="text-xl font-semibold text-foreground tabular-nums">{{ tile.value }}</span>
       <!-- Mốc so sánh nằm NGAY DƯỚI con số, không phải trong tooltip: một con số trần
            không nói lên điều gì — "p95 = 0,42 s" chỉ có nghĩa khi biết bình thường là bao nhiêu. -->
       <!-- Hai nhánh PHỦ HẾT: `tiles` luôn đặt `baseline` khi chuỗi có điểm và đặt
            `note` khi không. Nhánh thứ ba trước đây gọi một khoá i18n đã bị gỡ, tức
            là nó sẽ in ra chính chuỗi khoá nếu có ngày nào đó với tới được. -->
-      <span v-if="tile.baseline" class="imt-b">{{ tile.baseline }}</span>
-      <span v-else-if="tile.note" class="imt-n">{{ tile.note }}</span>
+      <span v-if="tile.baseline" class="text-xs text-faint tabular-nums">{{ tile.baseline }}</span>
+      <span v-else-if="tile.note" class="text-xs text-faint">{{ tile.note }}</span>
     </div>
   </div>
 </template>
@@ -31,47 +31,3 @@ import type { MonitorTile } from '~/composables/useInfraMetrics'
 
 defineProps<{ tiles: MonitorTile[] }>()
 </script>
-
-<style scoped>
-.imt {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-}
-
-.imt-t {
-  gap: 2px;
-  padding: 10px 12px;
-}
-
-.imt-t.off {
-  border-style: dashed;
-}
-
-.imt-k {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.imt-v {
-  color: var(--text);
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.imt-b {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.imt-n {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-</style>

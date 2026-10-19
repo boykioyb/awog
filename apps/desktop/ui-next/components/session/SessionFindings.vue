@@ -1,35 +1,65 @@
 <template>
-  <div class="fnd">
-    <div class="fndhead">
-      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="fndtitle">{{ t('sessionsSurfaces.findings.title') }}</span>
-      <span class="fndcount">{{ t('sessionsSurfaces.findings.count', { n: rows.length }) }}</span>
-      <span v-if="block.scope" class="fndscope">{{ block.scope }}</span>
+  <!-- Thẻ findings — viền mảnh + bo lg trên nền trong suốt; chip mức độ tô
+       destructive / warning. -->
+  <div class="my-0.5 flex flex-col gap-2 rounded-lg border px-3 py-2.5">
+    <div class="flex min-w-0 items-center gap-2">
+      <Icon name="alert" class="size-3.5 shrink-0 text-warning" />
+      <span class="text-base font-medium text-foreground">
+        {{ t('sessionsSurfaces.findings.title') }}
+      </span>
+      <span class="text-sm text-muted-foreground tabular-nums">
+        {{ t('sessionsSurfaces.findings.count', { n: rows.length }) }}
+      </span>
+      <span v-if="block.scope" class="min-w-0 flex-1 truncate text-right text-sm text-dim">
+        {{ block.scope }}
+      </span>
     </div>
-    <div class="fndlist">
-      <div v-for="(f, i) in rows" :key="`${f.file}-${f.line ?? 0}-${i}`" class="fndrow">
-        <span class="fndsev" :class="f.severity">{{ severityLabel(f.severity) }}</span>
-        <div class="fndmain">
-          <div class="fndsum">{{ f.summary }}</div>
+    <div class="flex flex-col gap-2.5">
+      <div
+        v-for="(f, i) in rows"
+        :key="`${f.file}-${f.line ?? 0}-${i}`"
+        class="flex min-w-0 items-start gap-2.5"
+      >
+        <Badge
+          variant="outline"
+          class="shrink-0 rounded-sm px-1.5 py-px"
+          :class="
+            f.severity === 'blocker'
+              ? 'border-destructive/45 bg-destructive/10 text-destructive'
+              : f.severity === 'major'
+                ? 'border-warning/45 bg-warning/10 text-warning'
+                : 'text-muted-foreground'
+          "
+        >
+          {{ severityLabel(f.severity) }}
+        </Badge>
+        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div class="text-base text-foreground">{{ f.summary }}</div>
           <!-- The location the model already knew. A link only when the sidecar
-               confirmed the path is a readable workspace file. -->
-          <button
+               confirmed the path is a readable workspace file.
+               mono: file:line người dùng có thể dán sang editor. -->
+          <Button
             v-if="f.linkable"
-            class="fndloc link"
+            variant="link"
+            class="h-auto max-w-full self-start truncate p-0 text-left font-mono text-sm font-normal"
             :title="t('sessionsSurfaces.findings.open', { path: f.file })"
             @click="openFile(f)"
           >
             {{ location(f) }}
-          </button>
-          <span v-else class="fndloc" :title="t('sessionsSurfaces.findings.notInWorkspace')">
+          </Button>
+          <span
+            v-else
+            class="max-w-full self-start truncate font-mono text-sm text-dim"
+            :title="t('sessionsSurfaces.findings.notInWorkspace')"
+          >
             {{ location(f) }}
           </span>
-          <div class="fndfail">{{ f.failure }}</div>
-          <div v-if="f.verdict" class="fndverdict">
-            <span class="fndvlabel">{{ t('sessionsSurfaces.findings.verdict') }}</span>
+          <div class="text-base text-muted-foreground">{{ f.failure }}</div>
+          <div v-if="f.verdict" class="text-sm text-muted-foreground">
+            <span class="text-foreground">{{ t('sessionsSurfaces.findings.verdict') }}</span>
             {{ f.verdict }}
           </div>
-          <div v-else class="fndverdict unverified">
+          <div v-else class="text-sm text-muted-foreground italic opacity-75">
             {{ t('sessionsSurfaces.findings.unverified') }}
           </div>
         </div>
@@ -73,133 +103,3 @@ function openFile(f: Finding): void {
   filePreview.open(f.file)
 }
 </script>
-
-<style scoped>
-/* Findings card — hairline border + lg radius on transparent surface; severity
-   chips tint destructive / warning. */
-.fnd {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 2px 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: transparent;
-}
-.fndhead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.fndhead .icn {
-  flex: 0 0 auto;
-  color: var(--warning);
-}
-.fndtitle {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  color: var(--foreground);
-}
-.fndcount {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-.fndscope {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fndlist {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.fndrow {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-.fndsev {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.fndsev.blocker {
-  color: var(--destructive);
-  border-color: rgb(from var(--destructive) r g b / 45%);
-  background: rgb(from var(--destructive) r g b / 10%);
-}
-.fndsev.major {
-  color: var(--warning);
-  border-color: rgb(from var(--warning) r g b / 45%);
-  background: rgb(from var(--warning) r g b / 10%);
-}
-.fndmain {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
-.fndsum {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--foreground);
-}
-.fndloc {
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  font-family: var(--code); /* mono-ok: a file:line the user may paste into an editor */
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fndloc.link {
-  color: var(--primary);
-  cursor: pointer;
-}
-.fndloc.link:hover {
-  text-decoration: underline;
-}
-.fndfail {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted-foreground);
-}
-.fndverdict {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.fndverdict.unverified {
-  font-style: italic;
-  opacity: 0.75;
-}
-.fndvlabel {
-  color: var(--foreground);
-}
-</style>

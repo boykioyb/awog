@@ -86,16 +86,13 @@
           </DialogDescription>
         </DialogHeader>
         <div class="flex flex-col gap-0.5 py-1">
-          <button
+          <Button
             v-for="p in projects"
             :key="p.id"
+            variant="ghost"
             :disabled="openTabs.includes(p.id)"
-            :class="[
-              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-              openTabs.includes(p.id)
-                ? 'cursor-default text-muted-foreground'
-                : 'text-foreground hover:bg-accent',
-            ]"
+            class="h-auto justify-start gap-2.5 rounded-lg px-3 py-2 text-left font-normal disabled:opacity-100"
+            :class="openTabs.includes(p.id) ? 'text-muted-foreground' : 'text-foreground'"
             @click="pickProject(p.id)"
           >
             <span class="size-2.5 shrink-0 rounded-full" :style="{ background: p.color }" />
@@ -104,7 +101,7 @@
             <span class="text-xs text-muted-foreground tabular-nums">
               {{ projectSessionCount(p.id) }} sessions
             </span>
-          </button>
+          </Button>
         </div>
         <DialogFooter>
           <Button variant="outline" @click="openProjectDialog = false">Cancel</Button>
@@ -134,16 +131,15 @@
         <Separator class="my-1" />
         <Tooltip v-for="s in tabSessions.slice(0, 6)" :key="s.id">
           <TooltipTrigger as-child>
-            <button
-              :class="[
-                'flex size-7 items-center justify-center rounded-md transition-colors',
-                s.id === activeId ? 'bg-accent' : 'hover:bg-accent/50',
-              ]"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              :class="{ 'bg-selected': s.id === activeId }"
               :aria-label="s.title"
               @click="activeId = s.id"
             >
-              <component :is="railMeta[s.status]" :class="['size-3.5', railCls[s.status]]" />
-            </button>
+              <component :is="railMeta[s.status]" :class="railCls[s.status]" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="right">{{ s.title }}</TooltipContent>
         </Tooltip>

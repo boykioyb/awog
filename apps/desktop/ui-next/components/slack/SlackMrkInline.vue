@@ -5,28 +5,41 @@
     <strong v-else-if="n.t === 'bold'"><SlackMrkInline :nodes="n.c" /></strong>
     <em v-else-if="n.t === 'italic'"><SlackMrkInline :nodes="n.c" /></em>
     <s v-else-if="n.t === 'strike'"><SlackMrkInline :nodes="n.c" /></s>
-    <code v-else-if="n.t === 'code'" class="slk-code">{{ n.v }}</code>
+    <!-- mono-ok: inline code trong tin Slack — người đọc copy nguyên văn -->
+    <code
+      v-else-if="n.t === 'code'"
+      class="rounded-sm border bg-accent px-1 py-px font-mono text-[0.9em]"
+      v-text="n.v"
+    />
     <!-- v-text thay vì {{ }} nhiều dòng: xuống dòng trong span thành khoảng trắng thừa
          quanh chip. -->
     <span
       v-else-if="n.t === 'user'"
-      class="slk-mention"
-      :class="{ self: n.id === selfId }"
+      class="rounded-sm px-0.75 font-medium"
+      :class="n.id === selfId ? MENTION_SELF : MENTION"
       v-text="`@${ctx.userName(n.id) ?? n.label ?? n.id}`"
     />
     <span
       v-else-if="n.t === 'channel'"
-      class="slk-mention"
+      :class="['rounded-sm px-0.75 font-medium', MENTION]"
       v-text="`#${ctx.channelName(n.id) ?? n.label ?? n.id}`"
     />
-    <span v-else-if="n.t === 'broadcast'" class="slk-mention self">@{{ n.name }}</span>
-    <span v-else-if="n.t === 'group'" class="slk-mention">{{ n.label }}</span>
+    <span
+      v-else-if="n.t === 'broadcast'"
+      class="rounded-sm px-0.75 font-medium"
+      :class="MENTION_SELF"
+    >
+      @{{ n.name }}
+    </span>
+    <span v-else-if="n.t === 'group'" class="rounded-sm px-0.75 font-medium" :class="MENTION">
+      {{ n.label }}
+    </span>
     <a
       v-else-if="n.t === 'link'"
       :href="n.url"
       target="_blank"
       rel="noopener noreferrer"
-      class="slk-link"
+      class="break-all text-info no-underline hover:underline"
       v-text="n.label ?? n.url"
     />
     <SlackEmoji
@@ -50,35 +63,8 @@ defineProps<{ nodes: MrkInline[] }>()
 
 const ctx = useSlackCtx()
 const selfId = computed(() => ctx.detail.value?.selfUserId ?? null)
-</script>
 
-<style scoped>
-.slk-code {
-  /* mono-ok: inline code trong tin Slack — người đọc copy nguyên văn */
-  font-family: var(--code);
-  font-size: 0.9em;
-  padding: 1px 4px;
-  border-radius: var(--r-xs);
-  background: var(--bgHover);
-  border: 1px solid var(--border);
-}
-.slk-mention {
-  padding: 0 3px;
-  border-radius: var(--r-xs);
-  background: var(--accentDim);
-  color: var(--accent);
-  font-weight: 500;
-}
-.slk-mention.self {
-  background: color-mix(in srgb, var(--amber) 22%, transparent);
-  color: var(--text);
-}
-.slk-link {
-  color: var(--blue);
-  text-decoration: none;
-  word-break: break-all;
-}
-.slk-link:hover {
-  text-decoration: underline;
-}
-</style>
+// Chip mention: người khác = accent-tint; chính mình / @here… = tô vàng như Slack.
+const MENTION = 'bg-selected text-primary'
+const MENTION_SELF = 'bg-warning/22 text-foreground'
+</script>

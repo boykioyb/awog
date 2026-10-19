@@ -1,62 +1,72 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on sfpp-ovl" @click.self="emit('cancel')">
-      <div class="sfpp-card" role="dialog" aria-modal="true">
-        <div class="sfpp-head">
-          <Icon :name="mode === 'move' ? 'move' : 'copy'" class="sfpp-icn" />
-          <span class="sfpp-title">
-            {{ mode === 'move' ? t('ssh.sftp.picker.moveTitle') : t('ssh.sftp.picker.copyTitle') }}
-          </span>
-        </div>
+  <!-- z-200: band hộp thoại trên cùng — mở từ SFTP browser có thể đang nằm trong modal. -->
+  <Dialog :open="open" @update:open="(v: boolean) => !v && emit('cancel')">
+    <DialogContent class="z-200 flex max-w-[92vw] flex-col gap-3 rounded-xl p-4.5 sm:max-w-105">
+      <DialogHeader class="flex-row items-center gap-2">
+        <Icon :name="mode === 'move' ? 'move' : 'copy'" class="size-4 shrink-0 text-primary" />
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          {{ mode === 'move' ? t('ssh.sftp.picker.moveTitle') : t('ssh.sftp.picker.copyTitle') }}
+        </DialogTitle>
+      </DialogHeader>
 
-        <div class="sfpp-crumbs">
-          <button class="sfpp-crumb" :disabled="pcwd === '.'" @click="navigate('.')">~</button>
-          <template v-for="(seg, i) in crumbs" :key="i">
-            <span class="sfpp-sep">/</span>
-            <button class="sfpp-crumb" @click="navigate(seg.path)">{{ seg.name }}</button>
-          </template>
-        </div>
-
-        <div class="sfpp-list">
-          <div v-if="loading" class="sfpp-empty">{{ t('ssh.sftp.loading') }}</div>
-          <div v-else-if="error" class="sfpp-err mono">{{ error }}</div>
-          <template v-else>
-            <button v-if="pcwd !== '.'" class="sfpp-row" @click="navigate(parentPath)">
-              <Icon
-                name="chev"
-                class="sfpp-up-icn"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-              <span>..</span>
-            </button>
-            <div v-if="!dirs.length" class="sfpp-empty">{{ t('ssh.sftp.picker.noSubdirs') }}</div>
-            <button
-              v-for="d in dirs"
-              :key="d.name"
-              class="sfpp-row"
-              @click="navigate(join(d.name))"
-            >
-              <Icon
-                name="folder"
-                class="sfpp-dir-icn"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-              <span>{{ d.name }}</span>
-            </button>
-          </template>
-        </div>
-
-        <div class="sfpp-dest mono">{{ displayPath }}</div>
-
-        <div class="sfpp-foot">
-          <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
-          <Button variant="default" @click="emit('confirm', pcwd)">
-            {{ t('ssh.sftp.picker.select') }}
+      <div class="flex flex-wrap items-center gap-0.5 text-sm">
+        <Button
+          variant="ghost"
+          size="xs"
+          :class="CRUMB"
+          :disabled="pcwd === '.'"
+          @click="navigate('.')"
+        >
+          ~
+        </Button>
+        <template v-for="(seg, i) in crumbs" :key="i">
+          <span class="text-muted-foreground">/</span>
+          <Button variant="ghost" size="xs" :class="CRUMB" @click="navigate(seg.path)">
+            {{ seg.name }}
           </Button>
-        </div>
+        </template>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="h-60 overflow-y-auto rounded-lg border bg-muted">
+        <div v-if="loading" class="px-3.5 py-3 text-sm text-muted-foreground">
+          {{ t('ssh.sftp.loading') }}
+        </div>
+        <div v-else-if="error" class="px-3.5 py-3 font-mono text-sm break-words text-destructive">
+          {{ error }}
+        </div>
+        <template v-else>
+          <!-- raw-ok: cả hàng thư mục là một vùng bấm (đi vào thư mục), không phải nút. -->
+          <button v-if="pcwd !== '.'" type="button" :class="ROW" @click="navigate(parentPath)">
+            <Icon name="chev" class="size-3.5 shrink-0 rotate-90 text-muted-foreground" />
+            <span>..</span>
+          </button>
+          <div v-if="!dirs.length" class="px-3.5 py-3 text-sm text-muted-foreground">
+            {{ t('ssh.sftp.picker.noSubdirs') }}
+          </div>
+          <!-- raw-ok: cả hàng thư mục là một vùng bấm (đi vào thư mục), không phải nút. -->
+          <button
+            v-for="d in dirs"
+            :key="d.name"
+            type="button"
+            :class="ROW"
+            @click="navigate(join(d.name))"
+          >
+            <Icon name="folder" class="size-3.5 shrink-0 text-primary" />
+            <span>{{ d.name }}</span>
+          </button>
+        </template>
+      </div>
+
+      <div class="font-mono text-sm break-all text-muted-foreground">{{ displayPath }}</div>
+
+      <DialogFooter class="gap-2">
+        <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+        <Button variant="default" @click="emit('confirm', pcwd)">
+          {{ t('ssh.sftp.picker.select') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -77,6 +87,12 @@ const emit = defineEmits<{ confirm: [dest: string]; cancel: [] }>()
 
 const { t } = useI18n()
 const api = useSshApi()
+
+// Class lặp: hàng thư mục (chia hairline giữa hai hàng liền kề) + breadcrumb.
+const ROW =
+  'flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-sm text-foreground hover:bg-accent [&+&]:border-t'
+const CRUMB =
+  'h-auto px-1 py-0 font-mono text-sm font-normal text-primary disabled:text-muted-foreground disabled:opacity-100'
 
 const pcwd = ref('.')
 const entries = ref<SftpEntry[]>([])
@@ -138,125 +154,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.sfpp-ovl {
-  align-items: center;
-  padding-top: 0;
-  z-index: 200;
-}
-.sfpp-card {
-  width: 420px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.sfpp-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.sfpp-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  color: var(--accent);
-}
-.sfpp-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.sfpp-crumbs {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-wrap: wrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sfpp-crumb {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 1px 3px;
-  border-radius: var(--r-xs);
-  /* mono-ok: remote path segment */
-  font-family: var(--code);
-}
-.sfpp-crumb:disabled {
-  color: var(--textDim);
-  cursor: default;
-}
-.sfpp-crumb:not(:disabled):hover {
-  background: var(--bgHover);
-}
-.sfpp-sep {
-  color: var(--textDim);
-}
-.sfpp-list {
-  height: 240px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-}
-.sfpp-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.sfpp-row + .sfpp-row {
-  border-top: 1px solid var(--border);
-}
-.sfpp-row:hover {
-  background: var(--bgHover);
-}
-.sfpp-up-icn {
-  transform: rotate(90deg);
-  color: var(--textDim);
-}
-.sfpp-dir-icn {
-  color: var(--accent);
-}
-.sfpp-empty {
-  padding: 12px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sfpp-err {
-  padding: 12px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  word-break: break-word;
-}
-.sfpp-dest {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.sfpp-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

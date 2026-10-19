@@ -1,5 +1,11 @@
 <template>
-  <div class="apeek flex flex-col border-l border-border bg-popover" :class="{ full }">
+  <!-- Drawer trượt đè lên cạnh phải của modal body (parent = relative). `full` = chế độ
+       đọc toàn màn: neo fixed lên viewport (không ancestor nào mang transform/filter nên
+       fixed vẫn tới được viewport), phủ lên cả editor modal (z 160). -->
+  <div
+    class="flex flex-col bg-popover transition-[width] duration-200 ease-out"
+    :class="placeClass"
+  >
     <div v-if="s" class="flex min-h-0 flex-1 flex-col">
       <!-- Header: avatar + tên + role/worktree + hành động. -->
       <div class="flex items-center gap-2 border-b border-border px-3 py-2.5">
@@ -11,7 +17,7 @@
         </span>
         <div class="min-w-0 flex-1">
           <div class="truncate text-xs font-semibold text-foreground">{{ s.title }}</div>
-          <div class="truncate text-[10px] text-faint">{{ subtitle }}</div>
+          <div class="truncate text-xs text-faint">{{ subtitle }}</div>
         </div>
         <Button
           variant="ghost"
@@ -52,11 +58,11 @@
       </div>
 
       <!-- Status + tokens + cost. -->
-      <div class="flex items-center gap-2 border-b border-border px-3 py-2 text-[11px]">
-        <span class="stchip" :data-st="s.status">
-          <component :is="statusIcon" class="sticn" />
+      <div class="flex items-center gap-2 border-b border-border px-3 py-2 text-xs">
+        <Badge variant="outline" class="gap-1.5 font-normal" :class="stChip.badge">
+          <component :is="statusIcon" :class="stChip.icon" />
           {{ t(`sessions.status.${s.status ?? 'idle'}`) }}
-        </span>
+        </Badge>
         <span v-if="tokLabel" class="text-faint">{{ tokLabel }}</span>
         <span v-if="s.usage?.cost != null" class="ml-auto text-faint">
           ${{ s.usage.cost.toFixed(2) }}
@@ -65,7 +71,7 @@
 
       <!-- Transcript đầy đủ — cùng component render của màn session nên có hết
            chức năng: markdown/code/mermaid, step đang chạy live, chapter nav…
-           Chế độ fullscreen (.apeek.full) bung toàn màn để đọc dài. -->
+           Chế độ fullscreen (`full`) bung toàn màn để đọc dài. -->
       <SessionTranscript :messages="s.msgs ?? []" :fallback-when="s.when" :loading="!!s.loading" />
     </div>
     <div v-else class="flex flex-1 items-center justify-center text-xs text-faint">
@@ -144,6 +150,32 @@ const STATUS_ICON: Record<SessionStatus, unknown> = {
 }
 const statusIcon = computed(() => STATUS_ICON[s.value?.status ?? 'idle'])
 
+// Drawer (neo cạnh phải modal body) ↔ chế độ đọc toàn màn (fixed, z 400).
+const placeClass = computed(() =>
+  props.full
+    ? 'fixed inset-0 z-400 w-auto max-w-none'
+    : 'absolute inset-y-0 right-0 z-30 w-85 max-w-[80%] border-l border-border',
+)
+
+// Màu chip trạng thái: streaming = brand + icon xoay, awaiting = cảnh báo + icon nhấp
+// nháy, error = đỏ; còn lại viền trung tính.
+const stChip = computed<{ badge: string; icon: string }>(() => {
+  const st = s.value?.status
+  if (st === 'streaming') {
+    return {
+      badge: 'border-primary/40 bg-primary/10 text-primary',
+      icon: 'animate-[spin_1.6s_linear_infinite]',
+    }
+  }
+  if (st === 'awaiting') {
+    return { badge: 'border-warning/40 bg-warning/10 text-warning', icon: 'animate-pulse' }
+  }
+  if (st === 'error') {
+    return { badge: 'border-destructive/40 bg-destructive/10 text-destructive', icon: '' }
+  }
+  return { badge: 'text-muted-foreground', icon: '' }
+})
+
 const tokLabel = computed(() =>
   s.value?.usage?.contextTokens ? `${formatTokenCount(s.value.usage.contextTokens)} tok` : '',
 )
@@ -166,72 +198,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-/* Drawer trượt đè lên cạnh phải của modal body (parent = relative). */
-.apeek {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 340px;
-  max-width: 80%;
-  z-index: 30;
-  transition: width 0.18s ease;
-}
-/* Chế độ đọc toàn màn — neo fixed lên viewport (không ancestor nào mang
-   transform/filter nên fixed vẫn tới được viewport), phủ lên cả editor modal
-   (z 160). */
-.apeek.full {
-  position: fixed;
-  inset: 0;
-  width: auto;
-  max-width: none;
-  z-index: 400;
-  border-left: 0;
-}
-.stchip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  color: var(--textMuted);
-}
-.stchip[data-st='streaming'] {
-  border-color: color-mix(in oklab, var(--accent) 42%, transparent);
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
-  color: var(--accent);
-}
-.stchip[data-st='awaiting'] {
-  border-color: color-mix(in oklab, var(--amber) 42%, transparent);
-  background: color-mix(in oklab, var(--amber) 12%, transparent);
-  color: var(--amber);
-}
-.stchip[data-st='error'] {
-  border-color: color-mix(in oklab, var(--danger) 42%, transparent);
-  background: color-mix(in oklab, var(--danger) 10%, transparent);
-  color: var(--danger);
-}
-.sticn {
-  width: 12px;
-  height: 12px;
-}
-.stchip[data-st='streaming'] .sticn {
-  animation: apeek-spin 1.6s linear infinite;
-}
-.stchip[data-st='awaiting'] .sticn {
-  animation: apeek-pulse 1.6s ease-in-out infinite;
-}
-@keyframes apeek-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes apeek-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-</style>

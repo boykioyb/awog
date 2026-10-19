@@ -1,95 +1,106 @@
 <template>
-  <div class="sshsess">
-    <div class="sshsess-head">
+  <div class="flex h-full min-w-0 flex-col overflow-hidden bg-background">
+    <div class="flex shrink-0 items-center gap-1.5 py-1.5 pr-2 pl-2.5 text-muted-foreground">
       <!-- Session switcher: current session + a menu to start a New one, jump to a
            past co-pilot session, or delete one. -->
-      <div class="sshsess-switch">
-        <button
-          class="sshsess-sesbtn"
-          :title="t('ssh.session.switchTitle')"
-          @click.stop="toggleMenu('session')"
-        >
-          <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <span class="sshsess-title">{{ currentTitle }}</span>
-          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
-        <div v-if="menu === 'session'" class="smenu sshsess-menu" @click.stop>
-          <button class="mi sshsess-new" @click="newSession">
-            <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <DropdownMenu
+        :open="menu === 'session'"
+        @update:open="(v: boolean) => (menu = v ? 'session' : null)"
+      >
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="ghost"
+            size="xs"
+            class="max-w-50 min-w-0 gap-1.5 px-2 text-muted-foreground"
+            :title="t('ssh.session.switchTitle')"
+          >
+            <Icon name="sessions" />
+            <span class="truncate text-sm font-medium text-foreground">{{ currentTitle }}</span>
+            <Icon name="chev" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" class="max-h-85 w-70 max-w-[78vw] overflow-y-auto">
+          <DropdownMenuItem class="text-primary [&_svg]:text-primary" @select="newSession">
+            <Icon name="plus" />
             {{ t('ssh.session.new') }}
-          </button>
-          <div class="sshsess-menu-div" />
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <!-- Hàng lịch sử = item chọn phiên + nút xoá hiện khi hover hàng. -->
           <div
             v-for="s in hostSessions"
             :key="s.id"
-            class="sshsess-row"
-            :class="{ on: s.id === sessionId }"
+            class="group flex items-center rounded-md hover:bg-accent"
           >
-            <button class="sshsess-rowmain" @click="switchSession(s.id)">
-              <Icon
-                v-if="s.id === sessionId"
-                name="check"
-                class="sshsess-row-ck"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-              <span v-else class="sshsess-row-ckspace" />
-              <span class="sshsess-row-title">{{ s.title || t('ssh.session.untitled') }}</span>
-              <span class="sshsess-row-when tnum">{{ s.when }}</span>
-            </button>
-            <button
-              class="sshsess-del"
+            <DropdownMenuItem
+              class="min-w-0 flex-1 gap-2 focus:bg-transparent"
+              :class="s.id === sessionId ? 'text-primary' : 'text-muted-foreground'"
+              @select="switchSession(s.id)"
+            >
+              <Icon v-if="s.id === sessionId" name="check" class="text-primary!" />
+              <span v-else class="w-3.5 shrink-0" />
+              <span class="min-w-0 flex-1 truncate font-medium">
+                {{ s.title || t('ssh.session.untitled') }}
+              </span>
+              <span class="shrink-0 text-sm text-faint tabular-nums">{{ s.when }}</span>
+            </DropdownMenuItem>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="mr-1 shrink-0 text-faint opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
               :title="t('ssh.session.delete')"
               :aria-label="t('ssh.session.delete')"
               @click.stop="askDelete(s.id)"
             >
-              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+              <Icon name="trash" />
+            </Button>
           </div>
-        </div>
-      </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      <!-- Terminal picker: which of the host's live shells the agent drives. -->
-      <div class="sshsess-termwrap">
-        <button
-          class="sshsess-term"
-          :class="{ live: !!boundConnId }"
-          :disabled="shells.length === 0"
-          :title="t('ssh.session.driving')"
-          @click.stop="shells.length > 1 && toggleMenu('term')"
-        >
-          <span class="sshsess-term-dot" />
-          <span class="sshsess-term-lbl">{{ termLabel }}</span>
-          <Icon
-            v-if="shells.length > 1"
-            name="chev"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-        </button>
-        <div v-if="menu === 'term'" class="smenu sshsess-termmenu" @click.stop>
-          <button v-for="(c, i) in shells" :key="c" class="mi" @click="pickTerminal(c)">
-            <span class="sshsess-row-title">{{ t('ssh.session.terminalN', { n: i + 1 }) }}</span>
-            <Icon
-              v-if="c === boundConnId"
-              name="check"
-              class="sshsess-row-ck"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-          </button>
-        </div>
-      </div>
+      <!-- Terminal picker: which of the host's live shells the agent drives. Chỉ mở
+           menu khi có > 1 shell (1 shell thì nút vẫn bấm được nhưng không có gì để chọn). -->
+      <DropdownMenu
+        :open="menu === 'term'"
+        @update:open="(v: boolean) => (menu = v && shells.length > 1 ? 'term' : null)"
+      >
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="ghost"
+            size="xs"
+            class="ml-auto max-w-35 min-w-0 shrink gap-1 px-2 text-sm"
+            :class="boundConnId ? 'text-success' : 'text-faint'"
+            :disabled="shells.length === 0"
+            :title="t('ssh.session.driving')"
+          >
+            <span class="size-2 shrink-0 rounded-full bg-current" />
+            <span class="truncate font-medium">{{ termLabel }}</span>
+            <Icon v-if="shells.length > 1" name="chev" class="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="min-w-40">
+          <DropdownMenuItem v-for="(c, i) in shells" :key="c" @select="pickTerminal(c)">
+            <span class="min-w-0 flex-1 truncate font-medium">
+              {{ t('ssh.session.terminalN', { n: i + 1 }) }}
+            </span>
+            <Icon v-if="c === boundConnId" name="check" class="text-primary!" />
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      <button
-        class="sshsess-x"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="shrink-0 text-muted-foreground"
         :title="t('ssh.terminal.close')"
         :aria-label="t('ssh.terminal.close')"
         @click="emit('close')"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <div v-if="menu" class="sshsess-backdrop" @click="menu = null" />
+        <Icon name="x" />
+      </Button>
     </div>
+    <Separator />
 
-    <div v-if="session" class="sshsess-body">
+    <div v-if="session" class="sshsess-body flex min-h-0 flex-1 flex-col overflow-hidden">
       <SessionTranscript
         :messages="session.msgs"
         :fallback-when="session.when"
@@ -97,7 +108,9 @@
       />
       <!-- Account / Style chip (same as the app status bar; popovers open upward into
            the transcript). Model / effort / mode live in the composer footer. -->
-      <div class="sshsess-cfg">
+      <Separator />
+      <!-- hook-ok: <style> bên dưới chạm DOM con của StatusConfig qua class này. -->
+      <div class="sshsess-cfg relative flex shrink-0 items-center gap-0.5 px-2 py-1">
         <StatusConfig :session="session" />
       </div>
       <SessionComposer @send="onSend" />
@@ -133,8 +146,8 @@ const ssh = useSshStore()
 // transcript at all and return 'not-found' (ADR 0075).
 provideTranscriptSurface()
 
+// Menu đang mở (DropdownMenu điều khiển qua open) — các action đóng bằng `menu = null`.
 const menu = ref<'session' | 'term' | null>(null)
-const toggleMenu = (m: 'session' | 'term') => (menu.value = menu.value === m ? null : m)
 
 const sessionId = ref(0)
 const session = computed(() => sessions.sessions.find((s) => s.id === sessionId.value))
@@ -236,252 +249,11 @@ function onSend(text: string, command?: SlashCommandRef) {
 </script>
 
 <style scoped>
-.sshsess {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-  background: var(--bg);
-}
-.sshsess-head {
-  position: relative;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px 6px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textDim);
-}
-/* Session switcher */
-.sshsess-switch {
-  position: relative;
-  min-width: 0;
-}
-.sshsess-sesbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 200px;
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshsess-sesbtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshsess-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sshsess-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 60;
-  width: 280px;
-  max-width: 78vw;
-  max-height: 340px;
-  overflow-y: auto;
-  padding: 5px;
-}
-.sshsess-menu-div {
-  height: 1px;
-  margin: 5px 6px;
-  background: var(--border);
-}
-.sshsess-new {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--accent);
-}
-/* History row = main select button + trailing delete. */
-.sshsess-row {
-  display: flex;
-  align-items: center;
-  border-radius: var(--r-xs);
-}
-.sshsess-row:hover {
-  background: var(--bgHover);
-}
-.sshsess-rowmain {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 4px 8px 10px;
-  border: 0;
-  background: transparent;
-  color: var(--textMuted);
-  cursor: pointer;
-  text-align: left;
-}
-.sshsess-row.on .sshsess-rowmain {
-  color: var(--accent);
-}
-.sshsess-row-ck {
-  flex: 0 0 auto;
-  color: var(--accent);
-}
-.sshsess-row-ckspace {
-  flex: 0 0 auto;
-  width: 13px;
-}
-.sshsess-row-title {
-  font-weight: 500;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sshsess-row-when {
-  flex: 0 0 auto;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.sshsess-del {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 30px;
-  margin-right: 4px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textFaint);
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity 0.12s,
-    color 0.12s,
-    background 0.12s;
-}
-.sshsess-row:hover .sshsess-del {
-  opacity: 1;
-}
-.sshsess-del:hover {
-  color: var(--danger);
-  background: var(--dangerBg, var(--bgHover));
-}
-.sshsess-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 55;
-}
-/* Terminal picker */
-.sshsess-termwrap {
-  position: relative;
-  margin-left: auto;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.sshsess-term {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 140px;
-  height: 24px;
-  padding: 0 7px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textFaint);
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.sshsess-term:not(:disabled):hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshsess-term:disabled {
-  cursor: default;
-}
-.sshsess-term-lbl {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sshsess-term-dot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--textFaint);
-}
-.sshsess-term.live {
-  color: var(--green);
-}
-.sshsess-term.live .sshsess-term-dot {
-  background: var(--green);
-}
-.sshsess-termmenu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 60;
-  min-width: 160px;
-}
-.sshsess-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.sshsess-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.sshsess-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* Config-chip bar above the composer. StatusConfig's .sb-item chips normally get
-   their sizing from the app status bar (:deep there); replicate it here so the chips
-   render as proper chips. Popovers are re-anchored to the bar so they stay inside. */
-.sshsess-cfg {
-  position: relative;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
-  border-top: 1px solid var(--border);
-}
+/* style-ok: chạm DOM con của StatusConfig + SessionComposer (component khác, CSS scoped
+   KHÔNG nằm trong layer) — utility Tailwind ở layer `utilities` không thắng được nên
+   phải giữ :deep. StatusConfig dựng chip cho status bar app; trong dock hẹp này thu chip
+   lại và neo popover vào thanh để không tràn ra terminal. Bỏ khối này khi hai component
+   đó chuyển sang shadcn. */
 .sshsess-cfg :deep(.sb-item) {
   display: inline-flex;
   align-items: center;
@@ -504,8 +276,6 @@ function onSend(text: string, command?: SlashCommandRef) {
   color: var(--text);
   background: var(--bgHover);
 }
-/* Contain StatusConfig's popovers INSIDE the dock (they anchor right:0 to a narrow
-   chip → spill onto the terminal). Neutralise .sb-wrap so menus anchor to the bar. */
 .sshsess-cfg :deep(.sb-wrap) {
   position: static;
 }
@@ -520,11 +290,9 @@ function onSend(text: string, command?: SlashCommandRef) {
 .sshsess-cfg :deep(.styinfocard) {
   display: none;
 }
-/* The composer toolbar forces flex-wrap:nowrap (built for the wide /sessions view),
-   so in this narrow dock its action buttons + Send overflow the right edge. Re-enable
-   wrapping HERE only: at a comfortable width the flex spacer keeps Send right-aligned
-   on one row; when narrow, the actions wrap to a second row instead of spilling out. */
-.sshsess :deep(.composer .cbar) {
+/* Toolbar composer ép flex-wrap:nowrap (dựng cho /sessions rộng) — trong dock hẹp cho
+   phép xuống dòng để nút Send không tràn mép phải. */
+.sshsess-body :deep(.composer .cbar) {
   flex-wrap: wrap;
   row-gap: 6px;
 }

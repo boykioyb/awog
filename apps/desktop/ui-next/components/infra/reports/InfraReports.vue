@@ -1,64 +1,75 @@
 <template>
-  <div class="rpt">
-    <header class="rpt-hd">
-      <h2 class="rpt-ttl">{{ t('infra.report.title') }}</h2>
-      <p class="rpt-sub">{{ t('infra.report.subtitle') }}</p>
+  <div class="flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-4 py-3.5">
+    <header class="flex flex-col gap-1">
+      <h2 class="m-0 text-lg font-semibold text-foreground">{{ t('infra.report.title') }}</h2>
+      <p class="m-0 max-w-[68ch] text-sm leading-relaxed text-dim">
+        {{ t('infra.report.subtitle') }}
+      </p>
     </header>
 
-    <p v-if="loading && !kinds.length" class="rpt-state">{{ t('infra.report.loading') }}</p>
+    <p v-if="loading && !kinds.length" class="m-0 text-sm text-dim">
+      {{ t('infra.report.loading') }}
+    </p>
 
-    <p v-else-if="!sidecar.available" class="rpt-state">{{ t('infra.report.noSidecar') }}</p>
+    <p v-else-if="!sidecar.available" class="m-0 text-sm text-dim">
+      {{ t('infra.report.noSidecar') }}
+    </p>
 
     <!-- Danh mục rỗng SAU khi nạp xong là chuyện khác với "chưa nạp xong": nói ra
          và cho thử lại, thay vì để người dùng nhìn một khoảng trắng rồi tự đoán. -->
-    <div v-else-if="!kinds.length" class="rpt-state">
-      <p class="rpt-state-txt">{{ t('infra.report.empty') }}</p>
+    <div v-else-if="!kinds.length" class="flex flex-col items-start gap-2 text-sm text-dim">
+      <p class="m-0">{{ t('infra.report.empty') }}</p>
       <Button type="button" variant="outline" size="sm" @click="reload">
-        <Icon name="refresh" class="rpt-ic" />
+        <Icon name="refresh" class="size-3" />
         {{ t('infra.report.retry') }}
       </Button>
     </div>
 
-    <ul v-else class="rpt-list">
-      <li v-for="info in kinds" :key="info.kind" class="icard rpt-card">
-        <div class="rpt-card-hd">
-          <h3 class="rpt-kind">{{ t(info.labelKey) }}</h3>
-        </div>
+    <ul
+      v-else
+      class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2.5 p-0"
+    >
+      <li v-for="info in kinds" :key="info.kind" class="flex">
+        <Card class="flex-1 gap-2 p-3">
+          <h3 class="m-0 text-base font-medium text-foreground">{{ t(info.labelKey) }}</h3>
 
-        <p class="rpt-about">{{ t(info.aboutKey) }}</p>
+          <p class="m-0 flex-1 text-sm leading-relaxed text-muted-foreground">
+            {{ t(info.aboutKey) }}
+          </p>
 
-        <!-- Nhịp của loại này KHÔNG biểu diễn được bằng trigger hiện có, hoặc cố ý
-             chạy tay. Nói ra Ở ĐÂY thì nút Đặt lịch tắt được — bấm vào chỉ để nghe
-             lại đúng câu đang đọc là nhiễu. Câu chữ do sidecar đặt (`scheduleGapKey`)
-             nên thêm một nhịp mới không phải sửa màn này. -->
-        <p v-if="!info.schedule" class="rpt-gap">
-          <Icon name="info" class="rpt-ic" />
-          {{ t(info.scheduleGapKey ?? 'infra.report.gap.onDemand') }}
-        </p>
+          <!-- Nhịp của loại này KHÔNG biểu diễn được bằng trigger hiện có, hoặc cố ý
+               chạy tay. Nói ra Ở ĐÂY thì nút Đặt lịch tắt được — bấm vào chỉ để nghe
+               lại đúng câu đang đọc là nhiễu. Câu chữ do sidecar đặt (`scheduleGapKey`)
+               nên thêm một nhịp mới không phải sửa màn này. -->
+          <p v-if="!info.schedule" class="m-0 flex items-start gap-1.5 text-xs text-faint">
+            <Icon name="info" class="mt-0.5 size-3 flex-none" />
+            {{ t(info.scheduleGapKey ?? 'infra.report.gap.onDemand') }}
+          </p>
 
-        <div class="rpt-acts">
-          <Button
-            type="button"
-            :title="t('infra.report.action.askHint')"
-            variant="default"
-            size="sm"
-            @click="onAsk(info)"
-          >
-            <Icon name="sparkles" class="rpt-ic" />
-            {{ t('infra.report.action.ask') }}
-          </Button>
-          <Button
-            type="button"
-            :disabled="!info.schedule"
-            :title="t('infra.report.action.scheduleHint')"
-            variant="outline"
-            size="sm"
-            @click="scheduleReport(info.kind)"
-          >
-            <Icon name="clock" class="rpt-ic" />
-            {{ t('infra.report.action.schedule') }}
-          </Button>
-        </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              :title="t('infra.report.action.askHint')"
+              variant="default"
+              size="sm"
+              @click="onAsk(info)"
+            >
+              <Icon name="sparkles" class="size-3" />
+              {{ t('infra.report.action.ask') }}
+            </Button>
+            <Button
+              type="button"
+              :disabled="!info.schedule"
+              :title="t('infra.report.action.scheduleHint')"
+              variant="outline"
+              size="sm"
+              @click="scheduleReport(info.kind)"
+            >
+              <Icon name="clock" class="size-3" />
+              {{ t('infra.report.action.schedule') }}
+            </Button>
+          </div>
+        </Card>
       </li>
     </ul>
   </div>
@@ -105,111 +116,3 @@ function onAsk(info: ReportKindInfo): void {
 
 onMounted(reload)
 </script>
-
-<style scoped>
-.rpt {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.rpt-hd {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.rpt-ttl {
-  margin: 0;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  color: var(--text);
-}
-
-.rpt-sub {
-  margin: 0;
-  max-width: 68ch;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-
-.rpt-state {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  color: var(--textDim);
-}
-
-.rpt-state-txt {
-  margin: 0;
-}
-
-.rpt-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rpt-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-}
-
-.rpt-card-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rpt-kind {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.rpt-about {
-  margin: 0;
-  flex: 1;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-}
-
-.rpt-gap {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-.rpt-acts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.rpt-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex-shrink: 0;
-}
-</style>

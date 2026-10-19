@@ -1,12 +1,16 @@
 <template>
-  <div class="skc">
-    <div v-if="!available" class="skc-muted">{{ t('skillsEval.unavailable') }}</div>
+  <div class="mt-4 rounded-xl border p-3.5">
+    <div v-if="!available" class="text-sm text-dim">{{ t('skillsEval.unavailable') }}</div>
 
     <template v-else>
       <!-- Chẩn đoán tĩnh: miễn phí nên chạy ngay khi mở bảng. -->
-      <div class="skc-head">
-        <div class="sech skc-sech">{{ t('skillsEval.doctor.title') }}</div>
-        <span v-if="doctorReport" class="tag" :class="{ warn: hasFindings }">
+      <div class="flex items-center gap-2">
+        <div class="text-xs font-semibold text-dim">{{ t('skillsEval.doctor.title') }}</div>
+        <Badge
+          v-if="doctorReport"
+          variant="outline"
+          :class="hasFindings ? 'border-warning/45 text-warning' : 'text-muted-foreground'"
+        >
           {{
             t('skillsEval.doctor.counts', {
               error: issueCounts.error,
@@ -14,33 +18,35 @@
               info: issueCounts.info,
             })
           }}
-        </span>
-        <span style="flex: 1" />
+        </Badge>
+        <span class="flex-1" />
         <Button :disabled="doctorBusy" variant="outline" size="sm" @click="runDoctor">
           <Icon name="refresh" />
           {{ t('skillsEval.doctor.rerun') }}
         </Button>
       </div>
-      <div class="skc-muted">{{ t('skillsEval.doctor.hint') }}</div>
+      <div class="text-sm text-dim">{{ t('skillsEval.doctor.hint') }}</div>
 
-      <div v-if="doctorBusy" class="skc-muted skc-gap">{{ t('skillsEval.doctor.running') }}</div>
-      <ul v-else-if="issues.length > 0" class="skc-issues">
-        <li v-for="(issue, i) in issues" :key="`${issue.rule}-${i}`" class="skc-issue">
-          <span class="skc-sev" :class="issue.severity">
+      <div v-if="doctorBusy" class="mt-2 text-sm text-dim">
+        {{ t('skillsEval.doctor.running') }}
+      </div>
+      <ul v-else-if="issues.length > 0" class="mt-2.5 flex list-none flex-col gap-2 p-0">
+        <li v-for="(issue, i) in issues" :key="`${issue.rule}-${i}`" class="flex items-start gap-2">
+          <Badge variant="outline" class="flex-none rounded-sm" :class="SEV[issue.severity]">
             {{ t(`skillsEval.sev.${issue.severity}`) }}
-          </span>
-          <div class="skc-issue-text">
+          </Badge>
+          <div class="min-w-0 text-base text-muted-foreground">
             <div>{{ t(`skillsEval.rule.${issue.rule}.msg`, issue.params ?? {}) }}</div>
-            <div class="skc-muted">{{ t(`skillsEval.rule.${issue.rule}.hint`, {}) }}</div>
+            <div class="text-sm text-dim">{{ t(`skillsEval.rule.${issue.rule}.hint`, {}) }}</div>
           </div>
         </li>
       </ul>
-      <div v-else-if="doctorReport" class="skc-ok skc-gap">
+      <div v-else-if="doctorReport" class="mt-2 flex items-center gap-1.5 text-base text-success">
         <Icon name="check" />
         {{ t('skillsEval.doctor.clean') }}
       </div>
 
-      <div v-if="doctorReport" class="skc-muted skc-gap tnum">
+      <div v-if="doctorReport" class="tnum mt-2 text-sm text-dim">
         {{
           t('skillsEval.doctor.stats', {
             kb: Math.max(1, Math.round(doctorReport.stats.fileBytes / 1024)),
@@ -51,33 +57,43 @@
       </div>
 
       <!-- Kiểm định kích hoạt: tốn tiền ⇒ chỉ chạy khi người dùng bấm. -->
-      <div class="sech">{{ t('skillsEval.eval.title') }}</div>
-      <div class="skc-muted">{{ t('skillsEval.eval.desc') }}</div>
-      <div v-if="budget" class="skc-budget tnum">{{ budgetLine }}</div>
+      <div class="mb-2 mt-5 text-xs font-semibold text-dim">{{ t('skillsEval.eval.title') }}</div>
+      <div class="text-sm text-dim">{{ t('skillsEval.eval.desc') }}</div>
+      <div v-if="budget" class="tnum mt-2 text-xs text-dim">{{ budgetLine }}</div>
 
-      <div class="skc-cases">
-        <div v-for="c in cases" :key="c.id" class="skc-case">
-          <button
-            class="chip skc-expect"
-            :class="c.expect"
+      <div class="mt-3 flex flex-col gap-2">
+        <div v-for="c in cases" :key="c.id" class="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="xs"
+            class="flex-none"
+            :class="
+              c.expect === 'activate'
+                ? 'border-selected-border text-primary'
+                : 'text-muted-foreground'
+            "
             :title="t('skillsEval.eval.toggleExpect')"
             @click="toggleExpect(c.id)"
           >
             {{ t(`skillsEval.eval.expect.${c.expect}`) }}
-          </button>
+          </Button>
           <Input
             v-model="c.prompt"
             :placeholder="t('skillsEval.eval.promptPh')"
             :disabled="evalBusy"
           />
-          <span v-if="verdict(c.id)" class="skc-verdict" :class="verdict(c.id)?.tone">
+          <span
+            v-if="verdict(c.id)"
+            class="flex-none whitespace-nowrap text-xs font-semibold"
+            :class="TONE[verdict(c.id)?.tone ?? 'muted']"
+          >
             {{ verdict(c.id)?.label }}
           </span>
           <Button
             :title="t('skillsEval.eval.removeCase')"
-            class="skc-del"
+            class="flex-none"
             variant="outline"
-            size="iconMd"
+            size="iconSm"
             @click="removeCase(c.id)"
           >
             <Icon name="x" />
@@ -85,7 +101,7 @@
         </div>
       </div>
 
-      <div class="skc-actions">
+      <div class="mt-3 flex items-center gap-2">
         <Button variant="outline" size="sm" @click="addCase('activate')">
           <Icon name="plus" />
           {{ t('skillsEval.eval.addActivate') }}
@@ -94,31 +110,38 @@
           <Icon name="plus" />
           {{ t('skillsEval.eval.addSkip') }}
         </Button>
-        <span style="flex: 1" />
+        <span class="flex-1" />
         <Button :disabled="!canRunEval" variant="default" size="sm" @click="runEval">
           <Icon name="play" />
           {{ evalBusy ? t('skillsEval.eval.running') : t('skillsEval.eval.run') }}
         </Button>
       </div>
-      <div v-if="!canRunEval && !evalBusy" class="skc-muted">
+      <div v-if="!canRunEval && !evalBusy" class="text-sm text-dim">
         {{ t('skillsEval.eval.needCases') }}
       </div>
 
-      <div v-if="latestRun" class="skc-run">
-        <span class="tag" :class="{ acc: latestRun.passed === latestRun.total }">
+      <div v-if="latestRun" class="mt-3 flex items-center gap-2.5">
+        <Badge
+          variant="outline"
+          :class="
+            latestRun.passed === latestRun.total
+              ? 'border-primary/45 bg-primary/8 text-primary'
+              : 'text-muted-foreground'
+          "
+        >
           {{ t('skillsEval.eval.score', { passed: latestRun.passed, total: latestRun.total }) }}
-        </span>
-        <span class="skc-muted tnum">
+        </Badge>
+        <span class="tnum text-sm text-dim">
           {{ t('skillsEval.eval.model', { model: latestRun.modelId }) }}
         </span>
-        <span class="skc-muted tnum">{{ costLabel(latestRun) }}</span>
+        <span class="tnum text-sm text-dim">{{ costLabel(latestRun) }}</span>
       </div>
-      <div v-if="latestRun?.stoppedBy" class="skc-stopped">
+      <div v-if="latestRun?.stoppedBy" class="mt-2 flex items-center gap-1.5 text-sm text-warning">
         <Icon name="alert" />
         {{ t(`skillsEval.eval.stopped.${latestRun.stoppedBy}`) }}
       </div>
-      <ul v-if="latestRun" class="skc-detail">
-        <li v-for="r in latestRun.results" :key="r.caseId" class="skc-muted">
+      <ul v-if="latestRun" class="mt-2 flex list-none flex-col gap-1 p-0">
+        <li v-for="r in latestRun.results" :key="r.caseId" class="text-sm text-dim">
           {{
             r.chosen
               ? t('skillsEval.eval.chosen', { id: r.chosen })
@@ -129,16 +152,16 @@
         </li>
       </ul>
 
-      <div v-if="runs.length > 1" class="skc-history">
-        <div class="sech skc-sech">{{ t('skillsEval.eval.history') }}</div>
-        <div v-for="r in runs.slice(1)" :key="r.runId" class="skc-muted tnum">
+      <div v-if="runs.length > 1" class="mt-3.5 flex flex-col gap-1">
+        <div class="text-xs font-semibold text-dim">{{ t('skillsEval.eval.history') }}</div>
+        <div v-for="r in runs.slice(1)" :key="r.runId" class="tnum text-sm text-dim">
           {{ formatTime(r.finishedAt) }} ·
           {{ t('skillsEval.eval.score', { passed: r.passed, total: r.total }) }} ·
           {{ costLabel(r) }}
         </div>
       </div>
 
-      <div v-if="lastError" class="skc-err">{{ lastError }}</div>
+      <div v-if="lastError" class="mt-2.5 text-sm text-destructive">{{ lastError }}</div>
     </template>
   </div>
 </template>
@@ -209,6 +232,18 @@ const costLabel = (run: SkillEvalRun): string =>
 const formatTime = (ms: number): string => new Date(ms).toLocaleString()
 
 // Nhãn kết quả của một ca trong lần chạy gần nhất.
+// Màu theo mức độ (doctor) / kết quả ca kiểm (eval).
+const SEV: Record<string, string> = {
+  error: 'border-destructive/40 text-destructive',
+  warn: 'border-warning/40 text-warning',
+  info: 'text-dim',
+}
+const TONE: Record<string, string> = {
+  good: 'text-success',
+  bad: 'text-destructive',
+  muted: 'text-dim',
+}
+
 const verdict = (caseId: string): { label: string; tone: string } | null => {
   const r = resultFor(caseId)
   if (!r) return null
@@ -224,177 +259,3 @@ onMounted(async () => {
   await runDoctor()
 })
 </script>
-
-<style scoped>
-.skc {
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  padding: 14px;
-  margin-top: 16px;
-}
-.skc-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.skc-sech {
-  margin: 0;
-}
-.skc-muted {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.skc-gap {
-  margin-top: 8px;
-}
-.skc-issues {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.skc-issue {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-.skc-issue-text {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--textMuted);
-  min-width: 0;
-}
-.skc-sev {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.skc-sev.error {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-}
-.skc-sev.warn {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-}
-.skc-ok {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--green);
-}
-.skc-budget {
-  margin-top: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.skc-cases {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-}
-.skc-case {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.skc-expect {
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.skc-expect.activate {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.skc-input {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.skc-input:focus {
-  border-color: var(--accent);
-}
-.skc-verdict {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.skc-verdict.good {
-  color: var(--green);
-}
-.skc-verdict.bad {
-  color: var(--danger);
-}
-.skc-verdict.muted {
-  color: var(--textDim);
-}
-.skc-del {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-}
-.skc-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-.skc-run {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-.skc-stopped {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-}
-.skc-detail {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.skc-history {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.skc-err {
-  margin-top: 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-</style>

@@ -1,21 +1,28 @@
 <template>
-  <div class="ape-identity">
-    <div class="ape-identity-title">{{ t('infra.editor.identity.title') }}</div>
-    <div v-if="checking" class="ape-identity-loading">
+  <div class="flex flex-col gap-2 rounded-lg border bg-muted p-3">
+    <div class="text-xs font-semibold text-muted-foreground">
+      {{ t('infra.editor.identity.title') }}
+    </div>
+    <div v-if="checking" class="text-sm text-dim">
       {{ t('infra.editor.identity.checking') }}
     </div>
     <template v-else-if="result">
-      <div v-if="ok" class="ape-identity-ok">
-        <div class="ape-identity-row">
-          <span class="ape-identity-k">{{ t('infra.editor.identity.account') }}</span>
-          <code class="ape-identity-v">{{ ok.accountId }}</code>
+      <div v-if="ok" class="flex flex-col gap-1">
+        <div class="flex items-baseline gap-2">
+          <span class="min-w-18 flex-none text-xs text-dim">
+            {{ t('infra.editor.identity.account') }}
+          </span>
+          <!-- mono-ok: account id / ARN là giá trị copy-paste vào terminal hoặc IAM console. -->
+          <code class="font-mono text-sm wrap-anywhere text-foreground">{{ ok.accountId }}</code>
         </div>
-        <div class="ape-identity-row">
-          <span class="ape-identity-k">{{ t('infra.editor.identity.arn') }}</span>
-          <code class="ape-identity-v">{{ ok.arn }}</code>
+        <div class="flex items-baseline gap-2">
+          <span class="min-w-18 flex-none text-xs text-dim">
+            {{ t('infra.editor.identity.arn') }}
+          </span>
+          <code class="font-mono text-sm wrap-anywhere text-foreground">{{ ok.arn }}</code>
         </div>
       </div>
-      <div v-else class="ape-identity-err">
+      <div v-else class="flex items-center gap-2.5 text-sm text-destructive">
         <span>{{ errorMessage }}</span>
         <Button type="button" variant="outline" size="sm" @click="emit('retry')">
           {{ t('common.retry') }}
@@ -55,59 +62,3 @@ const errorMessage = computed(() => {
   return r && !r.ok ? r.error : ''
 })
 </script>
-
-<style scoped>
-.ape-identity {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-}
-.ape-identity-title {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textMuted);
-}
-.ape-identity-loading {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.ape-identity-ok {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.ape-identity-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.ape-identity-k {
-  flex: 0 0 auto;
-  min-width: 70px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ape-identity-v {
-  /* mono-ok: account id / ARN là giá trị copy-paste vào terminal hoặc IAM console. */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.ape-identity-err {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-</style>

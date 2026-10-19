@@ -3,8 +3,13 @@
        Uses the grid-template-rows 0fr↔1fr technique: animatable, CSS-only, and
        collapses to exactly the content height with no magic max-height. The inner
        wrapper clips overflow during the transition. Disabled under reduced-motion. -->
-  <div class="collapsible" :class="{ open }">
-    <div class="collapsible-in">
+  <div
+    class="grid transition-[grid-template-rows] duration-180 ease-out motion-reduce:transition-none"
+    :class="open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+  >
+    <!-- `collapsible-in` giữ làm hook: SessionQuestionDrawer ghi đè qua
+         `:deep(.collapsible-in)`. Không mang style. -->
+    <div class="collapsible-in min-h-0 overflow-hidden">
       <!-- Lazy-mount: a transcript carries ~hundreds of collapsed step bodies
            (code views, diffs). Mounting them all on open made session load feel
            heavy even though the wire got smaller — mount the content on FIRST
@@ -26,28 +31,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-/* Class name is `collapsible`, NOT `collapse`: Tailwind ships a `.collapse`
-   utility (`visibility: collapse`) which, applied to this wrapper, renders the
-   revealed content as invisible-but-space-occupying in Chromium (an empty box
-   under the header). Scoped styles don't set `visibility`, so the utility wins.
-   See reference: Tailwind utility class-name collisions in ui-next. */
-.collapsible {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.18s ease;
-}
-.collapsible.open {
-  grid-template-rows: 1fr;
-}
-.collapsible-in {
-  overflow: hidden;
-  min-height: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .collapsible {
-    transition: none;
-  }
-}
-</style>

@@ -3,46 +3,71 @@
        dẫn — theo LOẠI playbook, vì playbook KHÔNG có trạng thái riêng: trạng thái
        là của từng lượt chạy (xem `usePlaybooksApi.PlaybookRun`). SFC chỉ bind; state
        ở `usePlaybooksManager()`. -->
-  <div class="pb-list">
-    <div v-if="loading" class="pbl-state">
-      <Icon name="refresh" class="ikspin" style="width: var(--icon-lg); height: var(--icon-lg)" />
-      <p class="pbl-state-txt" role="status" aria-busy="true">{{ t('playbooks.list.loading') }}</p>
+  <div class="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto px-1.5 pt-2 pb-3">
+    <div
+      v-if="loading"
+      class="flex flex-1 flex-col items-center justify-center gap-2.5 px-4.5 py-7.5 text-center text-dim"
+    >
+      <Icon name="refresh" class="size-5 animate-spin" />
+      <p class="text-sm text-muted-foreground" role="status" aria-busy="true">
+        {{ t('playbooks.list.loading') }}
+      </p>
     </div>
 
     <!-- Lỗi phải nói CÁCH SỬA, không chỉ nói đã hỏng (luật 3). -->
-    <div v-else-if="error" class="pbl-state">
-      <Icon name="alert" style="width: var(--icon-lg); height: var(--icon-lg)" />
-      <p class="pbl-state-txt">{{ error }}</p>
+    <div
+      v-else-if="error"
+      class="flex flex-1 flex-col items-center justify-center gap-2.5 px-4.5 py-7.5 text-center text-dim"
+    >
+      <Icon name="alert" class="size-5" />
+      <p class="text-sm text-muted-foreground">{{ error }}</p>
       <Button type="button" variant="outline" size="sm" @click="emit('refresh')">
         {{ t('playbooks.list.retry') }}
       </Button>
     </div>
 
-    <div v-else-if="!groups.length" class="pbl-state">
-      <Icon name="book" style="width: var(--icon-lg); height: var(--icon-lg)" />
-      <p class="pbl-state-txt">{{ t('playbooks.list.empty.title') }}</p>
-      <p class="pbl-state-hint">{{ t('playbooks.list.empty.hint') }}</p>
+    <div
+      v-else-if="!groups.length"
+      class="flex flex-1 flex-col items-center justify-center gap-2.5 px-4.5 py-7.5 text-center text-dim"
+    >
+      <Icon name="book" class="size-5" />
+      <p class="text-sm text-muted-foreground">{{ t('playbooks.list.empty.title') }}</p>
+      <p class="text-xs leading-(--lh-sm) text-dim">{{ t('playbooks.list.empty.hint') }}</p>
       <Button type="button" variant="outline" size="sm" @click="emit('refresh')">
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="refresh" />
         {{ t('playbooks.toolbar.refresh') }}
       </Button>
     </div>
 
     <template v-else>
-      <section v-for="group in groups" :key="group.key" class="pbl-group">
-        <div class="pbl-group-hd">{{ t(`playbooks.group.${group.key}`) }}</div>
-        <ul class="pbl-items">
+      <section v-for="group in groups" :key="group.key" class="flex flex-col gap-0.5">
+        <!-- Nhãn nhóm viết sentence-case, KHÔNG all-caps (luật UI của repo). -->
+        <div class="px-2 pt-1 pb-0.5 text-xs font-medium text-dim">
+          {{ t(`playbooks.group.${group.key}`) }}
+        </div>
+        <ul class="m-0 flex list-none flex-col gap-px p-0">
           <li v-for="item in group.items" :key="keyOf(item)">
+            <!-- Đang chọn = accent-tint + viền accent, KHÔNG nền xám đặc. -->
+            <!-- raw-ok: hàng list cả dòng là một vùng bấm, không phải nút -->
             <button
               type="button"
-              class="pbl-item"
-              :class="{ on: keyOf(item) === selectedKey }"
+              class="flex w-full cursor-default items-center gap-2 rounded-md border px-2 py-1.5 text-left text-foreground"
+              :class="
+                keyOf(item) === selectedKey
+                  ? 'border-selected-border bg-selected'
+                  : 'border-transparent hover:bg-accent'
+              "
               @click="emit('open', item)"
             >
-              <span class="pbl-dot" :class="`src-${item.source}`" />
-              <span class="pbl-main">
-                <span class="pbl-name">{{ item.name }}</span>
-                <span class="pbl-meta">
+              <!-- Chấm tô theo NGUỒN: dựng sẵn (chỉ đọc) · dùng chung · riêng dự án.
+                   Đây là thứ duy nhất phân biệt được hai playbook cùng id ở hai tier. -->
+              <span
+                class="size-2 shrink-0 rounded-full"
+                :class="SRC_DOT[item.source] ?? 'bg-dim'"
+              />
+              <span class="flex min-w-0 flex-col gap-px">
+                <span class="truncate text-sm">{{ item.name }}</span>
+                <span class="text-xs text-dim">
                   {{
                     t('playbooks.list.meta', {
                       source: t(`playbooks.source.${item.source}`),
@@ -55,12 +80,12 @@
                    `issues` khác rỗng cũng là thứ tắt luôn nút gửi duyệt. -->
               <span
                 v-if="item.issues.length"
-                class="pbl-bad"
+                class="ml-auto inline-flex shrink-0 text-warning"
                 role="img"
                 :aria-label="t('playbooks.list.broken')"
                 :title="t('playbooks.list.broken')"
               >
-                <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                <Icon name="alert" class="size-3" />
               </span>
             </button>
           </li>
@@ -90,6 +115,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+/** Màu chấm theo nguồn của playbook; nguồn lạ rơi về `bg-dim` ở template. */
+const SRC_DOT: Record<string, string> = {
+  builtin: 'bg-lavender',
+  global: 'bg-primary',
+  project: 'bg-info',
+}
+
 /**
  * Danh tính một dòng. `source` là MỘT PHẦN của khoá chứ không phải nhãn: cùng một
  * id nằm ở tier dựng sẵn và tier project là hai playbook khác nhau, nên so bằng
@@ -99,139 +131,3 @@ function keyOf(item: PlaybookSummary): string {
   return `${item.source}:${item.projectId ?? ''}:${item.id}`
 }
 </script>
-
-<style scoped>
-.pb-list {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  overflow-y: auto;
-  padding: 8px 6px 12px;
-  gap: 10px;
-}
-
-.pbl-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 30px 18px;
-  color: var(--textDim);
-  text-align: center;
-}
-
-.pbl-state-txt {
-  margin: 0;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pbl-state-hint {
-  margin: 0;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.pbl-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* Nhãn nhóm viết sentence-case, KHÔNG all-caps (luật UI của repo). */
-.pbl-group-hd {
-  padding: 4px 8px 2px;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 550;
-}
-
-.pbl-items {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.pbl-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: default;
-}
-
-.pbl-item:hover {
-  background: var(--bgHover);
-}
-
-/* Trạng thái đang chọn = accent-tint + thanh accent, KHÔNG nền xám đặc. */
-.pbl-item.on {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-}
-
-/* Chấm tô theo NGUỒN: dựng sẵn (chỉ đọc) · dùng chung · riêng dự án. Đây là thứ
-   duy nhất phân biệt được hai playbook cùng id ở hai tier. */
-.pbl-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--textDim);
-}
-
-.pbl-dot.src-builtin {
-  background: var(--violet);
-}
-
-.pbl-dot.src-global {
-  background: var(--accent);
-}
-
-.pbl-dot.src-project {
-  background: var(--blue);
-}
-
-.pbl-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.pbl-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.pbl-meta {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.pbl-bad {
-  flex: 0 0 auto;
-  margin-left: auto;
-  display: inline-flex;
-  color: var(--amber);
-}
-</style>

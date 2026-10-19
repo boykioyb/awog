@@ -19,6 +19,7 @@ export const SURFACE_TOOLS = [
 export const BRIDGE_SERVER_OF: Record<string, string> = {
   ...Object.fromEntries(SURFACE_TOOLS.map((tl) => [tl, 'awogsurfaces'])),
   schedule_wakeup: 'awogsurfaces',
+  propose_schedule: 'awogsurfaces',
   read_terminal: 'awogterm',
   browser_tool: 'awogbrowser',
   dev_server: 'awogdev',
@@ -49,6 +50,7 @@ export const TOOL_GROUPS: [string, string[]][] = [
       'TodoWrite',
       'ExitPlanMode',
       'schedule_wakeup',
+      'propose_schedule',
       'list_sessions',
       'send_session_message',
     ],

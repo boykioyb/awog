@@ -7,17 +7,15 @@
       v-if="decisions.length"
       class="mb-1 rounded-md border border-warning/40 bg-warning/10 p-1.5"
     >
-      <div
-        class="flex items-center gap-1.5 px-0.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-warning"
-      >
+      <div class="flex items-center gap-1.5 px-0.5 pb-1.5 text-xs font-medium text-warning">
         {{ t('sessions.workspace.group.decide') }}
-        <span class="font-bold">{{ decisions.length }}</span>
+        <span class="font-semibold">{{ decisions.length }}</span>
       </div>
       <Button
         v-for="d in decisions"
         :key="d.key"
         variant="ghost"
-        class="h-auto p-0 flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left transition-colors hover:bg-accent"
+        class="h-auto w-full justify-start gap-2 rounded-sm px-1.5 py-1 text-left font-normal [&_svg]:size-3"
         @click="d.go()"
       >
         <component

@@ -1,5 +1,5 @@
 <template>
-  <div class="codepage">
+  <div class="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
     <EditorTopBar
       :back-label="backLabel"
       :title="projectName ?? t('editor.project')"
@@ -15,37 +15,55 @@
           size="iconMd"
           @click="saveFile"
         >
-          <Icon name="save" class="acticon" />
+          <Icon name="save" />
         </Button>
       </template>
     </EditorTopBar>
 
     <!-- Body: explorer | editor area -->
-    <div v-if="ready" class="codebody">
-      <div class="codeexplorer">
+    <div v-if="ready" class="flex min-h-0 flex-1">
+      <div class="w-65 min-w-0 shrink-0 border-r">
         <EditorFileTree :ctrl="fileTreeCtrl" :selected-path="activePath" />
       </div>
 
-      <div class="codemain">
-        <!-- Tab strip -->
-        <div v-if="hasOpenTabs" class="codetabs">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <!-- Tab strip — tab tài liệu có nút đóng + dấu chưa lưu riêng, `Tabs` không
+             phủ được nên giữ hàng div bấm được. -->
+        <div
+          v-if="hasOpenTabs"
+          class="flex shrink-0 items-stretch overflow-x-auto border-b bg-sidebar"
+        >
           <div
             v-for="tab in tabs"
             :key="tab.path"
-            class="codetab"
-            :class="{ on: tab.path === activePath }"
+            class="flex cursor-pointer items-center gap-1.5 border-r px-2.5 py-1.5 font-medium whitespace-nowrap"
+            :class="
+              tab.path === activePath
+                ? 'bg-background text-foreground'
+                : 'text-muted-foreground hover:bg-accent'
+            "
             @click="activateTab(tab.path)"
           >
-            <Icon name="text" class="codetab-icon" />
-            <span class="codetab-name">{{ tab.name }}</span>
-            <span v-if="tab.dirty" class="codetab-dirty" :title="t('editor.unsaved')">●</span>
-            <button class="codetab-x" :title="t('editor.close')" @click.stop="closeTab(tab.path)">
-              <Icon name="x" class="codetab-xicon" />
-            </button>
+            <Icon name="text" class="size-3 shrink-0 text-faint" />
+            <!-- font-mono: tên file đang mở (mono-ok). -->
+            <span class="font-mono">{{ tab.name }}</span>
+            <span v-if="tab.dirty" class="text-sm text-warning" :title="t('editor.unsaved')">
+              ●
+            </span>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="size-5 text-faint hover:text-foreground"
+              :title="t('editor.close')"
+              :aria-label="t('editor.close')"
+              @click.stop="closeTab(tab.path)"
+            >
+              <Icon name="x" class="size-3" />
+            </Button>
           </div>
         </div>
 
-        <div class="codeeditor">
+        <div class="relative flex min-h-0 flex-1">
           <!-- Editor kept mounted (v-show) so models survive empty-state toggles. -->
           <EditorMonacoPane
             v-show="hasOpenTabs"
@@ -57,15 +75,20 @@
             @cursor-change="onCursorChange"
             @save="saveFile"
           />
-          <div v-if="!hasOpenTabs" class="codeempty">
-            <Icon name="folder" class="codeempty-icon" />
+          <div
+            v-if="!hasOpenTabs"
+            class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground"
+          >
+            <Icon name="folder" class="size-10 text-faint" />
             <p>{{ t('editor.openFileHint') }}</p>
           </div>
         </div>
 
         <!-- Status bar -->
-        <div class="codestatus">
-          <span v-if="activeTab" class="codestatus-pos">
+        <div
+          class="flex shrink-0 items-center gap-4 border-t bg-sidebar px-3.5 py-1 text-sm text-muted-foreground tabular-nums"
+        >
+          <span v-if="activeTab">
             {{ t('editor.position', { line: cursor.line, column: cursor.column }) }}
           </span>
           <span v-if="activeTab?.language">{{ activeTab.language }}</span>
@@ -74,8 +97,11 @@
     </div>
 
     <!-- Resolving / not found -->
-    <div v-else class="codenotfound">
-      <Icon name="folder" class="codeempty-icon" />
+    <div
+      v-else
+      class="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground"
+    >
+      <Icon name="folder" class="size-10 text-faint" />
       <p>{{ ready === null ? t('editor.loading') : t('editor.projectNotFound') }}</p>
     </div>
 
@@ -95,7 +121,7 @@
 // folder (ADR 0021/0022). Route /code/:id resolves the absolute workspace root
 // from projects.list, lists its tree (fs.listDir), opens files in tabs, edits in
 // Monaco, and saves via fs.writeFile. All state/logic lives in useCodeWorkspace
-// (page-controller); this SFC is the thin template + prototype CSS.
+// (page-controller); this SFC is the thin template (Tailwind + shadcn).
 import { computed, onMounted, watch } from 'vue'
 import EditorTopBar from '~/components/editor/EditorTopBar.vue'
 import EditorFileTree from '~/components/editor/EditorFileTree.vue'
@@ -162,141 +188,3 @@ onMounted(() => {
   void init()
 })
 </script>
-
-<style scoped>
-.codepage {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-}
-.acticon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.codebody {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-.codeexplorer {
-  flex: 0 0 260px;
-  min-width: 0;
-  border-right: 1px solid var(--border);
-}
-.codemain {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-.codetabs {
-  display: flex;
-  align-items: stretch;
-  overflow-x: auto;
-  flex-shrink: 0;
-  background: var(--bgPanel);
-  border-bottom: 1px solid var(--border);
-}
-.codetab {
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
-  border-right: 1px solid var(--border);
-  color: var(--textDim);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.codetab:hover {
-  background: var(--bgHover);
-}
-.codetab.on {
-  background: var(--bg);
-  color: var(--text);
-}
-.codetab-icon {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--textFaint);
-  flex-shrink: 0;
-}
-.codetab-name {
-  /* mono-ok: open file name on the tab */
-  font-family: var(--code);
-}
-.codetab-dirty {
-  color: var(--amber);
-  font-size: 12px;
-  line-height: 12px;
-}
-.codetab-x {
-  display: grid;
-  place-items: center;
-  padding: 2px;
-  border-radius: var(--r-xs);
-  color: var(--textFaint);
-  background: transparent;
-  cursor: pointer;
-}
-.codetab-x:hover {
-  background: var(--bgActive);
-  color: var(--text);
-}
-.codetab-xicon {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.codeeditor {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.codeempty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--textDim);
-}
-.codeempty-icon {
-  width: 40px;
-  height: 40px;
-  color: var(--textFaint);
-}
-
-.codestatus {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 4px 14px;
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  background: var(--bgPanel);
-  border-top: 1px solid var(--border);
-}
-
-.codenotfound {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: var(--textDim);
-}
-</style>

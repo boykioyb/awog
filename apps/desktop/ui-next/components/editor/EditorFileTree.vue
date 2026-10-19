@@ -1,14 +1,17 @@
 <template>
-  <div class="edtree">
-    <div class="edtree-head">{{ t('editor.explorer') }}</div>
-    <div class="edtree-body">
+  <div class="flex h-full min-h-0 flex-col bg-sidebar">
+    <div class="shrink-0 border-b px-3 py-2 text-sm text-dim">{{ t('editor.explorer') }}</div>
+    <div class="min-h-0 flex-1 overflow-y-auto pt-1 pb-2.5">
       <EditorFileTreeNodes
         :nodes="ctrl.childrenFor('')"
         :depth="0"
         :ctrl="ctrl"
         :selected-path="selectedPath"
       />
-      <div v-if="!ctrl.childrenFor('').length && !ctrl.loading.value" class="edtree-empty">
+      <div
+        v-if="!ctrl.childrenFor('').length && !ctrl.loading.value"
+        class="px-3.5 py-4.5 text-faint"
+      >
         {{ t('editor.emptyTree') }}
       </div>
     </div>
@@ -30,31 +33,3 @@ defineProps<{
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-.edtree {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: var(--bgPanel);
-}
-.edtree-head {
-  padding: 9px 12px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.edtree-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 0 10px;
-}
-.edtree-empty {
-  padding: 18px 14px;
-  color: var(--textFaint);
-}
-</style>

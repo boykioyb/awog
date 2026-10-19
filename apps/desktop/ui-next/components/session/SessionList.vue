@@ -1,22 +1,21 @@
 <template>
-  <div
-    id="slistcol"
-    class="list"
-    :class="{ selecting: store.selecting }"
-    :style="{ flex: `0 0 ${listWidth}px !important`, width: `${listWidth}px !important` }"
-  >
-    <div class="ltop">
+  <!-- Cột danh sách phiên — nền zinc `bg-background`, không viền phải (tay kéo `.rsz`
+       đã vẽ một hairline giữa danh sách và chi tiết).
+       hook-ok: `.list` do app-shell.css đọc (`.app.compact .list` — drawer ở shell hẹp) -->
+  <div id="slistcol" class="list" :class="LIST_CLASS" :style="listStyle">
+    <!-- Header proto `p-2 gap-1.5`, cùng nền với các hàng, không đường chia — ô tìm đọc
+         thành một dải với hai nút ghost. -->
+    <div class="flex items-center gap-1.5 p-2">
       <!-- Proto search idiom: the icon overlays a muted, borderless ui Input. -->
       <div class="relative flex-1">
         <Icon
           name="search"
-          class="absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
         />
         <Input
           v-model="filter"
           :placeholder="t('sessions.search.placeholder')"
-          class="h-[var(--ctrl-h-sm)] border-transparent bg-muted pl-8 shadow-none focus-visible:ring-1"
+          class="h-ctrl-sm border-transparent bg-muted pl-8 shadow-none focus-visible:ring-1"
         />
       </div>
       <!-- Tạo phiên. KHÔNG thêm nút thứ hai cạnh nó — header này chỉ vừa đúng ba điều
@@ -24,7 +23,7 @@
            phiên đang mở (tạo nhóm mới) · hoặc thả vào một nhóm đã có. Chỉ khi KHÔNG có
            lựa chọn nào (chưa mở phiên nào, chưa có nhóm nào) nó mới tạo thẳng. Anchor là
            span RIÊNG của nút này — dùng chung span với nút khác thì hai nút xuống dòng. -->
-      <span style="position: relative">
+      <span class="relative">
         <Button
           variant="ghost"
           size="iconSm"
@@ -34,22 +33,22 @@
         >
           <Icon name="plus" />
         </Button>
-        <div
-          v-if="newMenu"
-          style="position: fixed; inset: 0; z-index: 40"
-          @click="newMenu = false"
-        />
+        <div v-if="newMenu" class="fixed inset-0 z-40" @click="newMenu = false" />
         <!-- `.list` có `overflow:hidden`, nên một menu absolute rộng hơn cột (280px) bị
-             CẮT chứ không tràn ra ngoài. Vì vậy: menu kẹp bề rộng, và mọi nhãn mang tên
-             phiên đều truncate — tên đầy đủ nằm ở `title`. -->
+             CẮT chứ không tràn ra ngoài. Vì vậy: menu kẹp bề rộng 240px (vừa khít cột hẹp
+             nhất), và mọi nhãn mang tên phiên đều truncate — tên đầy đủ nằm ở `title`.
+             Menu tự dựng mang `role=dialog` + `data-state=open` để khớp OVERLAYS của
+             trình duyệt nhúng. -->
         <div
           v-if="newMenu"
-          class="smenu newmenu"
-          style="position: absolute; top: 116%; right: 0; z-index: 50"
+          role="dialog"
+          data-state="open"
+          :class="MENU"
+          class="top-[116%] right-0 max-w-60"
           @click.stop
         >
-          <div class="mi" @click="createNew(null)">
-            <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="createNew(null)">
+            <Icon name="sessions" />
             {{ t('sessions.newIn.standalone') }}
           </div>
           <!-- Phiên đang mở CHƯA là nhóm: cho tạo con ngay dưới nó. Đây là đường DUY
@@ -57,34 +56,39 @@
                dùng được sau khi đã đi xếp nhóm bằng chuột phải ở chỗ khác. -->
           <div
             v-if="activeAsParent"
-            class="mi"
+            :class="ITEM"
             :title="activeAsParent.title"
             @click="createNew(activeAsParent)"
           >
-            <Icon name="fork" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="nmt">{{ t('sessions.newIn.underActive') }}</span>
+            <Icon name="fork" />
+            <span class="min-w-0 flex-auto truncate">{{ t('sessions.newIn.underActive') }}</span>
           </div>
           <template v-if="groupTargets.length">
-            <div class="msep" />
-            <div class="nmlbl">{{ t('sessions.newIn.groupLabel') }}</div>
+            <Separator class="my-1" />
+            <!-- Nhãn nhóm mục — một dòng, không bẻ. -->
+            <div class="px-2.5 py-1 text-xs whitespace-nowrap text-muted-foreground">
+              {{ t('sessions.newIn.groupLabel') }}
+            </div>
           </template>
           <div
             v-for="g in groupTargets"
             :key="g.engineId"
-            class="mi"
+            :class="ITEM"
             :title="g.title"
             @click="createNew(g)"
           >
-            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <span class="nmt">{{ g.title }}</span>
-            <span v-if="g.current" class="kb">{{ t('sessions.newIn.currentGroup') }}</span>
+            <Icon name="folder" />
+            <span class="min-w-0 flex-auto truncate">{{ g.title }}</span>
+            <span v-if="g.current" class="ml-auto pl-3.5 text-xs text-faint">
+              {{ t('sessions.newIn.currentGroup') }}
+            </span>
           </div>
         </div>
       </span>
       <!-- Overflow (session-ui-refactor §3.8): chế độ chọn · bộ lọc · gấp tất cả.
            Ba thao tác dùng vài lần một tuần nhưng đang chiếm chỗ thường trực ngang
            hàng với nút tạo phiên — thứ được bấm mỗi ngày. -->
-      <span style="position: relative">
+      <span class="relative">
         <Button
           variant="ghost"
           size="iconSm"
@@ -94,104 +98,74 @@
         >
           <Icon name="dots" />
         </Button>
+        <div v-if="listMenu" class="fixed inset-0 z-40" @click="listMenu = false" />
         <div
           v-if="listMenu"
-          style="position: fixed; inset: 0; z-index: 40"
-          @click="listMenu = false"
-        />
-        <div
-          v-if="listMenu"
-          class="smenu"
-          style="position: absolute; top: 116%; right: 0; z-index: 50"
+          role="dialog"
+          data-state="open"
+          :class="MENU"
+          class="top-[116%] right-0"
           @click.stop
         >
-          <div class="mi" @click="runListAction(toggleSelectMode)">
-            <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="runListAction(toggleSelectMode)">
+            <Icon name="check" />
             {{
               store.selecting ? t('sessions.sidebar.selectExit') : t('sessions.sidebar.selectMode')
             }}
           </div>
-          <div class="mi" @click="runListAction(() => (showFilters = !showFilters))">
-            <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="runListAction(() => (showFilters = !showFilters))">
+            <Icon name="filter" />
             {{ t('sessions.filter.tooltip') }}
-            <Icon
-              v-if="showFilters"
-              name="check"
-              class="ck"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+            <Icon v-if="showFilters" name="check" class="ml-auto text-primary" />
           </div>
-          <div class="mi" @click="runListAction(toggleFoldAll)">
-            <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="runListAction(toggleFoldAll)">
+            <Icon name="foldv" />
             {{ t('sessions.foldAll.tooltip') }}
           </div>
-          <div class="mi" @click="runListAction(claudeImport.open)">
-            <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <div :class="ITEM" @click="runListAction(claudeImport.open)">
+            <Icon name="download" />
             {{ t('sessions.claudeImport.button') }}
           </div>
         </div>
       </span>
     </div>
 
-    <div v-if="showFilters" class="sfdrawer">
-      <div class="csrow">
-        <span class="cslbl">{{ t('sessions.filter.groupBy') }}</span>
-        <div class="csval" style="position: relative" @click.stop="openGroupMenu">
-          {{ groupByLabel }}
-          <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <div
-            v-if="groupMenu"
-            class="smenu"
-            style="position: absolute; top: 116%; left: 0; right: 0; z-index: 50"
-            @click.stop
-          >
-            <div v-for="[value] in GROUPBY" :key="value" class="mi" @click="selectGroup(value)">
-              {{ t(`sessions.team.${value}`) }}
-              <Icon
-                v-if="value === groupBy"
-                name="check"
-                class="ck"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-            </div>
-          </div>
-        </div>
+    <!-- Drawer bộ lọc: gom nhóm · sắp xếp · hiện phiên lưu trữ. -->
+    <div v-if="showFilters" class="flex flex-col gap-2 border-b bg-muted px-3 pt-3 pb-2">
+      <div class="flex items-center gap-2.5">
+        <span class="w-15.5 flex-none text-sm text-dim">{{ t('sessions.filter.groupBy') }}</span>
+        <AppSelect
+          :model-value="groupBy"
+          :options="groupOptions"
+          size="sm"
+          width="100%"
+          class="flex-1"
+          @update:model-value="selectGroup"
+        />
       </div>
-      <div class="csrow">
-        <span class="cslbl">{{ t('sessions.filter.sortBy') }}</span>
-        <div class="csval" style="position: relative" @click.stop="openSortMenu">
-          {{ sortByLabel }}
-          <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <div
-            v-if="sortMenu"
-            class="smenu"
-            style="position: absolute; top: 116%; left: 0; right: 0; z-index: 50"
-            @click.stop
-          >
-            <div v-for="value in SORTBY" :key="value" class="mi" @click="selectSort(value)">
-              {{ t(`sessions.sort.${value}`) }}
-              <Icon
-                v-if="value === sortBy"
-                name="check"
-                class="ck"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-            </div>
-          </div>
-        </div>
+      <div class="flex items-center gap-2.5">
+        <span class="w-15.5 flex-none text-sm text-dim">{{ t('sessions.filter.sortBy') }}</span>
+        <AppSelect
+          :model-value="sortBy"
+          :options="sortOptions"
+          size="sm"
+          width="100%"
+          class="flex-1"
+          @update:model-value="selectSort"
+        />
       </div>
       <!-- Archived sessions are hidden by default; the toggle pulls them in on first
            use (store.loadArchivedSessions) and then only filters, so flipping it is
-           instant. Persisted next to group-by / sort-by. -->
-      <div class="csrow arch" @click="toggleShowArchived">
-        <span class="lcbox" :class="{ on: showArchived }">
-          <Icon
-            v-if="showArchived"
-            name="check"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
+           instant. Persisted next to group-by / sort-by. Cả hàng là vùng bấm — ô tick
+           chỉ hiển thị (tắt pointer cho khỏi lật hai lần). -->
+      <div
+        class="group/arch flex cursor-pointer items-center gap-2 select-none"
+        @click="toggleShowArchived"
+      >
+        <Checkbox :model-value="showArchived" class="pointer-events-none" tabindex="-1" />
+        <span class="text-sm text-muted-foreground group-hover/arch:text-foreground">
+          {{ t('sessionsSearch.archive.show') }}
         </span>
-        <span class="archlbl">{{ t('sessionsSearch.archive.show') }}</span>
       </div>
     </div>
 
@@ -199,21 +173,19 @@
          select-all and the exit affordance are always reachable. (A context-menu
          "Select" that later ends up with 0 selected used to hide the bar entirely,
          stranding the user in select mode with no way to select-all or exit.) -->
-    <div v-if="store.selecting" class="bulkbar">
+    <div
+      v-if="store.selecting"
+      class="flex items-center gap-2 border-b bg-muted px-3 py-2 text-sm text-foreground"
+    >
+      <!-- Cụm trái (ô tick + nhãn) là một vùng bấm cho chọn hết / bỏ chọn hết. -->
       <span
-        class="bulkall"
+        class="inline-flex min-w-0 cursor-pointer items-center gap-2"
         :title="
           allFilteredSelected ? t('sessions.sidebar.deselectAll') : t('sessions.sidebar.selectAll')
         "
         @click="selectAllFiltered"
       >
-        <span class="lcbox" :class="{ on: allFilteredSelected }">
-          <Icon
-            v-if="allFilteredSelected"
-            name="check"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-        </span>
+        <Checkbox :model-value="allFilteredSelected" class="pointer-events-none" tabindex="-1" />
         <span>
           {{
             selectedCount
@@ -222,29 +194,34 @@
           }}
         </span>
       </span>
-      <span style="flex: 1" />
-      <span
+      <span class="flex-1" />
+      <Button
         v-if="selectedCount"
-        class="del"
+        variant="ghost"
+        size="iconSm"
+        class="size-5.5 text-destructive hover:text-destructive [&_svg]:size-3.5"
         :title="t('sessions.sidebar.deleteSelected')"
-        style="color: var(--destructive)"
         @click="askBulkRemove"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </span>
-      <span
-        class="del"
+        <Icon name="trash" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-5.5 text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
         :title="t('sessions.sidebar.selectExit')"
         @click="store.setSelectMode(false)"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </span>
+        <Icon name="x" />
+      </Button>
     </div>
 
-    <div class="lscroll">
+    <!-- Hàng cuộn dưới container proto `p-2 pt-0`: chỉ lề hai bên + đáy; padding dưới
+         của header đã lo khe trên hàng đầu. -->
+    <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       <template v-if="groupBy === 'none'">
         <template v-if="filtered.length">
-          <div class="grpitems">
+          <div>
             <SessionListItem
               v-for="s in flatPage.items"
               :key="s.id"
@@ -258,38 +235,46 @@
               @ctxmenu="(p) => openCtx(p, s)"
             />
           </div>
-          <div v-if="flatPage.totalPages > 1" class="pager">
-            <button
-              class="pgbtn"
+          <!-- Phân trang mỗi khu: trước/sau + "Trang X / Y", căn giữa, nhẹ. -->
+          <div
+            v-if="flatPage.totalPages > 1"
+            class="mt-0.5 mb-1.5 flex items-center justify-center gap-2 py-0.5"
+          >
+            <Button
+              variant="ghost"
+              size="iconSm"
+              :class="PAGE_BTN"
               type="button"
               :disabled="flatPage.page <= 1"
               :title="t('sessions.list.pagePrev')"
               @click="setPage(FLAT_KEY, flatPage.page - 1)"
             >
-              <Icon name="chev" class="pg-prev" />
-            </button>
-            <span class="pglbl">
+              <Icon name="chev" class="rotate-90" />
+            </Button>
+            <span class="min-w-17 text-center text-sm text-muted-foreground tabular-nums">
               {{ t('sessions.list.pageOf', { page: flatPage.page, total: flatPage.totalPages }) }}
             </span>
-            <button
-              class="pgbtn"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              :class="PAGE_BTN"
               type="button"
               :disabled="flatPage.page >= flatPage.totalPages"
               :title="t('sessions.list.pageNext')"
               @click="setPage(FLAT_KEY, flatPage.page + 1)"
             >
-              <Icon name="chev" class="pg-next" />
-            </button>
+              <Icon name="chev" class="-rotate-90" />
+            </Button>
           </div>
         </template>
-        <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
+        <div v-else :class="EMPTY">{{ t('sessions.list.noMatch') }}</div>
       </template>
       <!-- Chế độ "Nhóm": cây kiểu trang Notion, phiên con nằm dưới phiên cha. Cây đã
            được làm phẳng thành mảng có `depth` (useSessionTree) nên đây vẫn là MỘT
            v-for phẳng — hàng phiên giữ nguyên rename inline / select / context menu. -->
       <template v-else-if="groupBy === 'tree'">
         <template v-if="treeRows.length">
-          <div class="grpitems">
+          <div>
             <SessionListItem
               v-for="r in treeRows"
               :key="r.session.id"
@@ -311,48 +296,72 @@
               @toggle-children="toggleTree(r.session.engineId)"
             />
           </div>
-          <div v-if="treeTotalPages > 1" class="pager">
-            <button
-              class="pgbtn"
+          <div
+            v-if="treeTotalPages > 1"
+            class="mt-0.5 mb-1.5 flex items-center justify-center gap-2 py-0.5"
+          >
+            <Button
+              variant="ghost"
+              size="iconSm"
+              :class="PAGE_BTN"
               type="button"
               :disabled="treePage <= 1"
               :title="t('sessions.list.pagePrev')"
               @click="setTreePage(treePage - 1)"
             >
-              <Icon name="chev" class="pg-prev" />
-            </button>
-            <span class="pglbl">
+              <Icon name="chev" class="rotate-90" />
+            </Button>
+            <span class="min-w-17 text-center text-sm text-muted-foreground tabular-nums">
               {{ t('sessions.list.pageOf', { page: treePage, total: treeTotalPages }) }}
             </span>
-            <button
-              class="pgbtn"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              :class="PAGE_BTN"
               type="button"
               :disabled="treePage >= treeTotalPages"
               :title="t('sessions.list.pageNext')"
               @click="setTreePage(treePage + 1)"
             >
-              <Icon name="chev" class="pg-next" />
-            </button>
+              <Icon name="chev" class="-rotate-90" />
+            </Button>
           </div>
         </template>
-        <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
+        <div v-else :class="EMPTY">{{ t('sessions.list.noMatch') }}</div>
       </template>
       <template v-else>
         <template v-if="groups.length">
+          <!-- Mỗi nhóm là một khối riêng, cách nhau 11px. -->
           <div
-            v-for="grp in groups"
+            v-for="(grp, gi) in groups"
             :key="grp.key"
-            class="grp"
-            :class="{ col: collapsed[grp.key] }"
+            class="mb-0.5"
+            :class="{ 'mt-2.75': gi > 0 }"
             :data-grp="grp.key"
           >
-            <div class="grph" @click="toggleGroup(grp.key)">
-              <Icon name="chev" class="gchv" />
-              <span class="pdot" :style="{ background: grp.dot }" />
-              <span class="gnm">{{ grp.label }}</span>
-              <span class="gct">{{ grp.total }}</span>
+            <!-- Header nhóm (provider / model / agent / unread): nhãn mục nhỏ trên nền
+                 sidebar, dính trên cùng khi cuộn qua các hàng của nó; hairline dưới để
+                 đọc như một vạch chia chứ không phải thêm một hàng. -->
+            <div
+              class="group/grph sticky top-0 z-2 flex cursor-pointer items-center gap-2 border-b bg-sidebar px-2.25 py-1.75 select-none hover:bg-accent"
+              @click="toggleGroup(grp.key)"
+            >
+              <Icon
+                name="chev"
+                class="size-3 flex-none text-faint transition-transform motion-reduce:transition-none"
+                :class="[collapsed[grp.key] ? '-rotate-90' : '']"
+              />
+              <span class="size-2.25 flex-none rounded-sm" :style="{ background: grp.dot }" />
+              <span
+                class="text-xs font-semibold text-muted-foreground group-hover/grph:text-foreground"
+              >
+                {{ grp.label }}
+              </span>
+              <span class="ml-auto text-xs text-muted-foreground tabular-nums">
+                {{ grp.total }}
+              </span>
             </div>
-            <div class="grpitems">
+            <div class="pt-1" :class="{ hidden: collapsed[grp.key] }">
               <SessionListItem
                 v-for="s in grp.items"
                 :key="s.id"
@@ -365,85 +374,102 @@
                 @click="$emit('select', s.id)"
                 @ctxmenu="(p) => openCtx(p, s)"
               />
-              <div v-if="grp.totalPages > 1" class="pager">
-                <button
-                  class="pgbtn"
+              <div
+                v-if="grp.totalPages > 1"
+                class="mt-0.5 mb-1.5 flex items-center justify-center gap-2 py-0.5"
+              >
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  :class="PAGE_BTN"
                   type="button"
                   :disabled="grp.page <= 1"
                   :title="t('sessions.list.pagePrev')"
                   @click="setPage(grp.key, grp.page - 1)"
                 >
-                  <Icon name="chev" class="pg-prev" />
-                </button>
-                <span class="pglbl">
+                  <Icon name="chev" class="rotate-90" />
+                </Button>
+                <span class="min-w-17 text-center text-sm text-muted-foreground tabular-nums">
                   {{ t('sessions.list.pageOf', { page: grp.page, total: grp.totalPages }) }}
                 </span>
-                <button
-                  class="pgbtn"
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  :class="PAGE_BTN"
                   type="button"
                   :disabled="grp.page >= grp.totalPages"
                   :title="t('sessions.list.pageNext')"
                   @click="setPage(grp.key, grp.page + 1)"
                 >
-                  <Icon name="chev" class="pg-next" />
-                </button>
+                  <Icon name="chev" class="-rotate-90" />
+                </Button>
               </div>
             </div>
           </div>
         </template>
-        <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
+        <div v-else :class="EMPTY">{{ t('sessions.list.noMatch') }}</div>
       </template>
     </div>
 
     <!-- Cross-session content search (docs/features/cross-session-search.md). The box
          above still filters TITLES instantly and locally; this section answers the
-         other half — which transcript, anywhere, contains this text. -->
-    <div v-if="searchOpen" class="csearch">
-      <div class="csh">
-        <Icon name="search" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="csttl">{{ t('sessionsSearch.section.title') }}</span>
-        <span v-if="hits.length" class="cscount">{{ hits.length }}</span>
+         other half — which transcript, anywhere, contains this text. Neo dưới danh
+         sách (danh sách co lại), trần 46% để phía trên luôn còn vài hàng, tự cuộn. -->
+    <div v-if="searchOpen" class="flex max-h-[46%] min-h-0 flex-none flex-col border-t bg-muted">
+      <div class="flex items-center gap-1.75 px-2.75 py-1.75 text-muted-foreground">
+        <Icon name="search" class="size-3" />
+        <span class="text-xs font-semibold">{{ t('sessionsSearch.section.title') }}</span>
+        <span v-if="hits.length" class="ml-auto text-xs text-muted-foreground tabular-nums">
+          {{ hits.length }}
+        </span>
       </div>
-      <div class="csbody">
-        <div v-if="searchLoading" class="csnote">{{ t('sessionsSearch.loading') }}</div>
-        <div v-else-if="searchError" class="csnote err">{{ searchError }}</div>
+      <div class="overflow-y-auto px-1.75 pb-1.75">
+        <div v-if="searchLoading" :class="NOTE">{{ t('sessionsSearch.loading') }}</div>
+        <div v-else-if="searchError" :class="NOTE" class="text-destructive">
+          {{ searchError }}
+        </div>
         <template v-else-if="hits.length">
-          <div class="csnote">{{ t('sessionsSearch.hint') }}</div>
+          <div :class="NOTE">{{ t('sessionsSearch.hint') }}</div>
           <div
             v-for="h in hits"
             :key="`${h.sessionId}:${h.messageId}`"
-            class="cshit"
+            class="cursor-pointer rounded-md border border-transparent px-2 py-1.75 hover:bg-accent"
             @click="openHit(h)"
           >
-            <div class="cshead">
-              <span class="csname">{{ h.sessionTitle }}</span>
-              <span class="cstime">{{ hitTime(h.at) }}</span>
+            <div class="flex items-center gap-2">
+              <span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {{ h.sessionTitle }}
+              </span>
+              <span class="flex-none text-xs text-muted-foreground tabular-nums">
+                {{ hitTime(h.at) }}
+              </span>
             </div>
-            <div class="cssnip">
-              <span class="csrole">{{ t(`sessionsSearch.role.${h.role}`) }}</span>
-              <span v-for="(part, i) in snippetParts(h)" :key="i" :class="{ hl: part.hit }">
+            <!-- Hai dòng ngữ cảnh là đủ nhận ra kết quả; phần còn lại nằm trong phiên. -->
+            <div class="mt-0.75 line-clamp-2 text-xs leading-(--lh-sm) text-muted-foreground">
+              <span class="mr-1.25 text-muted-foreground">
+                {{ t(`sessionsSearch.role.${h.role}`) }}
+              </span>
+              <span
+                v-for="(part, i) in snippetParts(h)"
+                :key="i"
+                :class="{ 'rounded-sm bg-primary/16 font-semibold text-foreground': part.hit }"
+              >
                 {{ part.text }}
               </span>
             </div>
           </div>
-          <div v-if="searchTruncated" class="csnote">
+          <div v-if="searchTruncated" :class="NOTE">
             {{ t('sessionsSearch.truncated', { n: hits.length }) }}
           </div>
           <!-- Phiên đã lưu trữ bị loại khỏi kết quả. Nói ra, nếu không người dùng
                tìm mãi không thấy mà không hiểu vì sao. -->
-          <div v-if="searchArchivedHidden > 0" class="csnote">
+          <div v-if="searchArchivedHidden > 0" :class="NOTE">
             {{ t('sessionsSearch.archivedHidden', { n: searchArchivedHidden }) }}
           </div>
         </template>
-        <div v-else class="csnote">{{ t('sessionsSearch.empty', { q: filter.trim() }) }}</div>
+        <div v-else :class="NOTE">{{ t('sessionsSearch.empty', { q: filter.trim() }) }}</div>
       </div>
     </div>
-
-    <div
-      v-if="groupMenu || sortMenu"
-      style="position: fixed; inset: 0; z-index: 40"
-      @click="closeMenus"
-    />
 
     <SessionRunPicker
       v-if="runPickerFor"
@@ -484,6 +510,25 @@ import {
 import AppContextMenu from '~/components/common/AppContextMenu.vue'
 
 const props = defineProps<{ sessions: Session[]; activeId: number | null; listWidth: number }>()
+
+// ── Class dùng chung trong template ──
+const LIST_CLASS = 'flex min-w-0 flex-col overflow-hidden border-r-0 bg-background'
+// Bề rộng cột áp inline kèm !important để thắng `.list{flex:0 0 auto}` của prototype và
+// luật media ≤720px `width:192px !important` ở mọi breakpoint, cập nhật sống khi kéo.
+const listStyle = computed(() => ({
+  flex: `0 0 ${props.listWidth}px !important`,
+  width: `${props.listWidth}px !important`,
+}))
+// Menu tự dựng (neo absolute dưới nút) + hàng mục.
+const MENU =
+  'absolute z-50 min-w-44 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md'
+const ITEM =
+  'flex min-w-0 cursor-pointer items-center gap-2 rounded-sm px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground [&>svg]:size-3.5'
+const PAGE_BTN =
+  'size-5.5 text-muted-foreground hover:text-primary disabled:opacity-50 [&_svg]:size-3.5'
+const EMPTY = 'px-3.5 py-8.5 text-center text-sm text-muted-foreground'
+const NOTE = 'px-1 py-1.5 text-xs leading-(--lh-sm) text-muted-foreground'
+
 const emit = defineEmits<{ select: [id: number] }>()
 
 const { t } = useI18n()
@@ -616,24 +661,16 @@ function selectAllFiltered() {
     })
 }
 
-// Group-by / sort-by dropdown open state (backdrop pattern mirrors SessionDetail
-// `.dproj`). Only one is open at a time — opening one closes the other.
-const groupMenu = ref(false)
-const sortMenu = ref(false)
-function openGroupMenu() {
-  groupMenu.value = !groupMenu.value
-  sortMenu.value = false
-}
-function openSortMenu() {
-  sortMenu.value = !sortMenu.value
-  groupMenu.value = false
-}
+// Group-by / sort-by: AppSelect (ruột shadcn Select) tự lo mở/đóng, click ra ngoài.
+const groupOptions = computed(() =>
+  GROUPBY.map(([value]) => ({ value, label: t(`sessions.team.${value}`) })),
+)
+const sortOptions = computed(() =>
+  SORTBY.map((value) => ({ value, label: t(`sessions.sort.${value}`) })),
+)
 
 // Per-group collapse state, keyed by the group's stable key (groupKeyOf).
 const collapsed = ref<Record<string, boolean>>({})
-
-const groupByLabel = computed(() => t(`sessions.team.${groupBy.value}`))
-const sortByLabel = computed(() => t(`sessions.sort.${sortBy.value}`))
 
 // Epoch ms of an ISO timestamp (0 when missing/invalid) — for the time-based sorts.
 const filtered = computed(() => {
@@ -753,15 +790,9 @@ const groups = computed(() =>
 
 function selectGroup(value: string) {
   groupBy.value = value
-  groupMenu.value = false
 }
-function selectSort(value: SortBy) {
-  sortBy.value = value
-  sortMenu.value = false
-}
-function closeMenus() {
-  groupMenu.value = false
-  sortMenu.value = false
+function selectSort(value: string) {
+  sortBy.value = value as SortBy
 }
 
 // ── Tạo phiên: đơn, hay nằm trong một nhóm ───────────────────────────────────
@@ -894,285 +925,3 @@ function toggleFoldAll() {
   collapsed.value = next
 }
 </script>
-
-<style scoped>
-/* Menu tạo phiên sống TRONG `.list` (overflow:hidden), nên nó không được rộng hơn cột.
-   240px vừa khít cột hẹp nhất mà danh sách có thể bị kéo xuống. */
-.newmenu {
-  max-width: 240px;
-}
-.newmenu .mi {
-  min-width: 0;
-}
-/* Nhãn nhóm mục. KHÔNG dùng `.cslbl` — class đó là cột nhãn của drawer bộ lọc và có
-   `width: 62px`, nên "Trong nhóm" bị bẻ làm hai dòng. */
-.nmlbl {
-  padding: 4px 10px;
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: nowrap;
-}
-/* Nhãn mang tên phiên: một dòng, cắt bằng ellipsis. Tên đầy đủ ở `title`. */
-.nmt {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* In select mode every row's checkbox stays visible (the shared prototype.css
-   only reveals .lcbox on hover / when selected). :deep reaches the child rows. */
-.list.selecting :deep(.lcbox) {
-  display: grid;
-}
-/* Bulk-bar action icons: the shared .del rule is scoped to .li, so style the
-   bar's own clear/delete affordances here (clickable, hover feedback). */
-.bulkbar .del {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  color: var(--muted-foreground);
-}
-.bulkbar .del:hover {
-  color: var(--foreground);
-  background: var(--accent-wash);
-}
-.bulkbar .lcbox {
-  cursor: pointer;
-}
-/* Left cluster (checkbox + label) is one hit target for select-all / deselect-all. */
-.bulkall {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  min-width: 0;
-}
-/* Proto zinc parity — `.list` is SHARED (Library / Projects / Infra / Workflows
-   all reuse it), so the reskin stays scoped to this column:
-     · background → var(--background) (the global fills var(--bgPanel), the AWOG
-       gray seam that sits a step above the zinc app background);
-     · border-right → none. The .rsz drag handle already paints the one hairline
-       between list and detail — the panel edge stacked a second line 2.5px away. */
-.list {
-  background: var(--background);
-  border-right: none;
-}
-/* The global .ltop pads 11px with an 8px gap and a bottom hairline; the proto list
-   header is p-2 + gap-1.5 on the same background as the rows — tighter, and no
-   divider, so the search field reads as one band with the two ghost buttons. */
-.ltop {
-  padding: 8px;
-  gap: 6px;
-  border-bottom: none;
-}
-/* Per-group / flat pager: prev/next + "Page X / Y" at the bottom of a list section.
-   Centered, subtle — sits under the rows like the old load-more link but with
-   explicit page control. */
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 2px 0 6px;
-  padding: 2px 0;
-}
-.pgbtn {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-.pgbtn:hover:not(:disabled) {
-  color: var(--primary);
-  background: var(--accent-wash);
-}
-.pgbtn:disabled {
-  color: var(--muted-foreground);
-  cursor: default;
-  opacity: 0.5;
-}
-.pgbtn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.pgbtn .icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-/* The sprite only ships a down-chevron; rotate it into left/right arrows. */
-.pg-prev {
-  transform: rotate(90deg);
-}
-.pg-next {
-  transform: rotate(-90deg);
-}
-.pglbl {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 12px;
-  color: var(--muted-foreground);
-  min-width: 68px;
-  text-align: center;
-}
-/* "Show archived" row in the filter drawer. The shared .lcbox only shows on a row
-   hover / when checked — here it is a standing checkbox, so force it visible. */
-.sfdrawer .csrow.arch {
-  gap: 9px;
-  cursor: pointer;
-  user-select: none;
-}
-.sfdrawer .csrow.arch .lcbox {
-  display: grid;
-}
-.archlbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.sfdrawer .csrow.arch:hover .archlbl {
-  color: var(--foreground);
-}
-/* Content-search section: docked under the (shrinking) list, capped so the list
-   above always keeps some rows, with its own scroll for the hits. */
-.csearch {
-  flex: 0 0 auto;
-  max-height: 46%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-top: 1px solid var(--border);
-  background: var(--muted);
-}
-.csh {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 11px;
-  color: var(--muted-foreground);
-}
-.csttl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 700;
-}
-.cscount {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-}
-.csbody {
-  overflow-y: auto;
-  padding: 0 7px 7px;
-}
-.csnote {
-  padding: 6px 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.csnote.err {
-  color: var(--destructive);
-}
-.cshit {
-  padding: 7px 8px;
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-.cshit:hover {
-  background: var(--accent-wash);
-}
-.cshead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.csname {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cstime {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-}
-.cssnip {
-  margin-top: 3px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-  /* Two lines of context is enough to recognise the hit; the rest is in the session. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.csrole {
-  color: var(--muted-foreground);
-  margin-right: 5px;
-}
-.cssnip .hl {
-  background: color-mix(in srgb, var(--primary) 16%, transparent);
-  color: var(--foreground);
-  border-radius: var(--r-xs);
-  font-weight: 650;
-}
-/* Group headers (provider / model / agent / unread buckets): shadcn section-label
-   idiom — small, uppercase, tracked — on the sidebar surface, sticky over its rows. */
-.grph {
-  background: var(--sidebar);
-}
-.grph:hover {
-  background: var(--accent-wash);
-}
-.grph .gnm {
-  color: var(--muted-foreground);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.grph:hover .gnm {
-  color: var(--foreground);
-}
-.grph .gct {
-  color: var(--muted-foreground);
-}
-/* Rows scroll under proto's `p-2 pt-0` container (was 7px 11px for the old flat
-   list): side/bottom insets only — the header's own bottom padding supplies the
-   gap above the first row. The global `.grpitems{padding-top:4px}` still wants a
-   sliver for the top-level wrappers, so pin them to 0 (nested .grp > .grpitems
-   keeps its 4px under a sticky .grph). */
-.lscroll {
-  padding: 0 8px 8px;
-}
-.lscroll > .grpitems {
-  padding-top: 0;
-}
-.listempty {
-  color: var(--muted-foreground);
-}
-</style>

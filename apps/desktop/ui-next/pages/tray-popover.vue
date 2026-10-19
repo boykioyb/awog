@@ -1,79 +1,120 @@
 <template>
-  <div class="tp">
-    <header class="tp-hd">
-      <span class="tp-logo"><Icon name="home" /></span>
-      <div class="tp-hdtext">
-        <div class="tp-title">AWOG</div>
-        <div class="tp-sub">
+  <!-- Ghim kín cửa sổ (fixed inset-0) để popover không bao giờ cuộn cả thân —
+       chỉ vùng giữa cuộn. -->
+  <div class="fixed inset-0 flex flex-col overflow-hidden bg-background text-base text-foreground">
+    <header class="flex shrink-0 items-center gap-2.5 border-b px-3.5 py-3">
+      <span class="grid size-7 shrink-0 place-items-center rounded-md bg-selected text-primary">
+        <Icon name="home" />
+      </span>
+      <div class="min-w-0">
+        <div class="font-semibold">AWOG</div>
+        <div class="text-sm text-muted-foreground tabular-nums">
           {{ t('tray.todayUsage', { cost: costLabel, tokens: tokenLabel }) }}
         </div>
       </div>
     </header>
 
-    <div class="tp-scroll">
+    <!-- min-h-0: cuộn vùng này thay vì để popover phình ra. -->
+    <div class="flex min-h-0 flex-auto flex-col gap-3 overflow-y-auto px-3 py-2.5">
       <!-- Provider limits — compact: one line per limit, grouped per account -->
-      <section class="tp-sec">
-        <div class="tp-sech">{{ t('tray.section.limits') }}</div>
-        <div v-if="rlGroups.length" :key="refreshNonce" class="tp-rl">
-          <div v-for="g in rlGroups" :key="g.id" class="rl-acct">
-            <div class="rl-acctname">{{ g.label }}</div>
-            <div v-for="row in g.rows" :key="row.type" class="rl-row">
-              <span class="rl-type">{{ row.typeLabel }}</span>
-              <span class="rl-bar">
-                <i :style="{ width: row.pct + '%', background: row.color }" />
+      <section class="flex flex-col gap-1.5">
+        <div class="text-xs font-medium text-muted-foreground">{{ t('tray.section.limits') }}</div>
+        <div v-if="rlGroups.length" :key="refreshNonce" class="flex flex-col gap-2.5">
+          <div v-for="g in rlGroups" :key="g.id" class="flex flex-col gap-1">
+            <div class="truncate text-sm font-semibold">{{ g.label }}</div>
+            <div v-for="row in g.rows" :key="row.type" class="flex items-center gap-2">
+              <span class="w-23 shrink-0 truncate text-sm text-muted-foreground">
+                {{ row.typeLabel }}
               </span>
-              <span class="rl-pct tnum" :style="{ color: row.color }">{{ row.pct }}%</span>
-              <span class="rl-reset tnum">{{ row.reset }}</span>
+              <span class="h-1.5 flex-auto overflow-hidden rounded-full bg-muted">
+                <i
+                  class="block h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none"
+                  :class="row.bar"
+                  :style="{ width: row.pct + '%' }"
+                />
+              </span>
+              <span class="w-8.5 shrink-0 text-right text-sm tabular-nums" :class="row.text">
+                {{ row.pct }}%
+              </span>
+              <span class="w-6.5 shrink-0 text-right text-xs text-faint tabular-nums">
+                {{ row.reset }}
+              </span>
             </div>
           </div>
         </div>
-        <div v-else class="tp-empty">
+        <div v-else class="px-0.5 pt-0.5 pb-1 text-sm text-faint">
           {{ rlLoading ? t('tray.loading') : t('tray.empty.limits') }}
         </div>
       </section>
 
       <!-- Running — tasks (with %) + streaming sessions -->
-      <section v-if="running.length" class="tp-sec">
-        <div class="tp-sech">{{ t('tray.section.running') }} · {{ running.length }}</div>
-        <button v-for="r in running" :key="r.key" class="tp-row" @click="go(r.cmd)">
-          <span class="tp-dot pulse" :style="{ background: r.color }" />
-          <span class="tp-rtitle">{{ r.title }}</span>
-          <span class="tp-rmeta tnum">{{ r.meta }}</span>
-        </button>
+      <section v-if="running.length" class="flex flex-col gap-1.5">
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('tray.section.running') }} · {{ running.length }}
+        </div>
+        <Button
+          v-for="r in running"
+          :key="r.key"
+          variant="ghost"
+          class="h-auto w-full justify-start gap-2 px-2.5 py-1.5 text-left text-base font-normal"
+          @click="go(r.cmd)"
+        >
+          <span
+            class="size-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none"
+            :class="r.dot"
+          />
+          <span class="min-w-0 flex-1 truncate font-medium">{{ r.title }}</span>
+          <span class="shrink-0 text-sm text-muted-foreground tabular-nums">{{ r.meta }}</span>
+        </Button>
       </section>
 
       <!-- Needs action — awaiting sessions + tasks -->
-      <section v-if="attention.length" class="tp-sec">
-        <div class="tp-sech">{{ t('tray.section.attention') }} · {{ attention.length }}</div>
-        <button v-for="a in attention" :key="a.key" class="tp-row" @click="go(a.cmd)">
-          <span class="tp-dot" :style="{ background: 'var(--amber)' }" />
-          <span class="tp-rtitle">{{ a.title }}</span>
-          <span class="tp-rmeta" :style="{ color: 'var(--amber)' }">{{ a.meta }}</span>
-        </button>
+      <section v-if="attention.length" class="flex flex-col gap-1.5">
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('tray.section.attention') }} · {{ attention.length }}
+        </div>
+        <Button
+          v-for="a in attention"
+          :key="a.key"
+          variant="ghost"
+          class="h-auto w-full justify-start gap-2 px-2.5 py-1.5 text-left text-base font-normal"
+          @click="go(a.cmd)"
+        >
+          <span class="size-2 shrink-0 rounded-full" :class="a.dot" />
+          <span class="min-w-0 flex-1 truncate font-medium">{{ a.title }}</span>
+          <span class="shrink-0 text-sm text-warning">{{ a.meta }}</span>
+        </Button>
       </section>
 
       <!-- Recent sessions (excludes the active ones surfaced above) -->
-      <section class="tp-sec">
-        <div class="tp-sech">{{ t('tray.section.recent') }}</div>
-        <button
+      <section class="flex flex-col gap-1.5">
+        <div class="text-xs font-medium text-muted-foreground">{{ t('tray.section.recent') }}</div>
+        <Button
           v-for="s in recent"
           :key="s.id"
-          class="tp-row"
+          variant="ghost"
+          class="h-auto w-full justify-start gap-2 px-2.5 py-1.5 text-left text-base font-normal"
           @click="go({ kind: 'session', engineId: s.engineId })"
         >
-          <span class="tp-dot" :style="{ background: s.color }" />
-          <span class="tp-rtitle">{{ s.title }}</span>
-          <span class="tp-rmeta tnum">{{ s.when }}</span>
-        </button>
-        <div v-if="!recent.length" class="tp-empty">{{ t('tray.empty.recent') }}</div>
+          <span class="size-2 shrink-0 rounded-full" :class="s.dot" />
+          <span class="min-w-0 flex-1 truncate font-medium">{{ s.title }}</span>
+          <span class="shrink-0 text-sm text-muted-foreground tabular-nums">{{ s.when }}</span>
+        </Button>
+        <div v-if="!recent.length" class="px-0.5 pt-0.5 pb-1 text-sm text-faint">
+          {{ t('tray.empty.recent') }}
+        </div>
       </section>
     </div>
 
-    <footer class="tp-foot">
-      <button class="tp-fbtn" @click="go({ kind: 'activity' })">
-        <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <footer class="shrink-0 border-t px-3 py-2">
+      <Button
+        variant="outline"
+        class="w-full border-selected-border bg-selected text-primary"
+        @click="go({ kind: 'activity' })"
+      >
+        <Icon name="act" />
         {{ t('tray.openActivity') }}
-      </button>
+      </Button>
     </footer>
   </div>
 </template>
@@ -93,7 +134,7 @@ import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useSidecar } from '~/composables/useSidecar'
 import { useAccounts } from '~/composables/useAccounts'
-import { useSessionsData } from '~/composables/useSessionsData'
+import type { SessionStatus } from '~/composables/useSessionsData'
 import { formatCost, formatTokens } from '~/composables/useActivity'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import type { AwogTrayCommand } from '~/types/awog-bridge'
@@ -105,7 +146,21 @@ const sessions = useSessionsStore()
 const tasks = useTasksStore()
 const sc = useSidecar()
 const { accounts } = useAccounts()
-const { STATUS_COLOR } = useSessionsData()
+// Chấm trạng thái phiên — class màu ngữ nghĩa (cùng ý nghĩa với STATUS_COLOR ở
+// useSessionsData, nhưng ở dạng utility thay cho var màu inline).
+const STATUS_DOT: Record<SessionStatus, string> = {
+  idle: 'bg-faint',
+  streaming: 'bg-primary',
+  awaiting: 'bg-warning',
+  done: 'bg-success',
+  error: 'bg-destructive',
+}
+// Thanh hạn mức: đầy → đỏ, ≥90% → vàng, còn lại → màu brand.
+const LIMIT_TONE = {
+  full: { bar: 'bg-destructive', text: 'text-destructive' },
+  near: { bar: 'bg-warning', text: 'text-warning' },
+  ok: { bar: 'bg-primary', text: 'text-primary' },
+} as const
 
 const today = ref<{ tokens: number; cost: number }>({ tokens: 0, cost: 0 })
 const rateLimitsRaw = ref<{ id: string; label: string; entries: UsageEntry[] }[]>([])
@@ -127,18 +182,20 @@ const rlGroups = computed(() =>
     label: acc.label,
     rows: acc.entries.map((e) => {
       const u = Math.min(1, Math.max(0, e.utilization))
+      const tone = LIMIT_TONE[u >= 1 ? 'full' : u >= 0.9 ? 'near' : 'ok']
       return {
         type: e.rateLimitType,
         typeLabel: t(`activity.rateLimit.type.${e.rateLimitType}`),
         pct: Math.round(u * 100),
-        color: u >= 1 ? 'var(--danger)' : u >= 0.9 ? 'var(--amber)' : 'var(--accent)',
+        bar: tone.bar,
+        text: tone.text,
         reset: formatResetsIn(e.resetsAt),
       }
     }),
   })),
 )
 
-type Row = { key: string; title: string; meta: string; color: string; cmd: AwogTrayCommand }
+type Row = { key: string; title: string; meta: string; dot: string; cmd: AwogTrayCommand }
 
 const running = computed<Row[]>(() => {
   const out: Row[] = []
@@ -147,7 +204,7 @@ const running = computed<Row[]>(() => {
       key: `t-${task.id}`,
       title: task.title,
       meta: `${tasks.progressOf(task).pct}%`,
-      color: 'var(--accent)',
+      dot: STATUS_DOT.streaming,
       cmd: { kind: 'task', id: task.id },
     })
   for (const s of runningSessions.value)
@@ -155,7 +212,7 @@ const running = computed<Row[]>(() => {
       key: `s-${s.engineId}`,
       title: s.title || t('tray.untitledSession'),
       meta: t('tray.streaming'),
-      color: STATUS_COLOR.streaming,
+      dot: STATUS_DOT.streaming,
       cmd: { kind: 'session', engineId: s.engineId },
     })
   return out
@@ -169,7 +226,7 @@ const attention = computed<Row[]>(() => {
         key: `s-${s.id}`,
         title: s.title,
         meta: t('tray.awaitingReply'),
-        color: 'var(--amber)',
+        dot: STATUS_DOT.awaiting,
         cmd: { kind: 'session', engineId: s.engineId },
       })
   for (const task of tasks.awaitingTasks)
@@ -177,7 +234,7 @@ const attention = computed<Row[]>(() => {
       key: `t-${task.id}`,
       title: task.title,
       meta: t('tray.awaitingApproval'),
-      color: 'var(--amber)',
+      dot: STATUS_DOT.awaiting,
       cmd: { kind: 'task', id: task.id },
     })
   return out
@@ -187,7 +244,7 @@ const attention = computed<Row[]>(() => {
 // streaming/awaiting sessions already surfaced in Running / Needs action.
 const recent = computed(() => {
   const runningIds = new Set(runningSessions.value.map((r) => r.engineId))
-  const out: { id: number; engineId: string; title: string; when: string; color: string }[] = []
+  const out: { id: number; engineId: string; title: string; when: string; dot: string }[] = []
   for (const s of sessions.sessions) {
     if (s.status === 'streaming' || s.status === 'awaiting') continue
     // Need the stable engine id to route the click to the main window's store.
@@ -200,7 +257,7 @@ const recent = computed(() => {
       engineId: s.engineId,
       title: s.title,
       when: s.when,
-      color: STATUS_COLOR[s.status],
+      dot: STATUS_DOT[s.status],
     })
     if (out.length >= 5) break
   }
@@ -297,235 +354,3 @@ function formatResetsIn(ms: number | undefined): string {
   return `${mins % 60}m`
 }
 </script>
-
-<style scoped>
-/* Pin to the whole window via fixed/inset so the popover never produces a body
-   (overall) scroll — only the middle .tp-scroll scrolls. */
-.tp {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-  line-height: 20px;
-  overflow: hidden;
-}
-.tp-hd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.tp-logo {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-sm);
-  background: var(--accentDim);
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-.tp-logo :deep(svg) {
-  width: var(--icon-md);
-  height: var(--icon-md);
-}
-.tp-hdtext {
-  min-width: 0;
-}
-.tp-title {
-  font-weight: 650;
-  line-height: 16px;
-}
-.tp-sub {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-.tp-scroll {
-  flex: 1 1 auto;
-  min-height: 0; /* critical: scroll this region instead of growing the popover */
-  overflow-y: auto;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-}
-.tp-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tp-sech {
-  font-size: 11px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.tp-empty {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  padding: 2px 2px 4px;
-}
-
-/* ── Provider limits: slim one-line rows grouped per account ── */
-.tp-rl {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.rl-acct {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.rl-acctname {
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.rl-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rl-type {
-  flex: 0 0 92px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textMuted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.rl-bar {
-  flex: 1 1 auto;
-  height: 5px;
-  border-radius: var(--r-pill);
-  background: var(--bgInput);
-  overflow: hidden;
-}
-.rl-bar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  transition: width 0.2s;
-}
-.rl-pct {
-  flex: 0 0 34px;
-  text-align: right;
-  font-size: 12px;
-  line-height: 18px;
-}
-.rl-reset {
-  flex: 0 0 26px;
-  text-align: right;
-  font-size: 11px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-
-/* ── Running / attention / recent rows ── */
-.tp-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  text-align: left;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    border-color 0.12s;
-}
-.tp-row:hover {
-  background: var(--bgHover);
-  border-color: var(--border);
-}
-.tp-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.tp-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.tp-dot.pulse {
-  animation: tppulse 1.4s ease-in-out infinite;
-}
-.tp-rtitle {
-  font-weight: 500;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tp-rmeta {
-  flex: 0 0 auto;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-
-/* ── Footer ── */
-.tp-foot {
-  flex: 0 0 auto;
-  padding: 9px 12px;
-  border-top: 1px solid var(--border);
-}
-.tp-fbtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 100%;
-  padding: 8px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
-  font-weight: 550;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.tp-fbtn:hover {
-  background: var(--bgHover);
-}
-.tp-fbtn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-@keyframes tppulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tp-dot.pulse {
-    animation: none;
-  }
-  .rl-bar i {
-    transition: none;
-  }
-}
-</style>

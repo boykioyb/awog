@@ -6,9 +6,9 @@
     lock-scrim
     @close="onCancel"
   >
-    <div class="vch">
-      <p class="vch-sub">{{ t('vpn.challenge.sub', { name }) }}</p>
-      <p class="vch-prompt">{{ promptText }}</p>
+    <div class="flex flex-col gap-2.5">
+      <p class="text-base text-muted-foreground">{{ t('vpn.challenge.sub', { name }) }}</p>
+      <p class="text-lg font-semibold text-foreground">{{ promptText }}</p>
 
       <Input
         ref="input"
@@ -22,12 +22,12 @@
         @keydown.enter.prevent="onSubmit"
       />
 
-      <p class="vch-hint">{{ t('vpn.challenge.hint') }}</p>
+      <p class="text-sm text-muted-foreground">{{ t('vpn.challenge.hint') }}</p>
     </div>
 
     <template #footer>
       <Button variant="outline" @click="onCancel">{{ t('common.cancel') }}</Button>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button :disabled="!code.trim()" variant="default" @click="onSubmit">
         {{ t('vpn.challenge.submit') }}
       </Button>
@@ -87,48 +87,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-.vch {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.vch-sub {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--textDim);
-}
-.vch-prompt {
-  margin: 0;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-  color: var(--text);
-}
-.vch-input {
-  width: 100%;
-  margin-top: 2px;
-  padding: 9px 12px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  /* mono-ok: one-time challenge code — fixed advance keeps the digits apart */
-  font-family: var(--code);
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  letter-spacing: 0.14em;
-  outline: none;
-}
-.vch-input:focus {
-  border-color: var(--accent);
-}
-.vch-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-</style>

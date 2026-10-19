@@ -8,6 +8,19 @@
       <span class="tag" :class="{ acc: schedule.enabled }">
         {{ schedule.enabled ? t('schedules.state.on') : t('schedules.state.off') }}
       </span>
+      <!-- Agent đề xuất (ADR 0108): công tắc mở form để xem lại, không bật thẳng. -->
+      <span v-if="schedule.proposedBy" class="tag acc" :title="t('schedules.state.proposed.hint')">
+        {{ t('schedules.state.proposed') }}
+      </span>
+      <!-- Lệnh chưa duyệt / đã đổi từ lần duyệt (ADR 0108): lượt chạy sẽ bị từ chối. -->
+      <span
+        v-if="schedule.job.kind === 'command' && !schedule.approved"
+        class="tag"
+        :style="{ color: 'var(--danger)' }"
+        :title="t('schedules.state.unapproved.hint')"
+      >
+        {{ t('schedules.state.unapproved') }}
+      </span>
       <span style="flex: 1" />
       <span
         class="tog2"
@@ -70,7 +83,17 @@
       <div v-if="schedule.runs.length === 0" class="scd-empty">
         {{ t('schedules.history.empty') }}
       </div>
-      <div v-for="run in schedule.runs" :key="run.id" class="scd-run">
+      <!-- Bấm cả dòng ⇒ modal chi tiết lượt chạy + log (ScheduleRunModal). -->
+      <div
+        v-for="run in schedule.runs"
+        :key="run.id"
+        class="scd-run"
+        role="button"
+        tabindex="0"
+        :title="t('schedules.run.open')"
+        @click="emit('open-run', run.id)"
+        @keydown.enter="emit('open-run', run.id)"
+      >
         <span class="scd-dot" :style="{ background: statusColor(run.status) }" />
         <span class="scd-run-st">{{ t('schedules.status.' + run.status) }}</span>
         <span class="scd-run-at">{{ when(run.startedAt) }}</span>
@@ -82,7 +105,7 @@
           :title="t('schedules.openSession.hint')"
           variant="outline"
           size="sm"
-          @click="emit('open-session', run.sessionId)"
+          @click.stop="emit('open-session', run.sessionId)"
         >
           {{ t('schedules.openSession') }}
         </Button>
@@ -96,9 +119,9 @@
 // Chi tiết một lịch: biểu thức, việc sẽ chạy, mốc kế tiếp/lần cuối và vài lần
 // chạy gần đây. Mọi hành động đều emit lên page — component này không gọi store.
 import { computed } from 'vue'
-import type { Schedule, ScheduleRunStatus } from '~/stores/schedules'
+import type { Schedule } from '~/stores/schedules'
 import { useProjects } from '~/composables/useProjects'
-import { describeTrigger, formatWhen } from './schedule-format'
+import { describeTrigger, formatWhen, statusColor } from './schedule-format'
 import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ schedule: Schedule }>()
@@ -108,6 +131,7 @@ const emit = defineEmits<{
   toggle: []
   run: []
   'open-session': [sessionId: string]
+  'open-run': [runId: string]
 }>()
 
 const { t, locale } = useI18n()
@@ -121,6 +145,9 @@ const jobSummary = computed(() => {
   if (job.kind === 'session-prompt') {
     const where = job.projectId ? ` · ${projectName(job.projectId)}` : ''
     return `${t('schedules.job.sessionPrompt')}${where} · ${job.settings.mode}`
+  }
+  if (job.kind === 'command') {
+    return `${t('schedules.job.command')} · ${[job.program, ...job.args].join(' ')}`
   }
   return `${t('schedules.job.workflowTask')} · ${job.workflowId} · ${projectName(job.projectId)}`
 })
@@ -137,13 +164,6 @@ const lastLabel = computed(() => {
   const status = s.lastStatus ? t(`schedules.status.${s.lastStatus}`) : ''
   return `${when(s.lastRunAt)} · ${status}`
 })
-
-function statusColor(status: ScheduleRunStatus): string {
-  if (status === 'ok') return 'var(--accent)'
-  if (status === 'error') return 'var(--danger)'
-  if (status === 'running') return 'var(--warn)'
-  return 'var(--textFaint)'
-}
 </script>
 
 <style scoped>
@@ -219,8 +239,14 @@ function statusColor(status: ScheduleRunStatus): string {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 0;
+  padding: 7px 6px;
   border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.scd-run:hover,
+.scd-run:focus-visible {
+  background: var(--bgHover);
+  outline: none;
 }
 .scd-dot {
   width: 8px;

@@ -1,26 +1,37 @@
 <template>
-  <div class="ginit">
-    <div class="ginit-card">
-      <div class="ginit-icon">
+  <div class="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-8">
+    <Card class="w-full max-w-110 gap-2.5 rounded-xl p-6">
+      <div
+        class="mb-0.5 flex size-13 items-center justify-center self-center rounded-xl border bg-muted"
+      >
         <Icon name="git" class="size-6 text-primary" />
       </div>
 
-      <div class="ginit-title">{{ t('git.init.title') }}</div>
-      <div v-if="projectPath" class="ginit-path mono gtrunc" :title="projectPath">
+      <div class="text-center text-base font-semibold">{{ t('git.init.title') }}</div>
+      <!-- mono-ok: đường dẫn project -->
+      <div
+        v-if="projectPath"
+        class="truncate text-center font-mono text-xs text-muted-foreground"
+        :title="projectPath"
+      >
         {{ projectPath }}
       </div>
-      <p class="ginit-desc">{{ t('git.init.desc') }}</p>
+      <p class="mt-0.5 mb-2 text-center text-base text-muted-foreground">
+        {{ t('git.init.desc') }}
+      </p>
 
       <!-- Commit identity — git refuses to commit without user.name / user.email.
            Prefilled from the global config; saved to ~/.gitconfig on init. -->
-      <div class="ginit-sec">
-        <div class="ginit-sec-head">
+      <div class="flex flex-col gap-2 rounded-lg border bg-muted p-3">
+        <div class="flex items-center gap-2">
           <Icon name="globe" class="size-3.5 text-muted-foreground" />
-          <span class="ginit-sec-title">{{ t('git.init.identityTitle') }}</span>
+          <span class="text-sm font-semibold">{{ t('git.init.identityTitle') }}</span>
         </div>
-        <p class="ginit-hint">{{ t('git.init.identityHint') }}</p>
-        <label class="ginit-field">
-          <span class="ginit-label">{{ t('git.identity.name') }}</span>
+        <p class="-mt-0.5 mb-0.5 text-sm text-muted-foreground">{{ t('git.init.identityHint') }}</p>
+        <label class="flex items-center gap-2.5">
+          <span class="w-12 flex-none text-sm font-medium text-muted-foreground">
+            {{ t('git.identity.name') }}
+          </span>
           <Input
             v-model="name"
             :placeholder="t('git.identity.namePlaceholder')"
@@ -28,8 +39,10 @@
             @keydown.enter.prevent="onInit"
           />
         </label>
-        <label class="ginit-field">
-          <span class="ginit-label">{{ t('git.identity.email') }}</span>
+        <label class="flex items-center gap-2.5">
+          <span class="w-12 flex-none text-sm font-medium text-muted-foreground">
+            {{ t('git.identity.email') }}
+          </span>
           <Input
             v-model="email"
             class="font-mono"
@@ -40,13 +53,13 @@
         </label>
       </div>
 
-      <div class="ginit-actions">
+      <div class="mt-1 flex justify-center">
         <Button :disabled="busy" @click="onInit">
           <Icon v-if="!busy" name="plus" class="size-3.5" />
           {{ busy ? t('git.init.initializing') : t('git.init.button') }}
         </Button>
       </div>
-    </div>
+    </Card>
   </div>
 </template>
 
@@ -56,6 +69,7 @@
 // so a fresh repo can commit immediately. Identity is written to the global config
 // (~/.gitconfig) — git config --global doesn't need a repo, so it can run pre-init.
 import Button from '~/components/ui/button/Button.vue'
+import Card from '~/components/ui/card/Card.vue'
 import Input from '~/components/ui/input/Input.vue'
 import { useGitStore } from '~/stores/git'
 
@@ -96,103 +110,3 @@ async function onInit() {
   }
 }
 </script>
-
-<style scoped>
-.ginit {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  overflow-y: auto;
-}
-.ginit-card {
-  width: 100%;
-  max-width: 440px;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  padding: 24px;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-sm);
-}
-.ginit-icon {
-  align-self: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: var(--r-card);
-  background: var(--muted);
-  border: 1px solid var(--border);
-  margin-bottom: 2px;
-}
-.ginit-title {
-  text-align: center;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 600;
-}
-.ginit-path {
-  text-align: center;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.ginit-desc {
-  text-align: center;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--muted-foreground);
-  margin: 2px 0 8px;
-}
-.ginit-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.ginit-sec-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.ginit-sec-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-.ginit-hint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-  margin: -2px 0 2px;
-}
-.ginit-field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ginit-label {
-  flex: none;
-  width: 48px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.ginit-actions {
-  display: flex;
-  justify-content: center;
-  margin-top: 4px;
-}
-</style>

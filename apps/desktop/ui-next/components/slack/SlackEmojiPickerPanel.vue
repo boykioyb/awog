@@ -1,10 +1,5 @@
 <template>
-  <Input
-    ref="searchRef"
-    v-model="query"
-    class="h-[var(--ctrl-h-sm)]"
-    :placeholder="t('slack.emoji.search')"
-  />
+  <Input ref="searchRef" v-model="query" class="h-ctrl-sm" :placeholder="t('slack.emoji.search')" />
   <Tabs v-if="!query.trim()" v-model="tab">
     <TabsList class="w-full">
       <TabsTrigger value="recent" class="flex-1">{{ t('slack.emoji.recent') }}</TabsTrigger>
@@ -20,21 +15,26 @@
       :key="g.id"
       variant="ghost"
       size="iconSm"
-      :class="{ 'slk-grp-on': g.id === group }"
+      :class="{ 'bg-selected ring-1 ring-inset ring-selected-border': g.id === group }"
       :title="t(`slack.emoji.group.${g.id}`)"
       @click="group = g.id"
     >
       {{ g.items[0]?.char }}
     </Button>
   </div>
-  <div ref="gridRef" class="slk-grid">
+  <!-- flex-1 + min-h-0: chiếm phần còn lại của khung picker CAO CỐ ĐỊNH (SlackEmojiPicker) —
+       tab ít/không có emoji cũng không làm khung co lại ⇒ popover không lật trên/dưới. -->
+  <div
+    ref="gridRef"
+    class="grid min-h-0 flex-1 auto-rows-max grid-cols-8 content-start gap-0.5 overflow-y-auto"
+  >
     <Button
       v-for="it in items"
       :key="it.name"
       :ref="(el) => observe(el, it.name)"
       variant="ghost"
       size="iconSm"
-      class="slk-cell"
+      class="text-lg"
       :title="`:${it.name}:`"
       @click="pick(it.name)"
     >
@@ -165,26 +165,3 @@ function pick(name: string): void {
   emit('pick', name)
 }
 </script>
-
-<style scoped>
-.slk-grid {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  grid-auto-rows: max-content;
-  align-content: start;
-  gap: 2px;
-  /* Chiếm phần còn lại của khung picker CAO CỐ ĐỊNH (SlackEmojiPicker): tab ít/không có
-     emoji cũng không làm khung co lại ⇒ popover không lật trên/dưới khi đổi tab. */
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.slk-cell {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-}
-.slk-grp-on {
-  background: var(--accentDim);
-  box-shadow: inset 0 0 0 1px var(--accentBorder);
-}
-</style>

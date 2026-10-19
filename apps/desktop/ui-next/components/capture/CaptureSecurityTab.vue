@@ -1,23 +1,23 @@
 <template>
-  <div class="cap-tab">
-    <div v-if="!rows.length" class="cap-note">
+  <div :class="CAP_TAB">
+    <div v-if="!rows.length" :class="CAP_NOTE">
       <Badge v-if="entry.scheme !== 'https'" variant="warning" class="mr-2">
         {{ entry.scheme }}
       </Badge>
       {{ entry.scheme === 'https' ? t('capture.security.none') : t('capture.security.plain') }}
     </div>
-    <section v-else class="cap-sec">
-      <table class="cap-kv">
-        <tbody>
-          <tr v-for="r in rows" :key="r[0]">
-            <th>{{ r[0] }}</th>
-            <td class="cap-code cap-wrap">
+    <section v-else :class="CAP_SEC">
+      <Table :class="CAP_KV">
+        <TableBody>
+          <TableRow v-for="r in rows" :key="r[0]">
+            <TableHead>{{ r[0] }}</TableHead>
+            <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">
               <Badge v-if="r[2]" :variant="r[2]">{{ r[1] }}</Badge>
               <template v-else>{{ r[1] }}</template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </section>
   </div>
 </template>
@@ -25,6 +25,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CaptureEntry } from '~/types/network-capture'
+import { CAP_KV, CAP_NOTE, CAP_SEC, CAP_TAB } from './capture-ui'
 
 const props = defineProps<{ entry: CaptureEntry }>()
 const { t } = useI18n()

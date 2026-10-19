@@ -1,25 +1,62 @@
 <template>
-  <div
-    ref="rootRef"
-    class="asel"
-    :class="{ sm: size === 'sm', ghost: variant === 'ghost' }"
-    :style="{ width }"
-  >
+  <!-- `asel` / `aseltrigger` giữ làm hook: LogtimeDay, LibraryScopePicker,
+       WorkspaceIssueSidebar còn ghi đè bằng `:deep(.asel…)` cho tới khi các file đó
+       được chuyển. Không mang style nào ở đây. -->
+  <div ref="rootRef" class="asel relative inline-block min-w-0 align-middle" :style="{ width }">
+    <!-- Mặc định: ruột là shadcn Select (reka) — tự lo định vị, lật lên trên, bàn
+         phím, typeahead, nằm trong Dialog. -->
+    <Select
+      v-if="!searchable"
+      v-model:open="open"
+      :model-value="selectValue"
+      :disabled="disabled"
+      @update:model-value="onSelectValue"
+    >
+      <SelectTrigger
+        class="aseltrigger w-full min-w-0"
+        :class="[
+          size === 'sm' ? 'h-ctrl-sm! gap-1.5 px-2' : 'h-ctrl!',
+          variant === 'ghost' && GHOST_TRIGGER,
+        ]"
+      >
+        <span class="min-w-0 truncate" :class="{ 'text-muted-foreground': !selectedLabel }">
+          {{ selectedLabel || placeholder }}
+        </span>
+      </SelectTrigger>
+      <!-- `aselmenu` là hook JS: OVERLAYS (useEmbeddedBrowser.ts), SlackModal và
+           SessionSpawnHost dò `.aselmenu` để biết menu đang mở. -->
+      <SelectContent
+        class="aselmenu max-h-[min(17.5rem,var(--reka-select-content-available-height))] max-w-(--reka-select-content-available-width) shadow-lg"
+      >
+        <SelectItem
+          v-for="opt in options"
+          :key="opt.value"
+          :value="encode(opt.value)"
+          :disabled="opt.disabled"
+          class="whitespace-nowrap"
+          :class="{ 'bg-accent text-accent-foreground': opt.value === model }"
+        >
+          {{ opt.label }}
+        </SelectItem>
+      </SelectContent>
+    </Select>
+
     <!-- Searchable + đang mở: chính ô select thành ô gõ tìm (combobox), không tách
          thêm một ô tìm trong menu. Placeholder = giá trị đang chọn để người dùng vẫn
-         thấy mình đang ở đâu khi chưa gõ gì. -->
+         thấy mình đang ở đâu khi chưa gõ gì. Select của reka không có chế độ gõ tìm
+         nên nhánh này tự dựng trên Input + listbox. -->
     <div
-      v-if="searchable && open"
-      ref="triggerRef"
-      class="aseltrigger aselcombo"
+      v-else-if="open"
+      class="relative"
       role="combobox"
       :aria-expanded="open"
       aria-haspopup="listbox"
     >
-      <input
+      <Input
         ref="searchRef"
         v-model="search"
-        class="aselsearchin"
+        class="w-full min-w-0 pr-8 ring-1 ring-ring"
+        :class="size === 'sm' ? 'h-ctrl-sm min-h-0 px-2' : 'h-ctrl'"
         :placeholder="selectedLabel || searchPlaceholder || placeholder"
         :aria-label="searchPlaceholder || placeholder"
         @keydown.esc.stop.prevent="open = false"
@@ -28,39 +65,56 @@
         @keydown.up.prevent="moveActive(-1)"
         @keydown.tab="open = false"
       />
-      <Icon name="chev" class="aselchev open" @mousedown.prevent="open = false" />
+      <ChevronDown
+        class="absolute top-1/2 right-3 size-4 -translate-y-1/2 rotate-180 cursor-pointer text-muted-foreground opacity-50"
+        @mousedown.prevent="open = false"
+      />
     </div>
-    <button
+    <Button
       v-else
       ref="triggerRef"
-      type="button"
-      class="aseltrigger"
+      variant="outline"
+      :size="size === 'sm' ? 'sm' : 'default'"
+      class="aseltrigger w-full min-w-0 justify-between gap-2 font-normal"
+      :class="[size === 'sm' ? 'px-2 text-sm' : 'px-3', variant === 'ghost' && GHOST_TRIGGER]"
       :disabled="disabled"
       :aria-expanded="open"
       aria-haspopup="listbox"
       @click="toggle"
     >
-      <span class="aselval" :class="{ ph: !selectedLabel }">
+      <span class="min-w-0 truncate" :class="{ 'text-muted-foreground': !selectedLabel }">
         {{ selectedLabel || placeholder }}
       </span>
-      <Icon name="chev" class="aselchev" :class="{ open }" />
-    </button>
+      <ChevronDown class="text-muted-foreground opacity-50" />
+    </Button>
+
     <!-- Teleported to body + fixed-positioned so the menu escapes any
          overflow-clipping / scroll ancestor (e.g. a modal body). Trong hộp thoại
-         reka (shadcn Dialog) thì teleport vào CHÍNH hộp thoại — xem menuHost. -->
-    <Teleport :to="menuHost">
-      <div v-if="open" ref="menuRef" class="aselmenu" role="listbox" :style="menuStyle">
-        <div v-if="searchable && !filtered.length" class="aselnone">{{ emptyLabel }}</div>
+         reka (shadcn Dialog) thì teleport vào CHÍNH hộp thoại — xem menuHost.
+         z-180 = cùng tầng popper của shadcn: trên mọi modal (.ovl 100 → Dialog 170),
+         dưới confirm / command palette (200). -->
+    <Teleport v-if="searchable" :to="menuHost">
+      <div
+        v-if="open"
+        ref="menuRef"
+        class="aselmenu fixed z-180 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+        role="listbox"
+        :style="menuStyle"
+      >
+        <div v-if="!filtered.length" class="px-2 py-2.5 text-center text-sm text-muted-foreground">
+          {{ emptyLabel }}
+        </div>
+        <!-- raw-ok: hàng option của listbox (cả dòng là vùng bấm); mousedown.prevent giữ focus ở ô tìm -->
         <button
           v-for="(opt, i) in filtered"
           :key="opt.value"
           type="button"
-          class="aselopt"
-          :class="{
-            on: opt.value === model,
-            hl: searchable && i === active,
-            disabled: opt.disabled,
-          }"
+          class="flex min-h-ctrl-xs w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-sm px-2 text-left text-sm whitespace-nowrap hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:text-faint disabled:hover:bg-transparent"
+          :class="
+            opt.value === model || i === active
+              ? 'bg-accent text-accent-foreground'
+              : 'text-popover-foreground'
+          "
           role="option"
           :aria-selected="opt.value === model"
           :aria-disabled="opt.disabled"
@@ -68,8 +122,8 @@
           @mousedown.prevent
           @click="select(opt)"
         >
-          <span class="aseloptlbl">{{ opt.label }}</span>
-          <Icon v-if="opt.value === model" name="check" class="aseltick" />
+          <span class="min-w-0 truncate">{{ opt.label }}</span>
+          <Check v-if="opt.value === model" class="size-3.5 shrink-0 text-primary" />
         </button>
       </div>
     </Teleport>
@@ -77,12 +131,14 @@
 </template>
 
 <script setup lang="ts">
-// Theme-token dropdown — replaces the native <select> (which WKWebView/Chromium
-// render with non-themable chrome). v-model carries the option value; options are
-// { label, value }. Closes on outside click (window mousedown) + Escape. Keeps the
-// prototype's input/seg visual vocabulary (bgInput surface, accent active row).
-// The menu is teleported to <body> and fixed-positioned (anchored to the trigger)
-// so it escapes overflow-clipping / scroll ancestors such as a modal body.
+// Dropdown chọn giá trị dùng khắp app — API giữ nguyên từ bản tự viết (v-model =
+// value của option; options là { label, value, disabled? }; size / variant /
+// searchable / width). Ruột:
+//  - mặc định: shadcn `Select` (reka) — reka lo định vị, đóng khi bấm ngoài/Esc,
+//    bàn phím, và nằm đúng trong Dialog.
+//  - `searchable`: combobox tự dựng (Input ngay trong trigger + listbox teleport),
+//    vì Select của reka không có ô gõ tìm.
+import { Check, ChevronDown } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 
 export type AppSelectOption = { label: string; value: string; disabled?: boolean }
@@ -117,20 +173,37 @@ const props = withDefaults(
 
 const model = defineModel<string>({ required: true })
 
+// Biến thể ghost: bỏ viền + bóng + nền tối của trigger shadcn, chỉ wash khi hover.
+const GHOST_TRIGGER =
+  'border-transparent bg-transparent text-inherit shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent'
+
+// reka cấm SelectItem có value '' (dành cho "xoá chọn"), nhưng nhiều nơi gọi dùng ''
+// cho lựa chọn "không / kế thừa". Mã hoá '' thành một sentinel khi đưa vào reka và
+// giải mã lại khi phát ra.
+const EMPTY_VALUE = '__app-select-empty__'
+const encode = (v: string) => (v === '' ? EMPTY_VALUE : v)
+const decode = (v: string) => (v === EMPTY_VALUE ? '' : v)
+
+const selectValue = computed(() => encode(model.value))
+function onSelectValue(v: unknown) {
+  if (typeof v !== 'string') return
+  model.value = decode(v)
+}
+
 const open = ref(false)
 const rootRef = useTemplateRef<HTMLElement>('rootRef')
-const triggerRef = useTemplateRef<HTMLElement>('triggerRef')
+const triggerRef = useTemplateRef<{ $el: HTMLElement }>('triggerRef')
 const menuRef = useTemplateRef<HTMLElement>('menuRef')
-const searchRef = useTemplateRef<HTMLInputElement>('searchRef')
+const searchRef = useTemplateRef<{ focus: () => void }>('searchRef')
 const menuStyle = ref<Record<string, string>>({})
 const search = ref('')
 
-// Nơi gắn menu. Hộp thoại reka ở chế độ modal khoá focus trong nó và đặt
-// `body { pointer-events: none }` — menu gắn ở <body> thì bấm vào ô tìm / option bị
-// tính là "ngoài hộp thoại" (không gõ được, click xuyên xuống). Nên khi trigger nằm
-// trong một hộp thoại reka đang mở, gắn menu vào chính hộp thoại đó. Hộp thoại căn
-// giữa bằng transform ⇒ nó là containing block của `position: fixed`, toạ độ menu
-// phải trừ gốc của nó (xem updatePosition).
+// Nơi gắn menu (nhánh searchable). Hộp thoại reka ở chế độ modal khoá focus trong nó
+// và đặt `body { pointer-events: none }` — menu gắn ở <body> thì bấm vào ô tìm /
+// option bị tính là "ngoài hộp thoại" (không gõ được, click xuyên xuống). Nên khi
+// trigger nằm trong một hộp thoại reka đang mở, gắn menu vào chính hộp thoại đó. Hộp
+// thoại căn giữa bằng transform ⇒ nó là containing block của `position: fixed`, toạ
+// độ menu phải trừ gốc của nó (xem updatePosition).
 const menuHost = ref<HTMLElement | 'body'>('body')
 function resolveMenuHost(): HTMLElement | 'body' {
   return rootRef.value?.closest<HTMLElement>('[role="dialog"][data-state="open"]') ?? 'body'
@@ -181,7 +254,7 @@ function moveActive(step: 1 | -1) {
   active.value = i
   void nextTick(() => {
     menuRef.value
-      ?.querySelectorAll<HTMLElement>('.aselopt')
+      ?.querySelectorAll<HTMLElement>('[role="option"]')
       [i]?.scrollIntoView({ block: 'nearest' })
   })
 }
@@ -194,12 +267,13 @@ const selectedLabel = computed(
   () => props.options.find((o) => o.value === model.value)?.label ?? '',
 )
 
-// Position the teleported menu under (or above, when there isn't room) the
-// trigger, matching its width and clamping the height to the available space.
+// Position the teleported menu (searchable) under (or above, when there isn't room)
+// the trigger, matching its width and clamping the height to the available space.
 const GAP = 4
 const MAX_H = 280
 function updatePosition() {
-  const trigger = triggerRef.value
+  // Lúc mở, nút trigger đã nhường chỗ cho ô tìm ⇒ đo khung gốc (cùng kích thước).
+  const trigger = rootRef.value
   if (!trigger) return
   const r = trigger.getBoundingClientRect()
   const vh = window.innerHeight
@@ -235,14 +309,14 @@ function select(opt: AppSelectOption) {
   model.value = opt.value
   open.value = false
   // Ô gõ tìm vừa bị gỡ (combobox về lại nút) ⇒ trả focus cho nút để Tab/phím tiếp tục.
-  if (props.searchable) void nextTick(() => triggerRef.value?.focus())
+  void nextTick(() => triggerRef.value?.$el?.focus())
 }
 
 function onWindowDown(e: MouseEvent) {
   if (!open.value) return
   const target = e.target as Node
-  // Keep open for clicks on the trigger (toggle handles it) or inside the
-  // teleported menu (select handles it); close for anything else.
+  // Keep open for clicks on the trigger or inside the teleported menu (select
+  // handles it); close for anything else.
   if (rootRef.value?.contains(target) || menuRef.value?.contains(target)) return
   open.value = false
 }
@@ -252,11 +326,18 @@ function onKey(e: KeyboardEvent) {
 function onReposition() {
   if (open.value) updatePosition()
 }
+function removeListeners() {
+  window.removeEventListener('mousedown', onWindowDown)
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', onReposition)
+  window.removeEventListener('scroll', onReposition, true)
+}
 
-// Open/close drives the global listeners + initial positioning. The second
-// updatePosition (after the menu mounts) refines the flip decision with the
-// menu's real height.
+// Nhánh searchable: open/close lái listener toàn cục + định vị. Lần updatePosition
+// thứ hai (sau khi menu mount) tinh lại quyết định lật theo chiều cao thật.
+// Nhánh Select thì reka tự lo hết — không gắn gì.
 watch(open, async (isOpen) => {
+  if (!props.searchable) return
   if (isOpen) {
     search.value = ''
     active.value = firstEnabled()
@@ -268,205 +349,11 @@ watch(open, async (isOpen) => {
     await nextTick()
     updatePosition()
     // Combobox: đưa caret vào ô tìm kiếm ngay khi mở.
-    if (props.searchable) searchRef.value?.focus()
+    searchRef.value?.focus()
   } else {
-    window.removeEventListener('mousedown', onWindowDown)
-    window.removeEventListener('keydown', onKey)
-    window.removeEventListener('resize', onReposition)
-    window.removeEventListener('scroll', onReposition, true)
+    removeListeners()
   }
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('mousedown', onWindowDown)
-  window.removeEventListener('keydown', onKey)
-  window.removeEventListener('resize', onReposition)
-  window.removeEventListener('scroll', onReposition, true)
-})
+onBeforeUnmount(removeListeners)
 </script>
-
-<style scoped>
-.asel {
-  position: relative;
-  display: inline-block;
-  /* When used as a flex child (e.g. label + select in a row), min-width:0 lets
-     the control shrink below its content so the value can ellipsize instead of
-     overflowing the row. Harmless when standalone. */
-  min-width: 0;
-}
-/* shadcn SelectTrigger: h-9 px-3 border-input, transparent bg, shadow-sm,
-   focus-visible ring — cao BẰNG Input/Button default nên đặt cạnh nhau phẳng. */
-.aseltrigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  height: var(--ctrl-h); /* token control chung — bằng Input/Button default */
-  border: 1px solid var(--input);
-  background: transparent;
-  border-radius: var(--r-sm); /* rounded-md */
-  padding: 0 12px; /* px-3 */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--foreground);
-  cursor: pointer;
-  font-family: var(--sans);
-  box-shadow: var(--shadow-sm);
-}
-.asel.ghost .aseltrigger {
-  border-color: transparent;
-  box-shadow: none;
-  color: inherit;
-}
-.asel.ghost .aseltrigger:hover:not(:disabled) {
-  background: var(--bgHover);
-}
-.asel.ghost .aselcombo {
-  border-color: var(--input);
-}
-.asel.sm .aseltrigger {
-  height: var(--ctrl-h-sm);
-  padding: 0 8px;
-  gap: 6px;
-}
-.aseltrigger:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.aseltrigger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.aseltrigger:disabled:hover {
-  border-color: var(--input);
-  background: transparent;
-}
-.aselval {
-  /* min-width:0 lets this flex child shrink below its content width so the
-     ellipsis actually engages — without it a long value (e.g. a deep branch
-     ref) overflows the trigger and stretches the control past its container. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aselval.ph {
-  color: var(--muted-foreground);
-}
-.aselchev {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-  transition: transform 0.15s;
-}
-.aselchev.open {
-  transform: rotate(180deg);
-}
-.aselmenu {
-  /* Fixed + teleported to body — top/left/width/max-height set inline by
-     updatePosition so the menu escapes overflow-clipping ancestors. z-index must
-     sit above every form-modal overlay that can host a select (.ovl = 100,
-     SessionGitModal = 120, git sub-modals = 150, shadcn Dialog = 170) yet below
-     top-level alerts (confirm / command palette = 200), so it floats over its own
-     modal but a confirm still covers it. 180 = cùng tầng popover của shadcn
-     (DropdownMenu / ContextMenu / Tooltip): ở 160 thì menu nằm DƯỚI Dialog shadcn
-     (vd ô chọn project trong hộp "Thêm thread Slack"). */
-  position: fixed;
-  z-index: 180;
-  max-height: 280px;
-  overflow-y: auto;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  padding: 4px; /* p-1 */
-  /* `--shadow-lg`, không phải `--shadow-md` như `.smenu`/`.pop`: theo chính comment
-     z-index ở trên, menu này còn phải nổi TRÊN modal đang chứa nó (git sub-modal
-     = 150), mà modal dùng `--shadow-lg`. Lấy `--shadow-md` thì nó chìm vào modal.
-     Thay cho `0 8px 24px rgba(0,0,0,.32)` — bóng hardcode chỉ đúng ở theme tối,
-     sang theme sáng đọc thành quầng xám đặc, đúng lý do `app-shell.css:1838` đã
-     đổi `.smenu`/`.pop` sang ramp. */
-  box-shadow: var(--shadow-lg);
-}
-/* Combobox: trigger đang mở mang ô gõ tìm thay cho nhãn giá trị. Viền ring như
-   focus-visible vì focus thật nằm ở input bên trong. */
-.aselcombo {
-  cursor: text;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.aselcombo .aselchev {
-  cursor: pointer;
-}
-.aselsearchin {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--foreground);
-  font-family: var(--sans);
-  outline: none;
-  padding: 0;
-}
-.aselsearchin::placeholder {
-  color: var(--muted-foreground);
-}
-.aselnone {
-  padding: 10px 8px;
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  text-align: center;
-}
-.aselopt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  min-height: 28px; /* h-7 */
-  border: 0;
-  background: transparent;
-  border-radius: var(--r-xs); /* rounded-sm */
-  padding: 0 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--popover-foreground);
-  cursor: pointer;
-  text-align: left;
-  white-space: nowrap;
-  min-width: 0;
-}
-.aseloptlbl {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.aselopt:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.aselopt.on,
-.aselopt.hl {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.aselopt.disabled {
-  color: var(--textFaint);
-  cursor: not-allowed;
-}
-.aselopt.disabled:hover {
-  background: transparent;
-  color: var(--textFaint);
-}
-.aseltick {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--primary);
-}
-</style>

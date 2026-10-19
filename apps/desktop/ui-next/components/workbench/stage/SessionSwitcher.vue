@@ -5,13 +5,14 @@
        Esc/nền đóng. Mở bằng ⌘K — listener capture trên window, gated route
        /workbench để không đè palette toàn cục ở trang khác. -->
   <Teleport to="body">
+    <!-- hook-ok: `.cmdk-ovl` nằm trong OVERLAYS (useEmbeddedBrowser.ts) -->
     <div
       v-if="isOpen"
-      class="cmdk-ovl fixed inset-0 z-[200] flex items-start justify-center bg-black/50 pt-[14vh]"
+      class="cmdk-ovl fixed inset-0 z-200 flex items-start justify-center bg-black/50 pt-[14vh] [-webkit-app-region:no-drag]"
       @click.self="close"
     >
       <div
-        class="flex max-h-[60vh] w-[480px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--border)] bg-[var(--bgEl)] shadow-[var(--shadow-lg)]"
+        class="flex max-h-[60vh] w-120 max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
         role="dialog"
         aria-modal="true"
       >
@@ -19,7 +20,7 @@
           ref="inputEl"
           v-model="q"
           unstyled
-          class="h-10 flex-none border-b border-[var(--border)] bg-transparent px-4 font-sans text-lg text-[var(--text)] outline-none placeholder:text-[var(--textFaint)]"
+          class="h-10 flex-none border-b border-border bg-transparent px-4 font-sans text-lg text-foreground outline-hidden placeholder:text-faint"
           :placeholder="t('wb.switch.placeholder')"
           autocomplete="off"
           spellcheck="false"
@@ -28,49 +29,41 @@
           @keydown.enter.prevent="go"
         />
         <div class="min-h-0 overflow-y-auto py-1.5">
-          <div v-if="!flat.length" class="p-[18px] text-sm text-[var(--textFaint)]">
+          <div v-if="!flat.length" class="p-4.5 text-sm text-faint">
             {{ t('wb.switch.empty') }}
           </div>
           <template v-for="(it, i) in flat" :key="it.row.id">
-            <div v-if="it.first" class="px-3.5 pb-1 pt-[7px] text-xs font-[640] text-dim">
+            <div v-if="it.first" class="px-3.5 pb-1 pt-1.5 text-xs font-semibold text-dim">
               {{ it.label }}
             </div>
             <div
-              class="flex cursor-pointer items-center gap-[9px] px-3.5 py-[7px] text-sm hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
-              :class="
-                i === sel ? 'bg-[var(--bgHover)] text-[var(--text)]' : 'text-[var(--textMuted)]'
-              "
+              class="flex cursor-pointer items-center gap-2 px-3.5 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground data-sel:bg-accent data-sel:text-foreground"
               :data-sel="i === sel ? '' : undefined"
               @click="pick(it.row)"
               @mouseenter="sel = i"
             >
               <SessionStateDot :status="it.row.status" />
               <span class="min-w-0 truncate">{{ it.row.title }}</span>
-              <span class="ml-auto flex-none text-xs text-[var(--textFaint)]">
+              <span class="ml-auto flex-none text-xs text-faint">
                 {{ it.row.projectName }}
               </span>
-              <span
-                class="min-w-[52px] flex-none text-right text-xs"
-                :class="sttClass(it.row.status)"
-              >
+              <span class="min-w-13 flex-none text-right text-xs" :class="sttClass(it.row.status)">
                 {{ sttLabel(it.row.status) }}
               </span>
             </div>
           </template>
         </div>
-        <div
-          class="flex flex-none gap-3.5 border-t border-[var(--border)] px-3.5 py-[7px] text-xs text-[var(--textFaint)]"
-        >
+        <div class="flex flex-none gap-3.5 border-t border-border px-3.5 py-1.5 text-xs text-faint">
           <span>
-            <b class="font-[590] text-dim">↑↓</b>
+            <b class="font-semibold text-dim">↑↓</b>
             {{ t('wb.switch.hintNav') }}
           </span>
           <span>
-            <b class="font-[590] text-dim">Enter</b>
+            <b class="font-semibold text-dim">Enter</b>
             {{ t('wb.switch.hintEnter') }}
           </span>
           <span>
-            <b class="font-[590] text-dim">Esc</b>
+            <b class="font-semibold text-dim">Esc</b>
             {{ t('wb.switch.hintEsc') }}
           </span>
           <span class="ml-auto">⌘K</span>
@@ -144,11 +137,11 @@ function go() {
 }
 
 const STT_CLASS: Record<Session['status'], string> = {
-  streaming: 'text-[var(--accent)]',
+  streaming: 'text-primary',
   awaiting: 'text-warning',
-  done: 'text-[var(--textFaint)]',
+  done: 'text-faint',
   error: 'text-destructive',
-  idle: 'text-[var(--textFaint)]',
+  idle: 'text-faint',
 }
 const STT_KEY: Record<Session['status'], string> = {
   streaming: 'wb.status.run',

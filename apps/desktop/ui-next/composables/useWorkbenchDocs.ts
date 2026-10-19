@@ -56,6 +56,24 @@ const IMG_EXT: Record<string, true> = {
 const VID_EXT: Record<string, true> = { mp4: true, m4v: true, webm: true, mov: true, mkv: true }
 const MD_EXT: Record<string, true> = { md: true, markdown: true }
 const MMD_EXT: Record<string, true> = { mmd: true, mermaid: true }
+// OOXML (Word/Excel) — đọc bytes rồi parse bằng utils/office-*. .doc/.xls nhị phân cũ
+// không parse được ⇒ vẫn rơi về doc 'file' (thông báo "file nhị phân").
+export const OFFICE_EXT: Record<string, 'doc' | 'sheet'> = {
+  docx: 'doc',
+  docm: 'doc',
+  dotx: 'doc',
+  xlsx: 'sheet',
+  xlsm: 'sheet',
+  xltx: 'sheet',
+}
+
+/** Doc xem bằng trình xem Office. Gồm cả doc 'file' có đuôi Office: tab mở TRƯỚC khi có
+ *  kind 'office' đã được lưu là 'file' (workbench nhớ tab đang mở) — không có nhánh này
+ *  thì tab cũ vẫn rơi vào Monaco và báo "file nhị phân". */
+export function isOfficeDoc(doc: { kind: WorkbenchDocKind; id: string }): boolean {
+  if (doc.kind === 'office') return true
+  return doc.kind === 'file' && !!OFFICE_EXT[doc.id.split('.').pop()?.toLowerCase() ?? '']
+}
 
 /** Doc kind a workspace file opens as. Non-media/text extensions → code doc. */
 export function inferDocKind(path: string): WorkbenchDocKind {
@@ -63,6 +81,7 @@ export function inferDocKind(path: string): WorkbenchDocKind {
   if (MD_EXT[ext]) return 'md'
   if (IMG_EXT[ext]) return 'img'
   if (VID_EXT[ext]) return 'vid'
+  if (OFFICE_EXT[ext]) return 'office'
   if (MMD_EXT[ext]) return 'mmd'
   return 'file'
 }
@@ -285,7 +304,7 @@ export function useWorkbenchDocs() {
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error(t('workbench.file.timeout'))), 15_000),
     )
-    if (doc.kind === 'img' || doc.kind === 'vid') {
+    if (doc.kind === 'img' || doc.kind === 'vid' || isOfficeDoc(doc)) {
       const res = await Promise.race([fs.readFileBase64(r, rel), timeout])
       st.base64 = res.base64
       st.mimeType = res.mimeType
@@ -383,7 +402,8 @@ export function useWorkbenchDocs() {
 
   /** So nội dung trên đĩa với `saved` → bật/tắt `diskChanged`. Chỉ text doc đã nạp. */
   async function checkDisk(doc: WorkbenchDoc): Promise<void> {
-    if (!TEXT_KINDS[doc.kind]) return
+    // Office (kể cả tab cũ kind 'file') đọc base64 — so nội dung text vô nghĩa.
+    if (!TEXT_KINDS[doc.kind] || isOfficeDoc(doc)) return
     const st = fileStates.get(doc.id)
     if (!st || st.status !== 'ok' || st.isBinary || checking.has(doc.id)) return
     const r = st.root || rootFor(doc)
@@ -421,8 +441,11 @@ export function useWorkbenchDocs() {
               const st = fileStates.get(d.id)
               const docRoot = st?.root || rootFor(d)
               if (docRoot !== p.workspaceRoot || !changed.has(relPathOf(d))) continue
-              if (TEXT_KINDS[d.kind]) void checkDisk(d)
-              else if ((d.kind === 'img' || d.kind === 'vid') && st?.status === 'ok') {
+              if (TEXT_KINDS[d.kind] && !isOfficeDoc(d)) void checkDisk(d)
+              else if (
+                (d.kind === 'img' || d.kind === 'vid' || isOfficeDoc(d)) &&
+                st?.status === 'ok'
+              ) {
                 st.diskChanged = true
               }
             }

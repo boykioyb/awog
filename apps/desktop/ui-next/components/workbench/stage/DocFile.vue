@@ -15,6 +15,12 @@
         · {{ t('workbench.file.truncated') }}
       </span>
       <DocReloadButton class="ml-auto" :doc="props.doc" @reloaded="onReloaded" />
+      <DocButtonGroup
+        v-if="isTable"
+        :options="tableModeOptions"
+        :active="tableMode"
+        @select="(m) => (tableMode = m)"
+      />
       <template v-if="isHtml">
         <DocButtonGroup :options="modeOptions" :active="mode" @select="setMode" />
         <button
@@ -45,6 +51,16 @@
         :title="rel"
       />
     </template>
+    <!-- CSV/TSV: xem dạng bảng bằng lưới Excel dùng chung (OfficeSheetView). Bảng dựng
+         từ nội dung ĐANG sửa (st.content) nên sửa ở Mã nguồn rồi quay lại là thấy ngay. -->
+    <div
+      v-else-if="isTable && tableMode === 'table' && st.status === 'ok' && !st.isBinary"
+      class="relative min-h-0 flex-1"
+    >
+      <div class="absolute inset-0">
+        <OfficeSheetView :office="tableView" />
+      </div>
+    </div>
     <div
       v-else-if="st.status === 'loading' || st.status === 'idle'"
       class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
@@ -82,6 +98,9 @@ import { htmlPreviewUrl, isHtmlPath } from '~/composables/usePreview'
 import { useSidecar } from '~/composables/useSidecar'
 import { formatBytes } from '~/utils/format-bytes'
 import MonacoEditor from '~/components/common/MonacoEditor.vue'
+import OfficeSheetView from '~/components/common/OfficeSheetView.vue'
+import { useOfficePreview } from '~/composables/useOfficePreview'
+import { parseCsv } from '~/utils/office-csv'
 import DocReloadButton from '~/components/workbench/stage/DocReloadButton.vue'
 import DocButtonGroup from '~/components/workbench/stage/DocButtonGroup.vue'
 import type { MonacoEditorHandle } from '~/components/editor/types'
@@ -169,6 +188,26 @@ function setMode(next: FileMode) {
   mode.value = next
   if (next === 'preview') previewVersion.value++
 }
+
+// ── CSV/TSV: Bảng | Mã nguồn (mặc định Bảng) ─────────────────────────────────
+type TableMode = 'table' | 'code'
+const isTable = computed(() => /\.(csv|tsv)$/i.test(rel.value))
+const tableMode = ref<TableMode>('table')
+const tableModeOptions = computed(() => [
+  { id: 'table' as const, label: t('workbench.file.modeTable') },
+  { id: 'code' as const, label: t('workbench.file.modeCode') },
+])
+const tableView = useOfficePreview()
+// Dựng lại bảng khi đang xem Bảng và nội dung đổi (nạp xong / nạp lại / sửa ở Mã nguồn).
+watch(
+  [isTable, tableMode, () => st.content, () => st.status],
+  () => {
+    if (!isTable.value || tableMode.value !== 'table' || st.status !== 'ok') return
+    const name = rel.value.split('/').pop() ?? rel.value
+    tableView.load(parseCsv(st.content, name, /\.tsv$/i.test(rel.value) ? '\t' : undefined))
+  },
+  { immediate: true },
+)
 
 function openInBrowser() {
   const root = st.root || wbDocs.rootFor(props.doc)

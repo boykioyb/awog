@@ -6,290 +6,284 @@
 
        Nó cố ý KHÔNG stream (`kubectl logs -f` là tiến trình sống, việc của tab Logs
        trong Workspace Panel — P2 việc 21). Ở đây là ảnh chụp có nút ↻: đọc xong,
-       không để lại tiến trình nào chạy nền. -->
-  <Teleport to="body">
-    <div v-if="out.open" class="ikm-ovl" @click.self="kube.closeOut()">
-      <div class="ikm-card wide" role="dialog" aria-modal="true">
-        <div class="ikm-head">
-          <span class="ikm-title">
-            <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ out.pod }}
-          </span>
-          <span class="iksec-sub">{{ out.title }}</span>
+       không để lại tiến trình nào chạy nền.
+       Esc / bấm nền / nút ✕ (DialogContent tự vẽ) đều gọi `closeOut()`. -->
+  <Dialog :open="out.open" @update:open="(v: boolean) => !v && kube.closeOut()">
+    <DialogContent
+      :aria-describedby="undefined"
+      class="flex max-h-[min(47.5rem,88vh)] w-[94vw] max-w-295 min-h-0 flex-col gap-0 overflow-hidden p-0"
+    >
+      <div class="flex min-w-0 shrink-0 items-center gap-2 border-b py-3 pr-12 pl-3.5">
+        <DialogTitle class="inline-flex shrink-0 items-center gap-1.5 text-base font-semibold">
+          <Icon name="file" class="size-3.5" />
+          {{ out.pod }}
+        </DialogTitle>
+        <span class="min-w-0 truncate text-xs text-muted-foreground">{{ out.title }}</span>
 
-          <div class="ikm-actions">
-            <!-- Hai tab của cùng một pod: log và mô tả. `setOutMode` gọi lại đúng
-                 op của tab vừa chọn; số dòng đã chọn được giữ nguyên. -->
-            <!-- Khoá khi đang nạp: bấm tab khác giữa chừng là hai lệnh chồng nhau
-                 trên cùng một khung. -->
-            <div class="seg" :class="{ ikoff: out.loading }" role="tablist">
-              <span
-                role="button"
-                tabindex="0"
-                :class="{ on: out.mode === 'logs' }"
-                @click="kube.setOutMode('logs')"
-                @keydown.enter.prevent="kube.setOutMode('logs')"
-                @keydown.space.prevent="kube.setOutMode('logs')"
-              >
-                {{ t('infra.kube.out.tabLogs') }}
-              </span>
-              <span
-                role="button"
-                tabindex="0"
-                :class="{ on: out.mode === 'describe' }"
-                @click="kube.setOutMode('describe')"
-                @keydown.enter.prevent="kube.setOutMode('describe')"
-                @keydown.space.prevent="kube.setOutMode('describe')"
-              >
-                {{ t('infra.kube.act.describe') }}
-              </span>
-              <span
-                role="button"
-                tabindex="0"
-                :class="{ on: out.mode === 'terminal' }"
-                @click="kube.setOutMode('terminal')"
-                @keydown.enter.prevent="kube.setOutMode('terminal')"
-                @keydown.space.prevent="kube.setOutMode('terminal')"
-              >
-                {{ t('infra.kube.out.tabTerminal') }}
-              </span>
-            </div>
-
-            <AppSelect
-              v-if="out.mode === 'logs' && out.containers.length"
-              :model-value="out.container"
-              :options="containerOptions"
-              width="auto"
-              :disabled="out.loading"
-              @update:model-value="kube.setContainer"
-            />
-            <AppSelect
-              v-if="out.mode === 'logs'"
-              :model-value="String(out.tail)"
-              :options="tailOptions"
-              width="auto"
-              :disabled="out.loading"
-              @update:model-value="onTail"
-            />
-            <!-- `--since` là bộ lọc của CLUSTER: đổi nó là chạy lại `kubectl logs`.
-                 Nó đứng cạnh ô số dòng vì cả hai trả lời cùng một câu — "lấy về bao
-                 nhiêu" — còn hai bộ lọc bên dưới chỉ xén thứ đã lấy về. Cần dòng cũ
-                 hơn `--tail` cho phép thì đây là đường duy nhất. -->
-            <AppSelect
-              v-if="out.mode === 'logs'"
-              :model-value="out.since"
-              :options="sinceOptions"
-              width="auto"
-              :disabled="out.loading"
-              @update:model-value="kube.setSince"
-            />
-            <Button
-              v-if="out.mode !== 'terminal'"
-              type="button"
-              :disabled="out.loading"
-              :title="t('infra.kube.refresh')"
-              variant="outline"
-              @click="kube.refreshOut()"
-            >
-              <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </Button>
-            <Button
-              type="button"
-              :title="t('common.close')"
-              variant="outline"
-              @click="kube.closeOut()"
-            >
-              <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </Button>
-          </div>
-        </div>
-
-        <div class="ikm-body">
-          <!-- Ảnh chụp log/mô tả: TOÀN BỘ khối này ẩn ở tab Terminal — terminal là
-               một component sống (xterm + PTY), không dùng `out.text`. -->
-          <template v-if="out.mode !== 'terminal'">
-            <!-- Dòng lệnh đã chạy: có ích khi cần chép sang terminal để tự làm tiếp. -->
-            <div v-if="out.command" class="ikcmd">
-              <code>{{ out.command }}</code>
-              <Button type="button" variant="outline" @click="kube.copyCommand(out.command)">
-                {{ t('infra.kube.blocked.copy') }}
-              </Button>
-            </div>
-
-            <p v-if="out.error" class="ierr">{{ out.error }}</p>
-
-            <!-- MỘT HÀNG CHO CẢ BA BỘ LỌC (gộp 2026-09-17). Bản trước xếp ô tìm
-                 chữ, hàng chip mức và hàng chip khoảng thành BA dòng chồng nhau, mỗi
-                 dòng bỏ trống hai phần ba bề ngang modal — ba dòng để nói ba thứ mà
-                 gộp lại vẫn thừa chỗ. Nay ô tìm chữ giãn lấy phần trống, hai bộ lọc
-                 còn lại thu vào dropdown, và số khớp đẩy về sát mép phải.
-
-                 Lọc chạy trên chữ ĐÃ tải về (một lần `kubectl logs`), không gọi lại
-                 cluster: `kubectl logs` không có cờ lọc nội dung nào (chỉ `--tail`
-                 với `--since`, cả hai nằm ở thanh trên). Ô tìm chữ mặc định GIẤU
-                 dòng không khớp; nút bên cạnh đổi sang chỉ tô sáng để giữ mạch log. -->
-            <div v-if="out.text || out.loading" class="iklogbar">
-              <div class="srch iklogfind">
-                <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                <Input
-                  unstyled
-                  :model-value="logQuery"
-                  type="text"
-                  spellcheck="false"
-                  :placeholder="t('infra.kube.log.filter.ph')"
-                  :aria-label="t('infra.kube.log.filter.ph')"
-                  @update:model-value="onQuery"
-                />
-                <button
-                  v-if="logQuery"
-                  class="ikfindx"
-                  type="button"
-                  :title="t('infra.kube.search.clear')"
-                  :aria-label="t('infra.kube.search.clear')"
-                  @click="logQuery = ''"
-                >
-                  <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-                </button>
-              </div>
-
-              <!-- Mức: MỘT dropdown, không phải năm chip. Năm chip chiếm cả một dòng
-                   để nói một lựa chọn, và log thật thường chỉ có một hai mức nên ba
-                   trong năm chip luôn là "0". Tổ hợp hay dùng ("Lỗi + cảnh báo") là
-                   một mục sẵn trong danh sách — đủ thay cho multi-select. -->
-              <AppSelect
-                v-if="hasLevels"
-                v-model="sevFilter"
-                :options="sevOptions"
-                width="auto"
-                :aria-label="t('infra.kube.log.sevLabel')"
-              />
-
-              <!-- Khoảng thời gian neo vào DÒNG MỚI NHẤT, không vào đồng hồ máy: log
-                   có thể đã cũ (pod dừng hôm qua), và "5 phút cuối" tính theo đồng hồ
-                   sẽ trả về rỗng — trông y hệt một bộ lọc hỏng. -->
-              <AppSelect
-                v-if="hasStamps"
-                v-model="rangeMode"
-                :options="rangeOptions"
-                width="auto"
-                :aria-label="t('infra.kube.log.rangeLabel')"
-              />
-              <!-- Hai ô giờ chỉ có mặt khi người dùng chọn "Tuỳ chọn": lúc nào cũng
-                   hiện thì chúng là hai ô trống nằm cạnh một dropdown đã trả lời xong
-                   câu hỏi. -->
-              <span v-if="rangeMode === 'custom'" class="iklogfrom">
-                <Input
-                  v-model="fromTime"
-                  type="text"
-                  spellcheck="false"
-                  placeholder="16:40"
-                  :aria-label="t('infra.kube.log.from')"
-                  class="iktime"
-                />
-                <span class="ihint">→</span>
-                <Input
-                  v-model="toTime"
-                  type="text"
-                  spellcheck="false"
-                  placeholder="16:50"
-                  :aria-label="t('infra.kube.log.to')"
-                  class="iktime"
-                />
-              </span>
-
-              <!-- Số khớp và nút chế độ đẩy về mép phải: chúng nói về KẾT QUẢ, không
-                   phải một bộ lọc nữa. -->
-              <span v-if="filtering" class="ihint iklogcount" role="status">
-                {{ t('infra.kube.log.hits', { shown: matchedCount, total: lineCount }) }}
-              </span>
-              <Button
-                v-if="logQuery"
-                type="button"
-                :aria-pressed="onlyMatches"
-                variant="outline"
-                @click="onlyMatches = !onlyMatches"
-              >
-                <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                {{ onlyMatches ? t('infra.kube.log.allLines') : t('infra.kube.log.onlyMatches') }}
-              </Button>
-            </div>
-
-            <!-- Đang nạp: chưa có chữ thì hiện dòng "đang nạp", có chữ cũ (bấm ↻, đổi
-               số dòng) thì làm mờ chữ cũ. Thân modal trống trơn trước đây trông y
-               hệt "không có gì để hiện". -->
-            <p v-if="out.loading && !out.text" class="ikload" role="status" aria-busy="true">
-              <Icon
-                name="refresh"
-                class="ikspin"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-              {{ t('infra.kube.loading') }}
-            </p>
-            <p v-else-if="noMatch" class="ihint">
-              {{
-                logQuery
-                  ? t('infra.kube.log.noMatch', { q: logQuery })
-                  : t('infra.kube.log.noneLeft')
-              }}
-            </p>
-            <!-- Một khối chữ: chưa lọc, hoặc đang ở chế độ chỉ-hiện-dòng-khớp (mọi
-               dòng đều khớp nên tô sáng là vô nghĩa). -->
-            <pre v-else-if="displayText !== null" class="ikpre" :class="{ ikdim: out.loading }">{{
-              displayText
-            }}</pre>
-            <!-- Chế độ "tất cả dòng": từng dòng một để tô sáng dòng khớp. -->
-            <pre v-else-if="lineViews.length" class="ikpre iklines" :class="{ ikdim: out.loading }">
-<span
-  v-for="line in lineViews"
-  :key="line.i"
-  class="ikln"
-  :class="{ ikhit: line.hit }"
->{{ line.text }}</span></pre>
-            <p v-else-if="!out.error" class="ihint">{{ t('infra.kube.out.empty') }}</p>
-            <p v-if="cappedInfo" class="ihint">
-              {{ t('infra.kube.log.capped', cappedInfo) }}
-            </p>
-          </template>
-
-          <!-- Terminal: MOUNT khi mở lần đầu rồi GIỮ (v-show) để đổi sang Logs và
-               quay lại không giết shell. `:key` theo pod ⇒ đổi pod thì remount
-               (PTY cũ bị tắt, mở shell mới). Đóng modal (`out.open`=false) tháo cả
-               cây con ⇒ WorkspaceTerminal tự kill PTY lúc unmount. -->
-          <InfraKubeExecTab
-            v-if="terminalOpened"
-            v-show="out.mode === 'terminal'"
-            :key="out.pod"
-            :kube="kube"
-            :visible="out.mode === 'terminal'"
-          />
-        </div>
-
-        <div class="ikm-foot">
-          <!-- Xoá pod nằm CẠNH thứ nói về pod đó (log/mô tả của chính nó) — chỗ duy
-               nhất trong màn mà hành vi phá huỷ có đủ ngữ cảnh để người dùng quyết.
-               Vẫn qua hộp duyệt hạ tầng: phải gõ lại tên pod mới xoá được. -->
-          <Button
-            type="button"
-            :title="t('infra.kube.act.deletePodWhy')"
-            :disabled="!!deleting"
-            :aria-busy="deleting === out.pod"
-            variant="danger"
-            @click="kube.deletePod(out.pod)"
+        <div class="ml-auto flex shrink-0 items-center gap-1.5">
+          <!-- Ba tab của cùng một pod: log, mô tả, terminal. `setOutMode` gọi lại đúng
+               op của tab vừa chọn; số dòng đã chọn được giữ nguyên. Khoá khi đang
+               nạp: bấm tab khác giữa chừng là hai lệnh chồng nhau trên cùng một khung. -->
+          <ToggleGroup
+            type="single"
+            class="gap-0.5 rounded-lg bg-muted p-0.5"
+            :model-value="out.mode"
+            :disabled="out.loading"
+            @update:model-value="onMode"
           >
-            <Icon
-              :name="deleting === out.pod ? 'refresh' : 'trash'"
-              :class="{ ikspin: deleting === out.pod }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            {{ t('infra.kube.act.deletePod') }}
-          </Button>
-          <Button type="button" variant="outline" @click="kube.closeOut()">
-            {{ t('common.close') }}
+            <ToggleGroupItem value="logs" size="sm" :class="SEG_ITEM">
+              {{ t('infra.kube.out.tabLogs') }}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="describe" size="sm" :class="SEG_ITEM">
+              {{ t('infra.kube.act.describe') }}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="terminal" size="sm" :class="SEG_ITEM">
+              {{ t('infra.kube.out.tabTerminal') }}
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          <AppSelect
+            v-if="out.mode === 'logs' && out.containers.length"
+            :model-value="out.container"
+            :options="containerOptions"
+            width="auto"
+            :disabled="out.loading"
+            @update:model-value="kube.setContainer"
+          />
+          <AppSelect
+            v-if="out.mode === 'logs'"
+            :model-value="String(out.tail)"
+            :options="tailOptions"
+            width="auto"
+            :disabled="out.loading"
+            @update:model-value="onTail"
+          />
+          <!-- `--since` là bộ lọc của CLUSTER: đổi nó là chạy lại `kubectl logs`.
+               Nó đứng cạnh ô số dòng vì cả hai trả lời cùng một câu — "lấy về bao
+               nhiêu" — còn hai bộ lọc bên dưới chỉ xén thứ đã lấy về. Cần dòng cũ
+               hơn `--tail` cho phép thì đây là đường duy nhất. -->
+          <AppSelect
+            v-if="out.mode === 'logs'"
+            :model-value="out.since"
+            :options="sinceOptions"
+            width="auto"
+            :disabled="out.loading"
+            @update:model-value="kube.setSince"
+          />
+          <Button
+            v-if="out.mode !== 'terminal'"
+            type="button"
+            :disabled="out.loading"
+            :title="t('infra.kube.refresh')"
+            :aria-label="t('infra.kube.refresh')"
+            variant="outline"
+            size="iconMd"
+            @click="kube.refreshOut()"
+          >
+            <Icon name="refresh" />
           </Button>
         </div>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 pt-3 pb-3.5">
+        <!-- Ảnh chụp log/mô tả: TOÀN BỘ khối này ẩn ở tab Terminal — terminal là
+             một component sống (xterm + PTY), không dùng `out.text`. -->
+        <template v-if="out.mode !== 'terminal'">
+          <!-- Dòng lệnh đã chạy: có ích khi cần chép sang terminal để tự làm tiếp. -->
+          <InfraKubeCmd v-if="out.command" :command="out.command" @copy="kube.copyCommand" />
+
+          <p v-if="out.error" class="text-xs text-destructive">{{ out.error }}</p>
+
+          <!-- MỘT HÀNG CHO CẢ BA BỘ LỌC (gộp 2026-09-17). Bản trước xếp ô tìm
+               chữ, hàng chip mức và hàng chip khoảng thành BA dòng chồng nhau, mỗi
+               dòng bỏ trống hai phần ba bề ngang modal — ba dòng để nói ba thứ mà
+               gộp lại vẫn thừa chỗ. Nay ô tìm chữ giãn lấy phần trống, hai bộ lọc
+               còn lại thu vào dropdown, và số khớp đẩy về sát mép phải.
+
+               Lọc chạy trên chữ ĐÃ tải về (một lần `kubectl logs`), không gọi lại
+               cluster: `kubectl logs` không có cờ lọc nội dung nào (chỉ `--tail`
+               với `--since`, cả hai nằm ở thanh trên). Ô tìm chữ mặc định GIẤU
+               dòng không khớp; nút bên cạnh đổi sang chỉ tô sáng để giữ mạch log.
+               `flex-wrap` để modal hẹp thì xuống dòng thay vì bóp ô tìm chữ. -->
+          <div v-if="out.text || out.loading" class="flex shrink-0 flex-wrap items-center gap-2">
+            <!-- Ô lọc GIÃN lấy phần trống của hàng (2026-09-17). Trước nó bị ghim
+                 ~260px nên hai phần ba bề ngang modal bỏ trắng — chính là chỗ người
+                 dùng chỉ ra. Nó vẫn có trần mềm: các control bên phải luôn giữ đủ chỗ
+                 của mình trước khi ô này giãn. -->
+            <div class="relative max-w-130 min-w-45 flex-[1_1_13.75rem]">
+              <Icon
+                name="filter"
+                class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-dim"
+              />
+              <Input
+                class="h-ctrl-sm pr-8 pl-8"
+                :model-value="logQuery"
+                type="text"
+                spellcheck="false"
+                :placeholder="t('infra.kube.log.filter.ph')"
+                :aria-label="t('infra.kube.log.filter.ph')"
+                @update:model-value="onQuery"
+              />
+              <!-- Nút xoá nằm TRONG ô lọc: không viền, không nền — nó thuộc về ô nhập,
+                   không phải một nút ngang hàng với các nút trong thanh. -->
+              <Button
+                v-if="logQuery"
+                variant="ghost"
+                size="iconSm"
+                class="absolute top-1/2 right-1 size-6 -translate-y-1/2 text-faint hover:bg-transparent hover:text-foreground"
+                type="button"
+                :title="t('infra.kube.search.clear')"
+                :aria-label="t('infra.kube.search.clear')"
+                @click="logQuery = ''"
+              >
+                <Icon name="x" />
+              </Button>
+            </div>
+
+            <!-- Mức: MỘT dropdown, không phải năm chip. Năm chip chiếm cả một dòng
+                 để nói một lựa chọn, và log thật thường chỉ có một hai mức nên ba
+                 trong năm chip luôn là "0". Tổ hợp hay dùng ("Lỗi + cảnh báo") là
+                 một mục sẵn trong danh sách — đủ thay cho multi-select. -->
+            <AppSelect
+              v-if="hasLevels"
+              v-model="sevFilter"
+              :options="sevOptions"
+              width="auto"
+              :aria-label="t('infra.kube.log.sevLabel')"
+            />
+
+            <!-- Khoảng thời gian neo vào DÒNG MỚI NHẤT, không vào đồng hồ máy: log
+                 có thể đã cũ (pod dừng hôm qua), và "5 phút cuối" tính theo đồng hồ
+                 sẽ trả về rỗng — trông y hệt một bộ lọc hỏng. -->
+            <AppSelect
+              v-if="hasStamps"
+              v-model="rangeMode"
+              :options="rangeOptions"
+              width="auto"
+              :aria-label="t('infra.kube.log.rangeLabel')"
+            />
+            <!-- Hai ô giờ chỉ có mặt khi người dùng chọn "Tuỳ chọn": lúc nào cũng
+                 hiện thì chúng là hai ô trống nằm cạnh một dropdown đã trả lời xong
+                 câu hỏi. Ô chỉ đủ rộng cho `16:46:01`; rộng hơn thì nó trông như ô
+                 tìm kiếm thứ hai. -->
+            <span v-if="rangeMode === 'custom'" class="inline-flex items-center gap-1.5">
+              <!-- mono-ok: `16:46:01` phải thẳng cột khi gõ -->
+              <Input
+                v-model="fromTime"
+                type="text"
+                spellcheck="false"
+                placeholder="16:40"
+                :aria-label="t('infra.kube.log.from')"
+                class="h-ctrl-xs w-18 px-2 font-mono text-xs"
+              />
+              <span class="text-xs text-faint">→</span>
+              <Input
+                v-model="toTime"
+                type="text"
+                spellcheck="false"
+                placeholder="16:50"
+                :aria-label="t('infra.kube.log.to')"
+                class="h-ctrl-xs w-18 px-2 font-mono text-xs"
+              />
+            </span>
+
+            <!-- Số khớp và nút chế độ đẩy về mép phải: chúng nói về KẾT QUẢ, không
+                 phải một bộ lọc nữa. -->
+            <span v-if="filtering" class="ml-auto text-xs text-faint" role="status">
+              {{ t('infra.kube.log.hits', { shown: matchedCount, total: lineCount }) }}
+            </span>
+            <Button
+              v-if="logQuery"
+              type="button"
+              :aria-pressed="onlyMatches"
+              variant="outline"
+              @click="onlyMatches = !onlyMatches"
+            >
+              <Icon name="filter" />
+              {{ onlyMatches ? t('infra.kube.log.allLines') : t('infra.kube.log.onlyMatches') }}
+            </Button>
+          </div>
+
+          <!-- Đang nạp: chưa có chữ thì hiện dòng "đang nạp", có chữ cũ (bấm ↻, đổi
+             số dòng) thì làm mờ chữ cũ. Thân modal trống trơn trước đây trông y
+             hệt "không có gì để hiện". -->
+          <p
+            v-if="out.loading && !out.text"
+            class="flex items-center gap-2 text-sm text-muted-foreground"
+            role="status"
+            aria-busy="true"
+          >
+            <Icon name="refresh" class="size-3.5 motion-safe:animate-spin" />
+            {{ t('infra.kube.loading') }}
+          </p>
+          <p v-else-if="noMatch" class="text-xs text-faint">
+            {{
+              logQuery ? t('infra.kube.log.noMatch', { q: logQuery }) : t('infra.kube.log.noneLeft')
+            }}
+          </p>
+          <!-- Một khối chữ: chưa lọc, hoặc đang ở chế độ chỉ-hiện-dòng-khớp (mọi
+             dòng đều khớp nên tô sáng là vô nghĩa). `pre` là vùng cuộn duy nhất của
+             thân modal nên nó lấp hết phần còn lại. -->
+          <!-- mono-ok: log thô + output describe — cột do chương trình in ra -->
+          <pre v-else-if="displayText !== null" :class="[PRE, out.loading && DIM]">{{
+            displayText
+          }}</pre>
+          <!-- Chế độ "tất cả dòng": từng dòng một để tô sáng dòng khớp (tô CẢ DÒNG +
+               vạch accent bên trái, không tô từng ký tự — đủ để mắt bắt nhịp mà không
+               phải dựng DOM cho mọi lần khớp trong một log 5000 dòng). -->
+          <!-- mono-ok: log thô — cột do chương trình in ra -->
+          <pre v-else-if="lineViews.length" :class="[PRE, out.loading && DIM]">
+<span
+  v-for="line in lineViews"
+  :key="line.i"
+  class="block"
+  :class="line.hit && HIT"
+>{{ line.text }}</span></pre>
+          <p v-else-if="!out.error" class="text-xs text-faint">{{ t('infra.kube.out.empty') }}</p>
+          <p v-if="cappedInfo" class="text-xs text-faint">
+            {{ t('infra.kube.log.capped', cappedInfo) }}
+          </p>
+        </template>
+
+        <!-- Terminal: MOUNT khi mở lần đầu rồi GIỮ (v-show) để đổi sang Logs và
+             quay lại không giết shell. `:key` theo pod ⇒ đổi pod thì remount
+             (PTY cũ bị tắt, mở shell mới). Đóng modal (`out.open`=false) tháo cả
+             cây con ⇒ WorkspaceTerminal tự kill PTY lúc unmount. -->
+        <InfraKubeExecTab
+          v-if="terminalOpened"
+          v-show="out.mode === 'terminal'"
+          :key="out.pod"
+          :kube="kube"
+          :visible="out.mode === 'terminal'"
+        />
+      </div>
+
+      <div class="flex shrink-0 items-center gap-2 border-t px-3.5 py-2.5">
+        <!-- Xoá pod nằm CẠNH thứ nói về pod đó (log/mô tả của chính nó) — chỗ duy
+             nhất trong màn mà hành vi phá huỷ có đủ ngữ cảnh để người dùng quyết.
+             Vẫn qua hộp duyệt hạ tầng: phải gõ lại tên pod mới xoá được. -->
+        <Button
+          type="button"
+          :title="t('infra.kube.act.deletePodWhy')"
+          :disabled="!!deleting"
+          :aria-busy="deleting === out.pod"
+          variant="danger"
+          @click="kube.deletePod(out.pod)"
+        >
+          <Icon
+            :name="deleting === out.pod ? 'refresh' : 'trash'"
+            :class="{ 'motion-safe:animate-spin': deleting === out.pod }"
+          />
+          {{ t('infra.kube.act.deletePod') }}
+        </Button>
+        <!-- Nút đóng nằm sát mép phải; nút xoá ở lại bên trái vì nó không phải
+             đường đi tiếp. -->
+        <Button type="button" class="ml-auto" variant="outline" @click="kube.closeOut()">
+          {{ t('common.close') }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -331,6 +325,25 @@ watch(
 
 const { t } = useI18n()
 const kube = props.kube
+
+/** Một mục của segmented control: track nhạt, mục đang chọn nổi lên như card. */
+const SEG_ITEM =
+  'h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm'
+/** Khung output (log / `describe`): vùng cuộn duy nhất của thân modal. */
+const PRE =
+  'min-h-0 flex-1 overflow-auto rounded-md border bg-muted px-3 py-2.5 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground'
+/** Dữ liệu cũ đang được thay: mờ đi, không bấm được, nhưng VẪN Ở CHỖ (biến mất rồi
+ *  hiện lại làm bố cục nhảy và mất chỗ đang đọc). */
+const DIM = 'pointer-events-none opacity-40 transition-opacity'
+/** Dòng khớp ô lọc: nền accent-tint + vạch accent 2px bên trái. */
+const HIT =
+  'relative bg-selected before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary'
+
+/** Đổi tab output. ToggleGroup phát rỗng khi bấm lại mục đang chọn — bỏ qua, cùng
+ *  hành vi với `setOutMode` (đổi sang chính mode đang xem là no-op). */
+function onMode(v: unknown): void {
+  if (v === 'logs' || v === 'describe' || v === 'terminal') void kube.setOutMode(v)
+}
 
 /** Trần số dòng ĐƯỢC VẼ: một pod có thể trả về 5000 dòng, dựng 5000 phần tử DOM
  *  chỉ để nhìn là tự bắn vào chân. Dòng thừa vẫn nằm trong bộ nhớ và được đếm ra. */
@@ -527,59 +540,3 @@ function onWindowKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onWindowKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 </script>
-
-<style scoped>
-/* Nút đóng nằm sát mép phải; nút xoá ở lại bên trái vì nó không phải đường đi tiếp. */
-.ikm-foot .btn:last-child {
-  margin-left: auto;
-}
-/* Ô lọc GIÃN lấy phần trống của hàng (2026-09-17). Trước nó bị ghim ~260px nên
-   hai phần ba bề ngang modal bỏ trắng — chính là chỗ người dùng chỉ ra. Nó vẫn có
-   trần mềm: ba control bên phải luôn giữ đủ chỗ của mình trước khi ô này giãn. */
-.iklogfind {
-  flex: 1 1 220px;
-  min-width: 180px;
-  max-width: 520px;
-}
-/* MỘT hàng lọc: ô tìm chữ giãn, hai dropdown và ô giờ giữ nguyên cỡ, số khớp đẩy
-   sát mép phải. `flex-wrap` để modal hẹp thì xuống dòng thay vì bóp ô tìm chữ. */
-.iklogfrom {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Số khớp đứng về bên phải: nó là KẾT QUẢ, không phải thêm một bộ lọc nữa. */
-.iklogcount {
-  margin-left: auto;
-}
-/* Ô giờ: chỉ đủ rộng cho `16:46:01`. Rộng hơn thì nó trông như ô tìm kiếm thứ hai. */
-.iktime {
-  width: 72px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  color: var(--text);
-  font-family: var(--code); /* mono-ok: `16:46:01` phải thẳng cột khi gõ */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.iktime:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
-/* Nút xoá trong ô lọc: không viền, không nền — nó thuộc về ô nhập, không phải một
-   nút ngang hàng với các nút trong thanh. */
-.ikfindx {
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--textFaint);
-  cursor: pointer;
-}
-.ikfindx:hover {
-  color: var(--text);
-}
-</style>

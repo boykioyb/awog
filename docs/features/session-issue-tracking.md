@@ -40,8 +40,8 @@ Nếu tính các lượt này, một ping lúc issue đang `pending` sẽ tự l
 
 - Issue tự sinh lấy **nguyên tin nhắn đầu** làm mô tả (`autoDesc`), không gọi model. Muốn mô tả gọn hơn thì bấm "Viết bằng AI" trong modal issue: `boards.draft` kèm `itemId`, nguồn là phần đầu của tối đa 3 phiên đã làm issue. Kết quả chỉ được điền vào ô mô tả, bấm Lưu mới ghi.
 - Phiên **trackable** là phiên có project, không thuộc team run (`teamRunId`/`teamId`), không có `origin: 'board'` và chưa `issueUntracked`. Phiên trackable mà chưa có issue thì tạo issue `in_progress`, với phiên là assignee. Title lấy từ title của phiên; nếu title vẫn là placeholder `New session` thì lấy dòng đầu của prompt.
-- Phiên đã có issue đang ở `backlog`/`todo`/`pending`/`changes` thì chuyển sang `in_progress` và ghi một comment hệ thống "resumed in …".
-- Issue đang ở `blocked`/`in_review`/`done`/`cancelled` thì **giữ nguyên**. Đó là quyết định có chủ đích; hỏi thêm một câu trong phiên không được lật nó.
+- Phiên đã có issue đang ở `backlog`/`todo`/`pending`/`changes`/`in_review` thì chuyển sang `in_progress` và ghi một comment hệ thống "resumed in …". `in_review` nằm trong nhóm này vì người dùng còn trao đổi tiếp trong phiên nghĩa là việc chưa xong.
+- Issue đang ở `blocked`/`done`/`cancelled` thì **giữ nguyên**. Đó là quyết định có chủ đích; hỏi thêm một câu trong phiên không được lật nó.
 - Phiên không có project thì **không tạo issue** (người dùng đã chốt ngày 2026-10-15).
 
 Auto-title của phiên đổi tên (`sessions.upsert` update-metadata) thì gọi `syncIssueTitle`. Hàm này chỉ đổi title khi issue còn cờ `autoTitle`.
@@ -144,7 +144,7 @@ Chưa áp cho:
 | Chip issue ở đầu `SessionContextStrip` (`SessionIssueChip.vue`) | Chấm màu + status + title. Popover gồm: 7 status bấm nhanh (`pending`/`blocked` hỏi một dòng ghi chú, đăng thành comment), recap kèm nút viết lại, mở trên board, bỏ theo dõi. |
 | Menu ⋯ của phiên | "Theo dõi thành issue", chỉ hiện khi phiên đã bỏ theo dõi. |
 | Workbench → view **Issues** (`IssuesView.vue`) | Issue nhóm theo status: đang làm · bị chặn · tạm dừng · chờ review · cần sửa · cần làm · backlog · xong 7 ngày. Issue `in_progress` không động tới quá 3 ngày được gắn "N ngày chưa động". Phạm vi là project của tab hoặc mọi project. Bấm vào thì mở phiên gần nhất; chuột phải thì có phiên mới / recap / mở board. Badge trên view là số issue bị chặn. |
-| Hàng phiên trong view Sessions | Nhãn status của issue khi không phải "đang làm" (tạm dừng / bị chặn / chờ review / xong). |
+| Hàng phiên trong view Sessions | Nhãn status của issue cho MỌI trạng thái (đang làm, cần làm, tạm dừng, bị chặn, chờ review, xong…). |
 | Sidebar thuộc tính của modal issue (`WorkspaceIssueSidebar.vue`) | Khuôn GitHub: mỗi field là một section có nhãn nhỏ phía trên, giá trị hiện như chữ thường (viền chỉ hiện khi hover/focus), các section ngăn nhau bằng hairline. Field gồm: Giao cho · Loại (Epic / US / Task / Bug) · Trạng thái · Sprint · Ngày bắt đầu · Hạn chót (đỏ kèm "quá hạn N ngày") · Milestone · Thuộc về · Issue liên kết · Pull request. Sprint và milestone là nhãn tự do, gợi ý từ giá trị đã dùng trên board. Link GitHub hiện dạng `repo#123`, bấm để mở. Giai đoạn / Ưu tiên / Mức độ đã rời form; dữ liệu cũ vẫn giữ và agent vẫn đặt được. Form tạo mới dùng cùng sidebar, xếp lưới 3 cột. |
 | Thẻ kanban | Hạn chót (đỏ khi quá hạn) và sprint. |
 | Modal issue trên `/board` → tab Chung | Khối Recap, danh sách phiên đã làm issue, nút "Tiếp tục trong phiên mới" (`sessions.createForIssue`). |

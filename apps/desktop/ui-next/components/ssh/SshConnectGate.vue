@@ -1,22 +1,23 @@
 <template>
-  <div class="scg">
-    <Icon
-      name="conn"
-      style="width: var(--icon-md); height: var(--icon-md); flex: 0 0 auto; color: var(--textDim)"
-    />
-    <span class="scg-msg">{{ t('ssh.conn.needConnect') }}</span>
+  <div class="flex shrink-0 items-center gap-2.5 rounded-lg border bg-card px-3.5 py-3">
+    <Icon name="conn" class="size-4 shrink-0 text-muted-foreground" />
+    <span class="min-w-0 flex-1 text-sm text-muted-foreground">
+      {{ t('ssh.conn.needConnect') }}
+    </span>
     <Button variant="default" size="sm" @click="emit('connect')">
-      <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon name="play" />
       {{ t('ssh.detail.connect') }}
     </Button>
-    <button
-      class="scg-x"
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground"
       :title="t('ssh.panel.close')"
       :aria-label="t('ssh.panel.close')"
       @click="emit('close')"
     >
-      <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
+      <Icon name="x" />
+    </Button>
   </div>
 </template>
 
@@ -29,39 +30,3 @@ import Button from '~/components/ui/button/Button.vue'
 const emit = defineEmits<{ connect: []; close: [] }>()
 const { t } = useI18n()
 </script>
-
-<style scoped>
-.scg {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.scg-msg {
-  flex: 1;
-  min-width: 0;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.scg-x {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.scg-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-</style>

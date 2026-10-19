@@ -1,26 +1,44 @@
 <template>
-  <div class="chapnav">
-    <button
-      class="chapbtn"
-      :class="{ on: open }"
+  <div class="absolute top-2.5 right-13 z-4">
+    <!-- Nút mở = chip nổi; menu mở → wash sáng lên. -->
+    <Button
+      variant="outline"
+      size="iconSm"
+      class="bg-popover text-muted-foreground opacity-70 shadow-sm hover:text-foreground hover:opacity-100 motion-reduce:transition-none"
+      :class="open && 'bg-accent text-accent-foreground opacity-100'"
       :title="t('sessionsSurfaces.chapters.tooltip')"
+      :aria-label="t('sessionsSurfaces.chapters.tooltip')"
       :aria-expanded="open"
       @click.stop="open = !open"
     >
-      <Icon name="listol" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
-    <Transition name="fadepop">
-      <div v-if="open" class="chaplist" @click.stop>
-        <div class="chaphead">{{ t('sessionsSurfaces.chapters.title') }}</div>
-        <button
+      <Icon name="listol" class="size-3.5" />
+    </Button>
+    <Transition
+      enter-active-class="transition duration-150 ease-out motion-reduce:transition-none"
+      leave-active-class="transition duration-100 ease-in motion-reduce:transition-none"
+      enter-from-class="scale-95 opacity-0 motion-reduce:scale-100 motion-reduce:opacity-100"
+      leave-to-class="scale-95 opacity-0 motion-reduce:scale-100 motion-reduce:opacity-100"
+    >
+      <!-- Bảng mục lục = popover chuẩn: bg-popover + viền mảnh + shadow-md. -->
+      <div
+        v-if="open"
+        class="absolute top-8.5 right-0 max-h-80 w-65 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md"
+        @click.stop
+      >
+        <div class="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
+          {{ t('sessionsSurfaces.chapters.title') }}
+        </div>
+        <Button
           v-for="(c, i) in chapters"
           :key="`${c.msgIndex}-${i}`"
-          class="chaprow"
+          variant="ghost"
+          size="sm"
+          class="h-auto w-full items-baseline justify-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-normal text-popover-foreground"
           @click="jump(c.msgIndex)"
         >
-          <span class="chapn">{{ i + 1 }}</span>
-          <span class="chapt">{{ c.title }}</span>
-        </button>
+          <span class="shrink-0 text-muted-foreground tabular-nums">{{ i + 1 }}</span>
+          <span class="min-w-0 truncate">{{ c.title }}</span>
+        </Button>
       </div>
     </Transition>
   </div>
@@ -54,125 +72,3 @@ function closeOnOutside(): void {
 onMounted(() => document.addEventListener('click', closeOnOutside))
 onUnmounted(() => document.removeEventListener('click', closeOnOutside))
 </script>
-
-<style scoped>
-.chapnav {
-  position: absolute;
-  top: 10px;
-  right: 52px;
-  z-index: 4;
-}
-/* Nút mở = chip popover giống .foldbtn; menu mở → wash sáng lên (`bg-accent
-   text-accent-foreground`). */
-.chapbtn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-sm);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  opacity: 0.72;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.chapbtn:hover {
-  opacity: 1;
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.chapbtn:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.chapbtn.on {
-  opacity: 1;
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-/* ToC panel = popover chuẩn: bg-popover + hairline border + shadow-md. */
-.chaplist {
-  position: absolute;
-  top: 34px;
-  right: 0;
-  width: 260px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 4px;
-  border-radius: var(--radius);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-}
-.chaphead {
-  padding: 6px 8px 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-}
-.chaprow {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  text-align: left;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--popover-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.chaprow:hover {
-  background: var(--accent-wash);
-}
-.chaprow:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.chapn {
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-.chapt {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fadepop-enter-active {
-  transition:
-    opacity 0.16s ease-out,
-    transform 0.16s ease-out;
-}
-.fadepop-leave-active {
-  transition:
-    opacity 0.1s ease-in,
-    transform 0.1s ease-in;
-}
-.fadepop-enter-from,
-.fadepop-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
-@media (prefers-reduced-motion: reduce) {
-  .chapbtn,
-  .fadepop-enter-active,
-  .fadepop-leave-active {
-    transition: none;
-  }
-  .fadepop-enter-from,
-  .fadepop-leave-to {
-    opacity: 1;
-    transform: none;
-  }
-}
-</style>

@@ -1,68 +1,113 @@
 <template>
+  <!-- Vùng cuộn ngoài là thứ được ảo hoá (scrollTop/clientHeight); container của Table bỏ
+       overflow để header sticky bám đúng vùng cuộn này. Hàng cố định ROW_H = 24px (h-6) —
+       giữ khớp hằng số trong script. Hairline của ô vẽ bằng inset shadow để không cộng
+       thêm chiều cao vào bước nhảy 24px của cửa sổ ảo. -->
   <div
     ref="scrollEl"
-    class="cap-table"
+    class="relative overflow-auto outline-0 [&_[data-slot=table-container]]:overflow-visible"
     tabindex="0"
     role="grid"
     :aria-rowcount="rows.length"
     @scroll.passive="onScroll"
     @keydown="onKey"
   >
-    <div class="cap-thead cap-grid" role="row">
-      <button
-        v-for="c in COLUMNS"
-        :key="c.key"
-        type="button"
-        class="cap-th"
-        :class="[c.cls, { num: c.num }]"
-        role="columnheader"
-        @click="cap.setSort(c.key)"
-      >
-        {{ t(`capture.col.${c.key}`) }}
-        <span v-if="cap.sort.value.key === c.key" class="cap-caret" aria-hidden="true">
-          {{ cap.sort.value.dir === 'asc' ? '▲' : '▼' }}
-        </span>
-      </button>
-    </div>
+    <Table
+      class="min-w-200 table-fixed [&_td]:h-6 [&_td]:px-1 [&_td]:py-0 [&_td]:whitespace-nowrap [&_td]:shadow-[inset_0_-1px_0_var(--color-border)] [&_td:first-child]:pl-2 [&_td:last-child]:pr-2 [&_th]:px-1 [&_th:first-child]:pl-2 [&_th:last-child]:pr-2 [&_tr]:border-b-0"
+    >
+      <colgroup>
+        <col class="w-13" />
+        <col class="w-16" />
+        <col class="w-16" />
+        <col class="w-[12%]" />
+        <col />
+        <col class="w-21" />
+        <col class="w-19" />
+        <col class="w-19" />
+        <col class="w-24" />
+      </colgroup>
+      <TableHeader class="sticky top-0 z-2 bg-sidebar shadow-[inset_0_-1px_0_var(--color-border)]">
+        <TableRow class="hover:bg-transparent">
+          <TableHead v-for="c in COLUMNS" :key="c.key" class="h-6" role="columnheader">
+            <Button
+              variant="ghost"
+              size="xs"
+              class="h-6 w-full rounded-none px-0 font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
+              :class="c.num ? 'justify-end' : 'justify-start'"
+              @click="cap.setSort(c.key)"
+            >
+              {{ t(`capture.col.${c.key}`) }}
+              <span v-if="cap.sort.value.key === c.key" class="text-xs" aria-hidden="true">
+                {{ cap.sort.value.dir === 'asc' ? '▲' : '▼' }}
+              </span>
+            </Button>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
 
-    <div v-if="rows.length === 0" class="cap-empty">
-      {{ cap.total.value === 0 ? t('capture.empty.none') : t('capture.empty.filtered') }}
-    </div>
+      <TableBody>
+        <TableRow v-if="rows.length === 0" class="hover:bg-transparent">
+          <TableCell
+            :colspan="COLUMNS.length"
+            class="h-auto! p-6! text-center whitespace-normal! text-dim"
+          >
+            {{ cap.total.value === 0 ? t('capture.empty.none') : t('capture.empty.filtered') }}
+          </TableCell>
+        </TableRow>
 
-    <div v-else class="cap-body" :style="{ height: `${rows.length * ROW_H}px` }">
-      <div class="cap-slice" :style="{ transform: `translateY(${start * ROW_H}px)` }">
-        <div
-          v-for="r in slice"
-          :key="r.id"
-          class="cap-row-r cap-grid"
-          :class="[
-            statusClass(r),
-            { sel: r.id === cap.selectedId.value, pending: r.state === 'pending' },
-          ]"
-          role="row"
-          @click="cap.select(r.id)"
-        >
-          <span class="num tnum cap-dim">{{ r.seq }}</span>
-          <span class="cap-meth">{{ r.method }}</span>
-          <span class="cap-st tnum" :title="r.error || r.blockedReason || r.statusText">
-            {{ statusLabel(r) }}
-          </span>
-          <span class="cap-cut" :title="r.host">{{ r.host }}</span>
-          <span class="cap-cut cap-code" :title="r.url">{{ r.path }}</span>
-          <span class="cap-cut cap-dim">{{ r.resourceType }}</span>
-          <span class="num tnum cap-dim">{{ sizeLabel(r) }}</span>
-          <span class="num tnum cap-dim">{{ timeLabel(r) }}</span>
-          <span class="num tnum cap-dim">{{ clock(r.startedAt) }}</span>
-        </div>
-      </div>
-    </div>
+        <template v-else>
+          <!-- Đệm trên/dưới thay cho các dòng ngoài cửa sổ: tổng chiều cao thân bảng vẫn
+               bằng rows × ROW_H nên thanh cuộn đúng tỉ lệ. -->
+          <tr v-if="start > 0" aria-hidden="true" :style="{ height: `${start * ROW_H}px` }" />
+          <TableRow
+            v-for="r in slice"
+            :key="r.id"
+            class="h-6 cursor-default"
+            :class="[
+              r.id === cap.selectedId.value
+                ? '[&>td:first-child]:shadow-[inset_2px_0_0_var(--color-primary),inset_0_-1px_0_var(--color-border)] bg-selected hover:bg-selected'
+                : 'hover:bg-accent',
+              r.state === 'pending' && 'text-dim',
+            ]"
+            @click="cap.select(r.id)"
+          >
+            <TableCell class="tnum text-right text-dim">{{ r.seq }}</TableCell>
+            <TableCell>
+              <Badge variant="outline" class="px-1.5 py-0 font-semibold">{{ r.method }}</Badge>
+            </TableCell>
+            <TableCell :title="r.error || r.blockedReason || r.statusText">
+              <Badge
+                v-if="statusVariant(r)"
+                :variant="statusVariant(r)"
+                class="tnum max-w-full truncate px-1.5 py-0"
+              >
+                {{ statusLabel(r) }}
+              </Badge>
+              <span v-else class="tnum">{{ statusLabel(r) }}</span>
+            </TableCell>
+            <TableCell class="truncate" :title="r.host">{{ r.host }}</TableCell>
+            <!-- Path/URL là chuỗi người dùng copy ⇒ mono. -->
+            <TableCell class="truncate font-mono" :title="r.url">{{ r.path }}</TableCell>
+            <TableCell class="truncate text-dim">{{ r.resourceType }}</TableCell>
+            <TableCell class="tnum text-right text-dim">{{ sizeLabel(r) }}</TableCell>
+            <TableCell class="tnum text-right text-dim">{{ timeLabel(r) }}</TableCell>
+            <TableCell class="tnum text-right text-dim">{{ clock(r.startedAt) }}</TableCell>
+          </TableRow>
+          <tr
+            v-if="end < rows.length"
+            aria-hidden="true"
+            :style="{ height: `${(rows.length - end) * ROW_H}px` }"
+          />
+        </template>
+      </TableBody>
+    </Table>
   </div>
 </template>
 
 <script setup lang="ts">
-// Bảng request ảo hoá: chỉ dựng cửa sổ dòng đang nhìn thấy (+ đệm) trên một thân cao
-// cố định, nên 5000 dòng vẫn cuộn mượt. Chiều cao dòng là SỐ cố định vì việc tính
-// cửa sổ cần nó — giữ khớp với `.cap-row-r` trong network-capture.vue.
+// Bảng request ảo hoá: chỉ dựng cửa sổ dòng đang nhìn thấy (+ đệm) giữa hai hàng đệm
+// cao cố định, nên 5000 dòng vẫn cuộn mượt. Chiều cao dòng là SỐ cố định vì việc tính
+// cửa sổ cần nó — giữ khớp với `h-6` của hàng trong template.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CaptureSummary } from '~/types/network-capture'
 import type { CaptureSortKey } from '~/utils/capture-filter'
@@ -155,13 +200,15 @@ function onKey(ev: KeyboardEvent): void {
   ev.preventDefault()
 }
 
-function statusClass(r: CaptureSummary): string {
-  if (r.state === 'failed') return 'st-failed'
-  if (r.status === null) return ''
-  if (r.status >= 500) return 'st-5xx'
-  if (r.status >= 400) return 'st-4xx'
-  if (r.status >= 300) return 'st-3xx'
-  return 'st-2xx'
+// Màu badge trạng thái theo nhóm mã; chưa có mã (đang chờ) thì không badge.
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive'
+function statusVariant(r: CaptureSummary): StatusVariant | undefined {
+  if (r.state === 'failed') return 'destructive'
+  if (r.status === null) return undefined
+  if (r.status >= 500) return 'destructive'
+  if (r.status >= 400) return 'warning'
+  if (r.status >= 300) return 'info'
+  return 'success'
 }
 const statusLabel = (r: CaptureSummary): string =>
   r.state === 'failed' ? t('capture.status.failed') : r.status === null ? '…' : String(r.status)

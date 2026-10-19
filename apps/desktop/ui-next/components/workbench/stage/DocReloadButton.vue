@@ -2,22 +2,19 @@
   <!-- Nạp lại file từ đĩa. Luôn có; khi useWorkbenchDocs dò thấy file đổi ngoài
        app (fs:changed / chọn tab / cửa sổ lấy lại focus) thì đổi sang màu accent +
        nhãn "Đã thay đổi" để người dùng thấy bản đang xem đã cũ. -->
-  <button
-    type="button"
-    class="flex h-6 flex-none items-center gap-1 rounded-[var(--r-xs)] px-1 transition hover:bg-[var(--bgHover)]"
-    :class="st.diskChanged ? 'text-[var(--accent)]' : 'text-dim hover:text-[var(--text)]'"
+  <Button
+    variant="ghost"
+    size="xs"
+    class="h-6 flex-none gap-1 px-1 font-normal [&_svg]:size-3.5"
+    :class="st.diskChanged ? 'text-primary' : 'text-dim hover:text-foreground'"
     :title="st.diskChanged ? t('workbench.file.reloadChanged') : t('workbench.file.reload')"
     :aria-label="st.diskChanged ? t('workbench.file.reloadChanged') : t('workbench.file.reload')"
     :disabled="busy"
     @click="onReload"
   >
-    <Icon
-      name="refresh"
-      :class="{ 'animate-spin': busy }"
-      style="width: var(--icon-sm); height: var(--icon-sm)"
-    />
+    <Icon name="refresh" :class="{ 'animate-spin': busy }" />
     <span v-if="st.diskChanged" class="text-xs">{{ t('workbench.file.changedOnDisk') }}</span>
-  </button>
+  </Button>
 </template>
 
 <script setup lang="ts">

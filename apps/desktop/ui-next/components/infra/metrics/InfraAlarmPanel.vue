@@ -1,37 +1,42 @@
 <template>
-  <aside class="iap icard">
-    <div class="iap-head">
-      <span class="iap-title">
+  <!-- Da card dùng chung của khu hạ tầng — Card shadcn, không tự khai viền/nền/bóng. -->
+  <Card class="min-h-0 gap-0.5 overflow-y-auto px-3 py-2.5">
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-base font-semibold">
         {{ draft.editing ? t('infra.monitoring.alarm.edit') : t('infra.monitoring.alarm.create') }}
       </span>
-      <button
-        type="button"
-        class="iap-x"
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="text-dim"
         :title="t('infra.monitoring.alarm.cancel')"
         :aria-label="t('infra.monitoring.alarm.cancel')"
         @click="emit('close')"
       >
-        <Icon name="x" class="iap-ic" />
-      </button>
+        <Icon name="x" />
+      </Button>
     </div>
 
-    <div class="iap-metric">
-      <span class="iap-metric-l">{{ t('infra.monitoring.alarm.metric') }}</span>
-      <code class="iap-code">{{ draft.namespace }} / {{ draft.metricName }}</code>
-      <span class="ihint">
+    <div class="mt-1.5 flex flex-col gap-0.5 rounded-md border bg-muted px-2 py-1.5">
+      <span class="text-xs text-faint">{{ t('infra.monitoring.alarm.metric') }}</span>
+      <!-- mono-ok: namespace/metric của CloudWatch là định danh người dùng copy sang AWS CLI -->
+      <code class="font-mono text-sm break-all text-foreground">
+        {{ draft.namespace }} / {{ draft.metricName }}
+      </code>
+      <span class="mt-1.5 text-xs text-faint">
         {{ draft.stat }} · {{ draft.periodSeconds }}s ·
         {{ t(`infra.monitoring.unit.${draft.unit.toLowerCase()}`) }}
       </span>
     </div>
 
-    <div class="ifield">
-      <label class="ilbl" for="iap-threshold">
+    <div class="mt-3 flex flex-col gap-1.5">
+      <Label for="iap-threshold" class="text-sm font-normal text-dim">
         {{
           t('infra.monitoring.alarm.thresholdValue', {
             v: formatMetricValue(draft.threshold, draft.unit),
           })
         }}
-      </label>
+      </Label>
       <Input
         id="iap-threshold"
         type="number"
@@ -42,11 +47,11 @@
       />
       <!-- Kéo trên biểu đồ và gõ ở đây sửa CÙNG một trường; nói ra để không ai đi tìm
            một ô ngưỡng thứ hai ở nơi khác. -->
-      <p class="ihint">{{ t('infra.monitoring.alarm.dragHint') }}</p>
+      <p class="text-xs text-faint">{{ t('infra.monitoring.alarm.dragHint') }}</p>
     </div>
 
-    <div class="ifield">
-      <span class="ilbl iap-lbl">{{ t('infra.monitoring.alarm.comparison') }}</span>
+    <div class="mt-3 flex flex-col gap-1.5">
+      <span class="text-sm text-dim">{{ t('infra.monitoring.alarm.comparison') }}</span>
       <AppSelect
         :model-value="draft.comparisonOperator"
         :options="operatorOptions"
@@ -55,8 +60,10 @@
       />
     </div>
 
-    <div class="ifield">
-      <label class="ilbl" for="iap-eval">{{ t('infra.monitoring.alarm.evaluationPeriods') }}</label>
+    <div class="mt-3 flex flex-col gap-1.5">
+      <Label for="iap-eval" class="text-sm font-normal text-dim">
+        {{ t('infra.monitoring.alarm.evaluationPeriods') }}
+      </Label>
       <Input
         id="iap-eval"
         type="number"
@@ -68,8 +75,8 @@
       />
     </div>
 
-    <div class="ifield">
-      <span class="ilbl iap-lbl">{{ t('infra.monitoring.alarm.treatMissingData') }}</span>
+    <div class="mt-3 flex flex-col gap-1.5">
+      <span class="text-sm text-dim">{{ t('infra.monitoring.alarm.treatMissingData') }}</span>
       <AppSelect
         :model-value="draft.treatMissingData"
         :options="treatOptions"
@@ -78,8 +85,10 @@
       />
     </div>
 
-    <div class="ifield">
-      <label class="ilbl" for="iap-name">{{ t('infra.monitoring.alarm.name') }}</label>
+    <div class="mt-3 flex flex-col gap-1.5">
+      <Label for="iap-name" class="text-sm font-normal text-dim">
+        {{ t('infra.monitoring.alarm.name') }}
+      </Label>
       <Input
         id="iap-name"
         type="text"
@@ -91,19 +100,23 @@
       />
     </div>
 
-    <div class="ifield">
-      <label class="ilbl" for="iap-desc">{{ t('infra.monitoring.alarm.description') }}</label>
-      <textarea
+    <div class="mt-3 flex flex-col gap-1.5">
+      <Label for="iap-desc" class="text-sm font-normal text-dim">
+        {{ t('infra.monitoring.alarm.description') }}
+      </Label>
+      <Textarea
         id="iap-desc"
-        class="iin iap-ta"
+        class="min-h-12 resize-y"
         rows="2"
-        :value="draft.alarmDescription"
-        @input="setText('alarmDescription', $event)"
+        :model-value="draft.alarmDescription"
+        @update:model-value="(v: string | number) => setText('alarmDescription', String(v))"
       />
     </div>
 
-    <div class="ifield">
-      <label class="ilbl" for="iap-actions">{{ t('infra.monitoring.alarm.actions') }}</label>
+    <div class="mt-3 flex flex-col gap-1.5">
+      <Label for="iap-actions" class="text-sm font-normal text-dim">
+        {{ t('infra.monitoring.alarm.actions') }}
+      </Label>
       <Input
         id="iap-actions"
         type="text"
@@ -113,10 +126,10 @@
         class="flex-1"
         @update:model-value="setText('alarmActions', $event)"
       />
-      <p class="ihint">{{ t('infra.monitoring.alarm.actionsHint') }}</p>
+      <p class="text-xs text-faint">{{ t('infra.monitoring.alarm.actionsHint') }}</p>
     </div>
 
-    <div class="iap-foot">
+    <div class="mt-3 flex gap-1.5">
       <Button
         type="button"
         :disabled="saving"
@@ -124,15 +137,15 @@
         variant="default"
         @click="emit('save')"
       >
-        <Icon v-if="!saving" name="save" class="iap-ic" />
-        <Icon v-else name="refresh" class="iap-ic iap-spin" />
+        <Icon v-if="!saving" name="save" />
+        <Icon v-else name="refresh" class="animate-spin" />
         {{ t('infra.monitoring.alarm.save') }}
       </Button>
       <Button type="button" :disabled="saving" variant="outline" @click="emit('close')">
         {{ t('infra.monitoring.alarm.cancel') }}
       </Button>
     </div>
-  </aside>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -196,106 +209,3 @@ function setNumber(key: 'threshold' | 'evaluationPeriods', v: string): void {
   if (Number.isFinite(n)) set(key, n)
 }
 </script>
-
-<style scoped>
-.iap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 10px 12px;
-  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — xem app-shell.css. Bốn khối
-     của màn này TỪNG tự khai lại cùng một bộ, với ba nền khác nhau (`--bgSubtle`,
-     `--bgEl`), nên chúng đọc ra thành ba loại bề mặt trong cùng một màn. */
-}
-
-.iap-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.iap-title {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 650;
-}
-
-.iap-x {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-
-.iap-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-
-.iap-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.iap-spin {
-  animation: iap-rot 1s linear infinite;
-}
-
-@keyframes iap-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.iap-metric {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-}
-
-/* `.ilbl` của app-shell là một khối (mọi chỗ dùng nó là `<div>`); ở đây nó gắn trên
-   `<label>` để ô nhập có tên thật, mà `<label>` mặc định là inline nên `margin-bottom`
-   của token không có tác dụng. */
-.iap label,
-.iap-lbl {
-  display: block;
-}
-
-.iap-metric-l {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.iap-code {
-  /* mono-ok: namespace/metric của CloudWatch là định danh người dùng copy sang AWS CLI */
-  font-family: var(--code);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  word-break: break-all;
-}
-
-.iap-ta {
-  resize: vertical;
-  min-height: 48px;
-}
-
-.iap-foot {
-  display: flex;
-  gap: 6px;
-  margin-top: 12px;
-}
-</style>

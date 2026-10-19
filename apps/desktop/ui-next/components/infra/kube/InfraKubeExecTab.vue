@@ -7,8 +7,16 @@
 
        `root: null` vì transport này không phải PTY cục bộ (không cần cwd của
        workspace); `canCreatePane` trong host chỉ đòi cwd cho transport cục bộ nên
-       transport tuỳ biến vẫn spawn được. -->
-  <div class="ikm-term">
+       transport tuỳ biến vẫn spawn được.
+
+       Bố cục: shell lấp hết phần thân modal còn lại. PHẢI là cột flex — mặc định ROW
+       thì root của WorkspaceTerminal co theo NỘI DUNG (chỉ rộng bằng thanh tab).
+       Root đó mặc định `height:100%`, mà chiều cao ở đây do FLEX quyết nên % không
+       resolve và terminal co về ~33px (đo tại chỗ: khung 360 mà terminal 33) ⇒ không
+       đo được cỡ → không spawn. Vì vậy con trực tiếp được GROW (`*:flex-1`) thay vì
+       dựa vào %-height. `min-h-90` (360px) để cửa sổ thấp vẫn gõ được — thân modal
+       tự cuộn khi thiếu chỗ. -->
+  <div class="flex min-h-90 min-w-0 flex-auto flex-col *:min-h-0 *:flex-1">
     <WorkspaceTerminal
       :root="null"
       :ready="sc.available"

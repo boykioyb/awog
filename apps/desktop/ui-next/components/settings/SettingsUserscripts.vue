@@ -1,27 +1,31 @@
 <template>
   <div>
     <SettingsPaneHeader :title="t('userscripts.settings.heading')" />
-    <p class="su-intro">{{ t('userscripts.settings.intro') }}</p>
-    <p class="su-note">
-      <Icon name="warn" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span>{{ t('userscripts.settings.agentNote') }}</span>
-    </p>
+    <p class="mt-0 mb-3 text-sm text-dim">{{ t('userscripts.settings.intro') }}</p>
+    <Alert class="mb-3 px-2.5 py-2 text-dim">
+      <Icon name="warn" class="text-warning" />
+      <AlertDescription class="text-sm text-dim">
+        {{ t('userscripts.settings.agentNote') }}
+      </AlertDescription>
+    </Alert>
 
-    <div v-if="!hasEngine" class="su-intro">{{ t('userscripts.settings.unavailable') }}</div>
+    <div v-if="!hasEngine" class="mb-3 text-sm text-dim">
+      {{ t('userscripts.settings.unavailable') }}
+    </div>
 
     <template v-else>
-      <div class="su-toolbar">
+      <div class="mb-2.5 flex gap-2">
         <Button size="sm" variant="default" @click="openNew">
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="plus" class="size-3.5" />
           {{ t('userscripts.settings.add') }}
         </Button>
         <Button size="sm" variant="outline" @click="importOpen = !importOpen">
-          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="download" class="size-3.5" />
           {{ t('userscripts.settings.importUrl') }}
         </Button>
       </div>
 
-      <form v-if="importOpen" class="su-import" @submit.prevent="onImport">
+      <form v-if="importOpen" class="mb-2.5 flex gap-2" @submit.prevent="onImport">
         <Input
           v-model="importDraft"
           type="text"
@@ -38,42 +42,66 @@
           {{ importing ? t('userscripts.settings.importing') : t('userscripts.settings.import') }}
         </Button>
       </form>
-      <div v-if="importError" class="su-err" role="alert">{{ importError }}</div>
+      <div
+        v-if="importError"
+        class="mb-2.5 rounded-lg bg-destructive/10 px-2.5 py-2 text-sm whitespace-pre-wrap text-destructive"
+        role="alert"
+      >
+        {{ importError }}
+      </div>
 
-      <div v-if="!scripts.length" class="su-empty">{{ t('userscripts.settings.empty') }}</div>
+      <div
+        v-if="!scripts.length"
+        class="rounded-xl border border-dashed px-3 py-4 text-center text-sm text-faint"
+      >
+        {{ t('userscripts.settings.empty') }}
+      </div>
 
-      <div v-for="s in scripts" :key="s.id" class="su-row" :class="{ off: !s.enabled }">
-        <div class="su-head">
-          <span class="su-name">{{ s.meta.name }}</span>
-          <span v-if="s.meta.version" class="su-ver">{{ s.meta.version }}</span>
+      <div
+        v-for="s in scripts"
+        :key="s.id"
+        class="mb-2 flex flex-col gap-1.5 rounded-xl border px-3 py-2.5"
+      >
+        <div class="flex items-center gap-2">
           <span
+            class="min-w-0 truncate text-base"
+            :class="s.enabled ? 'text-foreground' : 'text-dim'"
+          >
+            {{ s.meta.name }}
+          </span>
+          <span v-if="s.meta.version" class="text-xs text-faint">{{ s.meta.version }}</span>
+          <Badge
             v-if="s.warnings.length"
-            class="su-warn"
+            variant="warning"
             :title="s.warnings.join('\n')"
             :aria-label="s.warnings.join(' · ')"
           >
-            <Icon name="warn" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="warn" />
             {{ t('userscripts.settings.warnings', { count: s.warnings.length }) }}
-          </span>
+          </Badge>
           <span class="flex-1" />
-          <button
+          <Button
             type="button"
-            class="su-btn"
+            variant="ghost"
+            size="iconSm"
+            class="text-dim"
             :title="t('common.edit')"
             :aria-label="t('common.edit')"
             @click="openEdit(s.id)"
           >
-            <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
+            <Icon name="edit" />
+          </Button>
+          <Button
             type="button"
-            class="su-btn su-del"
+            variant="ghost"
+            size="iconSm"
+            class="text-dim hover:bg-destructive/10 hover:text-destructive"
             :title="t('common.delete')"
             :aria-label="t('common.delete')"
             @click="onDelete(s)"
           >
-            <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="trash" />
+          </Button>
           <Switch
             :checked="s.enabled"
             :title="t('userscripts.settings.enabled')"
@@ -81,12 +109,18 @@
             @update:checked="run(() => api.setEnabled(s.id, $event))"
           />
         </div>
-        <div v-if="s.meta.description" class="su-desc">{{ s.meta.description }}</div>
-        <div class="su-meta">
-          <span class="su-match" :title="patternsOf(s).join('\n')">{{ matchSummary(s) }}</span>
-          <span class="chip">{{ s.meta.runAt }}</span>
+        <div v-if="s.meta.description" class="text-sm text-dim">{{ s.meta.description }}</div>
+        <div class="flex min-w-0 items-center gap-2">
+          <!-- mono-ok: pattern @match là chuỗi kỹ thuật người dùng copy-paste -->
+          <span
+            class="min-w-0 truncate font-mono text-xs text-faint"
+            :title="patternsOf(s).join('\n')"
+          >
+            {{ matchSummary(s) }}
+          </span>
+          <Badge variant="outline" class="text-muted-foreground">{{ s.meta.runAt }}</Badge>
         </div>
-        <ul v-if="s.warnings.length" class="su-warnlist">
+        <ul v-if="s.warnings.length" class="m-0 list-disc pl-4.5 text-xs text-warning">
           <li v-for="w in s.warnings" :key="w">{{ w }}</li>
         </ul>
       </div>
@@ -106,8 +140,6 @@
 // Mọi thao tác ghi đi qua sidecar (`userscripts.*`); sidecar parse header, UI chỉ hiển
 // thị. Xoá là phá huỷ (mất cả mã nguồn người dùng đã viết) nên đi qua confirm().
 import type { UserscriptItem } from '~/types'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 import Switch from '~/components/ui/switch/Switch.vue'
 import UserscriptEditorModal from '~/components/userscript/UserscriptEditorModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
@@ -191,147 +223,3 @@ const onDelete = async (s: UserscriptItem): Promise<void> => {
   if (ok) await run(() => api.remove(s.id))
 }
 </script>
-
-<style scoped>
-.su-intro {
-  margin: 0 0 12px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.su-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.su-note svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--amber);
-}
-.su-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.su-import {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.su-err {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border-radius: var(--r-btn);
-  background: var(--dangerBg);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-}
-.su-empty {
-  padding: 16px 12px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r-card);
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-.su-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-}
-.su-row.off .su-name {
-  color: var(--textDim);
-}
-.su-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.su-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.su-ver {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.su-warn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--amber) 16%, transparent);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.su-btn {
-  display: flex;
-  align-items: center;
-  padding: 6px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.su-btn:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.su-del:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
-}
-.su-desc {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.su-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.su-match {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--textFaint);
-  font-family: var(--code); /* mono-ok: pattern @match là chuỗi kỹ thuật người dùng copy-paste */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.su-warnlist {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  list-style: disc;
-}
-</style>

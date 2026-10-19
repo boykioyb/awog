@@ -1,49 +1,52 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="ovl on sfmod-ovl" @click.self="emit('cancel')">
-      <div class="sfmod-card" role="dialog" aria-modal="true">
-        <div class="sfmod-head">
-          <Icon name="settings" class="sfmod-icn" />
-          <span class="sfmod-title">{{ t('ssh.sftp.chown.title') }}</span>
-        </div>
-        <div class="sfmod-sub">{{ subtitle }}</div>
+  <!-- z-200: band hộp thoại trên cùng — mở từ SFTP browser có thể đang nằm trong modal. -->
+  <Dialog :open="open" @update:open="(v: boolean) => !v && emit('cancel')">
+    <DialogContent class="z-200 flex max-w-[92vw] flex-col gap-3 rounded-xl p-4.5 sm:max-w-90">
+      <DialogHeader class="flex-row items-center gap-2">
+        <Icon name="settings" class="size-4 shrink-0 text-primary" />
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          {{ t('ssh.sftp.chown.title') }}
+        </DialogTitle>
+      </DialogHeader>
+      <DialogDescription class="text-sm break-all text-muted-foreground">
+        {{ subtitle }}
+      </DialogDescription>
 
-        <label class="sfmod-field">
-          <span>{{ t('ssh.sftp.chown.owner') }}</span>
-          <Input
-            ref="ownerInput"
-            v-model="owner"
-            spellcheck="false"
-            placeholder="root"
-            class="sfmod-in mono"
-            @keydown.enter="submit"
-          />
-        </label>
-        <label class="sfmod-field">
-          <span>{{ t('ssh.sftp.chown.group') }}</span>
-          <Input
-            v-model="group"
-            spellcheck="false"
-            :placeholder="t('ssh.sftp.chown.groupPh')"
-            class="sfmod-in mono"
-            @keydown.enter="submit"
-          />
-        </label>
-        <label class="sfmod-check">
-          <input v-model="recursive" type="checkbox" />
-          <span>{{ t('ssh.sftp.chown.recursive') }}</span>
-        </label>
-        <div class="sfmod-hint">{{ t('ssh.sftp.chown.hint') }}</div>
+      <label class="flex flex-col gap-1 text-sm text-muted-foreground">
+        <span>{{ t('ssh.sftp.chown.owner') }}</span>
+        <Input
+          ref="ownerInput"
+          v-model="owner"
+          spellcheck="false"
+          placeholder="root"
+          class="font-mono"
+          @keydown.enter="submit"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-sm text-muted-foreground">
+        <span>{{ t('ssh.sftp.chown.group') }}</span>
+        <Input
+          v-model="group"
+          spellcheck="false"
+          :placeholder="t('ssh.sftp.chown.groupPh')"
+          class="font-mono"
+          @keydown.enter="submit"
+        />
+      </label>
+      <label class="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox :model-value="recursive" @update:model-value="recursive = $event === true" />
+        <span>{{ t('ssh.sftp.chown.recursive') }}</span>
+      </label>
+      <div class="text-xs text-muted-foreground">{{ t('ssh.sftp.chown.hint') }}</div>
 
-        <div class="sfmod-foot">
-          <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
-          <Button :disabled="!valid" variant="default" @click="submit">
-            {{ t('ssh.sftp.chown.apply') }}
-          </Button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+      <DialogFooter class="gap-2">
+        <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!valid" variant="default" @click="submit">
+          {{ t('ssh.sftp.chown.apply') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -92,93 +95,3 @@ const subtitle = computed(() =>
     : t('ssh.sftp.chmod.many', { count: props.targets.length }),
 )
 </script>
-
-<style scoped>
-.sfmod-ovl {
-  align-items: center;
-  padding-top: 0;
-  z-index: 200;
-}
-.sfmod-card {
-  width: 360px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.sfmod-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.sfmod-icn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  color: var(--accent);
-}
-.sfmod-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.sfmod-sub {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  word-break: break-all;
-}
-.sfmod-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sfmod-in {
-  padding: 7px 9px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.sfmod-in:focus {
-  border-color: var(--accent);
-}
-.sfmod-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  cursor: pointer;
-}
-.sfmod-check input {
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-.sfmod-hint {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-sm);
-}
-.sfmod-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-</style>

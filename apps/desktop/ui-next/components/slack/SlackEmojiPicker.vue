@@ -11,7 +11,7 @@
         side="top"
         align="end"
         :side-offset="6"
-        class="z-[180] flex h-[360px] w-[320px] flex-col gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-md"
+        class="z-180 flex h-90 w-80 flex-col gap-2 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-md"
         @open-auto-focus.prevent
       >
         <SlackEmojiPickerPanel :team-id="teamId" :custom-url="customUrl" @pick="pick" />
@@ -22,7 +22,7 @@
 
 <script setup lang="ts">
 // Nút mở bảng chọn emoji cho reaction. Nội dung bảng ở SlackEmojiPickerPanel.
-// Khung CAO CỐ ĐỊNH (h-[360px]): trước đây cao theo nội dung ⇒ đổi sang tab rỗng
+// Khung CAO CỐ ĐỊNH (h-90 = 360px): trước đây cao theo nội dung ⇒ đổi sang tab rỗng
 // (Tuỳ chỉnh không có emoji) làm khung co lại và reka lật popover trên/dưới loạn xạ.
 import { ref } from 'vue'
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui'

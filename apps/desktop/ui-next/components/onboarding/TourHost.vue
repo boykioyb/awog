@@ -1,30 +1,47 @@
 <template>
   <Teleport to="body">
-    <div v-if="active" class="tour-root" @click.self="noop">
+    <!-- data-tour-overlay: hook để người điều phối thêm vào OVERLAYS (useEmbeddedBrowser). -->
+    <div v-if="active" data-tour-overlay class="fixed inset-0 z-250" @click.self="noop">
       <!-- Spotlight: a transparent box over the target whose huge box-shadow dims
-           everything else. Hidden until the target rect is known. -->
-      <div v-if="rect" class="tour-spot" :style="spotStyle" />
+           everything else. Hidden until the target rect is known. Vị trí/kích thước
+           inline vì tính từ rect của phần tử đích lúc chạy. -->
+      <div
+        v-if="rect"
+        class="pointer-events-none fixed rounded-lg border-2 border-primary shadow-[0_0_0_9999px_rgb(0_0_0/0.55)] transition-[top,left,width,height] duration-180 ease-in-out motion-reduce:transition-none"
+        :style="spotStyle"
+      />
 
-      <div ref="popEl" class="tour-pop" :style="popStyle" role="dialog" aria-modal="true">
-        <div class="tour-pop-title">{{ step ? t(step.titleKey) : '' }}</div>
-        <div class="tour-pop-body">{{ step ? t(step.bodyKey) : '' }}</div>
-        <div class="tour-pop-foot">
-          <div class="tour-dots">
+      <!-- Coachmark: rộng theo nội dung (footer nowrap không bị cắt) nhưng chặn bề rộng
+           thân cho dễ đọc. -->
+      <div
+        ref="popEl"
+        class="fixed z-251 w-max max-w-[min(340px,calc(100vw-24px))] min-w-65 rounded-lg border border-input bg-card px-4 py-3.5 shadow-lg transition-[top,left] duration-180 ease-in-out motion-reduce:transition-none"
+        :style="popStyle"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="mb-1 font-semibold text-foreground">{{ step ? t(step.titleKey) : '' }}</div>
+        <div class="mb-3 text-muted-foreground">{{ step ? t(step.bodyKey) : '' }}</div>
+        <!-- flex-wrap chỉ là dự phòng khi viewport hẹp hơn hàng nút. -->
+        <div class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+          <div class="flex gap-1.5">
             <span
               v-for="(s, i) in steps"
               :key="s.id"
-              class="tour-dot"
-              :class="{ on: i === stepIndex }"
+              class="size-2 rounded-full"
+              :class="i === stepIndex ? 'bg-primary' : 'bg-border'"
             />
           </div>
-          <div class="tour-actions">
-            <button class="tbtn" @click="end">{{ t('onboarding.tour.skip') }}</button>
-            <button v-if="!isFirst" class="tbtn" @click="prev">
+          <div class="ml-auto flex shrink-0 gap-1.5">
+            <Button variant="ghost" size="sm" class="text-dim" @click="end">
+              {{ t('onboarding.tour.skip') }}
+            </Button>
+            <Button v-if="!isFirst" variant="ghost" size="sm" class="text-dim" @click="prev">
               {{ t('onboarding.tour.prev') }}
-            </button>
-            <button class="tbtn pri" @click="next">
+            </Button>
+            <Button variant="default" size="sm" @click="next">
               {{ isLast ? t('onboarding.tour.done') : t('onboarding.tour.next') }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -191,109 +208,3 @@ watch(stepIndex, () => {
 
 onBeforeUnmount(unbindListeners)
 </script>
-
-<style scoped>
-.tour-root {
-  position: fixed;
-  inset: 0;
-  z-index: 250;
-}
-.tour-spot {
-  position: fixed;
-  border-radius: var(--r-btn);
-  border: 2px solid var(--accent);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
-  pointer-events: none;
-  transition:
-    top 180ms ease,
-    left 180ms ease,
-    width 180ms ease,
-    height 180ms ease;
-}
-.tour-pop {
-  position: fixed;
-  /* Fit content (so the nowrap footer never clips) but cap the body width for
-     readability. The footer's nowrap buttons feed max-content, so the card is
-     always at least as wide as the action row. */
-  width: max-content;
-  min-width: 260px;
-  max-width: min(340px, calc(100vw - 24px));
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
-  padding: 14px 15px;
-  box-shadow: var(--shadow-lg);
-  z-index: 251;
-  transition:
-    top 180ms ease,
-    left 180ms ease;
-}
-.tour-pop-title {
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 5px;
-}
-.tour-pop-body {
-  color: var(--textMuted);
-  line-height: var(--lh-md);
-  margin-bottom: 13px;
-}
-.tour-pop-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* Fallback only — on a viewport narrower than the action row, let the buttons
-     drop below the dots instead of overflowing. */
-  flex-wrap: wrap;
-  row-gap: 8px;
-}
-.tour-dots {
-  display: flex;
-  gap: 6px;
-}
-.tour-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border);
-}
-.tour-dot.on {
-  background: var(--accent);
-}
-.tour-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.tbtn {
-  border: 0;
-  border-radius: var(--r-xs);
-  padding: 5px 11px;
-  font-size: 1em;
-  font-weight: 500;
-  color: var(--textDim);
-  background: transparent;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.tbtn:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.tbtn.pri {
-  color: var(--accentText);
-  background: var(--accent);
-}
-.tbtn.pri:hover {
-  color: var(--accentText);
-  filter: brightness(1.05);
-}
-@media (prefers-reduced-motion: reduce) {
-  .tour-spot,
-  .tour-pop {
-    transition: none;
-  }
-}
-</style>

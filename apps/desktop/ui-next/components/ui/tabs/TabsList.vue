@@ -3,7 +3,7 @@
     v-bind="$attrs"
     :class="
       cn(
-        'inline-flex h-[var(--ctrl-h)] items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
+        'inline-flex h-(--ctrl-h) items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground',
         $attrs.class,
       )
     "

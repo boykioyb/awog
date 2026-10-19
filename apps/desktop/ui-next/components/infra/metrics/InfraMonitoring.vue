@@ -14,11 +14,13 @@
 
        SFC này chỉ ghép khối + bind. Mọi state/lời gọi RPC nằm ở `useInfraMetrics()`
        (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
-  <div class="im">
-    <!-- Thanh công cụ là một CARD (`.itoolbar`, app-shell.css): ở theme sáng nền
-         trang và nền panel gần như không phân biệt được, nên một hàng control trôi
-         thẳng trên trang đọc ra thành các nút rời chứ không phải một thanh. -->
-    <div class="itoolbar ifields im-tool">
+  <!-- Cùng lề với Logs · Bảng điều khiển · Chi phí · Báo cáo. -->
+  <div class="flex h-full min-h-0 flex-col gap-2 px-4 py-3.5">
+    <!-- Thanh công cụ là một CARD: ở theme sáng nền trang và nền panel gần như không
+         phân biệt được, nên một hàng control trôi thẳng trên trang đọc ra thành các
+         nút rời chứ không phải một thanh. Ô nhãn-trên-control căn theo ĐÁY: nhãn cao
+         thấp khác nhau thì căn giữa đẩy các ô lệch nhau theo trục dọc. -->
+    <Card class="shrink-0 flex-row flex-wrap items-end gap-2.5 px-2.5 py-2">
       <InfraResourcePicker
         :model-value="target"
         :groups="pickerGroups"
@@ -30,8 +32,8 @@
         @reload="loadTargets(true)"
       />
 
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.monitoring.window.label') }}</div>
+      <div class="flex min-w-35 flex-col gap-1">
+        <div class="text-xs text-muted-foreground">{{ t('infra.monitoring.window.label') }}</div>
         <InfraTimeRange v-model="win" :default-seconds="3 * 3600" />
       </div>
 
@@ -39,7 +41,7 @@
            thanh gãy ở giữa chúng: ở cỡ cửa sổ thường "Nạp" ở lại hàng trên còn
            "Nạp lại"/"Mở ở Nhật ký" rơi xuống hàng dưới, tách nút chính khỏi hai
            nút anh em của nó (ảnh người dùng 2026-09-16). -->
-      <div class="itoolgrp">
+      <div class="flex shrink-0 flex-wrap items-center gap-1.5">
         <Button
           type="button"
           :disabled="loading || !windowValid || !target"
@@ -48,7 +50,7 @@
           variant="default"
           @click="load(false)"
         >
-          <Icon name="play" class="im-ic" />
+          <Icon name="play" />
           {{ t('infra.monitoring.load') }}
         </Button>
         <Button
@@ -58,7 +60,7 @@
           variant="outline"
           @click="reload()"
         >
-          <Icon name="refresh" class="im-ic" :class="loading ? 'im-spin' : ''" />
+          <Icon name="refresh" :class="loading ? 'animate-spin' : ''" />
           {{ t('infra.monitoring.reload') }}
         </Button>
         <Button
@@ -68,20 +70,26 @@
           variant="outline"
           @click="sendToLogs()"
         >
-          <Icon name="forward" class="im-ic" />
+          <Icon name="forward" />
           {{ t('infra.monitoring.window.sendToLogs') }}
         </Button>
       </div>
-    </div>
+    </Card>
 
-    <!-- Câu lỗi của lượt dò danh sách đứng ở ĐÂY, không trong `.im-tool`: thanh đó
+    <!-- Câu lỗi của lượt dò danh sách đứng ở ĐÂY, không trong thanh công cụ: thanh đó
          là flex-wrap, nên một đoạn văn nằm trong nó sẽ quyết định hàng gãy ở đâu và
          làm vỡ cả bố cục (lỗi thật 2026-09-16). Một dòng, cắt bằng ellipsis, toàn
          văn trong `title`. -->
-    <p v-if="pickerError" class="im-targeterr" :title="pickerError">{{ pickerError }}</p>
+    <p
+      v-if="pickerError"
+      class="mt-0.5 mb-1.5 truncate text-xs leading-(--lh-prose) text-warning"
+      :title="pickerError"
+    >
+      {{ pickerError }}
+    </p>
 
-    <div class="im-status">
-      <span class="ihint">
+    <div class="mt-1.5 flex flex-wrap items-baseline gap-2.5">
+      <span class="text-xs text-faint">
         <template v-if="target">
           {{ t(`infra.monitoring.kind.${target.kind}`) }} · {{ target.label }} ·
         </template>
@@ -94,12 +102,16 @@
           }}
         </template>
       </span>
-      <span v-if="windowDirty && loadedAt" class="iwarn">{{ dirtyLabel }}</span>
-      <span v-if="partialKeys.length > 0" class="iwarn">{{ t('infra.monitoring.partial') }}</span>
+      <span v-if="windowDirty && loadedAt" class="text-xs text-warning">{{ dirtyLabel }}</span>
+      <span v-if="partialKeys.length > 0" class="text-xs text-warning">
+        {{ t('infra.monitoring.partial') }}
+      </span>
     </div>
 
-    <p v-if="!sidecarAvailable" class="ierr">{{ t('infra.monitoring.sidecarUnavailable') }}</p>
-    <p v-else-if="error" class="ierr">{{ error }}</p>
+    <p v-if="!sidecarAvailable" class="mt-1.5 text-xs text-destructive">
+      {{ t('infra.monitoring.sidecarUnavailable') }}
+    </p>
+    <p v-else-if="error" class="mt-1.5 text-xs text-destructive">{{ error }}</p>
 
     <!-- CHƯA CHỌN TÀI NGUYÊN ⇒ MỘT câu, không phải một lưới khung rỗng. Bốn khung
          "thiếu dữ liệu" là lời nói dối: chúng khiến người dùng đi tìm lỗi ở AWS
@@ -110,7 +122,7 @@
       :hint="hasAccount ? t('infra.monitoring.empty.hint') : t('infra.monitoring.noProfile')"
     />
 
-    <div v-else class="im-body">
+    <div v-else class="flex min-h-0 flex-col gap-2.5 overflow-y-auto pb-1">
       <InfraAlarmStrip
         :alarms="targetAlarms"
         :state="worstState"
@@ -123,8 +135,11 @@
 
       <InfraMonitoringTiles :tiles="tiles" />
 
-      <div class="im-main">
-        <div class="im-grid">
+      <!-- Cửa sổ hẹp: lưới 2×2 nhường chỗ cho một cột, panel cảnh báo xuống dưới biểu đồ. -->
+      <div class="flex min-w-0 items-start gap-2.5 max-[1180px]:flex-col">
+        <div
+          class="grid min-w-0 flex-auto grid-cols-2 gap-3 max-[1180px]:w-full max-[1180px]:grid-cols-1"
+        >
           <MetricChart
             v-for="c in charts"
             :key="c.key"
@@ -145,7 +160,10 @@
           />
         </div>
 
-        <div v-if="draft || historyName" class="im-side">
+        <div
+          v-if="draft || historyName"
+          class="flex min-w-0 flex-[0_0_20rem] flex-col gap-2.5 max-[1180px]:w-full max-[1180px]:flex-auto"
+        >
           <InfraAlarmPanel
             v-if="draft"
             :draft="draft"
@@ -191,18 +209,20 @@
         @run="runLogErrors()"
       />
 
-      <div class="im-ask">
-        <span class="im-asklbl">{{ t('infra.monitoring.title') }}</span>
-        <button
+      <!-- Chip câu hỏi — cùng hình với chip của màn Chi phí để hai màn là một họ. -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-sm text-faint">{{ t('infra.monitoring.title') }}</span>
+        <Button
           v-for="s in askSuggestions"
           :key="s.key"
-          type="button"
-          class="im-chip"
+          variant="outline"
+          size="xs"
+          class="block h-auto max-w-full truncate rounded-full px-2.5 py-1 text-sm font-normal text-dim shadow-none hover:border-selected-border hover:bg-transparent hover:text-primary"
           :disabled="!loadedAt"
           @click="ask(s.text)"
         >
           {{ s.text }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -388,141 +408,3 @@ const dirtyLabel = computed(() =>
   }),
 )
 </script>
-
-<style scoped>
-/* Một dòng, cắt bằng ellipsis: stderr của AWS dài và thanh công cụ ngay trên nó
-   là flex-wrap. Toàn văn nằm trong `title`. */
-.im-targeterr {
-  margin: 2px 0 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--amber);
-}
-
-.im {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  gap: 8px;
-  /* Cùng lề với Logs · Bảng điều khiển · Chi phí · Báo cáo (14px 16px). */
-  padding: 14px 16px;
-}
-
-/* Bố cục + da của thanh, và khuôn `.ifield` bên trong thanh, nay ở app-shell.css. */
-
-.im-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.im-spin {
-  animation: im-rot 1s linear infinite;
-}
-
-@keyframes im-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.im-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.im-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 4px;
-}
-
-.im-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-
-.im-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.im-side {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 0 0 320px;
-  min-width: 0;
-}
-
-.im-ask {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.im-asklbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-/* Tự khai toàn bộ. Trước đây hàng này mượn `.mc-chip` — một class `<style scoped>`
-   của `MetricChart.vue`, nên nó KHÔNG BAO GIỜ với tới đây và ba chip câu hỏi
-   render thành chữ trần, đọc như một câu văn dính liền (ảnh người dùng
-   2026-09-16). Cùng hình với `.icst-chip` của màn Chi phí để hai màn là một họ. */
-.im-chip {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-
-.im-chip:hover:not(:disabled) {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-}
-
-.im-chip:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* Cửa sổ hẹp: lưới 2×2 nhường chỗ cho một cột, panel cảnh báo xuống dưới biểu đồ. */
-@media (max-width: 1180px) {
-  .im-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .im-main {
-    flex-direction: column;
-  }
-
-  .im-side {
-    flex: 1 1 auto;
-    width: 100%;
-  }
-}
-</style>

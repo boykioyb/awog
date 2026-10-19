@@ -9,21 +9,19 @@
        text keeps streaming — no per-frame diagram work.
        An ```awog:widget fence follows the SAME streaming rule and renders inside a
        sandboxed frame (SessionWidgetBlock) — never into this document. -->
-  <div
-    v-if="!buffering"
-    ref="rootEl"
-    class="blk txt mdwrap"
-    :class="{ 'tw-on': caret, respcapped: bubble }"
-  >
+  <!-- hook-ok: `.blk.txt` được useSessionFind.ts đọc (querySelectorAll) để tô kết quả tìm -->
+  <div v-if="!buffering" ref="rootEl" class="blk txt" :class="rootClass">
     <template v-for="(seg, i) in segments" :key="i">
       <MermaidView v-if="seg.type === 'mermaid' && (!streaming || seg.closed)" :code="seg.code" />
-      <pre v-else-if="seg.type === 'mermaid'" class="mmdstream"><code>{{ seg.code }}</code></pre>
+      <!-- Placeholder lúc fence mermaid/widget còn đang stream — thẻ code trơn (nền
+           muted + hairline). mono-ok: mã nguồn thô của fence. -->
+      <pre v-else-if="seg.type === 'mermaid'" :class="STREAM_PRE"><code>{{ seg.code }}</code></pre>
       <SessionWidgetBlock
         v-else-if="seg.type === 'widget' && (!streaming || seg.closed)"
         :code="seg.code"
         :lang="widgetLang(seg.code)"
       />
-      <pre v-else-if="seg.type === 'widget'" class="mmdstream"><code>{{ seg.code }}</code></pre>
+      <pre v-else-if="seg.type === 'widget'" :class="STREAM_PRE"><code>{{ seg.code }}</code></pre>
       <SessionMarkdownHtml v-else :html="seg.html" :highlights="highlights" />
     </template>
   </div>
@@ -54,11 +52,23 @@ const props = defineProps<{
   // typewriter caret at the end of the text (the part currently being typed).
   caret?: boolean
   // Mark this as the final response → cap its height and scroll inside the turn card
-  // (the elevated bubble is provided by the parent .abody.bubble). Set only for the
+  // (the elevated bubble card is provided by the parent body in SessionMessageItem). Set only for the
   // response, so intermediate/subagent text isn't capped.
   bubble?: boolean
 }>()
 const { renderMarkdown } = useMarkdown()
+
+// Chữ thân đọc dài; giữa hai đoạn liền nhau (diagram + prose…) cách 10px — trong một
+// đoạn thì SessionMarkdownHtml tự lo nhịp. Câu trả lời cuối (`bubble`) bị trần cao
+// 540px (craft MAX_HEIGHT) rồi cuộn trong thẻ, cả lúc đang stream lẫn khi xong — lúc
+// stream thì cuộn trong tự bám đáy (watch renderSrc), nên không có cú co lại khi xong.
+// Bản đầy đủ luôn cách một cú bấm qua nút toàn màn hình.
+const rootClass = computed(() => [
+  'text-base leading-(--lh-prose) [&>*+*]:mt-2.5',
+  { 'tw-on': props.caret, 'max-h-135 overflow-y-auto': props.bubble },
+])
+const STREAM_PRE =
+  'm-0 overflow-x-auto rounded-lg border bg-muted px-3 py-2.5 font-mono text-[0.92em] leading-(--lh-sm) whitespace-pre'
 const settings = useSettingsStore()
 
 // Craft streaming (ADR 0061, Pha 4): with the typewriter OFF the store hands us the
@@ -231,29 +241,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* Cap a long response and scroll it inside the bubble (craft MAX_HEIGHT 540) so a huge
-   answer doesn't dominate the transcript. Applied whether streaming or done: while
-   streaming the inner scroll is auto-pinned to the bottom (see the renderSrc watch), so
-   there's no jarring shrink-to-cap on completion. Full text stays a click away via the
-   fullscreen action. */
-.respcapped {
-  max-height: 540px;
-  overflow-y: auto;
-}
-/* Gap between consecutive segments (a diagram + a prose run, etc.). Within a run, the
-   prose styles in SessionMarkdownHtml own the internal spacing. */
-.mdwrap > * + * {
-  margin-top: 10px;
-}
-/* Two finishing touches while a reply is being typed (.tw-on — set only on the
-   trailing block):
-   1) FADE-IN — a soft mask at the bottom edge so freshly-revealed text emerges
-      gradually instead of snapping in. Dropped when streaming ends (.tw-on gone).
-   2) BLOCK CARET — a blinking accent block pinned inline to the end of the last
-      rendered markdown element, like a terminal cursor. */
+/* style-ok: mask + caret cho DOM markdown render ra (SessionMarkdownHtml innerHTML),
+   kèm keyframe nháy cứng không có trong tw-animate-css.
+   Hai nét hoàn thiện khi đang gõ (`.tw-on` — chỉ đặt ở block cuối đang stream):
+   1) FADE-IN — mask mềm ở mép dưới để chữ vừa hiện lên trồi dần thay vì bật ra.
+   2) BLOCK CARET — khối accent nhấp nháy dính vào cuối phần tử markdown cuối cùng,
+      như con trỏ terminal. */
 .tw-on {
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 0.95em), rgba(0, 0, 0, 0.28));
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 0.95em), rgba(0, 0, 0, 0.28));
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 0.95em), rgb(0 0 0 / 28%));
+  mask-image: linear-gradient(to bottom, black calc(100% - 0.95em), rgb(0 0 0 / 28%));
 }
 .tw-on :deep(.mdinline:last-child > :last-child)::after {
   content: '';
@@ -287,20 +283,5 @@ onBeforeUnmount(() => {
     animation: none;
     opacity: 0.65;
   }
-}
-/* Streaming placeholder for an as-yet-incomplete mermaid/widget fence — a plain
-   code card (muted surface + hairline border, như code block của proto). */
-.mmdstream {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow-x: auto;
-  /* mono-ok: raw mermaid source while the fence is still streaming */
-  font-family: var(--code);
-  font-size: 0.92em;
-  line-height: var(--lh-sm);
-  white-space: pre;
 }
 </style>

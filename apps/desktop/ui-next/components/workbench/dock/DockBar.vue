@@ -4,17 +4,17 @@
        phải (thu / mở rộng / đóng). -->
   <div
     ref="rootEl"
-    class="flex h-[34px] flex-none items-center gap-0.5 px-2.5 shadow-[inset_0_-1px_0_var(--border)]"
+    class="flex h-8.5 flex-none items-center gap-0.5 px-2.5 shadow-[inset_0_-1px_0_var(--border)]"
   >
     <!-- View tabs — shadcn Tabs (reka): model trên `wb.dockView`, trigger per
          view; chrome thu nhỏ cho thanh dock 34px (list h-6, trigger px 9). -->
     <Tabs :model-value="wb.dockView" class="flex-none" @update:model-value="onDockView">
-      <TabsList class="h-6 gap-0.5 rounded-[var(--r-xs)] bg-transparent p-0">
+      <TabsList class="h-6 gap-0.5 rounded-sm bg-transparent p-0">
         <TabsTrigger
           v-for="v in viewDefs"
           :key="v.id"
           :value="v.id"
-          class="h-6 gap-[5px] rounded-[var(--r-xs)] px-[9px] text-xs font-normal text-[var(--textDim)] hover:bg-[var(--bgHover)] hover:text-[var(--text)] data-[state=active]:bg-[var(--bgSubtle)] data-[state=active]:text-[var(--text)] data-[state=active]:shadow-none [&_svg]:size-3"
+          class="h-6 gap-1 rounded-sm px-2 text-xs font-normal text-dim hover:bg-accent hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none [&_svg]:size-3"
           :title="v.id"
         >
           <component :is="v.icon" class="shrink-0" :size="12" />
@@ -23,8 +23,27 @@
       </TabsList>
     </Tabs>
     <span class="flex-1" />
+    <!-- Snippets của terminal — chỉ có nghĩa ở view Terminal. Bật = accent-tint. -->
     <Button
-      class="size-[22px] rounded-[var(--r-xs)] text-[var(--textDim)] hover:bg-[var(--bgHover)] hover:text-[var(--text)] [&_svg]:size-3"
+      v-if="wb.dockView === 'Terminal'"
+      class="size-5.5 rounded-sm [&_svg]:size-3"
+      :class="
+        snippetsOpen
+          ? 'bg-selected text-primary hover:bg-selected hover:text-primary'
+          : 'text-dim hover:bg-accent hover:text-foreground'
+      "
+      variant="ghost"
+      size="iconSm"
+      type="button"
+      :title="t('terminalSnippet.toggle')"
+      :aria-label="t('terminalSnippet.toggle')"
+      :aria-pressed="snippetsOpen"
+      @click="toggleSnippets()"
+    >
+      <ScrollText :size="12" />
+    </Button>
+    <Button
+      class="size-5.5 rounded-sm text-dim hover:bg-accent hover:text-foreground [&_svg]:size-3"
       variant="ghost"
       size="iconSm"
       type="button"
@@ -34,7 +53,7 @@
       <ChevronDown :size="12" />
     </Button>
     <Button
-      class="size-[22px] rounded-[var(--r-xs)] text-[var(--textDim)] hover:bg-[var(--bgHover)] hover:text-[var(--text)] [&_svg]:size-3"
+      class="size-5.5 rounded-sm text-dim hover:bg-accent hover:text-foreground [&_svg]:size-3"
       variant="ghost"
       size="iconSm"
       type="button"
@@ -44,7 +63,7 @@
       <ChevronUp :size="12" />
     </Button>
     <Button
-      class="size-[22px] rounded-[var(--r-xs)] text-[var(--textDim)] hover:bg-[var(--bgHover)] hover:text-[var(--text)] [&_svg]:size-3"
+      class="size-5.5 rounded-sm text-dim hover:bg-accent hover:text-foreground [&_svg]:size-3"
       variant="ghost"
       size="iconSm"
       type="button"
@@ -53,11 +72,7 @@
     >
       <X :size="12" />
     </Button>
-    <kbd
-      class="ml-1.5 cursor-default rounded-[var(--r-xs)] border border-border px-[5px] py-px font-mono text-[10px] leading-[14px] text-faint"
-    >
-      ⌘J
-    </kbd>
+    <Kbd class="ml-1.5 border bg-transparent text-faint">⌘J</Kbd>
   </div>
 </template>
 
@@ -71,17 +86,21 @@ import {
   CircleDollarSign,
   Info,
   ListTodo,
+  ScrollText,
   SquareTerminal,
   Users,
   X,
 } from 'lucide-vue-next'
 import { useWorkbenchDock } from '~/composables/useWorkbenchDock'
+import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
 import { useGitStore } from '~/stores/git'
 import { useSessionsStore } from '~/stores/sessions'
 import { useWorkbenchStore } from '~/stores/workbench'
 import type { DockView } from '~/types/workbench'
 
 const wb = useWorkbenchStore()
+const { t } = useI18n()
+const { snippetsOpen, toggleSnippets } = useGlobalTerminal()
 const dock = useWorkbenchDock()
 const sessions = useSessionsStore()
 const git = useGitStore()

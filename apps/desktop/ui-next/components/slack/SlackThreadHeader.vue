@@ -1,19 +1,19 @@
 <template>
-  <div class="slk-thd">
+  <div class="flex items-center gap-2 border-b px-4 py-3">
     <div class="min-w-0 flex-1">
       <div class="flex min-w-0 items-center gap-1.5">
         <Input
           v-if="editing"
           ref="titleRef"
           v-model="titleDraft"
-          class="slk-title-in"
+          class="h-ctrl-xs text-lg font-semibold"
           :placeholder="thread.firstLine"
           @keydown.enter.prevent="commit"
           @keydown.esc.prevent="editing = false"
           @blur="commit"
         />
         <template v-else>
-          <h2 class="slk-title truncate" :title="title">{{ title }}</h2>
+          <h2 class="m-0 truncate text-xl font-semibold" :title="title">{{ title }}</h2>
           <Button
             variant="ghost"
             size="iconSm"
@@ -34,7 +34,7 @@
           size="sm"
           variant="ghost"
           width="auto"
-          class="max-w-[240px]"
+          class="max-w-60"
           searchable
           :search-placeholder="t('slack.filter.searchProject')"
         />
@@ -124,25 +124,3 @@ function commit(): void {
   void ctx.rename(titleDraft.value)
 }
 </script>
-
-<style scoped>
-.slk-thd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.slk-title {
-  margin: 0;
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  font-weight: 700;
-}
-.slk-title-in {
-  height: 28px;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 600;
-}
-</style>

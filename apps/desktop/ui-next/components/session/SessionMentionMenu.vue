@@ -1,22 +1,36 @@
 <template>
-  <div class="slashint">
-    <div class="silabel">{{ t('sessions.composer.mentionTitle') }}</div>
-    <div class="silist">
+  <!-- Khung popover: bề mặt popover + hairline + bóng vừa, item dày p-1. Nhãn đầu +
+       gợi ý cuối ghim ngoài vùng cuộn. -->
+  <div
+    class="mb-2 flex max-h-[min(340px,42vh)] flex-col overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
+  >
+    <div class="flex-none px-2 pt-1 pb-1 text-xs font-medium text-muted-foreground">
+      {{ t('sessions.composer.mentionTitle') }}
+    </div>
+    <div class="min-h-0 flex-1 overflow-y-auto">
       <div
         v-for="(m, i) in items"
         :key="m.key"
-        class="si2"
-        :class="{ on: i === active }"
+        class="flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-1 text-sm"
+        :class="{ 'bg-accent text-accent-foreground': i === active }"
         @mousedown.prevent="emit('select', i)"
         @mouseenter="emit('hover', i)"
       >
-        <span class="sc" :style="glyphStyle(m.kind)">@</span>
-        <span class="sd mlabel">{{ m.label }}</span>
-        <span v-if="m.hint" class="sd mhint">{{ m.hint }}</span>
-        <span class="sd mtag">{{ t(TAG_KEY[m.kind]) }}</span>
+        <!-- mono-ok: `@` là ký tự người dùng gõ nguyên văn -->
+        <span class="font-mono" :class="GLYPH_CLASS[m.kind] ?? 'text-primary'">@</span>
+        <!-- Tên agent / basename file chiếm hàng; hint path + tag loại ghim phải. -->
+        <span class="shrink truncate text-foreground">{{ m.label }}</span>
+        <span v-if="m.hint" class="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          {{ m.hint }}
+        </span>
+        <span class="flex-none text-faint">
+          {{ t(TAG_KEY[m.kind]) }}
+        </span>
       </div>
     </div>
-    <div class="sifoot">{{ t('sessions.composer.mentionHint') }}</div>
+    <div class="mt-0.5 flex-none border-t px-2 pt-1 pb-0.5 text-xs text-faint">
+      {{ t('sessions.composer.mentionHint') }}
+    </div>
   </div>
 </template>
 
@@ -48,88 +62,13 @@ const TAG_KEY: Record<MentionRow['kind'], string> = {
   file: 'sessions.composer.mentionFile',
   page: 'sessions.composer.mentionPage',
 }
-const GLYPH_COLOR: Partial<Record<MentionRow['kind'], string>> = {
-  agent: 'var(--violet)',
-  team: 'var(--accent)',
-  skill: 'var(--info)',
-  wiki: 'var(--primary)',
+const GLYPH_CLASS: Partial<Record<MentionRow['kind'], string>> = {
+  agent: 'text-lavender',
+  team: 'text-primary',
+  skill: 'text-info',
+  wiki: 'text-primary',
   // `@page` là hành động (chèn trang đang mở trong trình duyệt nhúng), không phải một
   // thực thể có tên — dùng chung primary với wiki cho khỏi thêm màu thứ tư.
-  page: 'var(--primary)',
-}
-const glyphStyle = (kind: MentionRow['kind']) => {
-  const color = GLYPH_COLOR[kind]
-  return color ? { color } : undefined
+  page: 'text-primary',
 }
 </script>
-
-<style scoped>
-/* Popover chrome — shadcn tokens: popover surface + hairline border + --radius +
-   mid shadow, dense p-1 item padding. Label + footer hint pin outside the scroll
-   region (proto menu idiom: header label, footer hint). */
-.slashint {
-  display: flex;
-  flex-direction: column;
-  max-height: min(340px, 42vh);
-  padding: 4px;
-  background: var(--popover);
-  border-color: var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-}
-.silist {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-/* Header label (DropdownMenuLabel tone) + footer hint strip. */
-.silabel {
-  flex: 0 0 auto;
-  padding: 5px 8px 4px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.sifoot {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  padding: 5px 8px 3px;
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-/* Rows: compact rounded-sm items; active = neutral wash (bg-accent idiom), no
-   accent bar. Nested under .silist so scoped rules beat the global
-   `.slashint .si2` / `.slashint .sd` (equal specificity otherwise). */
-.silist .si2 {
-  padding: 5px 8px;
-  border-radius: var(--r-xs);
-}
-.silist .si2.on {
-  background: var(--accent-wash);
-}
-/* The agent name / file basename takes the row; path hint + kind tag pin right. */
-.silist .mlabel {
-  color: var(--foreground);
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.silist .mhint {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 18px;
-}
-.silist .mtag {
-  flex: 0 0 auto;
-  color: var(--textFaint);
-}
-</style>

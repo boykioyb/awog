@@ -2,9 +2,12 @@
   <!-- Doc 'cdiff' — diff của MỘT file trong một commit, mở từ tab Git Log. Chỉ đọc
        (không stage/unstage), unified/split như pane diff của trang Git.
        [&>.dh]:flex-none + [&>.dscroll]:flex-1 — xem chú thích cùng chỗ ở DocDiff. -->
-  <div class="flex h-full min-h-0 flex-col [&>*]:min-h-0 [&>.dh]:flex-none [&>.dscroll]:flex-1">
-    <div v-if="loading" class="empty">
-      <div class="et">{{ t('wb.gitlog.loading') }}</div>
+  <div class="flex h-full min-h-0 flex-col *:min-h-0 [&>.dh]:flex-none [&>.dscroll]:flex-1">
+    <div
+      v-if="loading"
+      class="flex flex-1 flex-col items-center justify-center gap-3.5 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('wb.gitlog.loading') }}</div>
     </div>
     <GitDiffViewer
       v-else

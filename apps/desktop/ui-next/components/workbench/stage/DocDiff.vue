@@ -7,10 +7,12 @@
   <!-- [&>*]:min-h-0 + [&>.dh]:flex-none + [&>.dscroll]:flex-1 — GitDiffViewer
        render fragment (.dh + .dscroll), children nhận data-v của cha nên variant
        chạm cả hai; .dh phải flex:none nếu không bị kéo giãn thành khoảng trắng. -->
-  <div class="flex h-full min-h-0 flex-col [&>*]:min-h-0 [&>.dh]:flex-none [&>.dscroll]:flex-1">
-    <!-- .empty/.et là class toàn cục của app (prototype.css) — flex center + text. -->
-    <div v-if="!relPath" class="empty">
-      <div class="et">{{ t('git.diff.empty') }}</div>
+  <div class="flex h-full min-h-0 flex-col *:min-h-0 [&>.dh]:flex-none [&>.dscroll]:flex-1">
+    <div
+      v-if="!relPath"
+      class="flex flex-1 flex-col items-center justify-center gap-3.5 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('git.diff.empty') }}</div>
     </div>
     <GitDiffViewer
       v-else

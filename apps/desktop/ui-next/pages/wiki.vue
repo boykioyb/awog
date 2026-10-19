@@ -1,6 +1,6 @@
 <template>
   <section
-    class="page on wikipage"
+    class="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden"
     data-page="wiki"
     @dragover.prevent="dragging = true"
     @dragleave="dragging = false"
@@ -30,30 +30,37 @@
       @import-files="onImportFiles"
     />
 
-    <div class="wk-main">
+    <div class="flex h-full min-w-0 flex-1">
       <!-- search results take over the pane while a query is active -->
-      <div v-if="hits.length > 0 || (query.trim() !== '' && !searching)" class="wk-hits">
-        <div class="wk-hitshead">
-          <span class="sech">{{ t('wiki.search.results', { n: hits.length }) }}</span>
+      <div
+        v-if="hits.length > 0 || (query.trim() !== '' && !searching)"
+        class="min-w-0 flex-1 overflow-y-auto px-3 py-2.5"
+      >
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-xs font-medium text-muted-foreground">
+            {{ t('wiki.search.results', { n: hits.length }) }}
+          </span>
           <Button variant="outline" size="sm" @click="clearSearch">{{ t('common.clear') }}</Button>
         </div>
-        <div v-if="hits.length === 0" class="wk-empty" :style="{ color: 'var(--textFaint)' }">
+        <div v-if="hits.length === 0" class="px-1 py-5 text-faint">
           {{ t('wiki.search.none', { q: query }) }}
         </div>
         <!-- keyed with the tier: the global and a project wiki can hold the same slug,
              and a hit on the same line of both would otherwise collide -->
-        <button
+        <Button
           v-for="hit in hits"
           :key="`${hit.source}|${hit.projectId ?? ''}|${hit.path}:${hit.line}`"
-          class="wk-hit"
+          variant="outline"
+          class="mb-1.5 h-auto w-full flex-col items-start justify-start gap-0.5 px-2.5 py-2 text-left font-normal whitespace-normal text-foreground shadow-none"
           @click="openHit(hit)"
         >
-          <span class="wk-hittitle">{{ hit.title }}</span>
-          <span class="wk-hitpath" :style="{ color: 'var(--textFaint)' }">
-            {{ hit.path }}:{{ hit.line }}
+          <span class="text-base font-medium">{{ hit.title }}</span>
+          <!-- font-mono: đường dẫn trang + dòng nguồn khớp (mono-ok). -->
+          <span class="font-mono text-sm text-faint">{{ hit.path }}:{{ hit.line }}</span>
+          <span class="w-full truncate font-mono text-sm text-muted-foreground">
+            {{ hit.preview }}
           </span>
-          <span class="wk-hitprev" :style="{ color: 'var(--textDim)' }">{{ hit.preview }}</span>
-        </button>
+        </Button>
       </div>
 
       <WikiEditor
@@ -81,40 +88,44 @@
         @follow-link="onFollowLink"
       />
 
-      <div v-else class="wk-blank">
-        <div v-if="loadingPage" :style="{ color: 'var(--textFaint)' }">
+      <div v-else class="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
+        <div v-if="loadingPage" class="text-faint">
           {{ t('common.loading') }}
         </div>
         <template v-else-if="store.pages.length === 0">
-          <Icon name="file" :size="40" :style="{ color: 'var(--textFaint)' }" />
-          <h2 class="wk-blanktitle">{{ t('wiki.empty.title') }}</h2>
-          <p class="wk-blanktext" :style="{ color: 'var(--textDim)' }">
+          <Icon name="file" class="size-10 text-faint" />
+          <h2 class="mt-1 text-lg font-semibold">{{ t('wiki.empty.title') }}</h2>
+          <p class="max-w-md text-base leading-relaxed text-muted-foreground">
             {{ t('wiki.empty.body') }}
           </p>
-          <div class="wk-blankcta">
+          <div class="mt-2 flex flex-wrap justify-center gap-2">
             <Button variant="default" @click="onImportFiles">
-              <Icon name="download" :size="13" />
+              <Icon name="download" />
               {{ t('wiki.import.files') }}
             </Button>
             <Button variant="outline" @click="onImportFolder">
-              <Icon name="folder" :size="13" />
+              <Icon name="folder" />
               {{ t('wiki.import.folder') }}
             </Button>
             <Button variant="outline" @click="onNewPage">
-              <Icon name="plus" :size="13" />
+              <Icon name="plus" />
               {{ t('wiki.newPage') }}
             </Button>
           </div>
         </template>
         <template v-else>
-          <p class="wk-blanktext" :style="{ color: 'var(--textDim)' }">
+          <p class="max-w-md text-base leading-relaxed text-muted-foreground">
             {{ t('wiki.selectPage') }}
           </p>
         </template>
       </div>
     </div>
 
-    <div v-if="dragging" class="wk-drop" :style="{ borderColor: 'var(--accent)' }">
+    <!-- Khung "thả file vào đây" — pointer-events-none để không nuốt sự kiện drop. -->
+    <div
+      v-if="dragging"
+      class="pointer-events-none absolute inset-2 z-61 flex items-center justify-center rounded-md border-2 border-dashed border-primary bg-background/70 text-foreground"
+    >
       {{ t('wiki.import.dropHint') }}
     </div>
 
@@ -499,113 +510,3 @@ async function onRename(page: WikiPage): Promise<void> {
   })
 }
 </script>
-
-<style scoped>
-.wikipage {
-  display: flex;
-  flex-direction: row;
-  height: 100%;
-  min-height: 0;
-  position: relative;
-}
-.wk-main {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-}
-.wk-blank {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 40px;
-  text-align: center;
-}
-.wk-blanktitle {
-  font-size: 1.3em;
-  font-weight: 600;
-  margin: 4px 0 0;
-}
-.wk-blanktext {
-  max-width: 420px;
-  line-height: var(--lh-prose);
-  font-size: 1em;
-  margin: 0;
-}
-.wk-blankcta {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.wk-hits {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 10px 12px;
-}
-.wk-hitshead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.wk-hit {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  color: var(--text);
-}
-.wk-hit:hover {
-  background: var(--bgHover);
-}
-.wk-hittitle {
-  font-weight: 500;
-  font-size: 1em;
-}
-.wk-hitpath {
-  /* mono-ok: search hit — page path */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-}
-.wk-hitprev {
-  /* mono-ok: search hit — matching source line */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wk-empty {
-  padding: 20px 4px;
-  font-size: 1em;
-}
-.wk-drop {
-  position: absolute;
-  inset: 8px;
-  border: 2px dashed var(--accent);
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  color: var(--text);
-  font-size: 1em;
-  pointer-events: none;
-  z-index: 61;
-}
-</style>

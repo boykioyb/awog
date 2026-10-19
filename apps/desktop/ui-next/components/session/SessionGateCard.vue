@@ -1,12 +1,22 @@
 <template>
+  <!-- Thẻ gate/trạng thái: bề mặt card, viền mảnh, bo lg, hàng tiêu đề medium, hàng
+       nút căn phải. Tone thẻ (chờ / production / lỗi) tra qua CARD_CLASS + HEAD_CLASS. -->
   <!-- plan -->
-  <div v-if="block.kind === 'plan'" class="gcard" :class="{ gate: planStatus === 'pending' }">
-    <div class="gh">
-      <Icon name="rules" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div
+    v-if="block.kind === 'plan'"
+    class="my-1 flex flex-col gap-0.5 rounded-lg border p-3"
+    :class="CARD_CLASS[planStatus === 'pending' ? 'gate' : '']"
+  >
+    <div
+      class="mb-2 flex items-center gap-2 text-base leading-4.5 font-medium [&_svg]:size-3.5"
+      :class="HEAD_CLASS[planStatus === 'pending' ? 'gate' : '']"
+    >
+      <Icon name="rules" />
       {{ t('sessions.gate.plan') }}
     </div>
-    <SessionTextBlock class="planbody" :text="planMarkdown" />
-    <div v-if="planStatus === 'pending'" class="cact">
+    <!-- Thân plan = markdown của model render như một tài liệu (SessionTextBlock). -->
+    <SessionTextBlock class="mb-1.5" :text="planMarkdown" />
+    <div v-if="planStatus === 'pending'" class="mt-2.5 flex items-center justify-end gap-2">
       <Button variant="outline" size="sm" @click="onPlanEdit">
         {{ t('sessions.gate.planEdit') }}
       </Button>
@@ -15,7 +25,10 @@
         {{ t('sessions.gate.planRun') }}
       </Button>
     </div>
-    <div v-else class="resolved">
+    <div
+      v-else
+      class="mt-1.5 flex items-center gap-2 text-base leading-4.5 [&_svg]:size-3.5 text-success"
+    >
       <Icon name="check" />
       {{ t('sessions.gate.planApproved') }}
     </div>
@@ -27,44 +40,59 @@
 
   <!-- perm -->
   <!-- Lệnh hạ tầng nhuộm ĐỎ thay vì hổ phách khi chạm tài khoản production (ADR 0088
-       §5): hai lớp không cùng lúc, nếu không thì `.gcard.gate` và luật đỏ ở đây tranh
-       nhau đúng một thuộc tính và thắng thua phụ thuộc thứ tự chèn style — thứ
-       không ai đọc code đoán được. -->
+       §5): hai tone loại trừ nhau (permCardTone), không bao giờ cùng lúc. -->
   <div
     v-else-if="block.kind === 'perm'"
-    class="gcard"
-    :class="{ gate: gateLit && !isProdInfra, iprod: gateLit && isProdInfra }"
+    class="my-1 flex flex-col gap-0.5 rounded-lg border p-3"
+    :class="CARD_CLASS[permCardTone]"
   >
     <!-- Lệnh hạ tầng: tiêu đề là nút thu/mở cả thẻ. Thu gọn còn MỘT hàng — chip
          production + lớp lệnh, dòng lệnh cắt một dòng, trạng thái — vì thẻ đã duyệt
          nằm mãi trong transcript và chiếm cả màn hình. Thẻ đang chờ vẫn giữ nút
-         Từ chối/Cho phép khi thu gọn (xem `showBody`). -->
-    <button
+         Từ chối/Cho phép khi thu gọn (xem `showBody`). Giữ chữ/màu của hàng tiêu đề
+         (kể cả đỏ/hổ phách khi đang chờ), chỉ bỏ chrome của nút. -->
+    <Button
       v-if="infra"
-      type="button"
-      class="gh ihead"
+      variant="ghost"
+      class="h-auto w-full min-w-0 justify-start gap-2 p-0 text-left text-base leading-4.5 font-medium hover:bg-transparent [&_svg]:size-3.5"
+      :class="[HEAD_CLASS[permCardTone], infraOpen ? 'mb-2' : 'mb-0']"
       :aria-expanded="infraOpen"
       :title="infraOpen ? t('infraGate.collapse') : t('infraGate.expand')"
       @click="infraOpen = !infraOpen"
     >
-      <Icon name="globe" class="flex-none" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="flex-none">{{ t('infraGate.title') }}</span>
+      <Icon name="globe" class="shrink-0" />
+      <span class="shrink-0">{{ t('infraGate.title') }}</span>
       <template v-if="!infraOpen">
-        <span v-for="chip in headChips" :key="chip.key" class="ichip flex-none" :class="chip.tone">
+        <Badge
+          v-for="chip in headChips"
+          :key="chip.key"
+          variant="outline"
+          class="inline-block shrink-0 truncate rounded-sm px-2 py-0.5 text-xs leading-4"
+          :class="CHIP_TONE_CLASS[chip.tone]"
+        >
           {{ chip.label }}
+        </Badge>
+        <!-- Dòng lệnh rút gọn: một dòng, cắt bằng …; bản đầy đủ ở thân thẻ khi mở.
+             mono: dòng lệnh shell. -->
+        <span class="min-w-0 flex-1 truncate font-mono text-sm font-normal text-muted-foreground">
+          {{ infra.command }}
         </span>
-        <span class="ihcmd">{{ infra.command }}</span>
-        <span class="ihstate" :class="permState.tone">{{ permState.label }}</span>
+        <span class="shrink-0 text-sm font-normal" :class="STATE_TONE_CLASS[permState.tone]">
+          {{ permState.label }}
+        </span>
       </template>
       <Icon
         name="chev"
-        class="ihchev"
-        :class="{ up: infraOpen }"
-        style="width: var(--icon-sm); height: var(--icon-sm)"
+        class="ml-auto shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none"
+        :class="infraOpen && 'rotate-180'"
       />
-    </button>
-    <div v-else class="gh">
-      <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    </Button>
+    <div
+      v-else
+      class="mb-2 flex items-center gap-2 text-base leading-4.5 font-medium [&_svg]:size-3.5"
+      :class="HEAD_CLASS[permCardTone]"
+    >
+      <Icon name="shield" />
       {{ t('sessions.gate.permission') }}
     </div>
     <!-- Hạ tầng (ADR 0088 §5): hậu quả → dòng lệnh → ngữ cảnh, đúng thứ tự người
@@ -72,111 +100,177 @@
          thứ sắp chạy thật chứ không phải thứ model gõ ra. Cả cụm nằm NGOÀI nhánh
          pending nên một lệnh đã duyệt vẫn tra lại được là nó chạm account nào. -->
     <template v-if="infra && infraOpen">
-      <div class="isent" :class="{ hot: infra.commandClass === 'destructive' }">
+      <!-- Một câu: lệnh này làm gì với hạ tầng. Đọc trước dòng lệnh, vì phần lớn người
+           duyệt không phân loại được `s3api delete-bucket` chỉ bằng cách nhìn. -->
+      <div
+        class="text-base leading-5"
+        :class="
+          infra.commandClass === 'destructive'
+            ? 'font-semibold text-destructive'
+            : 'text-foreground'
+        "
+      >
         {{ t(`infraGate.sentence.${infra.commandClass}`) }}
       </div>
-      <div class="icmd">{{ infra.command }}</div>
-      <div class="ichips">
-        <span
+      <!-- Dòng lệnh ĐÚNG NHƯ sắp chạy. XUỐNG DÒNG chứ không cuộn ngang: phần đuôi bị
+           đẩy khỏi tầm nhìn (macOS ẩn scrollbar) tệ hơn một lệnh bị bẻ dòng — chữ vẫn
+           nguyên văn nên copy ra terminal vẫn chạy đúng, và `wrap-anywhere` chỉ bẻ
+           khi token không còn chỗ. mono: dòng lệnh người dùng copy vào terminal. -->
+      <div
+        class="mt-2 rounded-sm border bg-muted px-2.5 py-2 font-mono text-base leading-4.5 wrap-anywhere whitespace-pre-wrap text-foreground select-text"
+      >
+        {{ infra.command }}
+      </div>
+      <!-- Chip ngữ cảnh — viền mảnh + chữ muted; danger/warn nhuộm theo mức hậu quả.
+           `-chdir=` dài hơn cả thẻ thì cắt bằng …, giá trị đầy đủ nằm ở `title`. -->
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <Badge
           v-for="chip in infraChips"
           :key="chip.key"
-          class="ichip"
-          :class="chip.tone"
+          variant="outline"
+          class="inline-block max-w-full shrink-0 truncate rounded-sm px-2 py-0.5 text-xs leading-4"
+          :class="CHIP_TONE_CLASS[chip.tone]"
           :title="chip.label"
         >
           {{ chip.label }}
-        </span>
+        </Badge>
       </div>
       <!-- Ba câu trước khi bấm: sẽ làm gì · kết quả mong đợi · rủi ro. Nhãn đứng
            trước để đọc lướt vẫn ra nghĩa; xem `infraBrief` cho luật dựng từng dòng.
            Mặc định THU GỌN: mỗi dòng tối đa 2 dòng chữ, rủi ro dùng bản tóm tắt, lời
-           rủi ro của model ẩn; bấm "Xem chi tiết" ra bản đầy đủ. -->
-      <dl class="pbrief" :class="{ 'is-open': briefOpen }">
+           rủi ro của model ẩn; bấm "Xem chi tiết" ra bản đầy đủ. Lưới hai cột để nhãn
+           thẳng hàng; cửa sổ hẹp thì tự xuống một cột. -->
+      <dl
+        class="mt-2 mb-0 grid grid-cols-[max-content_1fr] gap-x-2.5 gap-y-1 max-[560px]:grid-cols-1 max-[560px]:gap-0.5"
+      >
         <template v-for="row in infraBrief" :key="row.label">
-          <dt class="pbrief-lbl">{{ row.label }}</dt>
-          <dd class="pbrief-txt" :class="row.tone">
+          <dt class="text-sm leading-4.5 whitespace-nowrap text-dim">{{ row.label }}</dt>
+          <dd class="m-0 text-sm leading-4.5" :class="BRIEF_TONE_CLASS[row.tone]">
             <!-- Nhãn "model diễn giải" là sibling ĐỨNG NGOÀI phần bị cắt dòng: nó nói
-                 nguồn của câu chữ, cắt mất nó là người đọc tưởng AWOG tự suy. -->
-            <span class="pbrief-main">
-              <span class="pbrief-body">{{ briefOpen ? row.text : (row.short ?? row.text) }}</span>
-              <span v-if="row.ai" class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
+                 nguồn của câu chữ, cắt mất nó là người đọc tưởng AWOG tự suy. Nhãn nhỏ,
+                 không tô màu cảnh báo — nó nói NGUỒN, không nói mức nguy hiểm. -->
+            <span class="flex items-start gap-1.5">
+              <span class="min-w-0" :class="!briefOpen && 'line-clamp-2'">
+                {{ briefOpen ? row.text : (row.short ?? row.text) }}
+              </span>
+              <span
+                v-if="row.ai"
+                class="shrink-0 rounded-full border px-1.5 text-xs leading-4 whitespace-nowrap text-faint"
+                :title="t('infraGate.brief.aiWhy')"
+              >
                 {{ t('infraGate.brief.ai') }}
               </span>
             </span>
             <!-- Dòng RỦI RO giữ phần AWOG tự suy ở trên; lời mô hình chỉ nối thêm
-                 vào đây, có nhãn. Xem `infraBrief` cho lý do ranh giới đó. -->
-            <span v-if="briefOpen && row.note" class="pbrief-note">
+                 vào đây, có nhãn, xuống dòng riêng để không đọc lẫn. Xem `infraBrief`. -->
+            <span v-if="briefOpen && row.note" class="mt-0.5 block text-dim">
               {{ row.note }}
-              <span class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
+              <span
+                class="ml-1.5 rounded-full border px-1.5 text-xs leading-4 whitespace-nowrap text-faint"
+                :title="t('infraGate.brief.aiWhy')"
+              >
                 {{ t('infraGate.brief.ai') }}
               </span>
             </span>
           </dd>
         </template>
       </dl>
-      <button
-        class="pbrief-toggle"
-        type="button"
+      <Button
+        variant="ghost"
+        class="mt-1 h-auto justify-start gap-1 p-0 text-sm leading-4.5 font-normal text-faint hover:bg-transparent hover:text-foreground [&_svg]:size-3"
         :aria-expanded="briefOpen"
         @click="briefOpen = !briefOpen"
       >
         <Icon
           name="chev"
-          class="pbrief-chev"
-          :class="{ up: briefOpen }"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
+          class="transition-transform motion-reduce:transition-none"
+          :class="briefOpen && 'rotate-180'"
         />
         {{ briefOpen ? t('infraGate.brief.less') : t('infraGate.brief.more') }}
-      </button>
+      </Button>
       <!-- Chỉ hiện khi đang hỏi hoặc đã hỏng: lúc bình thường ba dòng trên tự nói
            hết, thêm một dòng trạng thái nữa chỉ là nhiễu ngay trên nút Cho phép. -->
-      <p v-if="explainState?.loading" class="pbrief-state">
+      <p v-if="explainState?.loading" class="mt-0.5 mb-0 text-sm leading-4.5 text-faint">
         {{ t('infraGate.brief.loading') }}
       </p>
-      <p v-else-if="explainState?.failed" class="pbrief-state" :title="explainState.error">
+      <p
+        v-else-if="explainState?.failed"
+        class="mt-0.5 mb-0 flex items-baseline gap-2 text-sm leading-4.5 text-faint"
+        :title="explainState.error"
+      >
         {{ t('infraGate.brief.failed') }}
-        <button class="pbrief-retry" type="button" @click="onRetryExplain">
+        <Button
+          variant="link"
+          class="h-auto p-0 text-sm leading-4.5 font-normal underline"
+          @click="onRetryExplain"
+        >
           {{ t('infraGate.brief.retry') }}
-        </button>
+        </Button>
       </p>
     </template>
-    <div v-else-if="!infra" class="ptext">
+    <div v-else-if="!infra" class="text-base leading-5 text-foreground">
       {{ t('sessions.gate.allowQuestion') }}
       <b>{{ block.tool }}</b>
       {{ t('sessions.gate.on') }}
-      <span class="permcode">{{ block.target }}</span>
+      <!-- mono: lệnh shell mà lời xin quyền đang hỏi -->
+      <span
+        class="rounded-sm bg-muted px-1.5 py-px font-mono text-base leading-4.5 text-muted-foreground"
+      >
+        {{ block.target }}
+      </span>
       ?
     </div>
     <template v-if="cancelled">
-      <div v-if="showBody" class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
+      <div
+        v-if="showBody"
+        class="mt-1.5 flex items-center gap-2 text-base leading-4.5 [&_svg]:size-3.5 text-destructive"
+      >
+        {{ t('sessions.gate.cancelled') }}
+      </div>
     </template>
     <template v-else-if="permStatus === 'pending'">
       <!-- ADR 0080: the rule about to be created, verbatim, BEFORE the button that
            creates it. "Always allow" on `git status` grants `Bash(git status)` — not
-           every Bash call — and the only way the user can know that is to read it. -->
-      <div v-if="canRemember && showBody" class="prule">
-        <span class="prulelbl">{{ ruleLabel }}</span>
-        <span class="prulecode">{{ ruleText }}</span>
-        <span class="prulehint">{{ ruleMeaning }}</span>
+           every Bash call — and the only way the user can know that is to read it.
+           Mỗi hàng đẩy lời giải thích xuống một dòng riêng (basis-full) thay vì ép cạnh
+           control. -->
+      <div
+        v-if="canRemember && showBody"
+        class="mt-2 flex flex-wrap items-center gap-2 text-base leading-4.5 text-muted-foreground"
+      >
+        <span class="font-medium text-muted-foreground">{{ ruleLabel }}</span>
+        <!-- mono: chuỗi luật là code người dùng có thể copy -->
+        <span
+          class="rounded-sm border bg-muted px-2 py-0.5 font-mono text-base leading-4.5 break-all text-foreground select-text"
+        >
+          {{ ruleText }}
+        </span>
+        <span class="basis-full text-dim">{{ ruleMeaning }}</span>
       </div>
       <!-- No rule could be derived (compound shell command…) → "Always allow" is not
            rendered at all; say why instead of leaving a dead button. Lệnh hạ tầng
            không bao giờ nhớ được, và lý do khác hẳn nên câu chữ cũng khác. -->
-      <div v-else-if="showBody" class="pnote">
-        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div
+        v-else-if="showBody"
+        class="mt-2 flex flex-wrap items-center gap-2 text-base leading-4.5 text-muted-foreground"
+      >
+        <Icon name="alert" class="size-3.5 shrink-0 text-warning" />
         <span>{{ infra ? t('infraGate.noRemember') : noRuleReason }}</span>
       </div>
-      <div v-if="canRemember && showBody" class="pscope">
-        <span class="prulelbl">{{ t('sessionsPerm.scopeLabel') }}</span>
+      <div
+        v-if="canRemember && showBody"
+        class="mt-2 flex flex-wrap items-center gap-2 text-base leading-4.5 text-muted-foreground"
+      >
+        <span class="font-medium text-muted-foreground">{{ t('sessionsPerm.scopeLabel') }}</span>
         <AppSelect
           :model-value="permScope"
           :options="scopeOptions"
           width="190px"
           @update:model-value="setScope"
         />
-        <span class="prulehint">{{ scopeHint }}</span>
+        <span class="basis-full text-dim">{{ scopeHint }}</span>
       </div>
-      <div class="cact">
+      <div class="mt-2.5 flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" @click="onDeny">
           {{ t('sessions.gate.deny') }}
         </Button>
@@ -190,51 +284,89 @@
       </div>
     </template>
     <template v-else-if="permStatus === 'allowed' && showBody">
-      <div class="resolved">
+      <div
+        class="mt-1.5 flex items-center gap-2 text-base leading-4.5 [&_svg]:size-3.5 text-success"
+      >
         <Icon name="check" />
         {{ t('sessions.gate.allowed') }}
       </div>
       <!-- Where the rule actually landed, from the RPC's savedScopes (the engine
            downgrades project → session when the session has no project). -->
-      <div v-if="savedMessage" class="psaved">
+      <div
+        v-if="savedMessage"
+        class="mt-2 flex flex-wrap items-center gap-2 text-base leading-4.5 text-muted-foreground"
+      >
         <span>{{ savedMessage }}</span>
-        <span v-if="savedOk && ruleText" class="prulecode">{{ ruleText }}</span>
+        <span
+          v-if="savedOk && ruleText"
+          class="rounded-sm border bg-muted px-2 py-0.5 font-mono text-base leading-4.5 break-all text-foreground select-text"
+        >
+          {{ ruleText }}
+        </span>
       </div>
-      <div v-if="savedDowngraded" class="pnote">
-        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <div
+        v-if="savedDowngraded"
+        class="mt-2 flex flex-wrap items-center gap-2 text-base leading-4.5 text-muted-foreground"
+      >
+        <Icon name="alert" class="size-3.5 shrink-0 text-warning" />
         <span>{{ t('sessionsPerm.savedDowngraded') }}</span>
       </div>
       <!-- Kết quả lệnh vừa được duyệt, chép từ step của CHÍNH lời gọi này (xem
            attachPermResult trong store). Không có dòng này thì thẻ chỉ nói "Đã cho
            phép", còn output nằm trong khối bước mặc định thu gọn bên dưới — người
-           vừa bấm Cho phép đọc ra như thể lệnh không trả về gì. -->
-      <div v-if="permOutput" class="pout">
-        <div class="pouthead">
-          <span>{{ t('sessions.step.output') }}</span>
-          <span v-if="permExit" class="poutexit">{{ permExit }}</span>
+           vừa bấm Cho phép đọc ra như thể lệnh không trả về gì. Nằm SAU hàng "Đã cho
+           phép" vì đó là thứ tự thời gian thật (duyệt → chạy → kết quả). -->
+      <template v-if="permOutput">
+        <Separator class="mt-2" />
+        <div class="pt-2">
+          <div class="flex items-center gap-2 text-xs font-semibold text-dim">
+            <span>{{ t('sessions.step.output') }}</span>
+            <!-- mono: mã thoát là chữ của máy -->
+            <span v-if="permExit" class="font-mono font-medium text-destructive">
+              {{ permExit }}
+            </span>
+          </div>
+          <!-- Xuống dòng chứ không cuộn ngang — cùng lý do như dòng lệnh ở trên.
+               mono: output thô của tool. -->
+          <pre
+            class="m-0 pt-0.5 font-mono text-base leading-4.5 wrap-anywhere whitespace-pre-wrap text-muted-foreground select-text"
+            >{{ permOutput }}</pre
+          >
         </div>
-        <pre class="poutbody">{{ permOutput }}</pre>
-      </div>
+      </template>
     </template>
-    <div v-else-if="permStatus === 'denied' && showBody" class="resolved den">
+    <div
+      v-else-if="permStatus === 'denied' && showBody"
+      class="mt-1.5 flex items-center gap-2 text-base leading-4.5 [&_svg]:size-3.5 text-destructive"
+    >
       {{ t('sessions.gate.denied') }}
     </div>
   </div>
 
-  <!-- steer -->
-  <div v-else-if="block.kind === 'steer'" class="steernote">
-    <Icon name="send" style="width: var(--icon-xs); height: var(--icon-xs)" />
+  <!-- steer — ghi chú nghiêng trên thanh primary. -->
+  <div
+    v-else-if="block.kind === 'steer'"
+    class="flex items-center gap-2 border-l-2 border-ring py-0.5 pl-2.5 text-base leading-4.5 text-muted-foreground italic"
+  >
+    <Icon name="send" class="size-3 text-primary" />
     {{ t('sessions.gate.steered', { text: block.text || '' }) }}
   </div>
 
   <!-- error -->
-  <div v-else-if="block.kind === 'error'" class="gcard err">
-    <div class="gh">
-      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div
+    v-else-if="block.kind === 'error'"
+    class="my-1 flex flex-col gap-0.5 rounded-lg border p-3"
+    :class="CARD_CLASS.err"
+  >
+    <div
+      class="mb-2 flex items-center gap-2 text-base leading-4.5 font-medium [&_svg]:size-3.5"
+      :class="HEAD_CLASS.err"
+    >
+      <Icon name="alert" />
       {{ t('sessions.gate.error') }}
     </div>
-    <div class="ptext">{{ block.text }}</div>
-    <div class="cact">
+    <div class="text-base leading-5 text-foreground">{{ block.text }}</div>
+    <div class="mt-2.5 flex items-center justify-end gap-2">
       <Button size="sm" @click="onRetry">
         <Icon name="refresh" />
         {{ t('sessions.gate.retry') }}
@@ -663,453 +795,41 @@ const onRetry = (): void => {
   if (!located.value || sessionId.value == null) return
   store.regenerate(sessionId.value, msgIndex.value)
 }
+
+// ── Class Tailwind theo tone (thay cho `.ichip.danger` / `.ihstate.ok` / `.pbrief-txt.warn`
+// và `.gcard.gate|.iprod|.err` cũ). Chỉ là bảng tra hiển thị — không có logic.
+// `gate` = đang chờ quyết định (tint hổ phách); `prod` = lệnh hạ tầng đang chờ trên tài
+// khoản PRODUCTION (tint đỏ); `err` = thẻ lỗi. Ba trạng thái không bao giờ trộn nhau.
+type CardTone = '' | 'gate' | 'prod' | 'err'
+const CARD_CLASS: Record<CardTone, string> = {
+  '': 'border-border bg-card',
+  gate: 'border-warning/45 bg-warning/8',
+  prod: 'border-destructive/45 bg-destructive/8',
+  err: 'border-destructive/45 bg-destructive/8',
+}
+const HEAD_CLASS: Record<CardTone, string> = {
+  '': 'text-foreground',
+  gate: 'text-warning',
+  prod: 'text-destructive',
+  err: 'text-destructive',
+}
+const permCardTone = computed<CardTone>(() => {
+  if (!gateLit.value) return ''
+  return isProdInfra.value ? 'prod' : 'gate'
+})
+const CHIP_TONE_CLASS: Record<InfraChip['tone'], string> = {
+  '': 'text-muted-foreground',
+  warn: 'border-warning/45 bg-warning/10 text-warning',
+  danger: 'border-destructive/45 bg-destructive/10 font-semibold text-destructive',
+}
+const STATE_TONE_CLASS: Record<'' | 'ok' | 'warn', string> = {
+  '': 'text-muted-foreground',
+  ok: 'text-success',
+  warn: 'text-warning',
+}
+const BRIEF_TONE_CLASS: Record<BriefRow['tone'], string> = {
+  '': 'text-muted-foreground',
+  warn: 'text-warning',
+  danger: 'text-destructive',
+}
 </script>
-
-<style scoped>
-/* Gate/status card — card chrome in shadcn tokens: card surface, hairline border,
-   lg radius, medium title row, right-aligned actions. The class names stay the
-   documented hooks (`.gcard`/`.gate`/`.err` are also theme-cute.css restyle
-   targets, whose attribute-scoped rules intentionally still win when active);
-   the scoped rules below re-express them on the canonical var names.
-   `.gate` = awaiting a decision (warning tint); `.iprod` = pending infra command
-   on a PRODUCTION account (destructive tint); `.err` = error card — the three
-   never mix in template. */
-.gcard {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 4px 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-}
-.gcard.gate {
-  border-color: rgb(from var(--warning) r g b / 45%);
-  background: rgb(from var(--warning) r g b / 8%);
-}
-.gcard.gate .gh {
-  color: var(--warning);
-}
-.gcard.iprod {
-  border-color: rgb(from var(--destructive) r g b / 45%);
-  background: rgb(from var(--destructive) r g b / 8%);
-}
-.gcard.iprod .gh {
-  color: var(--destructive);
-}
-.gcard.err {
-  border-color: rgb(from var(--destructive) r g b / 45%);
-  background: rgb(from var(--destructive) r g b / 8%);
-}
-.gcard.err .gh {
-  color: var(--destructive);
-}
-.gh {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  color: var(--foreground);
-  margin-bottom: 7px;
-}
-/* Tiêu đề thẻ hạ tầng = nút thu/mở. Giữ nguyên chữ/màu của `.gh` (kể cả màu đỏ/hổ
-   phách khi thẻ đang chờ), chỉ bỏ chrome của <button>. Tiền tố `ih*` chứ không `gh*`:
-   `.ghstate` đã là class toàn cục ở prototype.css (pill trạng thái GitHub). */
-.ihead {
-  width: 100%;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-}
-.ihead[aria-expanded='false'] {
-  margin-bottom: 0;
-}
-/* Dòng lệnh rút gọn: một dòng, cắt bằng dấu …; bản đầy đủ ở thân thẻ khi mở. */
-.ihcmd {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  font-family: var(--code); /* mono-ok: dòng lệnh shell, cùng bề mặt với .icmd */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 400;
-  color: var(--muted-foreground);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ihstate {
-  flex: none;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 400;
-  color: var(--muted-foreground);
-}
-.ihstate.ok {
-  color: var(--success);
-}
-.ihstate.warn {
-  color: var(--warning);
-}
-.ihchev {
-  flex: none;
-  margin-left: auto;
-  color: var(--muted-foreground);
-  transition: transform 0.18s ease;
-}
-.ihchev.up {
-  transform: rotate(180deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ihchev {
-    transition: none;
-  }
-}
-/* Action row — right-aligned (spec idiom). Buttons are ui/Button (shadcn). */
-.cact {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-/* Resolved state ("Allowed"/"Denied"/"Approved") — status-tinted one-liner. */
-.resolved {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--success);
-}
-.resolved :deep(.icn) {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.resolved.den {
-  color: var(--destructive);
-}
-/* Plain body line inside the card. */
-.ptext {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--foreground);
-}
-/* Steer note — italic aside on a primary rail (proto steer idiom). */
-.steernote {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  line-height: 18px;
-  font-style: italic;
-  color: var(--muted-foreground);
-  border-left: 2px solid var(--ring);
-  padding: 3px 0 3px 10px;
-}
-.steernote :deep(.icn) {
-  color: var(--primary);
-}
-
-/* Khối "sẽ làm gì · kết quả · rủi ro" của thẻ duyệt lệnh hạ tầng. Lưới hai cột để
-   nhãn thẳng hàng; ở cửa sổ hẹp nó tự xuống một cột. */
-.pbrief {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 10px;
-  margin: 8px 0 0;
-}
-
-.pbrief-lbl {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  white-space: nowrap;
-}
-
-.pbrief-txt {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-
-.pbrief-txt.warn {
-  color: var(--warning);
-}
-
-.pbrief-txt.danger {
-  color: var(--destructive);
-}
-
-/* Phần chữ + nhãn nguồn trên cùng một hàng: chữ co/cắt dòng, nhãn đứng ngoài nên
-   không bao giờ bị cắt mất. */
-.pbrief-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-.pbrief-body {
-  min-width: 0;
-}
-.pbrief-main .pbrief-ai {
-  flex: none;
-  margin-left: 0;
-}
-.pbrief:not(.is-open) .pbrief-body {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.pbrief-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--textFaint);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 18px;
-}
-.pbrief-toggle:hover {
-  color: var(--text);
-}
-.pbrief-chev {
-  transition: transform 0.18s ease;
-}
-.pbrief-chev.up {
-  transform: rotate(180deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .pbrief-chev {
-    transition: none;
-  }
-}
-
-/* Nhãn "do model" — nhỏ, không tô màu cảnh báo: nó nói NGUỒN của câu chữ, không
-   nói mức nguy hiểm. Trộn hai thứ đó vào một màu là dạy sai người đọc. */
-.pbrief-ai {
-  margin-left: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--textFaint);
-  white-space: nowrap;
-}
-
-/* Câu của mô hình ở hàng Rủi ro: xuống dòng riêng để không bị đọc lẫn vào phần
-   AWOG tự suy đứng trước nó. */
-.pbrief-note {
-  display: block;
-  margin-top: 3px;
-  color: var(--textDim);
-}
-
-.pbrief-state {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-
-.pbrief-retry {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--primary);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 18px;
-  text-decoration: underline;
-}
-
-@media (max-width: 560px) {
-  .pbrief {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
-}
-
-/* Plan body = the model's markdown rendered as a document (SessionTextBlock).
-   Replaces the old flat <ul> so headers/nested lists/bold/code survive. */
-.planbody {
-  margin-bottom: 6px;
-}
-/* ── Permission rule preview + tier picker (ADR 0080) ────────────────────────
-   Both rows sit between the "allow X on Y?" line and the action row, so the rule
-   and its reach are read BEFORE the buttons. Each row wraps its explanation onto
-   a line of its own (.prulehint) instead of squeezing it beside the control. */
-.prule,
-.pscope,
-.psaved,
-.pnote {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 9px;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.prulelbl {
-  font-weight: 550;
-  color: var(--muted-foreground);
-}
-.prulehint {
-  flex: 1 1 100%;
-  color: var(--textDim);
-}
-/* The verbatim rule string — `Bash(git status)` — the user reads before granting it. */
-.prulecode {
-  font-family: var(--code); /* mono-ok: a rule string is code the user can copy */
-  font-size: 13px;
-  line-height: 18px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  padding: 2px 7px;
-  color: var(--foreground);
-  user-select: text;
-  word-break: break-all;
-}
-/* Mono inline target — the shell command a permission prompt is asking about. */
-.permcode {
-  font-family: var(--code); /* mono-ok */
-  font-size: 13px;
-  line-height: 18px;
-  background: var(--muted);
-  padding: 1px 6px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-}
-.pnote :deep(.icn) {
-  color: var(--warning);
-  flex: 0 0 auto;
-}
-.psaved {
-  margin-top: 7px;
-}
-/* Một câu: lệnh này làm gì với hạ tầng. Đọc trước dòng lệnh, vì phần lớn người
-   duyệt không phân loại được `s3api delete-bucket` chỉ bằng cách nhìn. */
-.isent {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--foreground);
-}
-.isent.hot {
-  font-weight: 650;
-  color: var(--destructive);
-}
-/* Dòng lệnh ĐÚNG NHƯ sắp chạy. XUỐNG DÒNG chứ không cuộn ngang.
-   Bản đầu để `white-space: pre` + `overflow-x: auto` với lý do "một lệnh bị bẻ dòng
-   đọc ra thành nhiều lệnh" — đúng về nguyên tắc, nhưng trên thực tế phần ĐUÔI bị
-   đẩy ra ngoài tầm nhìn và thanh cuộn ngang không hiện trên thanh này (macOS ẩn
-   scrollbar), nên người duyệt đọc `aws sts get-caller-identity … | env | grep -c
-   '^AWS_'` mà không thấy `'^AWS_'`. Một lệnh dài bị cắt cụt tệ hơn một lệnh bị bẻ
-   dòng: chữ vẫn nguyên văn (không thêm/bớt ký tự nào) nên copy ra terminal vẫn chạy
-   đúng, và `overflow-wrap: anywhere` chỉ bẻ khi token không còn chỗ — cờ ngắn vẫn
-   nằm nguyên trên dòng của nó. */
-.icmd {
-  margin-top: 9px;
-  padding: 7px 10px;
-  font-family: var(--code); /* mono-ok: dòng lệnh người dùng copy vào terminal */
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--foreground);
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: text;
-}
-.ichips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
-}
-/* Ngữ cảnh chip — hairline + muted text; `danger`/`warn` nhuộm theo mức hậu quả.
-   Một `-chdir=` dài hơn cả thẻ thì cắt bằng ellipsis, không đẩy ngang cả hàng —
-   giá trị đầy đủ nằm ở `title`. */
-.ichip {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 0 0 auto;
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-}
-.ichip.danger {
-  color: var(--destructive);
-  border-color: rgb(from var(--destructive) r g b / 45%);
-  background: rgb(from var(--destructive) r g b / 10%);
-  font-weight: 650;
-}
-.ichip.warn {
-  color: var(--warning);
-  border-color: rgb(from var(--warning) r g b / 45%);
-  background: rgb(from var(--warning) r g b / 10%);
-}
-/* ── Kết quả của lệnh vừa được duyệt ─────────────────────────────────────────
-   Nằm SAU hàng "Đã cho phép" vì đó là thứ tự thời gian thật (duyệt → chạy → kết
-   quả), và cách hàng luật đã ghi. Nhãn nhỏ phía trên để "Kết quả" không bị đọc lẫn
-   vào dòng lệnh ở đầu thẻ. */
-.pout {
-  margin-top: 9px;
-  padding-top: 9px;
-  border-top: 1px solid var(--border);
-}
-.pouthead {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 650;
-  color: var(--textDim);
-}
-.poutexit {
-  font-family: var(--code); /* mono-ok: mã thoát là chữ của máy */
-  font-weight: 550;
-  color: var(--destructive);
-}
-/* Xuống dòng chứ không cuộn ngang — cùng lý do như `.icmd`: output dài (một dòng
-   JSON lỗi AWS) mà để `pre` là phần đuôi biến mất khỏi tầm mắt trên thanh này. */
-.poutbody {
-  margin: 0;
-  padding: 2px 0 0;
-  font-family: var(--code); /* mono-ok: raw tool output */
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: text;
-}
-</style>

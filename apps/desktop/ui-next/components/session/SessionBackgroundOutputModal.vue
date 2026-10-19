@@ -1,62 +1,92 @@
 <template>
-  <Teleport to="body">
-    <div class="ovl on bgo-ovl" @click.self="emit('close')">
-      <div class="bgo-card" role="dialog" aria-modal="true">
-        <div class="bgo-head">
-          <Icon name="terminal" class="bgo-hicn" />
-          <span class="bgo-title">{{ t('sessionsBg.title') }}</span>
-          <span class="bgo-status" :class="`is-${kind}`">{{ statusText }}</span>
-          <button
-            class="p-1.5 rounded transition bgo-x"
-            :title="t('common.close')"
-            @click="emit('close')"
-          >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
-
-        <div class="bgo-meta">
-          <span class="bgo-k">{{ t('sessionsBg.command') }}</span>
-          <code class="bgo-cmd">{{ shell.command }}</code>
-          <span class="bgo-k">{{ t('sessionsBg.started') }}</span>
-          <span>{{ startedText }}</span>
-        </div>
-
-        <div class="bgo-outhd">
-          <span class="bgo-k">{{ t('sessionsBg.output') }}</span>
-          <button
-            v-if="output.text"
-            class="p-1.5 rounded transition bgo-x"
-            :title="copied ? t('common.copied') : t('common.copy')"
-            @click="onCopy"
-          >
-            <Icon
-              :name="copied ? 'check' : 'copy'"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-          </button>
-        </div>
-
-        <p v-if="output.truncated" class="bgo-note">
-          {{ t('sessionsBg.truncated', { kb: droppedKb }) }}
-        </p>
-
-        <div v-if="output.loading && !output.text" class="bgo-empty">
-          {{ t('sessionsBg.loading') }}
-        </div>
-        <div v-else-if="output.error" class="bgo-empty is-err">
-          {{ t('sessionsBg.error', { msg: output.error }) }}
-        </div>
-        <pre v-else-if="output.text" class="bgo-out">{{ output.text }}</pre>
-        <div v-else class="bgo-empty">{{ emptyText }}</div>
+  <Dialog :open="true" @update:open="(v) => !v && emit('close')">
+    <DialogContent
+      class="flex max-h-[78vh] w-[92vw] max-w-180 flex-col gap-3 rounded-lg bg-popover px-4.5 pt-4 pb-4.5 sm:max-w-180"
+      :aria-describedby="undefined"
+    >
+      <!-- Nút đóng (✕) do DialogContent tự vẽ ở góc phải-trên; pr-8 chừa chỗ cho nó. -->
+      <div class="flex items-center gap-2 pr-8">
+        <Icon name="terminal" class="size-4 shrink-0 text-muted-foreground" />
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          {{ t('sessionsBg.title') }}
+        </DialogTitle>
+        <Badge
+          variant="outline"
+          class="rounded-sm px-2 py-px text-sm font-normal"
+          :class="
+            kind === 'ok'
+              ? 'border-success/45 text-success'
+              : kind === 'fail'
+                ? 'border-destructive/45 text-destructive'
+                : 'border-primary/45 text-primary'
+          "
+        >
+          {{ statusText }}
+        </Badge>
       </div>
-    </div>
-  </Teleport>
+
+      <!-- Lưới khoá / giá trị: cột nhãn, cột giá trị. -->
+      <div
+        class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm text-muted-foreground"
+      >
+        <span class="text-faint">{{ t('sessionsBg.command') }}</span>
+        <!-- mono: lệnh shell người dùng có thể dán vào terminal -->
+        <code class="font-mono text-sm break-words whitespace-pre-wrap text-foreground">
+          {{ shell.command }}
+        </code>
+        <span class="text-faint">{{ t('sessionsBg.started') }}</span>
+        <span>{{ startedText }}</span>
+      </div>
+
+      <div class="flex items-center gap-2 text-sm">
+        <span class="text-faint">{{ t('sessionsBg.output') }}</span>
+        <Button
+          v-if="output.text"
+          variant="ghost"
+          size="iconSm"
+          class="ml-auto text-muted-foreground hover:text-foreground"
+          :title="copied ? t('common.copied') : t('common.copy')"
+          :aria-label="copied ? t('common.copied') : t('common.copy')"
+          @click="onCopy"
+        >
+          <Icon :name="copied ? 'check' : 'copy'" class="size-3.5" />
+        </Button>
+      </div>
+
+      <!-- Ghi chú "log bị cắt" — thông tin, không phải cảnh báo. -->
+      <p v-if="output.truncated" class="m-0 text-sm text-faint">
+        {{ t('sessionsBg.truncated', { kb: droppedKb }) }}
+      </p>
+
+      <div
+        v-if="output.loading && !output.text"
+        class="rounded-md border border-dashed px-3 py-3.5 text-sm leading-5 text-faint"
+      >
+        {{ t('sessionsBg.loading') }}
+      </div>
+      <!-- Chỉ lỗi ĐỌC mới tô đỏ; output rỗng đúng bản chất thì không. -->
+      <div
+        v-else-if="output.error"
+        class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3.5 text-sm leading-5 text-destructive"
+      >
+        {{ t('sessionsBg.error', { msg: output.error }) }}
+      </div>
+      <!-- Phần dài có vùng cuộn riêng để khung card đứng yên. mono: stdout+stderr thô. -->
+      <pre
+        v-else-if="output.text"
+        class="m-0 min-h-0 flex-auto overflow-auto rounded-md border bg-muted px-3 py-2.5 font-mono text-sm leading-5 break-words whitespace-pre-wrap text-foreground"
+        >{{ output.text }}</pre
+      >
+      <div v-else class="rounded-md border border-dashed px-3 py-3.5 text-sm leading-5 text-faint">
+        {{ emptyText }}
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
 // Modal xem output của MỘT lệnh chạy nền (ADR 0066). Mở từ chip job nền, dùng chung
-// scrim `.ovl` với các modal session khác.
+// khung Dialog (reka) với các modal session khác.
 //
 // `output` là state do `useSessionBackgroundOutput` fetch từ sidecar (RPC
 // `sessions.backgroundRead` đọc file log thật). Rỗng KHÔNG mặc nhiên là lỗi: lệnh
@@ -125,147 +155,3 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
 })
 </script>
-
-<style scoped>
-/* Centre the card (the shared .ovl aligns to top for the command palette) and sit
-   in the modal band, above the session page chrome. */
-.bgo-ovl {
-  align-items: center;
-  padding-top: 0;
-  z-index: 120;
-}
-.bgo-card {
-  /* Dialog chrome — popover surface + hairline border + --radius + lg shadow. */
-  width: 720px;
-  max-width: 92vw;
-  max-height: 78vh;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px 18px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-}
-.bgo-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.bgo-hicn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-}
-.bgo-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--foreground);
-}
-.bgo-status {
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.bgo-status.is-ok {
-  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
-  color: var(--success);
-}
-.bgo-status.is-fail {
-  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
-  color: var(--destructive);
-}
-.bgo-status.is-running {
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
-  color: var(--primary);
-}
-.bgo-x {
-  color: var(--muted-foreground);
-}
-.bgo-x:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.bgo-head .bgo-x {
-  margin-left: auto;
-}
-/* Key / value grid: label column, value column. */
-.bgo-meta {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  align-items: baseline;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-.bgo-k {
-  color: var(--textFaint);
-}
-.bgo-cmd {
-  /* mono-ok: the shell command the user can paste into a terminal */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--foreground);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.bgo-outhd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.bgo-outhd .bgo-x {
-  margin-left: auto;
-}
-/* The long part: its own scroll area so the card chrome stays put. Muted surface
-   like a code block / secondary panel. */
-.bgo-out {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  /* mono-ok: raw stdout+stderr of a shell command */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  color: var(--foreground);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-/* Ghi chú "log bị cắt" — thông tin, không phải cảnh báo. */
-.bgo-note {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.bgo-empty {
-  padding: 14px 12px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  color: var(--textFaint);
-}
-/* Chỉ lỗi ĐỌC mới tô đỏ; output rỗng đúng bản chất thì không. */
-.bgo-empty.is-err {
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--destructive) 40%, var(--border));
-  background: color-mix(in srgb, var(--destructive) 10%, transparent);
-  color: var(--destructive);
-}
-</style>

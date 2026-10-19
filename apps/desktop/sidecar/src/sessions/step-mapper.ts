@@ -58,6 +58,10 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   BashOutput: 'terminal',
   KillShell: 'terminal',
   read_terminal: 'terminal',
+  terminal_snippet_list: 'terminal',
+  terminal_snippet_save: 'terminal',
+  terminal_snippet_delete: 'terminal',
+  terminal_snippet_run: 'terminal',
   monitor: 'terminal',
   // `dev_server` nói về những background shell của Bash, nên nó cùng icon với
   // chúng. `code_index` là tra cứu ⇒ cùng icon với Grep. Cả hai đã có NHÃN từ
@@ -246,12 +250,22 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
     // hàng hiện tên thô `schedule_wakeup` trên CẢ HAI runtime.
     case 'schedule_wakeup':
       return 'Wake-up'
+    case 'propose_schedule':
+      return 'Propose schedule'
     // Nhóm tool AWOG-native chưa từng có nhãn: hàng transcript hiện tên thô
     // (`read_terminal`, `dev_server`…) trong khi mọi tool khác hiện tên người
     // đọc được. Lộ ra khi bắc `read_terminal` sang nhánh SDK — nhãn phải giống
     // nhau ở hai runtime, mà hoá ra nó chưa đúng ở runtime NÀO cả.
     case 'read_terminal':
       return 'Terminal'
+    case 'terminal_snippet_list':
+      return 'Snippets'
+    case 'terminal_snippet_save':
+      return 'Save snippet'
+    case 'terminal_snippet_delete':
+      return 'Delete snippet'
+    case 'terminal_snippet_run':
+      return 'Run snippet'
     case 'KillShell':
       return 'Kill shell'
     case 'monitor':

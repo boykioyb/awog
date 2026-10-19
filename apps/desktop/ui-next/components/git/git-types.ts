@@ -223,36 +223,36 @@ export function statusColor(st: string): string {
   return st === 'A' ? 'var(--success)' : st === 'D' ? 'var(--destructive)' : 'var(--warning)'
 }
 
-// Visual for one working-tree status char: the porcelain letter + theme color +
+// Visual for one working-tree status char: the porcelain letter + class màu theme +
 // i18n label key. The letter is the column every desktop git client uses (Fork,
 // Tower, Xcode, VS Code) — an action glyph in this slot misread as a button: a
 // trash can next to a filename looked like "delete this file", and the `+` for an
 // added file was the same glyph as the stage button on the far side of the row.
 // `U` for untracked rather than `?`, which reads as an error. `key` maps to
 // `git.fileStatus.<key>` for the tooltip so color is never the only channel.
-export type StatusVisual = { letter: string; color: string; key: string }
+export type StatusVisual = { letter: string; cls: string; key: string }
 
 export function statusVisual(st: string): StatusVisual {
   switch (st) {
     case 'A':
-      return { letter: 'A', color: 'var(--success)', key: 'added' }
+      return { letter: 'A', cls: 'text-success', key: 'added' }
     case '?':
-      return { letter: 'U', color: 'var(--success)', key: 'untracked' }
+      return { letter: 'U', cls: 'text-success', key: 'untracked' }
     case 'C':
-      return { letter: 'C', color: 'var(--success)', key: 'copied' }
+      return { letter: 'C', cls: 'text-success', key: 'copied' }
     case 'D':
-      return { letter: 'D', color: 'var(--destructive)', key: 'deleted' }
+      return { letter: 'D', cls: 'text-destructive', key: 'deleted' }
     case 'R':
-      return { letter: 'R', color: 'var(--warning)', key: 'renamed' }
+      return { letter: 'R', cls: 'text-warning', key: 'renamed' }
     case 'T':
-      return { letter: 'T', color: 'var(--warning)', key: 'typeChanged' }
+      return { letter: 'T', cls: 'text-warning', key: 'typeChanged' }
     case 'U':
-      return { letter: '!', color: 'var(--destructive)', key: 'conflicted' }
+      return { letter: '!', cls: 'text-destructive', key: 'conflicted' }
     case 'I':
-      return { letter: 'I', color: 'var(--muted-foreground)', key: 'ignored' }
+      return { letter: 'I', cls: 'text-muted-foreground', key: 'ignored' }
     case 'M':
     default:
-      return { letter: 'M', color: 'var(--warning)', key: 'modified' }
+      return { letter: 'M', cls: 'text-warning', key: 'modified' }
   }
 }
 

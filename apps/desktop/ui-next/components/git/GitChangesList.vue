@@ -1,63 +1,76 @@
 <template>
-  <div class="gmid" :style="{ flexBasis: `${width}px`, width: `${width}px` }">
+  <!-- Cột giữa: bề rộng do cha kéo (inline px). -->
+  <div
+    class="flex flex-none flex-col overflow-hidden border-r bg-sidebar"
+    :style="{ flexBasis: `${width}px`, width: `${width}px` }"
+  >
     <!-- Working-tree header: title + tree/flat toggle. Stage-all / unstage-all
          now live per zone (each section header owns its verb). -->
-    <div class="gchtools">
-      <span class="gchtitle">{{ t('git.status.workingTree') }}</span>
-      <span style="flex: 1" />
-      <span class="gchseg">
-        <span
-          class="gsegbtn"
-          :class="{ on: chTree }"
-          :title="t('git.changes.tree')"
-          @click="!chTree && emit('toggle-tree')"
-        >
-          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </span>
-        <span
-          class="gsegbtn"
-          :class="{ on: !chTree }"
-          :title="t('git.changes.flat')"
-          @click="chTree && emit('toggle-tree')"
-        >
-          <Icon name="rules" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </span>
+    <div class="flex flex-none items-center border-b px-2.5 py-1.5">
+      <span class="font-sans text-xs font-semibold text-muted-foreground">
+        {{ t('git.status.workingTree') }}
       </span>
+      <span class="flex-1" />
+      <ToggleGroup
+        type="single"
+        class="ml-1 overflow-hidden rounded-sm border"
+        :model-value="chTree ? 'tree' : 'flat'"
+        @update:model-value="(v) => v && (v === 'tree') !== chTree && emit('toggle-tree')"
+      >
+        <ToggleGroupItem
+          value="tree"
+          :class="SEG"
+          :title="t('git.changes.tree')"
+          :aria-label="t('git.changes.tree')"
+        >
+          <Icon name="folder" class="size-3" />
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="flat"
+          :class="SEG"
+          :title="t('git.changes.flat')"
+          :aria-label="t('git.changes.flat')"
+        >
+          <Icon name="rules" class="size-3" />
+        </ToggleGroupItem>
+      </ToggleGroup>
     </div>
 
-    <div class="gscroll">
+    <div class="flex-1 overflow-y-auto p-1.5">
       <!-- Conflicted section — top of the list, above the zones. No stage action
            and no discard-all here (QĐ-2 / OQ-6): a conflicted file is resolved
            via the resolver or discarded via a global Abort, not per-file. -->
-      <div v-if="conflicted.length" class="gconflictsec">
-        <div class="gstatsec gconflicthd">
-          <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <span class="gstatlbl">{{ t('git.conflict.section') }}</span>
-          <span class="gstatct">{{ conflicted.length }}</span>
+      <div v-if="conflicted.length">
+        <!-- Header vùng xung đột dùng màu destructive để gây chú ý. -->
+        <div :class="[ZONE_HEAD, 'text-destructive']">
+          <Icon name="alert" class="size-3" />
+          <span :class="[ZONE_LABEL, 'text-destructive']">{{ t('git.conflict.section') }}</span>
+          <span :class="[ZONE_COUNT, 'text-destructive']">{{ conflicted.length }}</span>
         </div>
         <div
           v-for="x in conflicted"
           :key="x.f"
-          class="gfile"
-          :class="{ on: conflictSelPath === x.f }"
+          :class="[FILE_ROW, { [FILE_ROW_ON]: conflictSelPath === x.f }]"
           @click="emit('select-conflict', x.f)"
         >
           <span
-            class="gsti"
-            style="color: var(--destructive)"
+            :class="[STATUS_LETTER, 'text-destructive']"
             :title="t('git.fileStatus.conflicted')"
           >
             !
           </span>
-          <span class="gnm2">
-            <span class="gp">{{ dirName(x.f) }}</span>
-            <span class="gn">{{ baseName(x.f) }}</span>
+          <span :class="FILE_NAME">
+            <!-- mono-ok: phần thư mục của path -->
+            <span :class="FILE_DIR">{{ dirName(x.f) }}</span>
+            <span :class="FILE_BASE">{{ baseName(x.f) }}</span>
           </span>
         </div>
       </div>
 
       <!-- Clean tree → single reassuring line instead of two empty zones. -->
-      <div v-if="isClean" class="listempty">{{ t('git.changes.clean') }}</div>
+      <div v-if="isClean" class="px-3.5 py-8 text-center text-sm text-dim">
+        {{ t('git.changes.clean') }}
+      </div>
 
       <!-- Two clearly separated zones (Unstaged on top → Staged below, mirroring
            the stage → commit flow), split by a hairline divider. Both always
@@ -80,7 +93,7 @@
           @context-folder="(e, p, s) => emit('context-folder', e, p, s)"
         />
 
-        <div class="gzonediv" />
+        <Separator class="mx-1.5 my-2 w-auto" />
 
         <GitStatusSection
           :label="t('git.status.staged')"
@@ -109,8 +122,26 @@
 // Mirrors production GitStatusList; commit panel lives in the detail pane.
 import type { GitFile, GitRightPaneSel, GitSelection, SelMods } from './git-types'
 import { baseNameOf, shortPath } from './git-types'
+import {
+  FILE_BASE,
+  FILE_DIR,
+  FILE_NAME,
+  FILE_ROW,
+  FILE_ROW_ON,
+  STATUS_LETTER,
+  ZONE_COUNT,
+  ZONE_HEAD,
+  ZONE_LABEL,
+} from './git-ui'
+import Separator from '~/components/ui/separator/Separator.vue'
+import ToggleGroup from '~/components/ui/toggle-group/ToggleGroup.vue'
+import ToggleGroupItem from '~/components/ui/toggle-group/ToggleGroupItem.vue'
 
 const { t } = useI18n()
+
+// Nút của segmented tree/flat: đang chọn = nền secondary.
+const SEG =
+  'h-auto min-w-0 rounded-none px-2 py-1 text-muted-foreground hover:bg-accent data-[state=on]:bg-secondary data-[state=on]:text-secondary-foreground'
 
 const props = withDefaults(
   defineProps<{
@@ -163,16 +194,3 @@ const emit = defineEmits<{
   (e: 'context-folder', event: MouseEvent, path: string, staged: boolean): void
 }>()
 </script>
-
-<style scoped>
-/* Conflicted header uses the danger token to signal attention. The conflict rows
-   themselves reuse the shared `.gsti` status glyph (alert, danger) so the icon
-   set is consistent across every zone. No hex — all via theme vars. */
-.gconflicthd {
-  color: var(--destructive);
-}
-.gconflicthd .gstatlbl,
-.gconflicthd .gstatct {
-  color: var(--destructive);
-}
-</style>

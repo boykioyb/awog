@@ -1,63 +1,82 @@
 <template>
-  <span class="sb-wrap">
-    <button
-      class="sb-item"
-      :title="t('statusbar.branch.title')"
-      :aria-expanded="open"
-      @click.stop="open = !open"
+  <!-- Popover (portal ra <body>, mở LÊN trên vì thanh ghim ở đáy cửa sổ). -->
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <StatusChip :title="t('statusbar.branch.title')">
+        <Icon name="branch" />
+        <span class="max-w-45 truncate">{{ branch ?? t('statusbar.branch.none') }}</span>
+        <Badge
+          v-if="dirtyCount"
+          class="h-3.5 min-w-4 justify-center border-transparent bg-selected px-1 py-0 font-semibold text-primary tabular-nums"
+        >
+          {{ dirtyCount }}
+        </Badge>
+        <!-- Working-tree diff-stat, only when there is something to show. Chữ số,
+             không phải code — tabular-nums giữ số khỏi nhảy, không cần font mono. -->
+        <span
+          v-if="stat"
+          class="inline-flex items-center gap-1 tabular-nums"
+          :title="t('statusbar.diffStat.title')"
+        >
+          <span v-if="stat.add" class="text-diff-add">+{{ stat.add }}</span>
+          <span v-if="stat.del" class="text-diff-del">−{{ stat.del }}</span>
+        </span>
+      </StatusChip>
+    </PopoverTrigger>
+    <PopoverContent
+      side="top"
+      align="end"
+      :side-offset="8"
+      class="flex max-h-[min(50vh,360px)] w-64 flex-col p-1"
     >
-      <Icon name="branch" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="sb-branch">{{ branch ?? t('statusbar.branch.none') }}</span>
-      <span v-if="dirtyCount" class="sb-badge">{{ dirtyCount }}</span>
-      <!-- Working-tree diff-stat, only when there is something to show. -->
-      <span v-if="stat" class="sb-stat tnum" :title="t('statusbar.diffStat.title')">
-        <span v-if="stat.add" class="sb-add">+{{ stat.add }}</span>
-        <span v-if="stat.del" class="sb-del">−{{ stat.del }}</span>
-      </span>
-    </button>
-
-    <template v-if="open">
-      <div class="sb-backdrop" @click="open = false" />
-      <div class="smenu sb-menu" @click.stop>
-        <div class="sb-menu-hd">{{ t('statusbar.branch.switch') }}</div>
-        <!-- Only the branch list scrolls; the "Open Git Manager" action below is
-             frozen so it stays reachable no matter how many branches there are. -->
-        <div class="sb-menu-scroll">
-          <div v-if="loading" class="sb-menu-hint">{{ t('statusbar.branch.loading') }}</div>
-          <div v-else-if="!localBranches.length" class="sb-menu-hint">
-            {{ t('statusbar.branch.empty') }}
-          </div>
-          <button
-            v-for="b in localBranches"
-            :key="b"
-            class="mi"
-            :disabled="switching"
-            @click="pick(b)"
-          >
-            <span class="sb-mi-name">{{ b }}</span>
-            <Icon
-              v-if="b === branch"
-              name="check"
-              class="ck"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-          </button>
-        </div>
-        <div class="sb-menu-foot">
-          <div class="sb-menu-sep" />
-          <!-- Only meaningful inside a repo: no branch → no PR. -->
-          <button v-if="branch" class="mi" @click="createPr">
-            <Icon name="merge" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('statusbar.branch.createPr') }}
-          </button>
-          <button class="mi" @click="openGit">
-            <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('statusbar.branch.openGit') }}
-          </button>
-        </div>
+      <div class="shrink-0 px-2 pt-1 pb-1.5 text-sm text-faint">
+        {{ t('statusbar.branch.switch') }}
       </div>
-    </template>
-  </span>
+      <!-- Only the branch list scrolls; the "Open Git Manager" action below is
+           frozen so it stays reachable no matter how many branches there are. -->
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <div v-if="loading" class="px-2 py-1.5 text-sm text-faint">
+          {{ t('statusbar.branch.loading') }}
+        </div>
+        <div v-else-if="!localBranches.length" class="px-2 py-1.5 text-sm text-faint">
+          {{ t('statusbar.branch.empty') }}
+        </div>
+        <Button
+          v-for="b in localBranches"
+          :key="b"
+          variant="ghost"
+          size="sm"
+          class="w-full justify-start font-normal"
+          :disabled="switching"
+          @click="pick(b)"
+        >
+          <span class="min-w-0 truncate">{{ b }}</span>
+          <Icon v-if="b === branch" name="check" class="ml-auto text-primary" />
+        </Button>
+      </div>
+      <Separator class="my-1" />
+      <!-- Only meaningful inside a repo: no branch → no PR. -->
+      <Button
+        v-if="branch"
+        variant="ghost"
+        size="sm"
+        class="w-full shrink-0 justify-start font-normal"
+        @click="createPr"
+      >
+        <Icon name="merge" />
+        {{ t('statusbar.branch.createPr') }}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="w-full shrink-0 justify-start font-normal"
+        @click="openGit"
+      >
+        <Icon name="git" />
+        {{ t('statusbar.branch.openGit') }}
+      </Button>
+    </PopoverContent>
+  </Popover>
 </template>
 
 <script setup lang="ts">
@@ -162,92 +181,3 @@ onBeforeUnmount(() => {
   if (unlisten) unlisten()
 })
 </script>
-
-<style scoped>
-.sb-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.sb-branch {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Diff-stat: digits, not code — tabular figures (.tnum) keep them from jittering
-   as the counts change, without the terminal look of a mono font. */
-.sb-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.sb-add {
-  color: var(--add);
-}
-.sb-del {
-  color: var(--del);
-}
-/* Quick-switch list opens UPWARD (the bar is pinned to the window bottom). Override
-   the global `.smenu` fixed/z so it anchors above the chip. A flex column with a
-   capped height: header + frozen footer stay put while only the branch list scrolls
-   (override the global `.smenu { overflow-y: auto }` so the whole menu doesn't scroll). */
-.sb-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  z-index: 95;
-  max-height: min(50vh, 360px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* Only the branch list scrolls. */
-.sb-menu-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-/* Frozen footer: the separator + "Open Git Manager" action pinned at the bottom. */
-.sb-menu-foot {
-  flex: 0 0 auto;
-}
-.sb-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 94;
-}
-.sb-menu-hd {
-  flex: 0 0 auto;
-  padding: 4px 10px 6px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.sb-menu-hint {
-  padding: 6px 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.sb-menu-sep {
-  height: 1px;
-  margin: 5px 4px;
-  background: var(--border);
-}
-.mi {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  text-align: left;
-}
-.mi:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.sb-mi-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>

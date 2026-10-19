@@ -1,23 +1,35 @@
 <template>
-  <div
-    class="wsterm"
-    :class="{ 'wsterm--dragging': isDragging, 'wsterm--resizing': isResizing }"
-    :style="{ '--wsterm-bg': paneBg }"
-  >
-    <div v-if="errorMsg || !ready" class="empty" style="padding: 30px">
-      <div class="et">{{ errorMsg ?? unavailableMsg }}</div>
+  <!-- `.wsterm` là hook cho CSS ngoài file: app-shell.css `.ikm-body > .ikm-term > .wsterm`
+       cho root giãn trong tab Terminal của pod. Kéo pane / kéo splitter ⇒ chặn bôi đen.
+       hook-ok: `.wsterm` do app-shell.css (tab Terminal của pod) đọc -->
+  <div class="wsterm" :class="[ROOT_CLASS, { 'select-none': isDragging || isResizing }]">
+    <div
+      v-if="errorMsg || !ready"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ errorMsg ?? unavailableMsg }}</div>
     </div>
 
     <template v-else>
       <!-- Tab strip: one tab per shell group. A tab holds a split tree of panes; a
            fresh tab is a single leaf and behaves exactly as a plain terminal. Right-
            click (or double-click to rename) a tab for the actions menu. -->
-      <div class="wsterm-tabs" role="tablist">
-        <button
+      <div
+        class="flex h-8 flex-none items-center gap-0.5 overflow-x-auto border-b border-border px-1.5"
+        role="tablist"
+      >
+        <!-- Tab đang mở = wash + gạch chân primary 1px (giống tab strip của panel). -->
+        <Button
           v-for="(tab, i) in tabs"
           :key="tab.id"
-          class="wsterm-tab"
-          :class="{ active: tab.id === activeTabId }"
+          variant="ghost"
+          size="xs"
+          :class="[
+            'h-6 flex-none gap-1.5 px-2 text-sm [&_svg]:size-3',
+            tab.id === activeTabId
+              ? 'bg-accent text-foreground shadow-[inset_0_-1px_0_var(--primary)]'
+              : 'text-muted-foreground hover:text-foreground',
+          ]"
           role="tab"
           :aria-selected="tab.id === activeTabId"
           :title="tabLabel(tab, i)"
@@ -25,44 +37,61 @@
           @dblclick="renameTab(tab.id)"
           @contextmenu="menu.open($event, tab.id)"
         >
-          <span class="wsterm-tab-label">{{ tabLabel(tab, i) }}</span>
+          <span>{{ tabLabel(tab, i) }}</span>
           <span
             v-if="tabs.length > 1"
-            class="wsterm-tab-close"
+            class="inline-flex size-4 items-center justify-center rounded-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             role="button"
             :title="t('sessions.workspace.terminal.closeTab')"
             :aria-label="t('sessions.workspace.terminal.closeTab')"
             @click.stop="closeTab(tab.id)"
           >
-            <X class="size-3" />
+            <X />
           </span>
-        </button>
-        <button
-          class="wsterm-tab-add"
+        </Button>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="h-6 w-6 flex-none text-muted-foreground [&_svg]:size-3.5"
           :title="t('sessions.workspace.terminal.newTab')"
           :aria-label="t('sessions.workspace.terminal.newTab')"
           @click.stop="onAddClick"
         >
-          <Plus class="size-3.5" />
-        </button>
+          <Plus />
+        </Button>
         <!-- VSCode-style split button: splits the active pane to the right. The tab
              context menu still offers split-down + rename/duplicate. -->
-        <button
-          class="wsterm-tab-add"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="h-6 w-6 flex-none text-muted-foreground [&_svg]:size-3.5"
           :title="t('sessions.workspace.terminal.splitRight')"
           :aria-label="t('sessions.workspace.terminal.splitRight')"
           @click="splitActive"
         >
-          <PanelRight class="size-3.5" />
-        </button>
+          <PanelRight />
+        </Button>
       </div>
 
       <!-- One layer per tab; only the active one is shown (hidden tabs keep their
            PTYs + buffers). Each layer renders the tab's split tree via the recursive
            WorkspaceTerminalNode. A single-leaf tab renders exactly one full-size box —
            identical to before the split feature. -->
-      <div class="wsterm-stage">
-        <div v-for="tab in tabs" v-show="tab.id === activeTabId" :key="tab.id" class="wsterm-panes">
+      <div class="relative min-h-0 flex-1">
+        <!-- Breathing-room gutter for the terminal(s) lives HERE, not on the pane box,
+             because FitAddon measures the box's padding-inclusive clientHeight and would
+             consume box padding (→ extra clipped row). This layer isn't measured, so the
+             padding is a true gap, painted with the terminal bg so it reads as internal
+             padding. RIGHT is deliberately thin (2px): FitAddon already reserves 14px
+             there for xterm's scrollbar, and every extra pixel pushed the scroll track
+             away from the panel edge, where the mouse lands when you throw it right. -->
+        <div
+          v-for="tab in tabs"
+          v-show="tab.id === activeTabId"
+          :key="tab.id"
+          class="absolute inset-0 flex min-h-0 flex-col pt-1.5 pr-0.5 pb-3 pl-2.5"
+          :style="{ background: paneBg }"
+        >
           <WorkspaceTerminalNode :node="tab.layout" :tab-id="tab.id" />
         </div>
       </div>
@@ -113,6 +142,7 @@
 // bridge / cwd is absent.
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal, type ITheme } from '@xterm/xterm'
+import { useMutationObserver } from '@vueuse/core'
 import { PanelRight, Plus, X } from 'lucide-vue-next'
 import { useTerminalAppearanceStore } from '~/stores/terminalAppearance'
 import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
@@ -218,10 +248,9 @@ const tabLabel = (tab: TerminalTab, i: number): string => tab.label ?? tabTitle(
 // defaults. Reading <html> returned the dark tokens even in light mode, so the
 // 'system' preset was always dark — reading <body> yields the EFFECTIVE value
 // (light tokens when body.light is set, dark otherwise).
-const cssVar = (name: string, fallback: string): string => {
-  if (typeof window === 'undefined' || !document.body) return fallback
-  const v = getComputedStyle(document.body).getPropertyValue(name).trim()
-  return v || fallback
+const cssVar = (name: string): string | undefined => {
+  if (typeof window === 'undefined' || !document.body) return undefined
+  return getComputedStyle(document.body).getPropertyValue(name).trim() || undefined
 }
 
 // Terminal appearance (color preset + font). The 'system' preset (theme === null)
@@ -230,12 +259,8 @@ const cssVar = (name: string, fallback: string): string => {
 // the opt-in 'cute' family (theme-cute.css). Precedence: user preset > terminal
 // token > app token — a preset always wins; otherwise prefer the terminal-specific
 // var (dark, for readability — §11) and fall back to the app's own var when it's
-// undefined (getComputedStyle returns '' for an unset var, and cssVar()'s fallback
-// param covers that).
-const { family: themeFamily } = useThemeFamily()
-// Light/dark toggle → repaint open terminals on the 'system' preset (its palette is
-// read live from the app tokens, which flip with this).
-const { isDark } = useTheme()
+// undefined (getComputedStyle returns '' for an unset var → cssVar() returns
+// undefined → the next var in the chain, and xterm's own default as the last resort).
 const appearance = useTerminalAppearanceStore()
 
 // Background for the pane BOX so its padding reads as INTERNAL terminal padding (the
@@ -243,6 +268,8 @@ const appearance = useTerminalAppearanceStore()
 // gutter. Matches the xterm background: a preset's hex, else --termBg falling back to
 // --bg (system) — nested var() so the browser resolves the same precedence at paint
 // time without a JS re-read.
+const ROOT_CLASS = 'flex h-full min-h-0 flex-col bg-background'
+
 const paneBg = computed(() => appearance.theme?.background ?? 'var(--termBg, var(--bg))')
 
 // Scrollbar slider colors. From xterm 6 the scrollbar is xterm's OWN DOM and takes
@@ -264,11 +291,11 @@ const SLIDER_COLORS: ITheme = {
 const resolveTheme = (): ITheme => ({
   ...SLIDER_COLORS,
   ...(appearance.theme ?? {
-    background: cssVar('--termBg', cssVar('--bg', '#0d0d0d')),
-    foreground: cssVar('--termText', cssVar('--text', '#e5e5e5')),
-    cursor: cssVar('--accent', '#3b82f6'),
-    selectionBackground: cssVar('--accent', '#3b82f6'),
-    selectionForeground: cssVar('--accentText', '#ffffff'),
+    background: cssVar('--termBg') ?? cssVar('--bg'),
+    foreground: cssVar('--termText') ?? cssVar('--text'),
+    cursor: cssVar('--accent'),
+    selectionBackground: cssVar('--accent'),
+    selectionForeground: cssVar('--accentText'),
   }),
 })
 
@@ -1007,30 +1034,41 @@ onBeforeUnmount(() => {
 // Live-apply terminal appearance to every open pane. Fires only when the user
 // changes preset / size / font (the default 'system'/13/mono values are stable →
 // this stays dormant → no change by default). Font metrics change → refit. Also
-// fires on a theme-family switch: Settings → Appearance → Theme to/from Cute
-// flips whether --termBg/--termText resolve, so the 'system' preset must re-read
-// resolveTheme() and repaint every already-open xterm instance live.
+// fires on a theme-family / light-dark switch (body observer below): Settings →
+// Appearance → Theme to/from Cute flips whether --termBg/--termText resolve, so the
+// 'system' preset must re-read resolveTheme() and repaint every already-open xterm
+// instance live.
+// Palette lần vẽ gần nhất — observer <body> bên dưới so với nó để khỏi vẽ lại thừa.
+let lastThemeKey = ''
+function applyAppearance(): void {
+  const nextTheme = resolveTheme()
+  lastThemeKey = JSON.stringify(nextTheme)
+  for (const pane of panes.values()) {
+    if (!pane.term) continue
+    pane.term.options.theme = nextTheme
+    pane.term.options.fontSize = appearance.fontSize
+    pane.term.options.fontFamily = appearance.fontFamily
+  }
+  nextTick(() => {
+    for (const pane of panes.values()) if (pane.term) syncSize(pane)
+  })
+}
 watch(
-  [
-    () => appearance.theme,
-    () => appearance.fontSize,
-    () => appearance.fontFamily,
-    themeFamily,
-    isDark,
-  ],
-  () => {
-    const nextTheme = resolveTheme()
-    for (const pane of panes.values()) {
-      if (!pane.term) continue
-      pane.term.options.theme = nextTheme
-      pane.term.options.fontSize = appearance.fontSize
-      pane.term.options.fontFamily = appearance.fontFamily
-    }
-    nextTick(() => {
-      for (const pane of panes.values()) if (pane.term) syncSize(pane)
-    })
-  },
+  [() => appearance.theme, () => appearance.fontSize, () => appearance.fontFamily],
+  applyAppearance,
 )
+// Đổi sáng/tối hay đổi theme family đều là đổi thuộc tính của <body> (class / data-*)
+// ⇒ token CSS đổi ⇒ preset 'system' phải đọc lại resolveTheme() và vẽ lại mọi xterm
+// đang mở. Quan sát thẳng thuộc tính của <body> — chỗ token thật sự đổi — thay vì
+// bám state theme trong store (đọc CSS var ngay lúc đó có thể sớm hơn lúc class kịp
+// áp). Mọi thuộc tính đều bắn (kể cả style.cursor lúc kéo pane) nên chỉ vẽ lại khi
+// palette đọc được THỰC SỰ khác lần trước.
+function onBodyAttrsChanged(): void {
+  if (JSON.stringify(resolveTheme()) !== lastThemeKey) applyAppearance()
+}
+if (typeof document !== 'undefined') {
+  useMutationObserver(document.body, onBodyAttrsChanged, { attributes: true })
+}
 
 watch(
   () => props.visible,
@@ -1078,128 +1116,10 @@ onBeforeUnmount(() => {
 })
 </script>
 
-<style scoped>
-/* Class hooks stay (`theme-cute.css` re-skins `.wsterm*`; the stage/pane geometry
-   is behavioral). Only the values moved onto the shadcn alias tokens. */
-.wsterm {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: var(--background);
-}
-.wsterm-tabs {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex: 0 0 auto;
-  height: 32px;
-  padding: 0 6px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border);
-}
-.wsterm-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  height: 24px;
-  padding: 0 8px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.wsterm-tab:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-/* Active tab = the wash + a 1px primary underline (echoes the panel's tab strip). */
-.wsterm-tab.active {
-  background: var(--accent-wash);
-  color: var(--foreground);
-  box-shadow: inset 0 -1px 0 var(--primary);
-}
-.wsterm-tab-label {
-  display: inline-block;
-}
-.wsterm-tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-}
-.wsterm-tab-close:hover {
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  color: var(--destructive);
-}
-.wsterm-tab-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Stretch to the tab's height so the hover fill is a pill of the SAME box as a
-     tab (not a short, loose rect). Radius + spacing match the tabs too. */
-  align-self: center;
-  height: 24px;
-  width: 24px;
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
-  color: var(--muted-foreground);
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.wsterm-tab-add:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.wsterm-stage {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-/* Per-tab layer: fills the stage; its single child is the tab's split-tree root
-   (a lone leaf box for a single-pane tab — identical to before the split feature). */
-.wsterm-panes {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  /* Breathing-room gutter for the terminal(s). Lives HERE, not on `.wsterm-box`,
-     because FitAddon measures the box's padding-inclusive clientHeight and would
-     consume box padding (→ extra clipped row). Panes isn't measured, so this is a
-     true gap. Painted with the terminal bg so it reads as internal padding.
-     RIGHT is deliberately thin (2px, not 10px): FitAddon already reserves 14px there
-     for xterm's scrollbar, so text keeps its gap either way — while every extra pixel
-     of padding pushed the scroll track away from the panel edge, where the mouse
-     lands when you throw it right. */
-  padding: 6px 2px 12px 10px;
-  background: var(--wsterm-bg, var(--background));
-}
-/* While a pane is being dragged or a splitter resized, suppress selection across the
-   whole widget (the grabbing/resize cursor itself is set on <body>). */
-.wsterm--dragging,
-.wsterm--resizing {
-  user-select: none;
-}
-</style>
-
 <style>
-/* xterm's scrollbar — a plain global block: xterm builds its own DOM, outside Vue's
+/* style-ok: DOM của xterm (thư viện tự dựng, class Tailwind không chạm tới được).
+
+   xterm's scrollbar — a plain global block: xterm builds its own DOM, outside Vue's
    scoped tree.
 
    xterm 6 no longer scrolls with `.xterm-viewport`'s NATIVE scrollbar: it wraps

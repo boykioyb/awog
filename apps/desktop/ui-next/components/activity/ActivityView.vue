@@ -1,26 +1,16 @@
 <template>
-  <div class="actview">
+  <div>
     <!-- Header: title + range/account filters -->
-    <div class="acthd">
-      <div class="acthdl">
-        <Icon name="act" class="acthdic" />
+    <div class="mb-1.5 flex flex-wrap items-start justify-between gap-4">
+      <div class="flex min-w-0 items-center gap-3">
+        <Icon name="act" class="size-5.5 shrink-0 text-primary" />
         <div>
-          <div class="acthdt">{{ t('activity.title') }}</div>
-          <div class="fd">{{ rangeSubtitle }}</div>
+          <div class="text-xl font-semibold">{{ t('activity.title') }}</div>
+          <div class="text-sm text-dim">{{ rangeSubtitle }}</div>
         </div>
       </div>
-      <div class="acthdr">
-        <div class="seg">
-          <span
-            v-for="r in ACTIVITY_RANGES"
-            :key="r"
-            :class="{ on: r === range }"
-            role="button"
-            @click="range = r"
-          >
-            {{ t(`activity.range.${r}`) }}
-          </span>
-        </div>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <SettingsSeg v-model="rangeValue" :options="rangeOptions" />
         <AppSelect
           v-model="projectId"
           :options="projectSelectOptions"
@@ -37,17 +27,22 @@
     </div>
 
     <!-- Error banner (sidecar failed — showing fallback data) -->
-    <div v-if="error" class="acterr">
-      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <div
+      v-if="error"
+      class="my-2.5 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+    >
+      <Icon name="alert" class="size-3.5" />
       {{ t('activity.error', { msg: error }) }}
     </div>
 
     <!-- Summary cards -->
-    <div class="actcards">
-      <div class="tile actcard">
-        <div class="actclbl">{{ t('activity.cards.totalTokens') }}</div>
-        <div class="actcbig tnum">{{ initialLoad ? '…' : formatTokens(totals.totalTokens) }}</div>
-        <div class="actcsub">
+    <div class="mt-3.5 grid grid-cols-3 gap-3">
+      <Card class="gap-1 p-4 shadow-none">
+        <div class="text-xs text-dim">{{ t('activity.cards.totalTokens') }}</div>
+        <div class="mt-1 text-2xl font-semibold tabular-nums">
+          {{ initialLoad ? '…' : formatTokens(totals.totalTokens) }}
+        </div>
+        <div class="mt-1 text-sm text-dim">
           {{
             t('activity.cards.tokenBreak', {
               input: formatTokens(totals.inputTokens),
@@ -55,13 +50,13 @@
             })
           }}
         </div>
-      </div>
-      <div class="tile actcard">
-        <div class="actclbl">{{ t('activity.cards.totalCost') }}</div>
-        <div class="actcbig tnum" style="color: var(--accent)">
+      </Card>
+      <Card class="gap-1 p-4 shadow-none">
+        <div class="text-xs text-dim">{{ t('activity.cards.totalCost') }}</div>
+        <div class="mt-1 text-2xl font-semibold text-primary tabular-nums">
           {{ initialLoad ? '…' : formatCost(totals.costUsd) }}
         </div>
-        <div class="actcsub">
+        <div class="mt-1 text-sm text-dim">
           {{
             t('activity.cards.cacheBreak', {
               read: formatTokens(totals.cacheReadTokens),
@@ -69,25 +64,27 @@
             })
           }}
         </div>
-      </div>
-      <div class="tile actcard">
-        <div class="actclbl">{{ t('activity.cards.turns') }}</div>
-        <div class="actcbig tnum">{{ initialLoad ? '…' : formatTokens(totals.turns) }}</div>
-        <div class="actcsub">{{ t('activity.cards.turnsSub') }}</div>
-      </div>
+      </Card>
+      <Card class="gap-1 p-4 shadow-none">
+        <div class="text-xs text-dim">{{ t('activity.cards.turns') }}</div>
+        <div class="mt-1 text-2xl font-semibold tabular-nums">
+          {{ initialLoad ? '…' : formatTokens(totals.turns) }}
+        </div>
+        <div class="mt-1 text-sm text-dim">{{ t('activity.cards.turnsSub') }}</div>
+      </Card>
     </div>
 
     <!-- Cost timeseries chart -->
-    <div class="sech">{{ t('activity.chart.title') }}</div>
-    <div class="tile actchartwrap">
-      <div v-if="!chartBars.length" class="acthint">{{ t('activity.chart.empty') }}</div>
+    <SettingsGroupLabel>{{ t('activity.chart.title') }}</SettingsGroupLabel>
+    <Card class="gap-2 p-4 shadow-none">
+      <div v-if="!chartBars.length" class="text-sm text-faint">{{ t('activity.chart.empty') }}</div>
       <template v-else>
-        <div class="actchart">
+        <!-- Cột biểu đồ CSS thuần: chiều cao inline là tỉ lệ dữ liệu. -->
+        <div class="flex h-35 items-end gap-1">
           <div
             v-for="bar in chartBars"
             :key="bar.date"
-            class="actbar"
-            :class="{ hi: bar.hi }"
+            class="group flex h-full flex-1 cursor-default items-end"
             :title="
               t('activity.chart.barTip', {
                 date: bar.date,
@@ -96,132 +93,204 @@
               })
             "
           >
-            <i :style="{ height: bar.height + '%' }" />
+            <i
+              class="block min-h-0.75 w-full rounded-t-sm bg-primary transition-opacity group-hover:opacity-85"
+              :class="bar.hi ? 'opacity-85' : 'opacity-40'"
+              :style="{ height: bar.height + '%' }"
+            />
           </div>
         </div>
-        <div class="actaxis">
+        <div class="flex justify-between text-xs text-faint tabular-nums">
           <span>{{ chartBars[0]?.date }}</span>
           <span>{{ chartBars[chartBars.length - 1]?.date }}</span>
         </div>
       </template>
-    </div>
+    </Card>
 
     <!-- By model table -->
-    <div class="sech">{{ t('activity.byModel.title') }}</div>
-    <div v-if="hasMissingPrices" class="actwarn">
-      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <SettingsGroupLabel>{{ t('activity.byModel.title') }}</SettingsGroupLabel>
+    <div
+      v-if="hasMissingPrices"
+      class="mb-2 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-sm text-warning"
+    >
+      <Icon name="alert" class="size-3.5" />
       {{ t('activity.byModel.missingHint') }}
     </div>
-    <div class="tile actpanel">
-      <div v-if="!byModel.length" class="acthint">{{ t('activity.byModel.empty') }}</div>
-      <table v-else class="acttable">
-        <thead>
-          <tr>
-            <th class="tl">{{ t('activity.byModel.col.model') }}</th>
-            <th class="tr">{{ t('activity.byModel.col.input') }}</th>
-            <th class="tr">{{ t('activity.byModel.col.output') }}</th>
-            <th class="tr">{{ t('activity.byModel.col.cache') }}</th>
-            <th class="tr">{{ t('activity.byModel.col.total') }}</th>
-            <th class="tr">{{ t('activity.byModel.col.turns') }}</th>
-            <th class="tr">{{ t('activity.byModel.col.cost') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in byModel" :key="m.model + m.provider">
-            <td class="tl">
-              <div class="actmdl">
-                <span class="mono">{{ m.model }}</span>
-                <span class="tag">{{ m.provider }}</span>
-                <span v-if="missingPriceSet.has(m.model)" class="tag warn">
+    <Card class="gap-0 overflow-hidden p-0 shadow-none">
+      <div v-if="!byModel.length" class="px-4 py-4.5 text-sm text-faint">
+        {{ t('activity.byModel.empty') }}
+      </div>
+      <Table v-else>
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead class="px-3.5 text-xs text-dim">
+              {{ t('activity.byModel.col.model') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byModel.col.input') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byModel.col.output') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byModel.col.cache') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byModel.col.total') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byModel.col.turns') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byModel.col.cost') }}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow
+            v-for="m in byModel"
+            :key="m.model + m.provider"
+            class="last:border-b-0 hover:bg-accent"
+          >
+            <TableCell class="px-3.5 py-2.5 text-muted-foreground">
+              <div class="flex flex-wrap items-center gap-2">
+                <!-- mono-ok: id model -->
+                <span class="font-mono">{{ m.model }}</span>
+                <Badge variant="outline" class="text-muted-foreground">{{ m.provider }}</Badge>
+                <Badge
+                  v-if="missingPriceSet.has(m.model)"
+                  variant="outline"
+                  class="border-warning/45 text-warning"
+                >
                   {{ t('activity.byModel.noPrice') }}
-                </span>
+                </Badge>
               </div>
-            </td>
-            <td class="tr tnum">{{ formatTokens(m.inputTokens) }}</td>
-            <td class="tr tnum">{{ formatTokens(m.outputTokens) }}</td>
-            <td class="tr tnum">
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+              {{ formatTokens(m.inputTokens) }}
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+              {{ formatTokens(m.outputTokens) }}
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
               {{ formatTokens(m.cacheReadTokens + m.cacheWriteTokens) }}
-            </td>
-            <td class="tr tnum">{{ formatTokens(m.totalTokens) }}</td>
-            <td class="tr tnum">{{ formatTokens(m.turns) }}</td>
-            <td class="tr tnum" style="color: var(--accent)">{{ formatCost(m.costUsd) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+              {{ formatTokens(m.totalTokens) }}
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+              {{ formatTokens(m.turns) }}
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-primary tabular-nums">
+              {{ formatCost(m.costUsd) }}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Card>
 
     <!-- By account table -->
-    <div class="sech">{{ t('activity.byAccount.title') }}</div>
-    <div class="tile actpanel">
-      <div v-if="!byAccount.length" class="acthint">{{ t('activity.byAccount.empty') }}</div>
-      <table v-else class="acttable">
-        <thead>
-          <tr>
-            <th class="tl">{{ t('activity.byAccount.col.account') }}</th>
-            <th class="tl">{{ t('activity.byAccount.col.provider') }}</th>
-            <th class="tr">{{ t('activity.byAccount.col.total') }}</th>
-            <th class="tr">{{ t('activity.byAccount.col.turns') }}</th>
-            <th class="tr">{{ t('activity.byAccount.col.cost') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="a in byAccount" :key="a.accountId">
-            <td class="tl">{{ a.label }}</td>
-            <td class="tl">
-              <span class="tag">{{ a.provider }}</span>
-            </td>
-            <td class="tr tnum">{{ formatTokens(a.totalTokens) }}</td>
-            <td class="tr tnum">{{ formatTokens(a.turns) }}</td>
-            <td class="tr tnum" style="color: var(--accent)">{{ formatCost(a.costUsd) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- By session table -->
-    <div class="actsesh">
-      <div class="sech">{{ t('activity.bySession.title') }}</div>
-      <div class="seg">
-        <span
-          v-for="s in SESSION_SORTS"
-          :key="s"
-          :class="{ on: s === sessionSort }"
-          role="button"
-          @click="sessionSort = s"
-        >
-          {{ t(`activity.bySession.sort.${s}`) }}
-        </span>
+    <SettingsGroupLabel>{{ t('activity.byAccount.title') }}</SettingsGroupLabel>
+    <Card class="gap-0 overflow-hidden p-0 shadow-none">
+      <div v-if="!byAccount.length" class="px-4 py-4.5 text-sm text-faint">
+        {{ t('activity.byAccount.empty') }}
       </div>
+      <Table v-else>
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead class="px-3.5 text-xs text-dim">
+              {{ t('activity.byAccount.col.account') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-xs text-dim">
+              {{ t('activity.byAccount.col.provider') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byAccount.col.total') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byAccount.col.turns') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.byAccount.col.cost') }}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow
+            v-for="a in byAccount"
+            :key="a.accountId"
+            class="last:border-b-0 hover:bg-accent"
+          >
+            <TableCell class="px-3.5 py-2.5 text-muted-foreground">{{ a.label }}</TableCell>
+            <TableCell class="px-3.5 py-2.5 text-muted-foreground">
+              <Badge variant="outline" class="text-muted-foreground">{{ a.provider }}</Badge>
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+              {{ formatTokens(a.totalTokens) }}
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+              {{ formatTokens(a.turns) }}
+            </TableCell>
+            <TableCell class="px-3.5 py-2.5 text-right text-primary tabular-nums">
+              {{ formatCost(a.costUsd) }}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Card>
+
+    <!-- By session table: tiêu đề + nút sắp xếp trên một hàng -->
+    <div class="mt-5 mb-2 flex flex-wrap items-center justify-between gap-3">
+      <div class="text-xs font-medium text-muted-foreground">
+        {{ t('activity.bySession.title') }}
+      </div>
+      <SettingsSeg v-model="sessionSortValue" :options="sessionSortOptions" />
     </div>
-    <div class="tile actpanel">
-      <div v-if="!bySession.length" class="acthint">{{ t('activity.bySession.empty') }}</div>
-      <table v-else class="acttable">
-        <thead>
-          <tr>
-            <th class="tl">{{ t('activity.bySession.col.session') }}</th>
-            <th class="tl">{{ t('activity.bySession.col.model') }}</th>
-            <th class="tr">{{ t('activity.bySession.col.total') }}</th>
-            <th class="tr">{{ t('activity.bySession.col.turns') }}</th>
-            <th class="tr">{{ t('activity.bySession.col.cost') }}</th>
-          </tr>
-        </thead>
-        <tbody>
+    <Card class="gap-0 overflow-hidden p-0 shadow-none">
+      <div v-if="!bySession.length" class="px-4 py-4.5 text-sm text-faint">
+        {{ t('activity.bySession.empty') }}
+      </div>
+      <Table v-else>
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead class="px-3.5 text-xs text-dim">
+              {{ t('activity.bySession.col.session') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-xs text-dim">
+              {{ t('activity.bySession.col.model') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.bySession.col.total') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.bySession.col.turns') }}
+            </TableHead>
+            <TableHead class="px-3.5 text-right text-xs text-dim">
+              {{ t('activity.bySession.col.cost') }}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           <template v-for="s in bySession" :key="s.sessionId">
-            <tr>
-              <td class="tl">
-                <div class="actsesnm">
-                  <button
-                    class="actsesx"
-                    :class="{ open: isSessionExpanded(s.sessionId) }"
+            <TableRow class="last:border-b-0 hover:bg-accent">
+              <TableCell class="px-3.5 py-2.5 text-muted-foreground">
+                <div class="flex min-w-0 items-center gap-1.5">
+                  <!-- Chev của sprite trỏ xuống; đóng = xoay -90° (trỏ phải). -->
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    class="size-4.5 shrink-0 text-faint transition-transform hover:text-foreground disabled:opacity-25 [&_svg]:size-3"
+                    :class="isSessionExpanded(s.sessionId) ? 'text-dim' : '-rotate-90'"
                     :disabled="!s.byDay.length"
                     :aria-expanded="isSessionExpanded(s.sessionId)"
                     :title="t('activity.bySession.days.toggle')"
+                    :aria-label="t('activity.bySession.days.toggle')"
                     @click="toggleSessionDays(s.sessionId)"
                   >
-                    <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-                  </button>
+                    <Icon name="chev" />
+                  </Button>
                   <span
-                    class="actseshttl actseshlink"
+                    class="block max-w-115 cursor-pointer truncate transition-colors hover:text-primary hover:underline"
                     role="button"
                     tabindex="0"
                     :title="s.title"
@@ -231,28 +300,44 @@
                     {{ s.title }}
                   </span>
                 </div>
-              </td>
-              <td class="tl">
-                <div class="actmdl">
-                  <span class="mono">{{ s.model || '—' }}</span>
-                  <span v-if="s.provider" class="tag">{{ s.provider }}</span>
+              </TableCell>
+              <TableCell class="px-3.5 py-2.5 text-muted-foreground">
+                <div class="flex flex-wrap items-center gap-2">
+                  <!-- mono-ok: id model -->
+                  <span class="font-mono">{{ s.model || '—' }}</span>
+                  <Badge v-if="s.provider" variant="outline" class="text-muted-foreground">
+                    {{ s.provider }}
+                  </Badge>
                 </div>
-              </td>
-              <td class="tr tnum">{{ formatTokens(s.totalTokens) }}</td>
-              <td class="tr tnum">{{ formatTokens(s.turns) }}</td>
-              <td class="tr tnum" style="color: var(--accent)">{{ formatCost(s.costUsd) }}</td>
-            </tr>
+              </TableCell>
+              <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+                {{ formatTokens(s.totalTokens) }}
+              </TableCell>
+              <TableCell class="px-3.5 py-2.5 text-right text-muted-foreground tabular-nums">
+                {{ formatTokens(s.turns) }}
+              </TableCell>
+              <TableCell class="px-3.5 py-2.5 text-right text-primary tabular-nums">
+                {{ formatCost(s.costUsd) }}
+              </TableCell>
+            </TableRow>
             <!-- Drill-down: this session's spend split by day, newest first. Same
                  pricing + filters as the row above, so the days sum to it. -->
-            <tr v-if="isSessionExpanded(s.sessionId)" class="actdaysrow">
-              <td colspan="5">
-                <div class="actdays">
-                  <div v-for="d in sessionDays(s)" :key="d.date" class="actday">
-                    <span class="actdaydate tnum">{{ d.date }}</span>
-                    <span class="actdaybar">
-                      <i :style="{ width: `${dayPct(s, d.costUsd)}%` }" />
+            <TableRow v-if="isSessionExpanded(s.sessionId)" class="bg-accent hover:bg-accent">
+              <TableCell colspan="5" class="pt-0 pr-3.5 pb-2.5 pl-9.5">
+                <div class="flex flex-col gap-0.5">
+                  <div
+                    v-for="d in sessionDays(s)"
+                    :key="d.date"
+                    class="flex items-center gap-2.5 py-0.5"
+                  >
+                    <span class="shrink-0 text-sm text-dim tabular-nums">{{ d.date }}</span>
+                    <span class="h-1.5 min-w-10 flex-auto overflow-hidden rounded-sm bg-muted">
+                      <i
+                        class="block h-full rounded-sm bg-primary"
+                        :style="{ width: `${dayPct(s, d.costUsd)}%` }"
+                      />
                     </span>
-                    <span class="actdaymeta tnum">
+                    <span class="shrink-0 text-sm text-faint tabular-nums">
                       {{
                         t('activity.bySession.days.meta', {
                           tokens: formatTokens(d.totalTokens),
@@ -260,22 +345,24 @@
                         })
                       }}
                     </span>
-                    <span class="actdaycost tnum">{{ formatCost(d.costUsd) }}</span>
+                    <span class="min-w-16 shrink-0 text-right text-sm text-primary tabular-nums">
+                      {{ formatCost(d.costUsd) }}
+                    </span>
                   </div>
                 </div>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           </template>
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
 
     <!-- Provider rate-limit panel (one card per account) -->
-    <div class="sech">{{ t('activity.rateLimit.title') }}</div>
-    <div v-if="!rateLimitAccounts.length" class="tile actpanel">
-      <div class="acthint">{{ t('activity.rateLimit.empty') }}</div>
-    </div>
-    <div v-else class="actrl">
+    <SettingsGroupLabel>{{ t('activity.rateLimit.title') }}</SettingsGroupLabel>
+    <Card v-if="!rateLimitAccounts.length" class="gap-0 overflow-hidden p-0 shadow-none">
+      <div class="px-4 py-4.5 text-sm text-faint">{{ t('activity.rateLimit.empty') }}</div>
+    </Card>
+    <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-3.5">
       <ActivityRateLimit v-for="acc in rateLimitAccounts" :key="acc.id" :account="acc" />
     </div>
   </div>
@@ -289,7 +376,7 @@
 // auto-import (components/common/AppSelect.vue). Rendered inside ActivityModal —
 // the modal body owns scrolling; this view is just the content.
 import { computed } from 'vue'
-import type { ActivityBySession, SessionSort } from '~/composables/useActivity'
+import type { ActivityBySession, ActivityRange, SessionSort } from '~/composables/useActivity'
 import { ACTIVITY_RANGES, useActivity } from '~/composables/useActivity'
 
 // By-session sort options (most-used first / least-used first).
@@ -365,301 +452,24 @@ const rateLimitAccounts = computed(() =>
 )
 
 const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
+
+// Segmented (SettingsSeg) giữ model kiểu string — cầu nối sang union của useActivity.
+const rangeOptions = computed(() =>
+  ACTIVITY_RANGES.map((r) => ({ label: t(`activity.range.${r}`), value: r })),
+)
+const rangeValue = computed<string>({
+  get: () => range.value,
+  set: (value) => {
+    range.value = value as ActivityRange
+  },
+})
+const sessionSortOptions = computed(() =>
+  SESSION_SORTS.map((s) => ({ label: t(`activity.bySession.sort.${s}`), value: s })),
+)
+const sessionSortValue = computed<string>({
+  get: () => sessionSort.value,
+  set: (value) => {
+    sessionSort.value = value as SessionSort
+  },
+})
 </script>
-
-<style scoped>
-.acthd {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-}
-.acthdl {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.acthdic {
-  width: 22px;
-  height: 22px;
-  color: var(--accent);
-  flex: 0 0 auto;
-}
-.acthdt {
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-  font-weight: 600;
-}
-.acthdr {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.acterr {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0;
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.actcards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 14px;
-}
-.actcard {
-  gap: 4px;
-}
-.actclbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.actcbig {
-  font-size: var(--fs-2xl);
-  font-weight: 600;
-  line-height: 26px;
-  margin-top: 4px;
-}
-.actcsub {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  margin-top: 4px;
-}
-
-.actchartwrap {
-  gap: 8px;
-}
-.actchart {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 140px;
-}
-.actbar {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  cursor: default;
-}
-.actbar i {
-  width: 100%;
-  background: var(--accent);
-  opacity: 0.42;
-  border-radius: var(--r-xs) var(--r-xs) 0 0;
-  min-height: 3px;
-  transition: opacity 0.12s;
-}
-.actbar.hi i,
-.actbar:hover i {
-  opacity: 0.85;
-}
-.actaxis {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--textFaint);
-}
-
-.actpanel {
-  padding: 0;
-  overflow: hidden;
-}
-.acthint {
-  padding: 18px 15px;
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.actwarn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 7px 11px;
-  border-radius: var(--r-sm);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.acttable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.acttable th {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  font-weight: 500;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.acttable td {
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--textMuted);
-}
-.acttable tbody tr:last-child td {
-  border-bottom: 0;
-}
-.acttable tbody tr:hover td {
-  background: var(--bgHover);
-}
-.acttable .tl {
-  text-align: left;
-}
-.acttable .tr {
-  text-align: right;
-}
-.actmdl {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.actrl {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
-}
-
-/* By-session header row: section title + sort toggle on one line. */
-.actsesh {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 20px 0 9px;
-}
-.actsesh .sech {
-  margin: 0;
-}
-.actseshttl {
-  display: block;
-  max-width: 460px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.actseshlink {
-  cursor: pointer;
-  transition: color 0.12s;
-}
-.actseshlink:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-/* Session name cell: expander + title. */
-.actsesnm {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.actsesx {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textFaint);
-  cursor: pointer;
-  /* Collapsed = pointing right; the sprite's chev points down. */
-  transform: rotate(-90deg);
-  transition:
-    transform 0.15s ease,
-    color 0.12s ease;
-}
-.actsesx.open {
-  transform: rotate(0deg);
-  color: var(--textDim);
-}
-.actsesx:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.actsesx:disabled {
-  opacity: 0.25;
-  cursor: default;
-}
-/* Per-day drill-down under a session row. */
-.actdaysrow > td {
-  padding: 0 14px 10px 38px;
-  background: var(--bgHover);
-}
-.actdays {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.actday {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 3px 0;
-}
-.actdaydate {
-  flex: 0 0 auto;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.actdaybar {
-  flex: 1 1 auto;
-  min-width: 40px;
-  height: 6px;
-  border-radius: var(--r-xs);
-  background: var(--bgActive);
-  overflow: hidden;
-}
-.actdaybar > i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-xs);
-  background: var(--accent);
-}
-.actdaymeta {
-  flex: 0 0 auto;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.actdaycost {
-  flex: 0 0 auto;
-  min-width: 64px;
-  text-align: right;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-</style>

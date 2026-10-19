@@ -1,29 +1,48 @@
 <template>
-  <div class="pop cfgpop">
-    <div class="poptabs">
-      <span :class="{ on: cfgTab === 'General' }" @click="cfgTab = 'General'">
-        {{ t('sessions.config.tab.general') }}
-      </span>
-      <span :class="{ on: cfgTab === 'Tools' }" @click="cfgTab = 'Tools'">
-        {{ t('sessions.config.tab.tools') }}
-      </span>
-    </div>
+  <!-- Khung popover: bề mặt popover + viền mảnh + bo lg + shadow vừa. Cùng trần chiều
+       cao với các popup khác của composer — dài hơn thì cuộn. Vị trí do cha đặt qua
+       `style` (absolute). `role="dialog"` + `data-state="open"` khớp OVERLAYS
+       (composables/useEmbeddedBrowser.ts) thay cho class `.pop` cũ. -->
+  <div
+    role="dialog"
+    data-state="open"
+    class="fixed z-130 flex max-h-[min(420px,60vh)] w-71 flex-col overflow-y-auto rounded-lg border bg-popover text-popover-foreground shadow-md"
+  >
+    <Tabs v-model="cfgTab" class="flex min-h-0 flex-col">
+      <TabsList
+        class="h-auto w-full shrink-0 justify-start gap-0.5 rounded-none bg-transparent p-2"
+      >
+        <TabsTrigger
+          value="General"
+          class="rounded-sm px-3 py-1.5 font-normal text-muted-foreground hover:text-foreground data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none"
+        >
+          {{ t('sessions.config.tab.general') }}
+        </TabsTrigger>
+        <TabsTrigger
+          value="Tools"
+          class="rounded-sm px-3 py-1.5 font-normal text-muted-foreground hover:text-foreground data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none"
+        >
+          {{ t('sessions.config.tab.tools') }}
+        </TabsTrigger>
+      </TabsList>
+      <Separator />
 
-    <div class="popbody">
       <!-- General — Budget caps. Account / Model / Reasoning effort / Style now live
            on the status-bar chips (StatusConfig); Tools on its own tab. -->
-      <template v-if="cfgTab === 'General'">
+      <TabsContent value="General" class="max-h-[60vh] overflow-y-auto p-3">
         <!-- Budget: soft warning + hard cap (USD). Soft only warns; hard refuses a
              turn / stops tool calls sidecar-side. Empty = no cap. -->
-        <div class="pr2">
-          <div class="pl plnowrap">
+        <div>
+          <div class="mb-2 flex items-center justify-between gap-2 text-sm text-muted-foreground">
             <span>{{ t('sessions.budget.section') }}</span>
-            <span class="budgetcost">
+            <span class="text-sm text-muted-foreground tabular-nums">
               {{ t('sessions.budget.spent', { cost: fmtUsd(spent) }) }}
             </span>
           </div>
-          <div class="budgetfields">
-            <label class="budgetfield">
+          <div class="flex gap-2">
+            <Label
+              class="flex flex-1 flex-col items-stretch gap-0.5 text-sm font-normal text-muted-foreground"
+            >
               <span>{{ t('sessions.budget.softLimit') }}</span>
               <Input
                 v-model="softLimitInput"
@@ -31,10 +50,13 @@
                 min="0"
                 step="0.5"
                 placeholder="—"
+                class="tabular-nums"
                 @change="commitSoft"
               />
-            </label>
-            <label class="budgetfield">
+            </Label>
+            <Label
+              class="flex flex-1 flex-col items-stretch gap-0.5 text-sm font-normal text-muted-foreground"
+            >
               <span>{{ t('sessions.budget.hardLimit') }}</span>
               <Input
                 v-model="hardLimitInput"
@@ -42,12 +64,15 @@
                 min="0"
                 step="0.5"
                 placeholder="—"
+                class="tabular-nums"
                 @change="commitHard"
               />
-            </label>
+            </Label>
           </div>
-          <div class="budgetfields">
-            <label class="budgetfield">
+          <div class="flex gap-2">
+            <Label
+              class="flex flex-1 flex-col items-stretch gap-0.5 text-sm font-normal text-muted-foreground"
+            >
               <span>{{ t('sessions.budget.maxToolCalls') }}</span>
               <Input
                 v-model="maxToolCallsInput"
@@ -55,10 +80,13 @@
                 min="0"
                 step="1"
                 placeholder="—"
+                class="tabular-nums"
                 @change="commitMaxToolCalls"
               />
-            </label>
-            <label class="budgetfield">
+            </Label>
+            <Label
+              class="flex flex-1 flex-col items-stretch gap-0.5 text-sm font-normal text-muted-foreground"
+            >
               <span>{{ t('sessions.budget.maxMinutes') }}</span>
               <Input
                 v-model="maxMinutesInput"
@@ -66,47 +94,62 @@
                 min="0"
                 step="1"
                 placeholder="—"
+                class="tabular-nums"
                 @change="commitMaxMinutes"
               />
-            </label>
+            </Label>
           </div>
-          <p class="budgethint">{{ t('sessions.budget.hardHint') }}</p>
+          <p class="mt-1.5 mb-0 text-sm text-faint">{{ t('sessions.budget.hardHint') }}</p>
         </div>
-      </template>
+      </TabsContent>
 
-      <!-- Tools -->
-      <template v-else>
-        <div class="toolsrch">
-          <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <Input v-model="toolQ" unstyled :placeholder="t('sessions.config.toolSearch')" />
-          <span class="tc tnum" style="font-size: var(--fs-xs); color: var(--textFaint)">
-            {{ onCount }}/{{ total }}
-          </span>
+      <!-- Tools — map vào DENYLIST tool của phiên (params.disabledTools). -->
+      <TabsContent value="Tools" class="max-h-[60vh] overflow-y-auto p-3">
+        <!-- Ô tìm tool — cùng khung với ô nhập budget (viền input, nền trong suốt). -->
+        <div
+          class="mb-3 flex items-center gap-2 rounded-md border border-input bg-transparent px-2.5 py-1.5 text-muted-foreground"
+        >
+          <Icon name="search" class="size-3.5 shrink-0" />
+          <Input
+            v-model="toolQ"
+            unstyled
+            class="text-sm text-foreground placeholder:text-muted-foreground"
+            :placeholder="t('sessions.config.toolSearch')"
+          />
+          <span class="shrink-0 text-xs text-faint tabular-nums">{{ onCount }}/{{ total }}</span>
         </div>
-        <div v-for="[group, tools] in filteredGroups" :key="group" class="tgrp">
-          <div class="tgrph">
+        <div v-for="[group, tools] in filteredGroups" :key="group" class="mb-3 last:mb-0">
+          <div class="mb-2 flex items-center text-xs font-semibold text-muted-foreground">
             {{ group }}
-            <span class="tc">
+            <span class="ml-auto text-faint tabular-nums">
               {{ tools.filter((tl) => toolsOn.has(tl)).length }}/{{ tools.length }}
             </span>
           </div>
-          <div class="opts">
-            <span
+          <!-- Công tắc tool — chip viền, hover wash trung tính, tint primary khi BẬT. -->
+          <div class="flex flex-wrap gap-1.5">
+            <Button
               v-for="tl in tools"
               :key="tl"
-              class="o"
-              :class="{ on: toolsOn.has(tl) }"
+              variant="outline"
+              size="xs"
+              class="h-auto rounded-sm px-2.5 py-1 text-sm font-normal shadow-none"
+              :class="
+                toolsOn.has(tl)
+                  ? 'border-primary/45 bg-primary/12 text-primary hover:bg-primary/12 hover:text-primary'
+                  : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              "
+              :aria-pressed="toolsOn.has(tl)"
               @click="toggleTool(tl)"
             >
               {{ tl }}
-            </span>
+            </Button>
           </div>
         </div>
-        <div v-if="!filteredGroups.length" class="listempty">
+        <div v-if="!filteredGroups.length" class="px-3.5 py-8.5 text-center text-sm text-dim">
           {{ t('sessions.config.noToolMatch') }}
         </div>
-      </template>
-    </div>
+      </TabsContent>
+    </Tabs>
   </div>
 </template>
 
@@ -205,112 +248,3 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   ).filter(([, tools]) => tools.length)
 })
 </script>
-
-<style scoped>
-/* Popover chrome — popover surface + hairline border + --radius + mid shadow. */
-.cfgpop {
-  background: var(--popover);
-  border-color: var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  /* Cùng trần chiều cao với các popup khác của composer — dài hơn thì cuộn. */
-  max-height: min(420px, 60vh);
-}
-/* Tab strip — muted labels, neutral accent-wash on the active tab. */
-.poptabs {
-  gap: 2px;
-}
-.poptabs span {
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-}
-.poptabs span:hover {
-  color: var(--foreground);
-}
-.poptabs span.on {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.plnowrap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.pl {
-  color: var(--muted-foreground);
-}
-.budgetcost {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-.budgetfields {
-  display: flex;
-  gap: 8px;
-}
-.budgetfield {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex: 1;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-/* Inputs — the shadcn field look: transparent fill, --input border, rounded-md,
-   1px --ring halo on focus. */
-.budgetinput {
-  width: 100%;
-  background: transparent;
-  border: 1px solid var(--input);
-  border-radius: var(--r-sm);
-  padding: 5px 8px;
-  color: var(--foreground);
-  font-variant-numeric: tabular-nums;
-}
-.budgetinput:focus {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.budgethint {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-/* Tools tab — search field matches the budget inputs. */
-.toolsrch {
-  background: transparent;
-  border-color: var(--input);
-  border-radius: var(--r-sm);
-  color: var(--muted-foreground);
-}
-.toolsrch input::placeholder {
-  color: var(--muted-foreground);
-}
-.tgrph {
-  color: var(--muted-foreground);
-  font-weight: 600;
-}
-.tgrph .tc {
-  color: var(--textFaint);
-}
-/* Tool toggles — outlined chips, neutral wash hover, primary tint when ON.
-   Nested under .opts so scoped rules beat the global `.pop .o` (equal
-   specificity otherwise). */
-.opts .o {
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-}
-.opts .o:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.opts .o.on {
-  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
-}
-</style>

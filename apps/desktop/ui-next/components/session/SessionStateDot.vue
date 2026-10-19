@@ -5,26 +5,55 @@
        "chưa đọc" cùng là chấm xanh 7px, còn "đang chờ" dùng chung spinner với
        "đang chạy" ⇒ không đọc được list. Key theo trạng thái ⇒ đổi trạng thái có
        hiệu ứng nảy (pop) để mắt bắt được phiên vừa xong. -->
-  <span class="ssd" role="img" :aria-label="label" :title="label">
+  <span
+    class="relative inline-flex size-3.5 flex-none items-center justify-center"
+    role="img"
+    :aria-label="label"
+    :title="label"
+  >
     <!-- Thời lượng khai TƯỜNG MINH: phần tử rời đi (spinner) mang animation vô hạn,
          để Vue tự đo thì nó lấy chu kỳ dài nhất (1.6s) làm thời lượng rời ⇒ ô trống
          hơn một giây ngay lúc phiên vừa xong. -->
     <Transition name="ssd-swap" mode="out-in" :duration="{ enter: 320, leave: 100 }">
-      <span v-if="state === 'streaming'" key="streaming" class="ssd-run" />
-      <span v-else-if="state === 'awaiting'" key="awaiting" class="ssd-ico ssd-ping st-await">
-        <CircleHelp class="ssd-glyph" />
+      <!-- Đang chạy: cung xoay + quầng thở. px-ok: nét vòng 1.5px là hình vẽ. -->
+      <span
+        v-if="state === 'streaming'"
+        key="streaming"
+        class="ssd-run box-border size-2.5 rounded-full border-[1.5px] border-current border-t-transparent text-primary"
+      />
+      <span
+        v-else-if="state === 'awaiting'"
+        key="awaiting"
+        class="ssd-ping relative inline-flex rounded-full text-warning"
+      >
+        <CircleHelp class="size-3.5 stroke-[2.25]" />
       </span>
       <span
         v-else-if="state === 'error'"
         key="error"
-        class="ssd-ico st-err"
-        :class="{ 'ssd-ping': unread }"
+        class="relative inline-flex rounded-full text-destructive"
+        :class="{ 'ssd-ping': props.unread }"
       >
-        <CircleX class="ssd-glyph" />
+        <CircleX class="size-3.5 stroke-[2.25]" />
       </span>
-      <span v-else-if="state === 'unread'" key="unread" class="ssd-dot ssd-ping st-done" />
-      <span v-else-if="state === 'read'" key="read" class="ssd-ring" />
-      <span v-else key="idle" class="ssd-ring ssd-draft" />
+      <!-- Chưa đọc: chấm đặc + vòng loang. -->
+      <span
+        v-else-if="state === 'unread'"
+        key="unread"
+        class="ssd-ping relative size-2 rounded-full bg-success text-success"
+      />
+      <!-- Đã đọc: vòng rỗng mờ — "xong rồi, không có gì mới". Nháp: vòng đứt nét.
+           px-ok: nét vòng 1.5px là hình vẽ. -->
+      <span
+        v-else-if="state === 'read'"
+        key="read"
+        class="box-border size-2 rounded-full border-[1.5px] border-faint opacity-70"
+      />
+      <span
+        v-else
+        key="idle"
+        class="box-border size-2 rounded-full border-[1.5px] border-dashed border-faint opacity-50"
+      />
     </Transition>
   </span>
 </template>
@@ -55,81 +84,22 @@ const label = computed(() => {
 </script>
 
 <style scoped>
-.ssd {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-}
-.st-done {
-  --ssd-c: var(--success);
-}
-.st-await {
-  --ssd-c: var(--amber);
-}
-.st-err {
-  --ssd-c: var(--danger);
-}
-
-/* Chưa đọc: chấm đặc + vòng loang. */
-.ssd-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ssd-c);
-}
-/* Đã đọc: vòng rỗng mờ — "xong rồi, không có gì mới". Nháp: vòng đứt nét. */
-.ssd-ring {
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
-  border: 1.5px solid var(--textFaint);
-  border-radius: 50%;
-  opacity: 0.7;
-}
-.ssd-draft {
-  border-style: dashed;
-  opacity: 0.5;
-}
-
-/* Đang chạy: cung xoay + quầng thở. */
+/* style-ok: keyframes riêng (xoay + thở, vòng loang, nảy) không có trong tw-animate-css;
+   vòng loang là `::after` lấy màu từ currentColor (đặt bằng class text-* ở template);
+   `.ssd-swap-*` là class do <Transition name="ssd-swap"> sinh ra. */
 .ssd-run {
-  box-sizing: border-box;
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid var(--accent);
-  border-top-color: transparent;
-  border-radius: 50%;
   animation:
     ssd-spin 0.8s linear infinite,
     ssd-glow 1.6s ease-in-out infinite;
 }
 
-.ssd-ico {
-  position: relative;
-  display: inline-flex;
-  color: var(--ssd-c);
-  border-radius: 50%;
-}
-.ssd-glyph {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  stroke-width: 2.25;
-}
-
 /* Vòng loang — báo "có việc cho bạn" (chưa đọc / đang chờ / lỗi chưa xem). */
-.ssd-ping {
-  position: relative;
-}
 .ssd-ping::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--ssd-c) 60%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent);
   animation: ssd-ping 1.6s ease-out infinite;
 }
 
@@ -155,19 +125,19 @@ const label = computed(() => {
 @keyframes ssd-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
   }
 }
 @keyframes ssd-ping {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ssd-c) 60%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--ssd-c) 0%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent);
   }
 }
 @keyframes ssd-pop {

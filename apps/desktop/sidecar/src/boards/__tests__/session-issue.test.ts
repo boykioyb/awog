@@ -130,7 +130,7 @@ describe('onSessionTurnStart', () => {
     expect(await listBoardItems('proj-a')).toHaveLength(0)
   })
 
-  it.each(['backlog', 'todo', 'pending', 'changes'] as const)(
+  it.each(['backlog', 'todo', 'pending', 'changes', 'in_review'] as const)(
     'issue đang %s → về in_progress + vạch system',
     async (status) => {
       const item = await upsertBoardItem('proj-a', { title: 'x', status })
@@ -143,7 +143,7 @@ describe('onSessionTurnStart', () => {
     },
   )
 
-  it.each(['blocked', 'in_review', 'done', 'cancelled'] as const)(
+  it.each(['blocked', 'done', 'cancelled'] as const)(
     'issue đang %s → giữ nguyên (quyết định có chủ đích)',
     async (status) => {
       const item = await upsertBoardItem('proj-a', { title: 'x', status })

@@ -1,49 +1,64 @@
 <template>
-  <div class="agd">
-    <div class="dh">
-      <span class="lav agd-av" :style="avatarStyle">{{ initials }}</span>
-      <div class="dt">{{ agent.name }}</div>
-      <span class="tag mono">{{ agent.id }}</span>
-      <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
-      <span style="flex: 1" />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-12.5 flex-none items-center gap-2.5 border-b px-5.5">
+      <span
+        class="grid size-6.5 flex-none place-items-center rounded-md border text-xs font-semibold"
+        :style="avatarStyle"
+      >
+        {{ initials }}
+      </span>
+      <div class="min-w-0 truncate text-lg font-semibold">{{ agent.name }}</div>
+      <!-- mono-ok: id agent -->
+      <Badge variant="outline" class="font-mono text-muted-foreground">{{ agent.id }}</Badge>
+      <Badge
+        variant="outline"
+        :class="isProject ? 'border-primary/45 bg-primary/8 text-primary' : 'text-muted-foreground'"
+        :title="sourcePath"
+      >
+        {{ sourceLabel }}
+      </Badge>
+      <span class="flex-1" />
       <Button
         :title="t('agents.detail.edit')"
-        class="agd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('edit')"
       >
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="edit" />
       </Button>
       <Button
         :title="t('agents.detail.duplicate')"
-        class="agd-act"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('duplicate')"
       >
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="copy" />
       </Button>
       <Button
         :title="t('agents.detail.delete')"
-        class="agd-act agd-danger"
+        class="hover:border-destructive hover:text-destructive"
         variant="outline"
-        size="iconMd"
+        size="iconSm"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="trash" />
       </Button>
     </div>
 
-    <div class="dscroll">
-      <p v-if="agent.description" class="agd-desc">{{ agent.description }}</p>
+    <div class="flex-1 overflow-y-auto p-5.5">
+      <p v-if="agent.description" class="m-0 text-base leading-(--lh-prose) text-muted-foreground">
+        {{ agent.description }}
+      </p>
 
-      <div class="sech">{{ t('agents.detail.providerModel') }}</div>
-      <div class="agd-chips">
-        <span class="chip">{{ providerLabel }}</span>
-        <span class="chip">{{ modelLabel }}</span>
-        <span v-if="agent.role" class="chip">{{ agent.role }}</span>
-        <span v-if="agent.accountId" class="chip mono">{{ agent.accountId }}</span>
+      <div :class="SECH">{{ t('agents.detail.providerModel') }}</div>
+      <div class="flex flex-wrap gap-1.5">
+        <Badge variant="outline" :class="CHIP">{{ providerLabel }}</Badge>
+        <Badge variant="outline" :class="CHIP">{{ modelLabel }}</Badge>
+        <Badge v-if="agent.role" variant="outline" :class="CHIP">{{ agent.role }}</Badge>
+        <!-- mono-ok: id account -->
+        <Badge v-if="agent.accountId" variant="outline" :class="[CHIP, 'font-mono']">
+          {{ agent.accountId }}
+        </Badge>
       </div>
 
       <LibraryMarkdownBody
@@ -57,50 +72,46 @@
       />
 
       <template v-if="(agent.mcpServerIds ?? []).length > 0">
-        <div class="sech">
+        <div :class="SECH">
           {{ t('agents.detail.connections', { n: (agent.mcpServerIds ?? []).length }) }}
         </div>
-        <div class="agd-chips">
-          <span
+        <div class="flex flex-wrap gap-1.5">
+          <!-- mono-ok: tên server MCP -->
+          <Badge
             v-for="id in agent.mcpServerIds"
             :key="id"
-            class="chip mono"
-            :style="{ color: 'var(--accent)', borderColor: 'var(--accentBorder)' }"
+            variant="outline"
+            :class="[CHIP_ACCENT, 'font-mono']"
           >
-            <Icon name="conn" style="width: 10px; height: 10px" />
+            <Icon name="conn" />
             {{ mcpLabel(id) }}
-          </span>
+          </Badge>
         </div>
-        <div class="agd-hint">{{ t('agents.detail.connectionsHint') }}</div>
+        <div class="mt-2 text-xs text-dim">{{ t('agents.detail.connectionsHint') }}</div>
       </template>
 
       <template v-if="(agent.tools ?? []).length > 0">
-        <div class="sech">{{ t('agents.detail.tools', { n: (agent.tools ?? []).length }) }}</div>
-        <div class="agd-chips">
-          <span
+        <div :class="SECH">{{ t('agents.detail.tools', { n: (agent.tools ?? []).length }) }}</div>
+        <div class="flex flex-wrap gap-1.5">
+          <!-- mono-ok: tên tool mcp__… -->
+          <Badge
             v-for="tool in agent.tools"
             :key="tool"
-            class="chip"
-            :class="{ mono: tool.startsWith('mcp__') }"
-            :style="
-              tool.startsWith('mcp__')
-                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-                : undefined
-            "
+            variant="outline"
+            :class="tool.startsWith('mcp__') ? [CHIP_ACCENT, 'font-mono'] : CHIP"
           >
             {{ tool }}
-          </span>
+          </Badge>
         </div>
-        <div class="agd-hint">{{ t('agents.detail.toolsHint') }}</div>
+        <div class="mt-2 text-xs text-dim">{{ t('agents.detail.toolsHint') }}</div>
       </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Agent detail pane — port of the old UI AgentDetail logic, rendered in
-// prototype CSS (.dh header + .dscroll body, matching skills/connections detail
-// markup). Header actions (edit / duplicate / delete) emit to the page;
+// Agent detail pane — port of the old UI AgentDetail logic: header cố định +
+// thân cuộn, cùng bố cục với detail của skills/connections. Header actions (edit / duplicate / delete) emit to the page;
 // LibraryMarkdownBody renders the AGENT.md system prompt with an LLM-edit
 // trigger. Provider/model/role/account chips + MCP whitelist + tools whitelist
 // (mcp__* chips accent-styled).
@@ -131,16 +142,14 @@ const initials = computed(() => agentInitials(props.agent))
 
 const avatarStyle = computed<CSSProperties>(() => {
   const av = agentAvatar(props.agent)
-  return {
-    background: av.bg,
-    color: av.fg,
-    width: '26px',
-    height: '26px',
-    borderRadius: '7px',
-    fontSize: '0.7692rem',
-    fontWeight: 600,
-  }
+  // Màu avatar là dữ liệu (băm theo agent), không phải token theme.
+  return { background: av.bg, color: av.fg }
 })
+
+// Nhãn nhóm + chip của thân detail.
+const SECH = 'mb-2 mt-5 text-xs font-semibold text-dim first:mt-0'
+const CHIP = 'text-muted-foreground'
+const CHIP_ACCENT = 'border-selected-border text-primary'
 
 const providerLabel = computed(() => providerDisplayName(props.agent.provider))
 const modelLabel = computed(() => modelDisplayName(props.agent.model))
@@ -162,40 +171,3 @@ const sourcePath = computed(() => {
 // the referenced server is missing (deleted).
 const mcpLabel = (id: string): string => props.mcpServers.find((s) => s.id === id)?.name ?? id
 </script>
-
-<style scoped>
-.agd {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-.agd-av {
-  border: 1px solid var(--border);
-}
-.agd-act {
-  width: 28px;
-  height: 28px;
-}
-.agd-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.agd-desc {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-prose);
-  margin: 0;
-}
-.agd-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.agd-hint {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  margin-top: 8px;
-  line-height: var(--lh-sm);
-}
-</style>

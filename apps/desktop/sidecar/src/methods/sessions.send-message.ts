@@ -160,6 +160,15 @@ const Params = z
     // (see RunNonStreamArgs.nativeCommand). Anthropic branch only; the runner
     // refuses it on other providers.
     nativeCommand: z.boolean().optional(),
+    // Lệnh `/` đã gọi — chỉ để persist cho UI hiện bubble gọn sau reload (L1: giới
+    // hạn độ dài + ký tự tên; không ảnh hưởng gì tới thứ gửi cho model).
+    command: z
+      .object({
+        name: z.string().min(1).max(128).regex(/^[\w:.-]+$/),
+        args: z.string().max(20_000),
+        native: z.boolean().optional(),
+      })
+      .optional(),
     // Background wake (ADR 0099): the Claude CLI process the previous turn left running has
     // already started a model turn by itself — this turn ADOPTS it instead of sending
     // `text` to the model. Anthropic branch only; `text` is the user-visible echo of the wake
@@ -1527,6 +1536,16 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       // next turn's resume rebuilds the image content block (image lives with
       // the session context, not just the turn that sent it).
       ...(attachments && attachments.length ? { attachments } : {}),
+      // Pick đúng field (không spread payload IPC).
+      ...(params.command
+        ? {
+            command: {
+              name: params.command.name,
+              args: params.command.args,
+              ...(params.command.native ? { native: true } : {}),
+            },
+          }
+        : {}),
     })
   } catch (err) {
     log.warn('failed to persist user message', {

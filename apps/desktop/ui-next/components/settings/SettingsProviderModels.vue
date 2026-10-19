@@ -1,22 +1,18 @@
 <template>
-  <div class="pcard smcatalog">
-    <div class="pcardtop">
-      <span class="rx">
-        <Icon
-          name="agents"
-          style="width: var(--icon-md); height: var(--icon-md); color: var(--blue)"
-        />
-      </span>
-      <div class="pcardinfo">
-        <div class="rt">{{ t('settingsModels.catalog.title') }}</div>
-        <div class="rd">{{ t('settingsModels.catalog.intro') }}</div>
-      </div>
-    </div>
+  <Card class="gap-3 p-3.5 shadow-none">
+    <SettingsProviderCardHeader
+      :title="t('settingsModels.catalog.title')"
+      :desc="t('settingsModels.catalog.intro')"
+    >
+      <template #icon>
+        <Icon name="agents" class="size-4 text-info" />
+      </template>
+    </SettingsProviderCardHeader>
 
-    <SettingsSeg v-model="providerId" :options="providerOptions" />
+    <SettingsSeg v-model="providerId" :options="providerOptions" class="self-start" />
 
-    <div class="smcatbar">
-      <span class="fd smcatmeta">{{ metaText }}</span>
+    <div class="flex items-center gap-2">
+      <span class="min-w-0 flex-1 text-sm text-dim">{{ metaText }}</span>
       <Button
         v-if="customized"
         type="button"
@@ -30,40 +26,55 @@
       <Button
         type="button"
         :disabled="!available || loading"
-        class="smcatfetch"
         variant="default"
         size="sm"
         @click="onFetch"
       >
         <Icon
           name="refresh"
-          :class="{ spin: loading }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5"
+          :class="{ 'animate-spin motion-reduce:animate-none': loading }"
         />
         {{ loading ? t('settingsModels.catalog.fetching') : t('settingsModels.catalog.fetch') }}
       </Button>
     </div>
 
-    <div v-if="!hasAccount" class="fd smcathint">
+    <div v-if="!hasAccount" class="-mt-1 text-sm text-dim">
       {{ t('settingsModels.catalog.needAccount') }}
     </div>
-    <div v-if="error" class="pcarderror">{{ t('settingsModels.catalog.fetchError') }}</div>
+    <Alert
+      v-if="error"
+      variant="destructive"
+      class="border-destructive/50 bg-destructive/10 px-2.5 py-1.5"
+    >
+      <AlertDescription>{{ t('settingsModels.catalog.fetchError') }}</AlertDescription>
+    </Alert>
 
-    <div class="smcatlist">
-      <label v-for="m in models" :key="m.id" class="smcatrow">
-        <div class="smcatinfo">
-          <span class="smcatname">{{ m.name }}</span>
-          <span class="smcatid mono">{{ m.id }}</span>
+    <Separator />
+    <div class="flex flex-col gap-0.5">
+      <label
+        v-for="m in models"
+        :key="m.id"
+        class="flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-accent"
+      >
+        <div class="flex min-w-0 flex-1 flex-col gap-px">
+          <span class="text-foreground">{{ m.name }}</span>
+          <!-- mono-ok: id model -->
+          <span class="font-mono text-sm text-faint">{{ m.id }}</span>
         </div>
-        <span v-if="sourceLabel(m.source)" class="chip smcatsrc">{{ sourceLabel(m.source) }}</span>
+        <Badge v-if="sourceLabel(m.source)" variant="outline" class="shrink-0 text-dim">
+          {{ sourceLabel(m.source) }}
+        </Badge>
         <SettingsTog
           :model-value="isEnabled(provider, m.id)"
           @update:model-value="toggle(provider, m.id)"
         />
       </label>
-      <div v-if="!models.length" class="fd smcatempty">{{ t('settingsModels.catalog.empty') }}</div>
+      <div v-if="!models.length" class="px-1 py-2 text-sm text-dim">
+        {{ t('settingsModels.catalog.empty') }}
+      </div>
     </div>
-  </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -78,7 +89,6 @@ import { PROVIDERS } from '~/components/agent/agent-display'
 import { useProviderModels, type ModelSource } from '~/composables/useProviderModels'
 import { useSettingsStore, type ProviderName } from '~/stores/settings'
 import { useSidecar } from '~/composables/useSidecar'
-import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -131,82 +141,3 @@ const onFetch = () => {
 
 const onReset = () => reset(provider.value)
 </script>
-
-<style scoped>
-.smcatalog {
-  gap: 12px;
-}
-.smcatbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.smcatmeta {
-  flex: 1;
-  min-width: 0;
-}
-.smcatfetch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.spin {
-  animation: smcatspin 0.9s linear infinite;
-}
-@keyframes smcatspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-.smcathint {
-  margin-top: -4px;
-}
-.smcatlist {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-}
-.smcatrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 4px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.smcatrow:hover {
-  background: var(--bgHover);
-}
-.smcatinfo {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.smcatname {
-  font-size: 1em;
-  color: var(--text);
-}
-.smcatid {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.smcatsrc {
-  flex: 0 0 auto;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.smcatempty {
-  padding: 8px 4px;
-}
-</style>

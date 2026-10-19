@@ -1,7 +1,11 @@
 <template>
+  <!-- Một nguồn màu: nét vẽ ăn `currentColor`, bên gọi đặt tông bằng `color` (accent ở
+       logo, text-dim ở empty state). -->
   <svg
-    class="mascot"
-    :class="[`mascot--${state}`, { 'mascot--bob': bob }]"
+    class="shrink-0 overflow-visible fill-none stroke-current [stroke-linejoin:round]"
+    :class="{
+      'animate-[awog-mascot-bob_3.2s_var(--ease)_infinite] motion-reduce:animate-none': bob,
+    }"
     :width="size"
     :height="size"
     viewBox="0 0 32 32"
@@ -11,7 +15,16 @@
   >
     <!-- Antenna: the one "AI" cue. Its bulb pulses only while thinking. -->
     <line x1="16" y1="6.4" x2="16" y2="3.4" :stroke-width="sw" stroke-linecap="round" />
-    <circle class="mascot-bulb" cx="16" cy="2.4" r="1.7" :fill="bulbFill" />
+    <circle
+      :class="{
+        'animate-[awog-mascot-bulb_1.4s_ease-in-out_2] motion-reduce:animate-none':
+          state === 'happy',
+      }"
+      cx="16"
+      cy="2.4"
+      r="1.7"
+      :fill="bulbFill"
+    />
 
     <!-- Side ears/speakers — keep the silhouette readable at 16px. -->
     <rect x="2" y="12.5" width="2.8" height="5.5" rx="1.4" :stroke-width="sw" />
@@ -19,7 +32,7 @@
 
     <!-- Head -->
     <rect
-      class="mascot-head"
+      class="fill-current/10"
       x="5.4"
       y="6.4"
       width="21.2"
@@ -106,23 +119,11 @@ const mouth = computed(() => MOUTH[props.state])
 const bulbFill = computed(() => (props.state === 'happy' ? 'currentColor' : 'none'))
 </script>
 
-<style scoped>
-/* One color source: the mark inherits `currentColor` for strokes, so a caller sets
-   the tone by setting `color` (accent in the logo, textDim in an empty state). */
-.mascot {
-  flex: 0 0 auto;
-  stroke: currentColor;
-  fill: none;
-  stroke-linejoin: round;
-  overflow: visible;
-}
-.mascot-head {
-  fill: color-mix(in srgb, currentColor 10%, transparent);
-}
-.mascot--bob {
-  animation: mascot-bob 3.2s var(--ease) infinite;
-}
-@keyframes mascot-bob {
+<style>
+/* style-ok: @keyframes riêng của mascot (không có trong tw-animate-css). Không scoped vì
+   Vue đổi tên keyframes trong block scoped, còn class `animate-[…]` của Tailwind gọi
+   đúng tên gốc. Tên có tiền tố `awog-` để không đụng keyframes toàn cục khác. */
+@keyframes awog-mascot-bob {
   0%,
   100% {
     transform: translateY(0);
@@ -131,24 +132,14 @@ const bulbFill = computed(() => (props.state === 'happy' ? 'currentColor' : 'non
     transform: translateY(-2px);
   }
 }
-/* Thinking/idle bulb breathes very slightly so the mark feels alive without
-   pulling attention. */
-.mascot--happy .mascot-bulb {
-  animation: mascot-bulb 1.4s ease-in-out 2;
-}
-@keyframes mascot-bulb {
+/* Bóng đèn "thở" rất nhẹ khi vui để mark có sức sống mà không giành chú ý. */
+@keyframes awog-mascot-bulb {
   0%,
   100% {
     opacity: 1;
   }
   50% {
     opacity: 0.45;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mascot--bob,
-  .mascot--happy .mascot-bulb {
-    animation: none;
   }
 }
 </style>

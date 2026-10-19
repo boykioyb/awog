@@ -1,6 +1,6 @@
 <template>
-  <div class="cap-toolbar">
-    <div class="cap-row">
+  <div class="flex flex-none flex-col gap-1.5 p-2 shadow-[inset_0_-1px_0_var(--color-border)]">
+    <div class="flex flex-wrap items-center gap-1.5">
       <Button
         type="button"
         size="sm"
@@ -9,7 +9,11 @@
         :title="cap.recording.value ? t('capture.toolbar.stop') : t('capture.toolbar.record')"
         @click="cap.toggleRecording()"
       >
-        <span class="cap-recdot" :class="{ on: cap.recording.value }" aria-hidden="true" />
+        <span
+          class="size-2 rounded-full"
+          :class="cap.recording.value ? 'bg-destructive' : 'bg-dim'"
+          aria-hidden="true"
+        />
         {{ cap.recording.value ? t('capture.toolbar.stop') : t('capture.toolbar.record') }}
       </Button>
       <Button
@@ -24,12 +28,17 @@
         {{ t('capture.toolbar.clear') }}
       </Button>
 
-      <div class="cap-filter">
-        <Icon name="filter" class="cap-filter-ic" />
-        <!-- `cap-filterin`: miễn min-height toàn cục của prototype.css để Input giữ chiều cao sm. -->
+      <!-- Ô lọc: icon nằm trong Input (padding-left đã chừa chỗ). -->
+      <div class="relative max-w-105 min-w-50 flex-[1_1_12.5rem]">
+        <Icon
+          name="filter"
+          class="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-dim"
+        />
+        <!-- `min-h-0`: gỡ min-height toàn cục của ô nhập trong prototype.css để Input giữ
+             chiều cao sm. -->
         <Input
           v-model="cap.filterText.value"
-          class="cap-filterin h-[var(--ctrl-h-sm)] pl-7 text-xs"
+          class="h-ctrl-sm min-h-0 pl-7 text-xs"
           :class="{ 'border-destructive': cap.regexInvalid.value }"
           type="text"
           spellcheck="false"
@@ -46,14 +55,18 @@
         size="sm"
         variant="outline"
         class="[&_svg]:size-3.5"
-        :class="{ 'cap-on': cap.searchBodies.value }"
+        :class="cap.searchBodies.value && CAP_ON"
         :aria-pressed="cap.searchBodies.value"
         :title="t('capture.toolbar.searchBodiesHint')"
         @click="cap.searchBodies.value = !cap.searchBodies.value"
       >
         <Icon name="search" />
         {{ t('capture.toolbar.searchBodies') }}
-        <span v-if="cap.searching.value" class="cap-spin" aria-hidden="true" />
+        <span
+          v-if="cap.searching.value"
+          class="size-2.5 animate-spin rounded-full border-2 border-input border-t-primary"
+          aria-hidden="true"
+        />
       </Button>
 
       <AppSelect
@@ -67,7 +80,7 @@
         size="sm"
         variant="outline"
         class="[&_svg]:size-3.5"
-        :class="{ 'cap-on': cap.onlySite.value }"
+        :class="cap.onlySite.value && CAP_ON"
         :aria-pressed="cap.onlySite.value"
         :title="t('capture.toolbar.onlySiteHint')"
         @click="cap.onlySite.value = !cap.onlySite.value"
@@ -76,13 +89,13 @@
         {{ t('capture.toolbar.onlySite') }}
       </Button>
 
-      <span class="cap-grow" />
+      <span class="flex-auto" />
 
-      <span class="cap-count tnum" :title="t('capture.toolbar.countHint')">
+      <span class="tnum text-muted-foreground" :title="t('capture.toolbar.countHint')">
         {{ t('capture.toolbar.count', { shown: cap.rows.value.length, total: cap.total.value }) }}
         <template v-if="(cap.capState.value?.dropped ?? 0) > 0">
           ·
-          <span class="cap-warn">
+          <span class="text-destructive">
             {{ t('capture.toolbar.dropped', { n: cap.capState.value?.dropped ?? 0 }) }}
           </span>
         </template>
@@ -114,13 +127,13 @@
       </Button>
     </div>
 
-    <div class="cap-row cap-chips">
+    <div class="flex flex-wrap items-center gap-1">
       <Button
         type="button"
         size="xs"
         variant="outline"
         class="rounded-full"
-        :class="{ 'cap-on': cap.typeSel.value.length === 0 }"
+        :class="cap.typeSel.value.length === 0 && CAP_ON"
         :aria-pressed="cap.typeSel.value.length === 0"
         @click="cap.clearTypes()"
       >
@@ -133,13 +146,13 @@
         size="xs"
         variant="outline"
         class="rounded-full"
-        :class="{ 'cap-on': cap.typeSel.value.includes(c) }"
+        :class="cap.typeSel.value.includes(c) && CAP_ON"
         :aria-pressed="cap.typeSel.value.includes(c)"
         @click="cap.toggleType(c)"
       >
         {{ t(`capture.type.${c}`) }}
       </Button>
-      <Separator orientation="vertical" class="cap-sep" />
+      <Separator orientation="vertical" class="mx-1 h-4" />
       <Button
         v-for="c in STATUS_CHIPS"
         :key="c"
@@ -147,7 +160,7 @@
         size="xs"
         variant="outline"
         class="rounded-full"
-        :class="[`st-${c}`, { 'cap-on': cap.statusSel.value.includes(c) }]"
+        :class="cap.statusSel.value.includes(c) && [CAP_ON, STATUS_ON[c]]"
         :aria-pressed="cap.statusSel.value.includes(c)"
         @click="cap.toggleStatus(c)"
       >
@@ -160,74 +173,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
-import { STATUS_CHIPS, TYPE_CHIPS } from '~/utils/capture-filter'
+import { STATUS_CHIPS, TYPE_CHIPS, type StatusChip } from '~/utils/capture-filter'
 import { useNetworkCaptureContext } from '~/composables/useNetworkCapture'
+import { CAP_ON } from './capture-ui'
 
 const { t } = useI18n()
 const cap = useNetworkCaptureContext()
+
+// Chip trạng thái đang BẬT nhuộm chữ theo nhóm mã (2xx xanh, 3xx lam, 4xx vàng, 5xx/lỗi đỏ).
+const STATUS_ON: Record<StatusChip, string> = {
+  '2xx': 'text-success',
+  '3xx': 'text-info',
+  '4xx': 'text-warning',
+  '5xx': 'text-destructive',
+  failed: 'text-destructive',
+}
 
 const methodOptions = computed<AppSelectOption[]>(() => [
   { label: t('capture.toolbar.methodAll'), value: '' },
   ...cap.methods.value.map((m) => ({ label: m, value: m })),
 ])
 </script>
-
-<style scoped>
-.cap-toolbar {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.cap-chips {
-  gap: 4px;
-}
-.cap-count {
-  color: var(--textMuted);
-}
-.cap-recdot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--textDim);
-}
-.cap-recdot.on {
-  background: var(--danger);
-}
-.cap-spin {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid var(--borderStrong);
-  border-top-color: var(--accent);
-  animation: cap-rot 0.8s linear infinite;
-}
-@keyframes cap-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* Ô lọc: icon nằm trong Input (padding-left đã chừa chỗ). */
-.cap-filter {
-  position: relative;
-  min-width: 200px;
-  flex: 1 1 200px;
-  max-width: 420px;
-}
-.cap-filter-ic {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  transform: translateY(-50%);
-  color: var(--textDim);
-  pointer-events: none;
-}
-.cap-sep {
-  height: 16px;
-  margin: 0 4px;
-}
-</style>

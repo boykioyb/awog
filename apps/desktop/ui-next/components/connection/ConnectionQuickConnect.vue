@@ -1,65 +1,94 @@
 <template>
   <LibraryEntityModal :open="open" :title="title" :width="520" @close="emit('close')">
-    <div class="cqc">
+    <div class="flex flex-col gap-3">
       <!-- REVIEW — tóm tắt thứ sắp cấu hình (preset tĩnh chưa qua màn đồng ý).
            Entry registry đã xem chi tiết ở ConnectionDiscoverDetail nên nhảy
            thẳng sang secrets/working, không qua phase này. -->
       <template v-if="phase === 'review'">
-        <div class="cqc-hero">
+        <div class="flex items-center gap-3">
           <SourceAvatar v-if="draft" :source="draft" size="md" />
-          <div class="cqc-hero-tx">
-            <div class="cqc-name">{{ draft?.name || draft?.slug }}</div>
-            <div v-if="draft?.tagline" class="cqc-sub">{{ draft.tagline }}</div>
+          <div class="min-w-0">
+            <div class="text-base font-semibold text-foreground">
+              {{ draft?.name || draft?.slug }}
+            </div>
+            <div v-if="draft?.tagline" class="mt-0.5 text-xs text-muted-foreground">
+              {{ draft.tagline }}
+            </div>
           </div>
         </div>
-        <div v-if="commandLine" class="cqc-row">
-          <span class="cqc-k">{{ t('connections.quick.review.command') }}</span>
-          <span class="cqc-v mono">{{ commandLine }}</span>
+        <!-- Lệnh / URL là chuỗi người dùng copy được ⇒ mono. -->
+        <div v-if="commandLine" class="grid grid-cols-[7.5rem_1fr] items-baseline gap-2.5">
+          <span class="text-xs text-muted-foreground">
+            {{ t('connections.quick.review.command') }}
+          </span>
+          <span class="font-mono text-sm break-all text-foreground">{{ commandLine }}</span>
         </div>
-        <div v-else-if="draft?.mcp.url" class="cqc-row">
-          <span class="cqc-k">{{ t('connections.quick.review.url') }}</span>
-          <span class="cqc-v mono">{{ draft.mcp.url }}</span>
+        <div v-else-if="draft?.mcp.url" class="grid grid-cols-[7.5rem_1fr] items-baseline gap-2.5">
+          <span class="text-xs text-muted-foreground">{{ t('connections.quick.review.url') }}</span>
+          <span class="font-mono text-sm break-all text-foreground">{{ draft.mcp.url }}</span>
         </div>
-        <div class="cqc-row">
-          <span class="cqc-k">{{ t('connections.quick.review.auth') }}</span>
-          <span class="cqc-v">{{ authLabel }}</span>
+        <div class="grid grid-cols-[7.5rem_1fr] items-baseline gap-2.5">
+          <span class="text-xs text-muted-foreground">
+            {{ t('connections.quick.review.auth') }}
+          </span>
+          <span class="text-sm break-all text-foreground">{{ authLabel }}</span>
         </div>
-        <p v-if="meta?.setupHint" class="cqc-hint">{{ meta.setupHint }}</p>
-        <div class="cqc-actions">
-          <Button variant="default" @click="emit('advance')">
-            <Icon name="link" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <p v-if="meta?.setupHint" class="m-0 text-xs leading-relaxed text-muted-foreground">
+          {{ meta.setupHint }}
+        </p>
+        <div class="flex items-center gap-2.5 pt-1.5">
+          <Button variant="default" class="[&_svg]:size-3.5" @click="emit('advance')">
+            <Icon name="link" />
             {{ t('connections.quick.connect') }}
           </Button>
-          <button type="button" class="cqc-link" @click="emit('open-in-editor')">
+          <Button
+            variant="link"
+            size="xs"
+            class="h-auto p-0 font-normal"
+            @click="emit('open-in-editor')"
+          >
             {{ t('connections.quick.customize') }}
-          </button>
+          </Button>
         </div>
       </template>
 
       <!-- SECRETS — chỉ đúng các ô còn thiếu, không phải full form. Giá trị đi
            thẳng vào OS keychain (source.setSecret); config giữ secret:KEY. -->
       <template v-else-if="phase === 'secrets'">
-        <p v-if="secretNoteKey" class="cqc-note">
+        <p
+          v-if="secretNoteKey"
+          class="m-0 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-warning"
+        >
           {{ t(`connections.quick.note.${secretNoteKey}`) }}
         </p>
-        <div v-for="f in secretFields" :key="f.target + ':' + f.key" class="cqc-field">
-          <label
-            class="cqc-label"
-            :class="{ 'cqc-label-id': f.target === 'env' || f.target === 'headers' }"
+        <div v-for="f in secretFields" :key="f.target + ':' + f.key" class="flex flex-col gap-1">
+          <!-- Tên env var / header là identifier thật của config ⇒ mono. -->
+          <Label
+            class="flex items-center gap-2 text-xs font-semibold text-muted-foreground"
+            :class="(f.target === 'env' || f.target === 'headers') && 'font-mono'"
           >
             {{ fieldLabel(f) }}
-            <span v-if="f.required" class="tag warn">{{ t('connections.quick.required') }}</span>
-          </label>
+            <Badge v-if="f.required" variant="warning" class="font-sans">
+              {{ t('connections.quick.required') }}
+            </Badge>
+          </Label>
           <Input
             v-model="secretValues[f.key]"
             :type="f.masked ? 'password' : 'text'"
             spellcheck="false"
           />
         </div>
-        <p class="cqc-hint">{{ t('connections.quick.secretsHint') }}</p>
-        <div class="cqc-actions">
-          <Button variant="default" :disabled="!canSubmit" @click="submitSecrets">
-            <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <p class="m-0 text-xs leading-relaxed text-muted-foreground">
+          {{ t('connections.quick.secretsHint') }}
+        </p>
+        <div class="flex items-center gap-2.5 pt-1.5">
+          <Button
+            variant="default"
+            class="[&_svg]:size-3.5"
+            :disabled="!canSubmit"
+            @click="submitSecrets"
+          >
+            <Icon name="shield" />
             {{ t('connections.quick.secretsSubmit') }}
           </Button>
         </div>
@@ -67,22 +96,32 @@
 
       <!-- WORKING — upsert / test đang chạy -->
       <template v-else-if="phase === 'working'">
-        <div class="cqc-center">
-          <span class="cqc-spin" />
-          <span class="cqc-status">{{ t(`connections.quick.working.${busyKey}`) }}</span>
+        <div class="flex items-center gap-3 py-2.5">
+          <span
+            class="size-4 flex-none animate-spin rounded-full border-2 border-selected border-t-primary"
+          />
+          <span class="text-sm font-semibold text-foreground">
+            {{ t(`connections.quick.working.${busyKey}`) }}
+          </span>
         </div>
       </template>
 
       <!-- OAUTH — trình duyệt đang mở, chờ user authorize -->
       <template v-else-if="phase === 'oauth'">
-        <div class="cqc-center">
-          <span class="cqc-spin" />
-          <div class="cqc-center-tx">
-            <span class="cqc-status">{{ t('connections.quick.oauthWaitingTitle') }}</span>
-            <span class="cqc-hint">{{ t('connections.quick.oauthWaiting') }}</span>
+        <div class="flex items-center gap-3 py-2.5">
+          <span
+            class="size-4 flex-none animate-spin rounded-full border-2 border-selected border-t-primary"
+          />
+          <div class="flex min-w-0 flex-col gap-1">
+            <span class="text-sm font-semibold text-foreground">
+              {{ t('connections.quick.oauthWaitingTitle') }}
+            </span>
+            <span class="m-0 text-xs leading-relaxed text-muted-foreground">
+              {{ t('connections.quick.oauthWaiting') }}
+            </span>
           </div>
         </div>
-        <div class="cqc-actions">
+        <div class="flex items-center gap-2.5 pt-1.5">
           <Button variant="outline" @click="emit('close')">
             {{ t('connections.quick.oauthCancel') }}
           </Button>
@@ -91,31 +130,53 @@
 
       <!-- DONE -->
       <template v-else-if="phase === 'done'">
-        <div class="cqc-center">
-          <span class="cqc-done-ic"><Icon name="check" style="width: 18px; height: 18px" /></span>
-          <div class="cqc-center-tx">
-            <span class="cqc-status">{{ t('connections.quick.doneTitle') }}</span>
-            <span v-if="doneTools !== null" class="cqc-hint">
+        <div class="flex items-center gap-3 py-2.5">
+          <span
+            class="grid size-8.5 flex-none place-items-center rounded-lg bg-success/15 text-success"
+          >
+            <Icon name="check" class="size-4.5" />
+          </span>
+          <div class="flex min-w-0 flex-col gap-1">
+            <span class="text-sm font-semibold text-foreground">
+              {{ t('connections.quick.doneTitle') }}
+            </span>
+            <span
+              v-if="doneTools !== null"
+              class="m-0 text-xs leading-relaxed text-muted-foreground"
+            >
               {{ t('connections.quick.doneTools', { n: doneTools }) }}
             </span>
           </div>
         </div>
-        <div class="cqc-actions">
+        <div class="flex items-center gap-2.5 pt-1.5">
           <Button variant="default" @click="emit('close')">{{ t('common.close') }}</Button>
         </div>
       </template>
 
       <!-- ERROR -->
       <template v-else>
-        <div class="cqc-center">
-          <span class="cqc-err-ic"><Icon name="alert" style="width: 18px; height: 18px" /></span>
-          <div class="cqc-center-tx">
-            <span class="cqc-status">{{ t('connections.quick.errorTitle') }}</span>
-            <span class="cqc-errmsg">{{ errorText }}</span>
+        <div class="flex items-center gap-3 py-2.5">
+          <span
+            class="grid size-8.5 flex-none place-items-center rounded-lg bg-destructive/15 text-destructive"
+          >
+            <Icon name="alert" class="size-4.5" />
+          </span>
+          <div class="flex min-w-0 flex-col gap-1">
+            <span class="text-sm font-semibold text-foreground">
+              {{ t('connections.quick.errorTitle') }}
+            </span>
+            <span class="text-xs leading-relaxed break-words text-muted-foreground">
+              {{ errorText }}
+            </span>
           </div>
         </div>
-        <pre v-if="errorStderr.length" class="cqc-stderr">{{ errorStderr.join('\n') }}</pre>
-        <div class="cqc-actions">
+        <!-- stderr thô của MCP server — output thật của tiến trình ⇒ mono. -->
+        <pre
+          v-if="errorStderr.length"
+          class="m-0 max-h-35 overflow-auto rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground"
+          >{{ errorStderr.join('\n') }}</pre
+        >
+        <div class="flex items-center gap-2.5 pt-1.5">
           <Button variant="outline" @click="emit('retry')">
             {{ t('connections.quick.retry') }}
           </Button>
@@ -201,173 +262,3 @@ const authLabel = computed(() => {
   return t(`connections.quick.auth.${a}`)
 })
 </script>
-
-<style scoped>
-.cqc {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.cqc-hero {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-.cqc-hero-tx {
-  min-width: 0;
-}
-.cqc-name {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 650;
-  color: var(--text);
-}
-.cqc-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  margin-top: 2px;
-}
-.cqc-row {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 10px;
-  align-items: baseline;
-}
-.cqc-k {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.cqc-v {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  word-break: break-all;
-}
-.cqc-hint {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-}
-.cqc-note {
-  margin: 0;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--amberDim);
-  border: 1px solid var(--amberBorder);
-  color: var(--amber);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-}
-.cqc-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.cqc-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--textDim);
-}
-.cqc-label-id {
-  /* mono-ok: tên env var / header — identifier thật của config */
-  font-family: var(--code);
-}
-.cqc-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 6px;
-}
-.cqc-link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-.cqc-link:hover {
-  text-decoration: underline;
-}
-.cqc-center {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-}
-.cqc-center-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.cqc-status {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.cqc-spin {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  border: 2px solid var(--accentDim);
-  border-top-color: var(--accent);
-  animation: cqc-rotate 0.9s linear infinite;
-}
-.cqc-done-ic {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border-radius: var(--r-btn);
-  background: var(--addBg);
-  color: var(--green);
-}
-.cqc-err-ic {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border-radius: var(--r-btn);
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.cqc-errmsg {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-  word-break: break-word;
-}
-.cqc-stderr {
-  margin: 0;
-  padding: 9px 11px;
-  max-height: 140px;
-  overflow: auto;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  /* mono-ok: stderr thô của MCP server — output thật của tiến trình */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-@keyframes cqc-rotate {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

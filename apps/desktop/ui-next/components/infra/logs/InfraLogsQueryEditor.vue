@@ -1,17 +1,19 @@
 <template>
-  <div class="lqe">
-    <div class="lqe-head">
-      <span class="lqe-label">{{ t('infra.logs.editor.label') }}</span>
-      <span class="lqe-hint">{{ t('infra.logs.editor.hint') }}</span>
+  <div class="flex min-h-0 flex-col">
+    <div class="flex flex-wrap items-baseline gap-2 pb-1.5">
+      <span class="text-sm font-semibold text-foreground">{{ t('infra.logs.editor.label') }}</span>
+      <span class="text-xs text-dim">{{ t('infra.logs.editor.hint') }}</span>
     </div>
-    <textarea
-      class="lqe-input"
+    <!-- Ô soạn câu dài ⇒ resize-y (luật textarea của *Editor.vue).
+         mono-ok: câu lệnh Logs Insights — cú pháp AWS, người dùng copy-paste được -->
+    <Textarea
+      class="min-h-27 resize-y rounded-lg bg-card px-3 py-2 font-mono text-sm leading-(--lh-md) placeholder:text-faint"
       spellcheck="false"
       autocomplete="off"
       autocapitalize="off"
-      :value="modelValue"
+      :model-value="modelValue"
       :placeholder="placeholder"
-      @input="onInput"
+      @update:model-value="(v: string | number) => emit('update:modelValue', String(v))"
       @keydown="onKey"
     />
   </div>
@@ -41,10 +43,6 @@ const { t } = useI18n()
 
 const placeholder = 'fields @timestamp, @message\n| sort @timestamp desc\n| limit 100'
 
-function onInput(e: Event): void {
-  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
-}
-
 // ── phím tắt 2.3 ───────────────────────────────────────────────────────────
 // ⌘/Ctrl+Enter = chạy, ⌘/Ctrl+. = huỷ. Chỉ DỊCH phím thành sự kiện, không tự
 // quyết chạy: `canRun`/`running` nằm ở `InfraLogs`, nên phím tắt không làm được
@@ -60,60 +58,6 @@ function onKey(e: KeyboardEvent): void {
   if (isRun) emit('run')
   else emit('cancel')
 }
-// Đổi câu lệnh từ BÊN NGOÀI (mẫu sẵn, lịch sử, chèn facet) chỉ cần cập nhật `:value`
-// — `<textarea>` không giữ state riêng nên không cần đồng bộ tay như Monaco từng cần.
+// Đổi câu lệnh từ BÊN NGOÀI (mẫu sẵn, lịch sử, chèn facet) chỉ cần cập nhật `modelValue`
+// — `Textarea` không giữ state riêng nên không cần đồng bộ tay như Monaco từng cần.
 </script>
-
-<style scoped>
-.lqe {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.lqe-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0 0 6px;
-  flex-wrap: wrap;
-}
-
-.lqe-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.lqe-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-/* Ô soạn câu dài ⇒ resize-y (luật textarea của *Editor.vue). */
-.lqe-input {
-  width: 100%;
-  min-height: 108px;
-  resize: vertical;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  /* mono-ok: câu lệnh Logs Insights — cú pháp AWS, người dùng copy-paste được */
-  font-family: var(--code);
-  outline: none;
-}
-
-.lqe-input:focus {
-  border-color: var(--accentBorder);
-}
-
-.lqe-input::placeholder {
-  color: var(--textFaint);
-}
-</style>

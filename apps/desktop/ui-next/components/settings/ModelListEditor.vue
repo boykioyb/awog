@@ -1,50 +1,59 @@
 <template>
-  <div class="mle">
-    <!-- One editable row per model: text input + delete button -->
-    <div v-for="(m, i) in models" :key="i" class="mlerow">
+  <div class="flex flex-col gap-1.5">
+    <!-- Mỗi model một dòng: ô nhập + nút xoá -->
+    <div v-for="(m, i) in models" :key="i" class="flex items-center gap-2">
+      <!-- mono-ok: id model -->
       <Input
         :model-value="m"
         :placeholder="placeholder || t('settingsModels.models.idPlaceholder')"
-        class="mono flex-1"
+        class="flex-1 font-mono"
         @update:model-value="updateAt(i, $event)"
       />
-      <button
-        class="mledel"
+      <Button
         type="button"
+        variant="outline"
+        size="iconMd"
+        class="text-dim hover:border-destructive hover:bg-transparent hover:text-destructive"
         :title="t('settingsModels.models.remove')"
+        :aria-label="t('settingsModels.models.remove')"
         @click="removeAt(i)"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+        <Icon name="trash" class="size-3.5" />
+      </Button>
     </div>
 
-    <!-- Append a new (empty) row -->
-    <Button type="button" class="mleadd" variant="outline" size="sm" @click="addRow">
-      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    <!-- Thêm một dòng rỗng -->
+    <Button
+      type="button"
+      class="self-start border-dashed"
+      variant="outline"
+      size="sm"
+      @click="addRow"
+    >
+      <Icon name="plus" class="size-3.5" />
       {{ t('settingsModels.models.add') }}
     </Button>
 
-    <!-- Quick-add suggestions not already in the list -->
-    <div v-if="freshSuggestions.length" class="mlesugg">
-      <span class="fd">{{ t('settingsModels.models.available') }}</span>
-      <button
+    <!-- Gợi ý thêm nhanh các id chưa có trong danh sách -->
+    <div v-if="freshSuggestions.length" class="flex flex-wrap items-center gap-1.5 pt-0.5">
+      <span class="text-sm text-dim">{{ t('settingsModels.models.available') }}</span>
+      <Button
         v-for="id in freshSuggestions"
         :key="id"
-        class="chip mlechip"
         type="button"
+        variant="outline"
+        size="xs"
+        class="font-normal text-muted-foreground"
         :title="id"
         @click="add(id)"
       >
         {{ id }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
-
 // Repeating editable list of model ids. v-model binds the string[]; each id is its
 // own input row with a delete button, plus an Add button to append a row and
 // quick-add suggestion chips. Ports legacy ModelListEditor.vue into ui-next style.
@@ -84,50 +93,3 @@ const add = (id: string) => {
   models.value = [...models.value, v]
 }
 </script>
-
-<style scoped>
-.mle {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.mlerow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.mledel {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.mledel:hover {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-.mleadd {
-  align-self: flex-start;
-  border-style: dashed;
-}
-.mlesugg {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding-top: 2px;
-}
-.mlechip {
-  cursor: pointer;
-}
-.mlechip:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-</style>

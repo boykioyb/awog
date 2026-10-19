@@ -1,16 +1,24 @@
 <template>
-  <div class="obf">
-    <p class="ob-lead">{{ t('onboarding.finish.desc') }}</p>
+  <div class="flex flex-col gap-4.5">
+    <p class="text-muted-foreground">{{ t('onboarding.finish.desc') }}</p>
 
-    <ul class="obf-summary">
-      <li :class="{ ok: hasAccount }">
-        <Icon :name="hasAccount ? 'check' : 'minus'" />
+    <ul class="m-0 flex list-none flex-col gap-2.5 p-0">
+      <li class="flex items-center gap-2.5" :class="hasAccount ? 'text-foreground' : 'text-dim'">
+        <Icon
+          :name="hasAccount ? 'check' : 'minus'"
+          class="shrink-0"
+          :class="hasAccount ? 'text-primary' : 'text-faint'"
+        />
         <span>
           {{ hasAccount ? t('onboarding.finish.accountOk') : t('onboarding.finish.accountNo') }}
         </span>
       </li>
-      <li :class="{ ok: !!projectName }">
-        <Icon :name="projectName ? 'check' : 'minus'" />
+      <li class="flex items-center gap-2.5" :class="projectName ? 'text-foreground' : 'text-dim'">
+        <Icon
+          :name="projectName ? 'check' : 'minus'"
+          class="shrink-0"
+          :class="projectName ? 'text-primary' : 'text-faint'"
+        />
         <span>
           {{
             projectName
@@ -21,7 +29,7 @@
       </li>
     </ul>
 
-    <div class="obf-cta">
+    <div class="flex flex-wrap gap-2">
       <Button variant="default" @click="onTour">
         <Icon name="sparkles" />
         {{ t('onboarding.finish.tour') }}
@@ -30,7 +38,7 @@
         <Icon name="message" />
         {{ t('onboarding.finish.session') }}
       </Button>
-      <Button class="obf-close" variant="outline" @click="onClose">
+      <Button class="ml-auto" variant="outline" @click="onClose">
         {{ t('onboarding.finish.close') }}
       </Button>
     </div>
@@ -42,7 +50,6 @@ import { computed } from 'vue'
 import { useSettingsStore, type ProviderName } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
 import { useSessionsStore } from '~/stores/sessions'
-import Button from '~/components/ui/button/Button.vue'
 
 // Finish step — recaps what got set up and offers the three exits. Each exit marks
 // onboarding complete first; "Show me around" then kicks off the spotlight tour.
@@ -73,46 +80,3 @@ const onClose = () => {
   complete()
 }
 </script>
-
-<style scoped>
-.obf {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.ob-lead {
-  color: var(--textMuted);
-}
-.obf-summary {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.obf-summary li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--textDim);
-}
-.obf-summary li.ok {
-  color: var(--text);
-}
-.obf-summary li :deep(svg) {
-  flex-shrink: 0;
-  color: var(--textFaint);
-}
-.obf-summary li.ok :deep(svg) {
-  color: var(--accent);
-}
-.obf-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.obf-close {
-  margin-left: auto;
-}
-</style>

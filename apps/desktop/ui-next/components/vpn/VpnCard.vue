@@ -1,54 +1,81 @@
 <template>
-  <div class="vpn-card" @contextmenu.prevent="emit('edit')">
-    <span class="vpn-av" :style="avatarStyle">
-      <Icon name="globe" style="width: var(--icon-md); height: var(--icon-md)" />
+  <Card
+    class="flex-row items-center gap-3 rounded-lg p-3 shadow-none"
+    @contextmenu.prevent="emit('edit')"
+  >
+    <!-- Màu monogram sinh theo từng profile (HSL dữ liệu, không phải token theme). -->
+    <span class="grid size-8 shrink-0 place-items-center rounded-md" :style="avatarStyle">
+      <Icon name="globe" class="size-4" />
     </span>
-    <div class="vpn-main">
-      <div class="vpn-name-row">
-        <span class="vpn-name">{{ profile.name }}</span>
-        <span class="vpn-status" :style="{ color: statusColor }" :title="error || statusLabel">
-          <span class="vpn-dot" :style="{ background: statusColor }" />
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <div class="flex min-w-0 items-center gap-2.5">
+        <span class="min-w-0 truncate text-base font-medium text-foreground">
+          {{ profile.name }}
+        </span>
+        <Badge variant="outline" :class="statusBadge" :title="error || statusLabel">
+          <span class="size-2 shrink-0 rounded-full bg-current" />
           {{ statusLabel }}
-        </span>
+        </Badge>
       </div>
-      <div class="vpn-meta">
-        <span class="vpn-path mono">{{ configLabel }}</span>
-        <span class="vpn-chip">{{ authLabel }}</span>
-        <span v-if="credState === 'saved'" class="vpn-cred" :title="t('vpn.card.credsSavedHint')">
-          <Icon name="check" style="width: 10px; height: 10px" />
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-mono text-sm break-all text-muted-foreground">{{ configLabel }}</span>
+        <Badge variant="secondary">{{ authLabel }}</Badge>
+        <Badge
+          v-if="credState === 'saved'"
+          variant="outline"
+          class="border-transparent bg-primary/15 text-primary"
+          :title="t('vpn.card.credsSavedHint')"
+        >
+          <Icon name="check" />
           {{ t('vpn.card.credsSaved') }}
-        </span>
-        <span
+        </Badge>
+        <!-- Chưa lưu credential cho VPN user/pass — báo trước là kết nối sẽ lỗi. -->
+        <Badge
           v-else-if="credState === 'missing'"
-          class="vpn-cred warn"
+          variant="warning"
           :title="t('vpn.card.credsMissingHint')"
         >
-          <Icon name="alert" style="width: 10px; height: 10px" />
+          <Icon name="alert" />
           {{ t('vpn.card.credsMissing') }}
-        </span>
-        <span v-for="tag in tags" :key="tag" class="vpn-tag">{{ tag }}</span>
+        </Badge>
+        <Badge
+          v-for="tag in tags"
+          :key="tag"
+          variant="outline"
+          class="font-normal text-muted-foreground"
+        >
+          {{ tag }}
+        </Badge>
       </div>
     </div>
-    <button
-      class="vpn-act"
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground"
       :title="t('vpn.card.log')"
       :aria-label="t('vpn.card.log')"
       @click="emit('log')"
     >
-      <Icon name="terminal" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
-    <button
+      <Icon name="terminal" />
+    </Button>
+    <!-- Connect / Disconnect: play (connect) → primary, stop (đang up) → destructive,
+         refresh (đang connecting) quay + disabled. -->
+    <Button
       v-if="status === 'up'"
-      class="vpn-act vpn-conn on"
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       :title="t('vpn.card.disconnect')"
       :aria-label="t('vpn.card.disconnect')"
       @click="emit('disconnect')"
     >
-      <Icon name="stop" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
-    <button
+      <Icon name="stop" />
+    </Button>
+    <Button
       v-else
-      class="vpn-act vpn-conn"
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:pointer-events-auto disabled:cursor-default disabled:text-primary disabled:hover:bg-transparent"
       :disabled="status === 'connecting'"
       :title="status === 'connecting' ? t('vpn.card.connecting') : t('vpn.card.connect')"
       :aria-label="status === 'connecting' ? t('vpn.card.connecting') : t('vpn.card.connect')"
@@ -56,27 +83,30 @@
     >
       <Icon
         :name="status === 'connecting' ? 'refresh' : 'play'"
-        :class="{ 'vpn-spin': status === 'connecting' }"
-        style="width: var(--icon-sm); height: var(--icon-sm)"
+        :class="{ 'animate-spin motion-reduce:animate-none': status === 'connecting' }"
       />
-    </button>
-    <button
-      class="vpn-act"
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground"
       :title="t('vpn.card.edit')"
       :aria-label="t('vpn.card.edit')"
       @click="emit('edit')"
     >
-      <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
-    <button
-      class="vpn-act vpn-del"
+      <Icon name="edit" />
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
+      class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       :title="t('vpn.card.delete')"
       :aria-label="t('vpn.card.delete')"
       @click="emit('delete')"
     >
-      <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
-  </div>
+      <Icon name="trash" />
+    </Button>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -87,7 +117,8 @@
 // Presentational — mutations bubble to the section via events. Nothing reads a
 // secret (only the has* booleans are shown).
 import { computed } from 'vue'
-import { vpnAccent, VPN_STATUS_COLORS, type VpnProfile, type VpnStatus } from '~/stores/vpn'
+import { vpnAccent, type VpnProfile, type VpnStatus } from '~/stores/vpn'
+import { VPN_STATUS_BADGE } from '~/components/vpn/vpn-status'
 
 const props = withDefaults(
   defineProps<{
@@ -111,7 +142,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const tags = computed(() => props.profile.tags ?? [])
-const statusColor = computed(() => VPN_STATUS_COLORS[props.status])
+const statusBadge = computed(() => VPN_STATUS_BADGE[props.status])
 const statusLabel = computed(() => t(`vpn.status.${props.status}`))
 const authLabel = computed(() =>
   props.profile.authMode === 'user-pass' ? t('vpn.auth.userPass') : t('vpn.auth.none'),
@@ -143,168 +174,3 @@ const avatarStyle = computed(() => {
   return { background: a.bg, color: a.fg, border: `1px solid ${a.border}` }
 })
 </script>
-
-<style scoped>
-.vpn-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
-}
-.vpn-card + .vpn-card {
-  margin-top: 8px;
-}
-.vpn-av {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-sm);
-  flex: 0 0 auto;
-}
-.vpn-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.vpn-name-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.vpn-name {
-  min-width: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.vpn-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: 0 0 auto;
-  font-size: 12px;
-  line-height: 12px;
-}
-.vpn-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.vpn-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.vpn-path {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  word-break: break-all;
-}
-.vpn-chip {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  background: var(--bgHover);
-}
-.vpn-cred {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 12px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  color: var(--accent);
-  background: var(--accentDim);
-}
-/* No credentials stored for a user/pass VPN — a heads-up that connect will fail. */
-.vpn-cred.warn {
-  color: var(--amber);
-  background: var(--amberDim);
-}
-.vpn-tag {
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  white-space: nowrap;
-}
-.vpn-act {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.vpn-act:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.vpn-act:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.vpn-del:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-/* Connect / Disconnect toggle: play (connect) → accent, stop (disconnect, on) →
-   danger tint, refresh (connecting) spins + disabled. */
-.vpn-conn:hover {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.vpn-conn.on:hover {
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.vpn-conn:disabled {
-  cursor: default;
-  color: var(--accent);
-}
-.vpn-conn:disabled:hover {
-  background: transparent;
-}
-.vpn-spin {
-  animation: vpn-spin 0.9s linear infinite;
-}
-@keyframes vpn-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vpn-spin {
-    animation: none;
-  }
-}
-</style>

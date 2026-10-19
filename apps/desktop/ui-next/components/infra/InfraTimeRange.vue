@@ -1,122 +1,153 @@
 <template>
-  <div class="itr">
-    <!-- Thanh gọn kiểu AWS CloudWatch: Clear · các preset nhanh · Custom. -->
-    <div class="itr-bar seg" role="group" :aria-label="t('infra.time.label')">
-      <span class="itr-cell itr-clear" role="button" @click="onClear">
+  <div class="relative inline-flex">
+    <!-- Thanh gọn kiểu AWS CloudWatch: Clear · các preset nhanh · Custom.
+
+         ⚠ `whitespace-nowrap` + `flex-auto` trên từng ô là bản vá cho cột hẹp của màn
+         Nhật ký (240–320px): ở đó thanh bị kéo giãn bằng cả cột, sáu ô không đủ chỗ
+         một hàng, và bản trước bẻ CHỮ trong ô — "Tuỳ chọn" thành "Tuỳ / chọn" — thay
+         vì xuống hàng theo ô. Nay ô không bao giờ vỡ chữ, và khi phải xuống hàng thì
+         các ô giãn đều nên hàng thứ hai đọc ra như một hàng có chủ đích. Ở màn Giám
+         sát / Bảng điều khiển thanh là `inline-flex` nên co theo nội dung. -->
+    <div
+      class="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-muted p-0.5"
+      role="group"
+      :aria-label="t('infra.time.label')"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        class="flex-auto px-2 font-normal text-faint hover:bg-transparent hover:text-foreground"
+        @click="onClear"
+      >
         {{ t('infra.time.clear') }}
-      </span>
-      <span
+      </Button>
+      <Button
         v-for="s in quickSeconds"
         :key="s"
-        class="itr-cell"
-        :class="{ on: isQuickOn(s) }"
-        role="button"
+        type="button"
+        variant="ghost"
+        size="xs"
+        class="flex-auto px-2 font-normal tabular-nums hover:bg-transparent hover:text-foreground"
+        :class="isQuickOn(s) ? 'bg-selected text-primary hover:bg-selected' : 'text-dim'"
         :aria-pressed="isQuickOn(s)"
         @click="emit('update:modelValue', relativeWindow(s))"
       >
         {{ shortLabel(s) }}
-      </span>
-      <span
+      </Button>
+      <Button
         ref="customBtn"
-        class="itr-cell itr-custom"
-        :class="{ on: open || isCustomActive }"
-        role="button"
+        type="button"
+        variant="ghost"
+        size="xs"
+        class="flex-auto gap-1 px-2 font-normal text-primary tabular-nums hover:bg-transparent"
+        :class="{ 'bg-selected hover:bg-selected': open || isCustomActive }"
         :aria-expanded="open"
         @click="toggle"
       >
         {{ isCustomActive ? customSummary : t('infra.time.custom') }}
-        <Icon name="calendar" class="itr-cal" />
-      </span>
+        <Icon name="calendar" class="size-3" />
+      </Button>
     </div>
 
     <!-- Teleport ra <body> + định vị FIXED.
-         ⚠ Bản trước là `position: absolute` trong `.itr`, và nó bị CẮT ở màn Nhật
-         ký: cột trái có `overflow-y: auto`, mà theo CSS khi một trục khác `visible`
-         thì trục kia cũng thành `auto` — nên cột rộng 320px xén mất popover rộng
-         460px. Không phải "bị che": nó bị tổ tiên cắt, nên không z-index nào cứu
-         được. Cùng khuôn `AppSelect` đã dùng cho đúng vấn đề này. -->
+         ⚠ Bản trước là `position: absolute` trong khung control, và nó bị CẮT ở màn
+         Nhật ký: cột trái có `overflow-y: auto`, mà theo CSS khi một trục khác
+         `visible` thì trục kia cũng thành `auto` — nên cột rộng 320px xén mất popover
+         rộng 460px. Không phải "bị che": nó bị tổ tiên cắt, nên không z-index nào cứu
+         được. Cùng khuôn `AppSelect` đã dùng cho đúng vấn đề này.
+         `left`/`top`|`bottom`/`width`/`max-height` do `updatePopPosition()` đặt inline. -->
     <Teleport to="body">
       <template v-if="open">
-        <div class="itr-backdrop" @click="close" />
-        <div ref="popRef" class="itr-pop" :style="popStyle" @click.stop>
+        <div class="fixed inset-0 z-128" @click="close" />
+        <div
+          ref="popRef"
+          data-infra-overlay
+          class="fixed z-129 overflow-y-auto rounded-xl border border-input bg-popover p-3.5 text-popover-foreground shadow-md"
+          :style="popStyle"
+          @click.stop
+        >
           <!-- Tab Absolute | Relative -->
-          <div class="seg itr-tabs">
-            <span
-              class="itr-tab"
-              :class="{ on: tab === 'absolute' }"
-              role="button"
-              :aria-pressed="tab === 'absolute'"
-              @click="tab = 'absolute'"
-            >
-              {{ t('infra.time.absolute') }}
-            </span>
-            <span
-              class="itr-tab"
-              :class="{ on: tab === 'relative' }"
-              role="button"
-              :aria-pressed="tab === 'relative'"
-              @click="tab = 'relative'"
-            >
-              {{ t('infra.time.relative') }}
-            </span>
-          </div>
+          <Tabs
+            :model-value="tab"
+            class="mb-3"
+            @update:model-value="
+              (v: string | number) => (tab = v === 'absolute' ? 'absolute' : 'relative')
+            "
+          >
+            <TabsList class="h-ctrl-sm">
+              <TabsTrigger value="absolute">{{ t('infra.time.absolute') }}</TabsTrigger>
+              <TabsTrigger value="relative">{{ t('infra.time.relative') }}</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
           <!-- ── Relative ── -->
-          <div v-if="tab === 'relative'" class="itr-rel">
-            <div v-for="u in UNITS" :key="u" class="itr-grid-row">
-              <span class="itr-grid-lbl">{{ t(`infra.time.unit.${u}`) }}</span>
-              <div class="itr-grid">
-                <button
+          <div v-if="tab === 'relative'" class="flex flex-col gap-2">
+            <div v-for="u in UNITS" :key="u" class="flex items-center gap-2.5">
+              <span class="w-15 flex-none text-sm text-dim">{{ t(`infra.time.unit.${u}`) }}</span>
+              <div class="flex flex-wrap gap-1.5">
+                <Button
                   v-for="n in RELATIVE_GRID[u]"
                   :key="n"
-                  class="itr-o"
-                  :class="{ on: amount === n && unit === u }"
                   type="button"
+                  variant="outline"
+                  size="xs"
+                  class="min-w-10 font-normal tabular-nums"
+                  :class="
+                    amount === n && unit === u
+                      ? 'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary'
+                      : 'text-muted-foreground'
+                  "
                   @click="pickGrid(n, u)"
                 >
                   {{ n }}
-                </button>
+                </Button>
               </div>
             </div>
 
-            <div class="itr-dur">
-              <label class="itr-field">
-                <span class="itr-field-lbl">{{ t('infra.time.duration') }}</span>
+            <div class="mt-1.5 flex flex-wrap gap-4 border-t pt-3">
+              <label class="flex flex-col gap-1">
+                <span class="text-sm font-semibold text-foreground">
+                  {{ t('infra.time.duration') }}
+                </span>
                 <Input
                   v-model.number="amount"
                   type="number"
                   min="1"
                   max="9999"
                   inputmode="numeric"
+                  class="h-ctrl-sm"
                 />
-                <span class="itr-hint">{{ t('infra.time.upTo4') }}</span>
+                <span class="text-xs text-faint">{{ t('infra.time.upTo4') }}</span>
               </label>
-              <label class="itr-field">
-                <span class="itr-field-lbl">{{ t('infra.time.unitOfTime') }}</span>
+              <label class="flex flex-col gap-1">
+                <span class="text-sm font-semibold text-foreground">
+                  {{ t('infra.time.unitOfTime') }}
+                </span>
                 <AppSelect v-model="unit" :options="unitOptions" width="150px" />
               </label>
             </div>
           </div>
 
           <!-- ── Absolute ── -->
-          <div v-else class="itr-abs">
-            <label class="itr-field">
-              <span class="itr-field-lbl">{{ t('infra.time.from') }}</span>
-              <Input v-model="absStart" type="datetime-local" />
+          <div v-else class="flex flex-wrap gap-4">
+            <label class="flex flex-col gap-1">
+              <span class="text-sm font-semibold text-foreground">{{ t('infra.time.from') }}</span>
+              <Input v-model="absStart" type="datetime-local" class="h-ctrl-sm" />
             </label>
-            <label class="itr-field">
-              <span class="itr-field-lbl">{{ t('infra.time.to') }}</span>
-              <Input v-model="absEnd" type="datetime-local" />
+            <label class="flex flex-col gap-1">
+              <span class="text-sm font-semibold text-foreground">{{ t('infra.time.to') }}</span>
+              <Input v-model="absEnd" type="datetime-local" class="h-ctrl-sm" />
             </label>
-            <p v-if="absError" class="itr-err">{{ absError }}</p>
+            <p v-if="absError" class="m-0 basis-full text-sm text-destructive">{{ absError }}</p>
           </div>
 
           <!-- Footer -->
-          <div class="itr-foot">
+          <div class="mt-3.5 flex items-center gap-2 border-t pt-3">
             <Button type="button" variant="outline" @click="onClearDraft">
               {{ t('infra.time.clear') }}
             </Button>
-            <span class="itr-foot-sp" />
+            <span class="flex-auto" />
             <Button type="button" variant="outline" @click="close">
               {{ t('infra.time.cancel') }}
             </Button>
@@ -217,10 +248,10 @@ useEscToClose(open, close)
 // Cùng phép của `AppSelect`: neo dưới nút, lật LÊN khi dưới không đủ chỗ, và kẹp
 // trong viewport theo cả hai trục. Phải tính bằng JS vì phần tử đã rời khỏi cây
 // bố cục của nút — đó chính là cái giá của việc thoát khỏi tổ tiên bị cắt.
-// `ref="customBtn"` đã có sẵn trong template từ trước nhưng CHƯA từng được khai
-// báo — không ai đọc tới nó. Khai bằng `useTemplateRef` theo luật của repo (không
-// dùng `ref<HTMLElement>(null)`, thứ làm `vue-tsc` đỏ).
-const customBtn = useTemplateRef<HTMLElement>('customBtn')
+// Khai bằng `useTemplateRef` theo luật của repo (không dùng `ref<HTMLElement>(null)`,
+// thứ làm `vue-tsc` đỏ). `customBtn` gắn trên `Button` shadcn ⇒ template ref là
+// INSTANCE, phần tử thật nằm ở `$el`.
+const customBtn = useTemplateRef<{ $el: HTMLElement }>('customBtn')
 const popRef = useTemplateRef<HTMLElement>('popRef')
 const popStyle = ref<Record<string, string>>({})
 
@@ -229,7 +260,7 @@ const POP_WIDTH = 460
 const POP_MARGIN = 12
 
 function updatePopPosition(): void {
-  const trigger = customBtn.value
+  const trigger = customBtn.value?.$el
   if (!trigger) return
   const r = trigger.getBoundingClientRect()
   const vw = window.innerWidth
@@ -362,206 +393,3 @@ function onClearDraft(): void {
   absEnd.value = ''
 }
 </script>
-
-<style scoped>
-.itr {
-  position: relative;
-  display: inline-flex;
-}
-
-/* Thanh preset — khung `.seg` toàn cục, các ô chia theo nội dung. */
-.itr-bar {
-  flex-wrap: wrap;
-}
-
-/* Ô preset.
- *
- * ⚠ `white-space: nowrap` + `flex: 1 1 auto` là bản vá cho cột hẹp của màn Nhật ký
- * (240–320px): ở đó `.itr` bị kéo giãn bằng cả cột, sáu ô không đủ chỗ một hàng, và
- * bản trước bẻ CHỮ trong ô — "Tuỳ chọn" thành "Tuỳ / chọn" — thay vì xuống hàng theo
- * ô. Nay ô không bao giờ vỡ chữ, và khi phải xuống hàng thì các ô giãn đều nên hàng
- * thứ hai đọc ra như một hàng có chủ đích.
- *
- * Padding 8px (trước là 10px) đủ để cả sáu ô đứng MỘT hàng trong cột 296px ở cỡ chữ
- * mặc định. Ở màn Giám sát / Bảng điều khiển không có gì đổi: `.itr` là `inline-flex`
- * nên nó co theo nội dung, và `flex: 1 1 auto` không có chỗ thừa nào để giãn. */
-.itr-cell {
-  flex: 1 1 auto;
-  text-align: center;
-  white-space: nowrap;
-  padding: 4px 8px;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.itr-cell:hover {
-  color: var(--text);
-}
-.itr-cell.on {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-
-.itr-clear {
-  color: var(--textFaint);
-}
-
-.itr-custom {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--accent);
-}
-.itr-cal {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-/* ── Popover ── */
-.itr-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 128;
-}
-/* `left`/`top`|`bottom`/`width`/`max-height` do `updatePopPosition()` đặt inline —
-   xem chú thích ở template. */
-.itr-pop {
-  position: fixed;
-  z-index: 129;
-  overflow-y: auto;
-  padding: 14px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-md);
-}
-
-.itr-tabs {
-  margin-bottom: 12px;
-}
-.itr-tab {
-  padding: 5px 14px;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.itr-tab.on {
-  background: var(--accentDim);
-  color: var(--accent);
-}
-
-.itr-rel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.itr-grid-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.itr-grid-lbl {
-  flex: 0 0 58px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.itr-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.itr-o {
-  min-width: 40px;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
-  transition:
-    background 0.12s,
-    border-color 0.12s,
-    color 0.12s;
-}
-.itr-o:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-.itr-o.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-
-.itr-dur {
-  display: flex;
-  gap: 16px;
-  margin-top: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-.itr-abs {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.itr-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.itr-field-lbl {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.itr-input {
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-}
-.itr-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.itr-err {
-  flex: 1 1 100%;
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.itr-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.itr-foot-sp {
-  flex: 1 1 auto;
-}
-</style>

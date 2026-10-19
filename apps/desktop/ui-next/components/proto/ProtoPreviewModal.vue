@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div
       v-if="item"
-      class="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-6 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+      class="fixed inset-0 z-80 flex items-center justify-center bg-black/70 p-6 data-[state=open]:animate-in data-[state=open]:fade-in-0"
       @click.self="close"
       @keydown.esc="close"
     >
@@ -24,21 +24,23 @@
           </span>
           <Badge variant="secondary" class="ml-1">{{ item.kind }}</Badge>
           <span class="flex-1" />
-          <div v-if="item.kind === 'markdown'" class="flex rounded-md border border-border p-0.5">
-            <button
+          <ToggleGroup
+            v-if="item.kind === 'markdown'"
+            type="single"
+            :spacing="1"
+            class="rounded-md border p-0.5"
+            :model-value="view"
+            @update:model-value="(v) => v && (view = v as 'render' | 'raw')"
+          >
+            <ToggleGroupItem
               v-for="v in ['render', 'raw'] as const"
               :key="v"
-              :class="[
-                'rounded px-2 py-0.5 text-xs capitalize transition-colors',
-                view === v
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              ]"
-              @click="view = v"
+              :value="v"
+              class="h-6 px-2 text-xs capitalize text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
             >
               {{ v }}
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
           <Button
             v-if="item.text"
             variant="ghost"

@@ -1,101 +1,91 @@
 <template>
-  <div class="ghdrawer" :class="{ full: isFull }" :style="drawerStyle">
-    <div v-show="!isFull" class="ghdwrsz" @mousedown.prevent="onHandleDown" />
-    <div class="ghdwin">
-      <div class="ghdwhd">
-        <span class="ghnum">#{{ thread?.number ?? '' }}</span>
-        <span v-if="thread" class="ghstate" :style="{ color: stateColor, borderColor: stateColor }">
+  <!-- Fullscreen: phủ cả pane issue/PR (cha ProjectGh là `relative`). Dưới 980px bề
+       rộng dock ép về 300px (thắng style inline nhờ `!`). -->
+  <div
+    class="flex overflow-hidden border-l bg-sidebar"
+    :class="isFull ? 'absolute inset-0 z-5 w-auto' : 'relative max-[980px]:basis-75!'"
+    :style="drawerStyle"
+  >
+    <!-- Grip kéo đổi bề rộng ở mép trái (không phải control). -->
+    <div
+      v-show="!isFull"
+      role="separator"
+      aria-orientation="vertical"
+      class="group/rsz absolute inset-y-0 left-0 z-2 w-1.5 cursor-col-resize"
+      @mousedown.prevent="onHandleDown"
+    >
+      <span
+        class="absolute inset-y-0 left-0.5 w-px bg-border group-hover/rsz:w-0.5 group-hover/rsz:bg-primary"
+      />
+    </div>
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <!-- Header: ngôn ngữ + tối đa 6 action không vừa một hàng ở bề rộng tối thiểu
+           320px — cho wrap thay vì bóp nhỏ vùng bấm. -->
+      <div class="flex flex-none flex-wrap items-center gap-2 gap-y-1.5 border-b px-3 py-2.5">
+        <span class="flex-none text-xs text-dim tabular-nums">#{{ thread?.number ?? '' }}</span>
+        <Badge v-if="thread" variant="outline" :class="[STATE_CHIP, threadStateClass]">
           {{ t('projects.gh.state.' + thread.state.toLowerCase()) }}
-        </span>
-        <span
+        </Badge>
+        <Badge
           v-if="kind === 'pr' && thread?.isDraft"
-          class="ghstate"
-          style="color: var(--textDim); border-color: var(--border)"
+          variant="outline"
+          :class="[STATE_CHIP, 'border-border text-dim']"
         >
           {{ t('projects.gh.state.draft') }}
-        </span>
-        <span style="flex: 1" />
+        </Badge>
+        <span class="flex-1" />
         <!-- Language picker — collapses the orig/vi/en/ja tabs into one dropdown so
              the header toolbar stays roomy on a narrow drawer. -->
         <Button
-          type="button"
           :title="t('projects.drawer.language')"
           :aria-label="t('projects.drawer.language')"
-          :style="{
-            width: 'auto',
-            height: '28px',
-            padding: '0 8px',
-            gap: '5px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            fontSize: '0.8462rem',
-            ...(viewLang !== 'orig'
-              ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-              : {}),
-          }"
           variant="outline"
-          size="iconMd"
+          size="xs"
+          class="flex-none gap-1 font-normal"
+          :class="{ 'border-selected-border text-primary': viewLang !== 'orig' }"
           @click.stop="toggleLangMenu"
         >
-          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="globe" class="size-3.5" />
           <span>{{ t('projects.drawer.viewLang.' + viewLang) }}</span>
-          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="chev" class="size-3" />
         </Button>
         <Button
           :title="isFull ? t('projects.drawer.exitFullscreen') : t('projects.drawer.fullscreen')"
           :aria-label="
             isFull ? t('projects.drawer.exitFullscreen') : t('projects.drawer.fullscreen')
           "
-          style="width: 28px; height: 28px"
+          class="flex-none"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="isFull = !isFull"
         >
-          <Icon
-            :name="isFull ? 'minimize' : 'maximize'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="isFull ? 'minimize' : 'maximize'" class="size-3.5" />
         </Button>
         <!-- Always available, thread or not: a detail that failed to arrive is
              exactly the one the user wants to retry. -->
         <Button
-          type="button"
           :title="t('projects.drawer.refresh')"
           :aria-label="t('projects.drawer.refresh')"
           :disabled="loading"
-          style="width: 28px; height: 28px"
+          class="flex-none"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="emit('refresh')"
         >
-          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="refresh" class="size-3.5" />
         </Button>
         <!-- PR only: hand the review off to a session in this project. The prompt
              comes from Settings → Git (PR review prompt). -->
         <Button
           v-if="kind === 'pr' && thread"
-          type="button"
           :title="t('projects.drawer.startReview')"
           :aria-label="t('projects.drawer.startReview')"
-          :style="{
-            width: 'auto',
-            height: '28px',
-            padding: '0 9px',
-            gap: '5px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            fontSize: 'var(--fs-sm)',
-            lineHeight: 'var(--lh-sm)',
-            fontWeight: '510',
-            whiteSpace: 'nowrap',
-            color: 'var(--accent)',
-            borderColor: 'var(--accentBorder)',
-          }"
           variant="outline"
-          size="iconMd"
+          size="xs"
+          class="flex-none border-selected-border text-primary"
           @click="emit('start-review')"
         >
-          <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="play" class="size-3.5" />
           <span>{{ t('projects.drawer.startReviewShort') }}</span>
         </Button>
         <Button
@@ -105,108 +95,125 @@
           rel="noopener"
           :title="t('projects.drawer.openOnGithub')"
           :aria-label="t('projects.drawer.openOnGithub')"
-          style="width: 28px; height: 28px"
+          class="flex-none"
           as="a"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
         >
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="external" class="size-3.5" />
         </Button>
         <Button
           v-if="thread?.url"
-          type="button"
           :title="linkCopied ? t('projects.drawer.linkCopied') : t('projects.drawer.copyLink')"
           :aria-label="t('projects.drawer.copyLink')"
-          :style="{
-            width: '28px',
-            height: '28px',
-            ...(linkCopied ? { color: 'var(--green)' } : {}),
-          }"
+          class="flex-none"
+          :class="{ 'text-success': linkCopied }"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="copyLink"
         >
-          <Icon
-            :name="linkCopied ? 'check' : 'copy'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="linkCopied ? 'check' : 'copy'" class="size-3.5" />
         </Button>
         <Button
           :title="t('projects.drawer.close')"
-          style="width: 28px; height: 28px"
+          :aria-label="t('projects.drawer.close')"
+          class="flex-none"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="emit('close')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="x" class="size-3.5" />
         </Button>
       </div>
 
       <!-- GitHub-style tab bar (underline indicator + icon + count badge). Issue →
            Conversation | Comments. PR → Conversation | Comments | Commits | Files. -->
-      <div v-if="thread && tabDefs.length > 1" class="ghtabs">
-        <button
-          v-for="tb in tabDefs"
-          :key="tb.key"
-          type="button"
-          class="ghtab"
-          :class="{ on: activeTab === tb.key }"
-          @click="selectTab(tb.key)"
-        >
-          <Icon
-            :name="tb.icon"
-            class="ghtab-ic"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-          <span>{{ t('projects.drawer.tab.' + tb.key) }}</span>
-          <span v-if="tb.count" class="ghtab-n">{{ tb.count }}</span>
-        </button>
-      </div>
+      <Tabs
+        v-if="thread && tabDefs.length > 1"
+        :model-value="activeTab"
+        class="flex-none border-b px-3"
+        @update:model-value="(v) => selectTab(v as GhTab)"
+      >
+        <TabsList class="h-auto gap-0.5 rounded-none bg-transparent p-0">
+          <TabsTrigger
+            v-for="tb in tabDefs"
+            :key="tb.key"
+            :value="tb.key"
+            class="group/tab -mb-px gap-2 rounded-none border-b-2 border-transparent px-3 py-2.5 text-base text-dim shadow-none hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            <Icon
+              :name="tb.icon"
+              class="size-3.5 flex-none text-dim group-data-[state=active]/tab:text-foreground"
+            />
+            <span>{{ t('projects.drawer.tab.' + tb.key) }}</span>
+            <span
+              v-if="tb.count"
+              class="min-w-4.5 rounded-sm bg-muted px-1.5 py-0.5 text-center text-xs text-dim tabular-nums group-data-[state=active]/tab:text-foreground"
+            >
+              {{ tb.count }}
+            </span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
+      <!-- Files changed ở fullscreen: thân không cuộn mà thành hàng flex để cột cây
+           và cột diff tự cuộn riêng (kiểu GitHub). -->
       <div
-        class="ghdwbody"
-        :class="{ 'gh-files-full': isFull && activeTab === 'files' && !!thread }"
+        class="flex-1"
+        :class="
+          isFull && activeTab === 'files' && !!thread
+            ? 'flex overflow-hidden p-0'
+            : 'overflow-y-auto p-3.5'
+        "
       >
         <!-- Only a cold open (no list row to seed from) waits on a blank pane —
              normally the header/title/labels are already painted and just the body
              below shimmers. -->
-        <div v-if="loading && !thread" class="fd" style="padding: 24px; text-align: center">
+        <div v-if="loading && !thread" class="p-6 text-center text-sm text-dim">
           {{ t('projects.gh.loading') }}
         </div>
         <template v-else-if="thread">
           <!-- ── Conversation: the opening post (meta + labels + body), plus PR
                reviews (the description / overview). ─────────────────────────── -->
           <template v-if="activeTab === 'conversation'">
-            <div class="ghdwtitle">{{ segText('title', thread.title) }}</div>
-            <div class="ghdwmeta">
-              <span class="mono">{{ thread.author.login }}</span>
+            <div class="text-lg font-semibold">{{ segText('title', thread.title) }}</div>
+            <div class="mt-1 text-base text-dim">
+              <!-- mono-ok: login GitHub -->
+              <span class="font-mono">{{ thread.author.login }}</span>
               {{ t('projects.drawer.opened') }} · {{ relativeWhen(thread.createdAt) }}
               <template v-if="kind === 'pr' && thread.baseRefName">
                 ·
-                <span class="mono">{{ thread.baseRefName }} ← {{ thread.headRefName }}</span>
+                <!-- mono-ok: tên nhánh git -->
+                <span class="font-mono">{{ thread.baseRefName }} ← {{ thread.headRefName }}</span>
               </template>
             </div>
-            <div
-              v-if="thread.labels.length"
-              style="display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px"
-            >
+            <div v-if="thread.labels.length" class="mt-2 flex flex-wrap gap-1">
+              <!-- Màu nhãn là dữ liệu GitHub (hex của label), không phải token theme. -->
               <span
                 v-for="l in thread.labels"
                 :key="l.name"
-                class="ghlabel"
+                class="rounded-sm border px-1.5 text-xs"
                 :style="ghLabelStyle(l.color, isDark)"
               >
                 {{ l.name }}
               </span>
             </div>
-            <div v-if="viewLang !== 'orig'" class="trbadge">
+            <div
+              v-if="viewLang !== 'orig'"
+              class="mt-2.5 rounded-sm border border-selected-border bg-selected px-2 py-1 text-xs text-primary"
+            >
               {{ t('projects.drawer.translatedBadge') }}
             </div>
             <!-- Body arrives with the core gh.get — shimmer in its place until then. -->
-            <div v-if="loading" class="ghsk-body">
-              <div v-for="w in BODY_SK" :key="w" class="ghskbar" :style="{ width: w }" />
+            <div v-if="loading" :class="SK_WRAP">
+              <Skeleton
+                v-for="w in BODY_SK"
+                :key="w"
+                class="h-3 rounded-sm"
+                :style="{ width: w }"
+              />
             </div>
-            <div v-else class="ghmd">
+            <div v-else :class="MD">
               <ProjectGhMarkdown :source="segText('body', thread.body)" />
             </div>
           </template>
@@ -215,25 +222,29 @@
                with its state + body + nested inline threads), Approve + composer. ── -->
           <template v-else-if="activeTab === 'comments'">
             <!-- Conversation comments (top-level PR/issue comments). -->
-            <div v-if="thread.comments.length" class="sech">
+            <div v-if="thread.comments.length" :class="SECH">
               {{ t('projects.drawer.comments', { n: thread.comments.length }) }}
             </div>
-            <div v-for="(c, i) in thread.comments" :key="`c${i}`" class="ghcomment">
-              <div class="ghchd">
-                <span class="mono">{{ c.author.login }}</span>
+            <!-- Comment nằm phẳng trên panel: chỉ viền, không nền xám. -->
+            <div v-for="(c, i) in thread.comments" :key="`c${i}`" :class="COMMENT">
+              <div :class="CHD">
+                <!-- mono-ok: login GitHub -->
+                <span class="font-mono">{{ c.author.login }}</span>
                 · {{ relativeWhen(c.createdAt) }}
-                <span style="flex: 1" />
-                <button
-                  type="button"
-                  class="ghreply"
+                <span class="flex-1" />
+                <!-- Reply: nút inline kín đáo, trích lại comment cha. -->
+                <Button
+                  variant="outline"
+                  size="xs"
+                  class="h-auto gap-1 rounded-sm px-2 py-0.5 font-normal text-dim"
                   :title="t('projects.drawer.reply')"
                   @click="emit('reply', { author: c.author.login, body: c.body })"
                 >
-                  <Icon name="message" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                  <Icon name="message" class="size-3" />
                   {{ t('projects.drawer.reply') }}
-                </button>
+                </Button>
               </div>
-              <div class="ghmd">
+              <div :class="MD">
                 <ProjectGhMarkdown :source="segText(i, c.body)" />
               </div>
             </div>
@@ -241,43 +252,53 @@
             <!-- PR-only: review timeline — each review's state + body + its nested
                  inline comment threads (root + replies), like GitHub. -->
             <template v-if="kind === 'pr' && reviews.length">
-              <div class="sech">{{ t('projects.drawer.reviews', { n: reviews.length }) }}</div>
-              <div v-for="(r, i) in reviews" :key="`r${i}`" class="ghreview">
-                <div class="ghchd">
-                  <span class="mono">{{ r.author.login }}</span>
-                  <span
-                    class="ghstate"
-                    :style="{ color: reviewColor(r.state), borderColor: reviewColor(r.state) }"
-                  >
+              <div :class="SECH">{{ t('projects.drawer.reviews', { n: reviews.length }) }}</div>
+              <div
+                v-for="(r, i) in reviews"
+                :key="`r${i}`"
+                class="my-2.5 rounded-lg border px-3 py-2.5"
+              >
+                <div :class="[CHD, 'mb-1.5']">
+                  <!-- mono-ok: login GitHub -->
+                  <span class="font-mono">{{ r.author.login }}</span>
+                  <Badge variant="outline" :class="[STATE_CHIP, reviewClass(r.state)]">
                     {{ reviewLabel(r.state) }}
-                  </span>
+                  </Badge>
                   · {{ relativeWhen(r.createdAt) }}
                 </div>
-                <div v-if="r.body.trim()" class="ghmd">
+                <div v-if="r.body.trim()" :class="MD">
                   <ProjectGhMarkdown :source="segText(`r${i}`, r.body)" />
                 </div>
-                <!-- Inline comment threads created by this review. -->
-                <div v-for="(th, ti) in r.threads" :key="`r${i}t${ti}`" class="ghrthread">
-                  <div class="ghrt-loc mono">
-                    <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                <!-- Inline comment threads created by this review: thanh dọc bên trái
+                     gom một thread, reply thụt vào. -->
+                <div
+                  v-for="(th, ti) in r.threads"
+                  :key="`r${i}t${ti}`"
+                  class="my-2.5 border-l-2 pl-3"
+                >
+                  <!-- mono-ok: đường dẫn file trong repo -->
+                  <div
+                    class="mb-1 flex items-center gap-1 font-mono text-sm break-anywhere text-dim"
+                  >
+                    <Icon name="file" class="size-3" />
                     {{ th.path }}
                     <template v-if="th.line">:{{ th.line }}</template>
                   </div>
                   <!-- The commented code snippet (GitHub's diff_hunk). -->
-                  <div v-if="th.diffHunk" class="ghrt-hunk">
+                  <div v-if="th.diffHunk" class="mb-2 overflow-hidden rounded-md border">
                     <ProjectGhFileDiff :patch="th.diffHunk" />
                   </div>
                   <div
-                    v-for="(c, ci) in th.comments"
-                    :key="ci"
-                    class="ghcomment"
-                    :class="{ 'ghrt-reply': ci > 0 }"
+                    v-for="(c, replyIdx) in th.comments"
+                    :key="replyIdx"
+                    :class="[COMMENT, { 'ml-4.5 border-l pl-3': replyIdx > 0 }]"
                   >
-                    <div class="ghchd">
-                      <span class="mono">{{ c.author.login }}</span>
+                    <div :class="CHD">
+                      <!-- mono-ok: login GitHub -->
+                      <span class="font-mono">{{ c.author.login }}</span>
                       · {{ relativeWhen(c.createdAt) }}
                     </div>
-                    <div class="ghmd">
+                    <div :class="MD">
                       <ProjectGhMarkdown :source="c.body" />
                     </div>
                   </div>
@@ -287,36 +308,48 @@
 
             <!-- Comments come with the core detail, the review timeline behind it
                  (gh.reviews) — shimmer for whichever is still in flight. -->
-            <div v-if="loading || reviewsLoading" class="ghsk-body">
-              <div v-for="w in COMMENT_SK" :key="w" class="ghskbar" :style="{ width: w }" />
+            <div v-if="loading || reviewsLoading" :class="SK_WRAP">
+              <Skeleton
+                v-for="w in COMMENT_SK"
+                :key="w"
+                class="h-3 rounded-sm"
+                :style="{ width: w }"
+              />
             </div>
 
             <!-- Empty state when there's no discussion yet. -->
             <div
               v-else-if="!thread.comments.length && !reviews.length"
-              class="fd"
-              style="margin-bottom: 4px"
+              class="mb-1 text-sm text-dim"
             >
               {{ t('projects.drawer.noComment') }}
             </div>
 
-            <!-- Approve PR with an LGTM! review (open PRs only; hidden once approved). -->
-            <div v-if="kind === 'pr' && thread.state === 'OPEN' && !reviewed" class="ghapprove-row">
-              <button
-                type="button"
-                class="ghapprove"
+            <!-- Approve PR with an LGTM! review (open PRs only; hidden once approved).
+                 Viền xanh, không fill primary để không tranh với nút Comment. -->
+            <div
+              v-if="kind === 'pr' && thread.state === 'OPEN' && !reviewed"
+              class="mt-3.5 flex items-center gap-2.5"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                class="border-success text-success hover:bg-success/10 hover:text-success"
                 :disabled="reviewing"
                 @click="emit('approve')"
               >
-                <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                <Icon name="check" class="size-3.5" />
                 {{ reviewing ? t('projects.drawer.approving') : t('projects.drawer.approve') }}
-              </button>
-              <span v-if="reviewError" class="fd ghapprove-err">
+              </Button>
+              <span v-if="reviewError" class="text-sm text-destructive">
                 {{ t('projects.drawer.approveFailed') }}
               </span>
             </div>
-            <div v-else-if="kind === 'pr' && reviewed" class="ghapproved">
-              <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <div
+              v-else-if="kind === 'pr' && reviewed"
+              class="mt-3.5 inline-flex items-center gap-1.5 font-medium text-success"
+            >
+              <Icon name="check" class="size-3.5" />
               {{ t('projects.drawer.approved') }}
             </div>
 
@@ -346,13 +379,13 @@
           <!-- ── Files changed (PR only). Fullscreen → two-pane (tree | diff, like
                GitHub); docked → directory tree with per-file inline diff. ───────── -->
           <template v-else-if="activeTab === 'files'">
-            <div v-if="!files.length" class="fd">
+            <div v-if="!files.length" class="text-sm text-dim">
               {{ t('projects.drawer.filesChanged', { n: 0 }) }}
             </div>
 
             <!-- Two-pane (fullscreen): file tree on the left, selected diff on the right. -->
-            <div v-else-if="isFull" class="ghfiles-2pane">
-              <div class="ghfiles-tree">
+            <div v-else-if="isFull" class="flex min-h-0 flex-1">
+              <div class="w-65 min-w-0 flex-none overflow-auto border-r px-1.5 py-2">
                 <ProjectGhFileTree
                   :nodes="fileTree"
                   :expanded="expanded"
@@ -363,23 +396,28 @@
                   @context-file="(ev, p) => ghMenu.open(ev, { path: p })"
                 />
               </div>
-              <div class="ghfiles-diff">
+              <div class="min-w-0 flex-1 overflow-auto">
                 <template v-if="expanded">
-                  <div class="ghfiles-diffhd">
-                    <span class="mono">{{ expanded }}</span>
+                  <div
+                    class="sticky top-0 z-1 truncate border-b bg-sidebar px-3 py-2 text-xs text-muted-foreground"
+                  >
+                    <!-- mono-ok: đường dẫn file -->
+                    <span class="font-mono">{{ expanded }}</span>
                   </div>
-                  <div v-if="diffLoading" class="fd" style="padding: 14px">
+                  <div v-if="diffLoading" class="p-3.5 text-sm text-dim">
                     {{ t('projects.drawer.diffLoading') }}
                   </div>
                   <ProjectGhFileDiff v-else :patch="patchFor(expanded)" />
                 </template>
-                <div v-else class="fd ghfiles-pick">{{ t('projects.drawer.pickFile') }}</div>
+                <div v-else class="px-4 py-7 text-center text-sm text-dim">
+                  {{ t('projects.drawer.pickFile') }}
+                </div>
               </div>
             </div>
 
             <!-- Docked: tree + inline diff. -->
             <template v-else>
-              <div class="sech">{{ t('projects.drawer.filesChanged', { n: files.length }) }}</div>
+              <div :class="SECH">{{ t('projects.drawer.filesChanged', { n: files.length }) }}</div>
               <ProjectGhFileTree
                 :nodes="fileTree"
                 :expanded="expanded"
@@ -449,9 +487,25 @@ import type {
 } from '~/composables/useProjectGh'
 import type { TranslateLang } from '~/composables/useSelectionTranslate'
 import { ghLabelStyle } from '~/utils/gh-label'
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
+import Skeleton from '~/components/ui/skeleton/Skeleton.vue'
+import Tabs from '~/components/ui/tabs/Tabs.vue'
+import TabsList from '~/components/ui/tabs/TabsList.vue'
+import TabsTrigger from '~/components/ui/tabs/TabsTrigger.vue'
 
+// Chỉ đọc chế độ sáng/tối cho ghLabelStyle (màu nhãn là dữ liệu GitHub) — không
+// dùng để tô token theme.
+// theme-ok: isDark chọn cách vẽ nhãn GitHub (màu nhãn là dữ liệu)
 const { isDark } = useTheme()
+
+// Class dùng lặp trong template.
+const STATE_CHIP = 'flex-none rounded-sm px-1.5 py-0 capitalize'
+const SECH = 'mt-5 mb-2 text-xs font-semibold text-dim first:mt-0'
+const COMMENT = 'mb-2 rounded-md border px-3 py-2.5'
+const CHD = 'mb-1 flex items-center gap-1 text-sm text-muted-foreground'
+const MD = 'mt-2.5 text-base'
+const SK_WRAP = 'mt-3 flex flex-col gap-2'
 
 const props = defineProps<{
   thread: GhThread | null
@@ -623,7 +677,7 @@ const files = computed(() => props.thread?.files ?? [])
 const reviews = computed(() => props.thread?.reviews ?? [])
 
 // Shimmer line widths for the body / discussion placeholders (static descriptors —
-// the bar itself is a CSS gradient sweep, see .ghskbar).
+// thanh là Skeleton shadcn).
 const BODY_SK = ['92%', '78%', '85%', '46%'] as const
 const COMMENT_SK = ['64%', '88%', '52%'] as const
 // Changed files as a directory tree (GitHub-style), single-child chains compressed.
@@ -653,9 +707,11 @@ function segText(id: GhSegmentId, original: string): string {
   return s.translated
 }
 
-const stateColor = computed(() => {
+// Chip trạng thái thread: chữ + viền cùng một màu.
+const threadStateClass = computed(() => {
   const st = props.thread?.state
-  return st === 'OPEN' ? 'var(--green)' : st === 'MERGED' ? 'var(--violet)' : 'var(--textDim)'
+  if (st === 'OPEN') return 'border-success text-success'
+  return st === 'MERGED' ? 'border-lavender text-lavender' : 'border-dim text-dim'
 })
 
 const REVIEW_LABEL_KEY: Record<string, string> = {
@@ -669,11 +725,11 @@ function reviewLabel(state: string): string {
   const key = REVIEW_LABEL_KEY[state]
   return key ? t('projects.drawer.reviewState.' + key) : state.toLowerCase()
 }
-function reviewColor(state: string): string {
-  if (state === 'APPROVED') return 'var(--green)'
-  if (state === 'CHANGES_REQUESTED') return 'var(--danger)'
-  if (state === 'DISMISSED') return 'var(--textDim)'
-  return 'var(--textMuted)'
+function reviewClass(state: string): string {
+  if (state === 'APPROVED') return 'border-success text-success'
+  if (state === 'CHANGES_REQUESTED') return 'border-destructive text-destructive'
+  if (state === 'DISMISSED') return 'border-dim text-dim'
+  return 'border-muted-foreground text-muted-foreground'
 }
 
 // ── PR file diff (lazy reveal) ──────────────────────────────────────────────────
@@ -742,261 +798,3 @@ function relativeWhen(iso: string): string {
   return new Date(ms).toLocaleDateString()
 }
 </script>
-
-<style scoped>
-/* Header toolbar: language + up to 6 actions no longer fit one row at the 320px
-   minimum drawer width. Wrap instead of squeezing — .iconbtn carries no
-   flex-shrink guard of its own, so a too-narrow row shrinks the 28px hit targets
-   under their own 14px glyphs. Wide drawers (the common case) look unchanged. */
-.ghdwhd {
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-.ghdwhd > button {
-  flex: 0 0 auto;
-}
-
-/* Placeholder for prose still in flight (body / discussion). Same shimmer as the
-   list skeleton: a soft band swept via background-position — paint only. */
-.ghsk-body {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin-top: 12px;
-}
-.ghskbar {
-  height: 11px;
-  border-radius: var(--r-xs);
-  background: linear-gradient(90deg, var(--bgHover) 25%, var(--bgActive) 50%, var(--bgHover) 75%);
-  background-size: 200% 100%;
-  animation: ghdw-shimmer 1.5s ease-in-out infinite;
-}
-@keyframes ghdw-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ghskbar {
-    animation: none;
-    background: var(--bgHover);
-  }
-}
-
-/* Files-changed two-pane (fullscreen only): turn the scrolling body into a
-   non-scrolling flex row so the tree column + diff column each scroll on their own
-   (GitHub-style). Higher specificity than the global .ghdwbody so it wins. */
-.ghdwbody.gh-files-full {
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-}
-.ghfiles-2pane {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-.ghfiles-tree {
-  flex: 0 0 260px;
-  min-width: 0;
-  overflow: auto;
-  padding: 8px 6px;
-  border-right: 1px solid var(--border);
-}
-.ghfiles-diff {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-}
-.ghfiles-diffhd {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bgPanel);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ghfiles-pick {
-  padding: 28px 16px;
-  text-align: center;
-}
-
-/* GitHub-style tab bar: underline indicator (not a pill). A bottom border runs the
-   full width; the active tab sits on a 2px accent underline that overlaps it, with
-   full-color bold text. Inactive = textDim, hover = text. Each tab is icon + label
-   + a subtle count badge. */
-.ghtabs {
-  display: flex;
-  gap: 2px;
-  flex: 0 0 auto;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-}
-.ghtab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 11px;
-  margin-bottom: -1px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  font-size: 1em;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: color 0.12s ease;
-}
-.ghtab:hover {
-  color: var(--text);
-}
-.ghtab.on {
-  color: var(--text);
-  font-weight: 600;
-  border-bottom-color: var(--accent);
-}
-.ghtab-ic {
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.ghtab.on .ghtab-ic {
-  color: var(--text);
-}
-.ghtab-n {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 12px;
-  padding: 2px 7px;
-  border-radius: var(--r-xs);
-  background: var(--bgActive);
-  color: var(--textDim);
-  min-width: 18px;
-  text-align: center;
-}
-.ghtab.on .ghtab-n {
-  color: var(--text);
-}
-/* Per-comment Reply action — quiet inline button that quotes the parent. */
-.ghreply {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  transition:
-    color 0.12s ease,
-    background 0.12s ease,
-    border-color 0.12s ease;
-}
-.ghreply:hover {
-  color: var(--text);
-  background: var(--bgHover);
-  border-color: var(--borderStrong);
-}
-.ghchd {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-/* Comments sit flat on the panel — drop the grey fill, keep the outline + spacing. */
-.ghcomment {
-  background: transparent;
-}
-/* A review timeline entry — its header + body + nested threads grouped in a card. */
-.ghreview {
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 10px 12px;
-  margin: 10px 0;
-}
-.ghreview > .ghchd {
-  margin-bottom: 6px;
-}
-/* Threaded inline review comments: a left rail groups the thread; replies indent. */
-.ghrthread {
-  border-left: 2px solid var(--border);
-  padding-left: 11px;
-  margin: 10px 0;
-}
-.ghrt-loc {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  margin-bottom: 5px;
-  overflow-wrap: anywhere;
-}
-/* The commented code snippet (diff_hunk) above a review thread. */
-.ghrt-hunk {
-  margin-bottom: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-.ghrt-reply {
-  margin-left: 18px;
-  border-left: 1px solid var(--border);
-  padding-left: 11px;
-}
-/* Approve PR — distinct green outline (not the primary fill, so it doesn't compete
-   with the composer's Comment button). */
-.ghapprove-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-.ghapprove {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--green);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--green);
-  font-size: 1em;
-  font-weight: 550;
-  cursor: pointer;
-}
-.ghapprove:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--green) 12%, transparent);
-}
-.ghapprove:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.ghapprove-err {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--danger);
-}
-/* Post-approve marker (replaces the button once approved). */
-.ghapproved {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 14px;
-  font-size: 1em;
-  font-weight: 550;
-  color: var(--green);
-}
-</style>

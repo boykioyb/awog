@@ -7,50 +7,40 @@
        Không nạp gì khi chưa có cluster. Nạp khi: người dùng chọn cluster/namespace
        (ý định rõ ràng) hoặc bấm ↻ — luật "không auto-refresh" của
        docs/features/infra-explorer.md cấm nạp sau lưng, không cấm làm theo cú bấm. -->
-  <section class="iksec ikmain">
-    <div class="ikmain-head">
-      <!-- `.seg` là khuôn segmented control sẵn có của app; `role/tabindex/keydown`
-           để bàn phím đi được, không chỉ chuột. -->
-      <div class="seg" role="tablist">
-        <span
-          role="button"
-          tabindex="0"
-          :class="{ on: tab === 'pods' }"
-          @click="setTab('pods')"
-          @keydown.enter.prevent="setTab('pods')"
-          @keydown.space.prevent="setTab('pods')"
-        >
+  <section
+    class="flex min-h-0 flex-auto flex-col gap-2 overflow-hidden rounded-xl border bg-muted px-3.5 py-3"
+  >
+    <!-- Hàng đầu (tab + ô tìm kiếm + chỉ dẫn) được phép xuống dòng thay vì kéo rộng
+         khung: một dòng phụ vẫn chưa phải cuộn trang. -->
+    <div class="flex min-w-0 shrink-0 flex-wrap items-center gap-2">
+      <ToggleGroup
+        type="single"
+        class="gap-0.5 rounded-lg bg-background p-0.5"
+        :model-value="tab"
+        @update:model-value="onTab"
+      >
+        <ToggleGroupItem value="pods" size="sm" :class="SEG_ITEM">
           {{ t('infra.kube.pods.tab', { n: pods.length }) }}
-        </span>
-        <span
-          role="button"
-          tabindex="0"
-          :class="{ on: tab === 'deployments' }"
-          @click="setTab('deployments')"
-          @keydown.enter.prevent="setTab('deployments')"
-          @keydown.space.prevent="setTab('deployments')"
-        >
+        </ToggleGroupItem>
+        <ToggleGroupItem value="deployments" size="sm" :class="SEG_ITEM">
           {{ t('infra.kube.deploys.tab', { n: deployments.length }) }}
-        </span>
-        <span
-          role="button"
-          tabindex="0"
-          :class="{ on: tab === 'report' }"
-          @click="setTab('report')"
-          @keydown.enter.prevent="setTab('report')"
-          @keydown.space.prevent="setTab('report')"
-        >
+        </ToggleGroupItem>
+        <ToggleGroupItem value="report" size="sm" :class="SEG_ITEM">
           {{ t('infra.kube.tab.report') }}
-        </span>
-      </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
 
       <!-- Tìm trong bảng ĐANG XEM, lọc tại chỗ trên các hàng đã tải (không gọi
            cluster thêm lần nào). Chỉ hiện khi có hàng để tìm — ô tìm kiếm trên một
-           bảng rỗng là thứ bấm vào không ra gì. -->
-      <div v-if="showSearch" class="srch ikfind">
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+           bảng rỗng là thứ bấm vào không ra gì. Không giãn hết chiều ngang: nó là
+           control, không phải vùng đọc. -->
+      <div v-if="showSearch" class="relative shrink basis-60">
+        <Icon
+          name="search"
+          class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-dim"
+        />
         <Input
-          unstyled
+          class="h-ctrl-sm pr-8 pl-8"
           :model-value="search"
           type="text"
           spellcheck="false"
@@ -58,68 +48,69 @@
           :aria-label="t('infra.kube.search.ph')"
           @update:model-value="onSearch"
         />
-        <button
+        <!-- Nút xoá nằm TRONG ô nhập: không viền, không nền — nó thuộc về ô, không
+             phải một nút ngang hàng với các nút khác trên thanh. -->
+        <Button
           v-if="search"
-          class="ikfindx"
+          variant="ghost"
+          size="iconSm"
+          class="absolute top-1/2 right-1 size-6 -translate-y-1/2 text-faint hover:bg-transparent hover:text-foreground"
           type="button"
           :title="t('infra.kube.search.clear')"
           :aria-label="t('infra.kube.search.clear')"
           @click="search = ''"
         >
-          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
+          <Icon name="x" />
+        </Button>
       </div>
 
-      <span v-if="busy" class="ihint">{{ t('infra.kube.loading') }}</span>
-      <span v-else-if="search.trim()" class="ihint" role="status">
+      <span v-if="busy" class="text-xs text-faint">{{ t('infra.kube.loading') }}</span>
+      <span v-else-if="search.trim()" class="text-xs text-faint" role="status">
         {{ t('infra.kube.search.showing', { shown: shownCount, total: totalCount }) }}
       </span>
       <!-- Dấu chỉ chỗ bấm được: hàng pod mở khung log/chi tiết, và không có mũi tên
            thì người mới không biết điều đó. -->
-      <span v-else-if="tab === 'pods' && pods.length" class="ihint">
+      <span v-else-if="tab === 'pods' && pods.length" class="text-xs text-faint">
         {{ t('infra.kube.pods.rowHint') }}
       </span>
     </div>
 
     <!-- Lệnh bị chặn giữa đường (ma trận quyền, hoặc CLI không dùng được): hiện
-         lý do + đúng dòng lệnh để người dùng tự chạy. Không có nút chạy. -->
-    <div v-if="blocked" class="ikblock">
-      <p class="iwarn">{{ blocked.reason }}</p>
-      <div v-if="blocked.command" class="ikcmd">
-        <code>{{ blocked.command }}</code>
-        <Button type="button" variant="outline" @click="kube.copyCommand(blocked.command)">
-          {{ t('infra.kube.blocked.copy') }}
-        </Button>
-      </div>
+         lý do + đúng dòng lệnh để người dùng tự chạy. Không có nút chạy. Một dải
+         ngang, không phải khối dọc — nó là tin nhắn, không phải nội dung để đọc lâu. -->
+    <div v-if="blocked" class="flex min-w-0 flex-wrap items-center gap-2">
+      <p class="text-xs text-warning">{{ blocked.reason }}</p>
+      <InfraKubeCmd v-if="blocked.command" :command="blocked.command" @copy="kube.copyCommand" />
       <!-- Không có dòng lệnh nghĩa là lỗi trước khi spawn (hay gặp nhất: kubectl
            ngoài allowlist đường dẫn) ⇒ lối sửa nằm trong modal quản lý cluster. -->
       <Button v-else type="button" variant="outline" @click="kube.openClusters()">
-        <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="shield" />
         {{ t('infra.kube.manage.open') }}
       </Button>
     </div>
 
-    <p v-if="namespacesError" class="iwarn">{{ namespacesError }}</p>
+    <p v-if="namespacesError" class="text-xs text-warning">{{ namespacesError }}</p>
 
     <!-- Chưa ghim cluster: hai câu khác nhau cho hai tình huống khác nhau. Máy CÓ
          cluster thì chỉ cần chỉ lên thanh trên; máy CHƯA có kubeconfig (lần đầu
          dùng) thì phải chỉ sang modal quản lý, vì ở thanh trên chẳng có gì để chọn. -->
-    <p v-if="!pinnedCluster" class="ihint">
+    <p v-if="!pinnedCluster" class="text-xs text-faint">
       {{ contexts.length ? t('infra.kube.workloads.pickFirst') : t('infra.kube.clusters.noFile') }}
     </p>
+    <!-- Nút ở trạng thái rỗng không giãn hết chiều ngang khung. -->
     <Button
       v-if="!pinnedCluster && !contexts.length"
       type="button"
-      class="ikempty-btn"
+      class="self-start"
       variant="outline"
       @click="kube.openClusters()"
     >
-      <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Icon name="plus" />
       {{ t('infra.kube.manage.open') }}
     </Button>
 
     <template v-else>
-      <p v-if="activeError" class="ierr">{{ activeError }}</p>
+      <p v-if="activeError" class="text-xs text-destructive">{{ activeError }}</p>
 
       <!-- Mục Báo cáo dùng CHUNG vùng này nhưng là cách nhìn khác: số liệu tổng
            hợp + theo dõi. `v-if` (không phải `v-show`) là cố ý — rời mục là component
@@ -130,11 +121,13 @@
            ngay là dữ liệu đang được thay), chưa có hàng nào thì hiện khung xương.
            Trước đây cả hai trường hợp đều là thân trắng, không phân biệt được với
            "không có pod nào". -->
-      <!-- `tblcard`: bảng nằm TRỰC TIẾP trên nền trang nên tự nâng mình lên card
-           (skin ở assets/css/app-shell.css). Không gắn vào `.ikscroll` toàn cục vì
-           `InfraKubeReport` dùng cùng class đó cho một chồng `.tile` — bọc thêm một
-           card quanh các card là hai tầng bóng, đọc thành lỗi chứ không phải độ sâu. -->
-      <div v-else class="ikscroll tblcard" :class="{ ikdim: activeLoading }">
+      <!-- Bảng nằm TRỰC TIẾP trên nền khối nên tự nâng mình lên card. Chỉ BẢNG cuộn,
+           phần đầu khung thì đứng yên. -->
+      <div
+        v-else
+        class="min-h-0 flex-auto overflow-x-hidden overflow-y-auto rounded-xl border bg-card shadow-sm"
+        :class="activeLoading && 'pointer-events-none opacity-40 transition-opacity'"
+      >
         <template v-if="tab === 'pods'">
           <InfraKubeTableSkeleton v-if="activeLoading && !pods.length" />
           <InfraKubeTable
@@ -144,14 +137,16 @@
             :clickable="!activeLoading"
             @row="kube.openLogs"
           />
-          <div v-else-if="search.trim()" class="iknomatch">
-            <span class="ihint">{{ t('infra.kube.search.noMatch', { q: search }) }}</span>
+          <div v-else-if="search.trim()" :class="NO_MATCH">
+            <span class="text-xs text-faint">
+              {{ t('infra.kube.search.noMatch', { q: search }) }}
+            </span>
             <Button type="button" variant="outline" @click="search = ''">
-              <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="x" />
               {{ t('infra.kube.search.clear') }}
             </Button>
           </div>
-          <p v-else-if="!podsLoading && !podsError" class="ihint">
+          <p v-else-if="!podsLoading && !podsError" :class="EMPTY">
             {{ t('infra.kube.pods.empty') }}
           </p>
         </template>
@@ -179,21 +174,22 @@
               >
                 <Icon
                   :name="restarting === row.name ? 'refresh' : 'play'"
-                  :class="{ ikspin: restarting === row.name }"
-                  style="width: var(--icon-sm); height: var(--icon-sm)"
+                  :class="{ 'motion-safe:animate-spin': restarting === row.name }"
                 />
                 {{ t('infra.kube.act.restart') }}
               </Button>
             </template>
           </InfraKubeTable>
-          <div v-else-if="search.trim()" class="iknomatch">
-            <span class="ihint">{{ t('infra.kube.search.noMatch', { q: search }) }}</span>
+          <div v-else-if="search.trim()" :class="NO_MATCH">
+            <span class="text-xs text-faint">
+              {{ t('infra.kube.search.noMatch', { q: search }) }}
+            </span>
             <Button type="button" variant="outline" @click="search = ''">
-              <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Icon name="x" />
               {{ t('infra.kube.search.clear') }}
             </Button>
           </div>
-          <p v-else-if="!deploymentsLoading && !deploymentsError" class="ihint">
+          <p v-else-if="!deploymentsLoading && !deploymentsError" :class="EMPTY">
             {{ t('infra.kube.deploys.empty') }}
           </p>
         </template>
@@ -226,6 +222,19 @@ const {
 
 const kube = props.kube
 const { t } = useI18n()
+
+/** Một mục của segmented control: track nhạt, mục đang chọn nổi lên như card. */
+const SEG_ITEM =
+  'h-ctrl-xs px-3 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm'
+/** Không hàng nào khớp: câu giải thích + đường thoát, cùng một hàng. */
+const NO_MATCH = 'flex flex-wrap items-center gap-2 p-2.5'
+/** Bảng rỗng (không phải do lọc). */
+const EMPTY = 'p-2.5 text-xs text-faint'
+
+/** ToggleGroup phát rỗng khi bấm lại mục đang chọn — bỏ qua (giống `setTab` no-op). */
+function onTab(v: unknown): void {
+  if (v === 'pods' || v === 'deployments' || v === 'report') setTab(v)
+}
 
 // Tab đang xem là state CỦA MÀN HÌNH (đổi tab không gọi cluster), nên nó sống ở
 // đây chứ không ở controller. Ba mục: hai BẢNG của cùng một ngữ cảnh, và mục Báo
@@ -311,53 +320,3 @@ const deployColumns = computed(() => [
   t('infra.kube.col.images'),
 ])
 </script>
-
-<style scoped>
-/* Hàng đầu (tab + ô tìm kiếm + chỉ dẫn) được phép xuống dòng thay vì kéo rộng
-   khung: một dòng phụ vẫn chưa phải cuộn trang. */
-.ikmain-head {
-  flex-wrap: wrap;
-}
-/* Ô tìm kiếm không giãn hết chiều ngang: nó là control, không phải vùng đọc. */
-.ikfind {
-  flex: 0 1 240px;
-}
-/* Nút xoá nằm TRONG ô nhập: không viền, không nền — nó thuộc về ô, không phải một
-   nút ngang hàng với các nút khác trên thanh. */
-.ikfindx {
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--textFaint);
-  cursor: pointer;
-}
-.ikfindx:hover {
-  color: var(--text);
-}
-/* Không hàng nào khớp: câu giải thích + đường thoát, cùng một hàng. */
-.iknomatch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 10px;
-}
-/* Lệnh bị chặn: một dải ngang, không phải khối dọc — nó là tin nhắn, không phải
-   nội dung để đọc lâu. */
-/* Nút ở trạng thái rỗng không giãn hết chiều ngang khung. */
-.ikempty-btn {
-  align-self: flex-start;
-}
-.ikblock {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.ikblock .iwarn {
-  margin: 0;
-}
-</style>

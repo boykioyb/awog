@@ -1,48 +1,70 @@
 <template>
   <!-- Advanced — override LLM per-slot của người nhận (collapse mặc định).
        Chỉ hiện khi assignee resolve ra ít nhất một slot. -->
-  <div v-if="rows.length" class="wsed-adv">
-    <button type="button" class="wsed-advtoggle" :class="{ on: open }" @click="open = !open">
-      <SlidersHorizontal class="size-3" />
+  <div v-if="rows.length" class="rounded-md border border-dashed border-border">
+    <Button
+      variant="ghost"
+      class="h-auto w-full justify-start gap-1.5 px-2.5 py-2 text-xs font-normal hover:bg-transparent hover:text-foreground [&_svg]:size-3"
+      :class="open ? 'text-foreground' : 'text-dim'"
+      @click="open = !open"
+    >
+      <SlidersHorizontal />
       {{ t('board.adv.title') }}
-      <span v-if="customCount" class="wsed-advcount">
+      <Badge
+        v-if="customCount"
+        variant="outline"
+        class="border-transparent bg-selected px-1.5 py-0 font-normal text-primary"
+      >
         {{ t('board.adv.count', { n: customCount }) }}
-      </span>
-      <ChevronDown class="wsed-advchev" :class="{ on: open }" />
-    </button>
+      </Badge>
+      <ChevronDown class="ml-auto transition-transform" :class="{ 'rotate-180': open }" />
+    </Button>
     <Collapse :open="open">
-      <div class="wsed-advbody">
-        <div class="wsed-advbar">
-          <p class="wsed-advhint">{{ t('board.adv.hint') }}</p>
+      <div class="flex flex-col gap-2 px-2.5 pb-2.5">
+        <div class="flex items-start gap-2">
+          <p class="m-0 flex-1 text-xs text-faint">{{ t('board.adv.hint') }}</p>
           <!-- Tối ưu một chạm: chấm độ phức tạp của item → chọn model RẺ NHẤT
                đủ nấc cho từng slot + effort tương ứng (ghi thẳng vào map
                override — user vẫn chỉnh tay được sau đó). -->
-          <button
-            type="button"
-            class="wsed-advopt"
+          <Button
+            variant="outline"
+            size="xs"
+            class="shrink-0 gap-1.5 border-selected-border font-normal text-primary hover:text-primary [&_svg]:size-3"
             :title="t('board.adv.optimizeTitle')"
             @click="optimize"
           >
-            <Sparkles class="size-3" />
+            <Sparkles />
             {{ t('board.adv.optimize') }}
-          </button>
+          </Button>
         </div>
-        <div v-for="row in rows" :key="row.key" class="wsed-advrow">
-          <div class="wsed-advhead">
-            <span class="wsed-advname">{{ row.label }}</span>
-            <span class="wsed-advrole">{{ t(`board.adv.role.${row.role}`) }}</span>
-            <span v-if="row.sessionId" class="wsed-advlive">{{ t('board.adv.live') }}</span>
-            <button
+        <div
+          v-for="row in rows"
+          :key="row.key"
+          class="flex flex-col gap-2 rounded-md border border-border p-2"
+        >
+          <div class="flex items-center gap-1.5">
+            <span class="min-w-0 truncate text-xs font-semibold text-foreground">
+              {{ row.label }}
+            </span>
+            <Badge variant="outline" class="shrink-0 px-1.5 py-0 font-normal text-faint">
+              {{ t(`board.adv.role.${row.role}`) }}
+            </Badge>
+            <span v-if="row.sessionId" class="shrink-0 text-xs text-success">
+              {{ t('board.adv.live') }}
+            </span>
+            <Button
               v-if="Object.keys(entry(row.key)).length"
-              type="button"
-              class="wsed-advreset"
+              variant="ghost"
+              size="iconSm"
+              class="ml-auto h-5 w-5 shrink-0 text-faint hover:text-foreground [&_svg]:size-3"
               :title="t('board.adv.reset')"
+              :aria-label="t('board.adv.reset')"
               @click="reset(row.key)"
             >
-              <RotateCcw class="size-3" />
-            </button>
+              <RotateCcw />
+            </Button>
           </div>
-          <div class="wsed-advgrid">
+          <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
             <div class="flex min-w-0 flex-col gap-1">
               <span class="text-xs text-muted-foreground">{{ t('board.adv.provider') }}</span>
               <AppSelect
@@ -573,125 +595,3 @@ async function applyLive(item: BoardItem): Promise<void> {
 
 defineExpose({ configForSave, applyLive })
 </script>
-
-<style scoped>
-.wsed-adv {
-  border: 1px dashed var(--border);
-  border-radius: var(--r-sm);
-}
-.wsed-advtoggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 7px 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.wsed-advtoggle:hover,
-.wsed-advtoggle.on {
-  color: var(--text);
-}
-.wsed-advcount {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--accentDim);
-  color: var(--accent);
-  font-size: 10px;
-}
-.wsed-advchev {
-  margin-left: auto;
-  width: 12px;
-  height: 12px;
-  transition: transform 0.15s ease;
-}
-.wsed-advchev.on {
-  transform: rotate(180deg);
-}
-.wsed-advbody {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 10px 10px;
-}
-.wsed-advbar {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.wsed-advhint {
-  flex: 1;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--textFaint);
-}
-.wsed-advopt {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-  padding: 3px 9px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--accent);
-  border: 1px solid var(--accentDim);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.wsed-advopt:hover {
-  background: var(--accent-wash);
-}
-.wsed-advrow {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.wsed-advhead {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.wsed-advname {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--text);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsed-advrole {
-  font-size: 10px;
-  color: var(--textFaint);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 6px;
-  flex-shrink: 0;
-}
-.wsed-advlive {
-  font-size: 10px;
-  color: var(--green);
-  flex-shrink: 0;
-}
-.wsed-advreset {
-  margin-left: auto;
-  color: var(--textFaint);
-  cursor: pointer;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-.wsed-advreset:hover {
-  color: var(--text);
-}
-.wsed-advgrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-</style>

@@ -1,19 +1,25 @@
 <template>
-  <div class="wco flex h-full min-h-0 flex-col gap-3.5 overflow-y-auto" :class="{ dock: compact }">
+  <!-- `compact` = biến thể dock dưới: ngang + gọn, không kéo dọc. -->
+  <div
+    class="flex h-full min-h-0 flex-col overflow-y-auto"
+    :class="compact ? 'gap-2 py-1 text-sm' : 'gap-3.5'"
+  >
     <!-- RPC failed (e.g. the engine predates this method — restart the app) → say so,
          don't misreport it as "no priced turns". -->
-    <div v-if="error" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.cost.error') }}</div>
-      <Button
-        variant="outline"
-        class="h-auto p-0 mt-2.5 rounded-sm border border-border px-3 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        @click="refresh"
-      >
+    <div
+      v-if="error"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.cost.error') }}</div>
+      <Button variant="outline" size="xs" class="mt-2.5" @click="refresh">
         {{ t('sessions.workspace.cost.refresh') }}
       </Button>
     </div>
-    <div v-else-if="!hasData && !loading" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.cost.empty') }}</div>
+    <div
+      v-else-if="!hasData && !loading"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.cost.empty') }}</div>
     </div>
 
     <template v-else>
@@ -23,23 +29,26 @@
         <div
           class="flex min-w-0 flex-[0_1_auto] gap-0.5 overflow-x-auto rounded-md border border-border p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <button
+          <Button
             v-for="r in RANGES"
             :key="r"
+            variant="ghost"
+            size="xs"
             :class="[
-              'shrink-0 whitespace-nowrap rounded-sm border px-2 py-0.5 font-medium tabular-nums transition-colors',
+              'shrink-0 border tabular-nums',
               range === r
-                ? 'border-ring bg-primary/10 text-primary'
-                : 'border-transparent text-dim hover:bg-accent hover:text-foreground',
+                ? 'border-selected-border bg-selected text-primary hover:bg-selected hover:text-primary'
+                : 'border-transparent text-dim hover:text-foreground',
             ]"
             @click="range = r"
           >
             {{ t(`sessions.workspace.cost.range.${r}`) }}
-          </button>
+          </Button>
         </div>
         <Button
-          variant="outline"
-          class="h-auto p-0 ml-auto flex size-[26px] shrink-0 items-center justify-center rounded-sm border border-border text-dim transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+          variant="ghost"
+          size="iconSm"
+          class="ml-auto shrink-0 text-dim"
           :title="t('sessions.workspace.cost.refresh')"
           :aria-label="t('sessions.workspace.cost.refresh')"
           :disabled="loading"
@@ -51,34 +60,37 @@
 
       <!-- Custom range date inputs (only when the "Range" preset is active). -->
       <div v-if="range === 'custom'" class="flex flex-wrap gap-2.5">
-        <label class="flex min-w-0 flex-[1_1_132px] items-center gap-1.5 text-dim">
+        <Label class="flex min-w-0 flex-[1_1_8rem] items-center gap-1.5 font-normal text-dim">
           <span>{{ t('sessions.workspace.cost.from') }}</span>
           <Input
             v-model="customFrom"
             type="date"
             :min="firstDay"
             :max="lastDay"
-            class="min-w-0 flex-1 rounded-sm border bg-transparent px-1.5 py-1 text-foreground outline-none tabular-nums focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-ring"
+            class="h-ctrl-xs min-w-0 flex-1 tabular-nums"
           />
-        </label>
-        <label class="flex min-w-0 flex-[1_1_132px] items-center gap-1.5 text-dim">
+        </Label>
+        <Label class="flex min-w-0 flex-[1_1_8rem] items-center gap-1.5 font-normal text-dim">
           <span>{{ t('sessions.workspace.cost.to') }}</span>
           <Input
             v-model="customTo"
             type="date"
             :min="firstDay"
             :max="lastDay"
-            class="min-w-0 flex-1 rounded-sm border bg-transparent px-1.5 py-1 text-foreground outline-none tabular-nums focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-ring"
+            class="h-ctrl-xs min-w-0 flex-1 tabular-nums"
           />
-        </label>
+        </Label>
       </div>
 
       <!-- Headline: cost over the selected range + token/turn subline. -->
-      <div class="wco-hl flex flex-col gap-0.5">
-        <div class="text-xs leading-[18px] text-dim">
+      <div class="flex" :class="compact ? 'flex-row items-baseline gap-2.5' : 'flex-col gap-0.5'">
+        <div class="text-xs text-dim">
           {{ t('sessions.workspace.cost.rangeCost') }}
         </div>
-        <div class="wco-num text-[34px] font-semibold leading-[38px] tabular-nums text-foreground">
+        <div
+          class="font-semibold tabular-nums text-foreground"
+          :class="compact ? 'text-xl' : HERO_NUM_CLASS"
+        >
           {{ fmtUsd(rangeTotal.costUsd) }}
         </div>
         <div class="tabular-nums text-dim">
@@ -92,7 +104,10 @@
       </div>
 
       <!-- Span + lifetime: makes multi-day sessions legible at a glance. -->
-      <div class="wco-span flex flex-col gap-1.5 border-y border-border py-2.5">
+      <div
+        class="flex flex-col border-y border-border"
+        :class="compact ? 'gap-1 py-1' : 'gap-1.5 py-2.5'"
+      >
         <div v-if="firstDay" class="flex items-center gap-2 text-dim">
           <Clock class="size-3 shrink-0" />
           <span>{{ spanLabel }}</span>
@@ -105,8 +120,8 @@
 
       <!-- Per-day breakdown: one bar per active day in range, normalized to the
            peak day so a heavy day is obvious. -->
-      <div class="wco-day">
-        <div class="mb-1 text-xs leading-[18px] text-dim">
+      <div>
+        <div class="mb-1 text-xs text-dim">
           {{ t('sessions.workspace.cost.byDay') }}
         </div>
         <p v-if="!rangeDays.length" class="py-1 text-faint">
@@ -119,31 +134,25 @@
         <div
           v-for="d in daysDesc"
           :key="d.date"
-          class="wco-dr flex items-center gap-2.5 py-1"
+          class="flex items-center gap-2.5"
+          :class="compact ? 'py-0.5' : 'py-1'"
           :title="dayTitle(d)"
         >
-          <span class="shrink-0 text-xs leading-[18px] tabular-nums text-dim">{{ d.date }}</span>
-          <span class="h-2 min-w-0 flex-1 overflow-hidden rounded-sm bg-accent">
-            <i
-              class="block h-full rounded-sm bg-primary"
-              :style="{ width: `${barPct(d.costUsd)}%` }"
-            />
-          </span>
-          <span
-            class="min-w-14 shrink-0 text-right text-xs leading-[18px] tabular-nums text-foreground"
-          >
+          <span class="shrink-0 text-xs tabular-nums text-dim">{{ d.date }}</span>
+          <Progress :model-value="barPct(d.costUsd)" class="h-2 min-w-0 flex-1 rounded-sm" />
+          <span class="min-w-14 shrink-0 text-right text-xs tabular-nums text-foreground">
             {{ fmtUsd(d.costUsd) }}
           </span>
         </div>
       </div>
 
-      <div
+      <Alert
         v-if="hasUnpriced"
-        class="wco-warn flex items-center gap-1.5 rounded-sm border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs leading-[18px] text-warning"
+        class="flex items-center gap-1.5 border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs text-warning [&>svg]:size-3 [&>svg]:translate-y-0"
       >
         <AlertTriangle class="size-3 shrink-0" />
         {{ t('sessions.workspace.cost.unpriced') }}
-      </div>
+      </Alert>
     </template>
   </div>
 </template>
@@ -156,8 +165,6 @@ import { AlertTriangle, Clock, RotateCw } from 'lucide-vue-next'
 import type { Session } from '~/composables/useSessionsData'
 import type { CostDay, CostRange } from '~/composables/useSessionCostBreakdown'
 import { formatTokenCount } from '~/utils/context-window'
-import Input from '~/components/ui/input/Input.vue'
-import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(defineProps<{ session: Session; compact?: boolean }>(), {
   compact: false,
@@ -167,6 +174,9 @@ const compact = props.compact
 const { t } = useI18n()
 
 const RANGES: CostRange[] = ['1d', '7d', '30d', 'all', 'custom']
+
+// Số tiền hero lớn hơn bậc text-2xl của thang — cố ý cố định, không theo Appearance.
+const HERO_NUM_CLASS = 'text-[34px] leading-[38px]' // px-ok: số hero ngoài thang chữ
 
 const {
   loading,
@@ -206,30 +216,3 @@ const spanLabel = computed(() => {
 const dayTitle = (d: CostDay): string =>
   `${d.date} · ${fmtUsd(d.costUsd)} · ${formatTokenCount(d.totalTokens)} tokens · ${d.turns} turns`
 </script>
-
-<style scoped>
-/* Dock variant — ngang + gọn, không kéo dọc. Tailwind vẫn dùng được; đây là
-   override khi `compact`. */
-.wco.dock {
-  gap: 8px;
-  padding: 4px 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wco.dock .wco-hl {
-  flex-direction: row;
-  align-items: baseline;
-  gap: 10px;
-}
-.wco.dock .wco-num {
-  font-size: var(--fs-xl);
-  line-height: var(--lh-xl);
-}
-.wco.dock .wco-span {
-  padding: 5px 0;
-  gap: 4px;
-}
-.wco.dock .wco-dr {
-  padding: 2px 0;
-}
-</style>

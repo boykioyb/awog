@@ -1,9 +1,9 @@
 <template>
-  <div
-    class="wpanel flex h-full flex-col overflow-hidden bg-sidebar"
-    :class="{ bottom: dock === 'bottom', left: dock === 'left' }"
-    :style="panelStyle"
-  >
+  <!-- Mép dock KHÔNG có hairline trên chính panel: mỗi dock đều có tay kéo `.rszwp`
+       sát mép và ::after của nó đã vẽ đường chia — thêm viền ở đây là hai đường cạnh
+       nhau. Mỗi mép một hairline, do tay kéo giữ.
+       hook-ok: `.wpanel` được useBrowserPanelSizing.ts / WorkspaceBrowser đọc qua closest() -->
+  <div class="wpanel" :class="PANEL_CLASS" :style="panelStyle">
     <!-- Tab strip — proto §3.5 idiom on ui/tabs: inactive tabs are icon-only
          (the label lives in `title`), `×` shows on the active or hovered tab
          via opacity (the slot is always reserved, so the strip never jumps),
@@ -14,7 +14,7 @@
         @contextmenu.prevent="toggleDockMenu"
       >
         <TabsList
-          class="wpanel-tabs h-9 min-w-0 flex-1 justify-start gap-0 overflow-x-auto rounded-none bg-transparent p-0"
+          class="h-9 min-w-0 [&::-webkit-scrollbar]:h-1.25 [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-transparent flex-1 justify-start gap-0 overflow-x-auto rounded-none bg-transparent p-0"
         >
           <TabsTrigger
             v-for="tab in tabs"
@@ -42,10 +42,10 @@
           </TabsTrigger>
         </TabsList>
 
-        <!-- `+` re-add a closed view (hand-rolled `.smenu`, NOT a reka popover:
-             `.smenu` is in the embedded-browser OVERLAYS registry, so the menu
-             stays visible when it hangs over the native Chromium viewport —
-             a teleported dropdown without that marker would paint UNDER it). -->
+        <!-- `+` re-add a closed view (menu tự dựng, NOT a reka popover: nó mang
+             `role=dialog` + `data-state=open` — khớp selector trong OVERLAYS của trình
+             duyệt nhúng, nên menu vẫn hiện khi treo trên viewport Chromium native;
+             một dropdown teleport không có dấu đó sẽ bị vẽ ĐÈ LÊN). -->
         <div class="relative shrink-0">
           <Button
             variant="ghost"
@@ -57,8 +57,19 @@
           >
             <Plus />
           </Button>
-          <div v-if="addOpen" class="smenu wpanel-menu" @click.stop>
-            <div v-for="v in addableViews" :key="v" class="mi" @click="addView(v)">
+          <div
+            v-if="addOpen"
+            role="dialog"
+            data-state="open"
+            class="absolute top-[calc(100%+4px)] z-50 min-w-40 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md right-0"
+            @click.stop
+          >
+            <div
+              v-for="v in addableViews"
+              :key="v"
+              class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              @click="addView(v)"
+            >
               <component :is="viewIcon(v)" class="size-3.5" />
               {{ v }}
             </div>
@@ -77,25 +88,40 @@
           <X />
         </Button>
 
-        <!-- Dock picker — right-click on the strip. Same `.smenu` reasoning. -->
-        <div v-if="dockMenuOpen" class="smenu wpanel-dockmenu" @click.stop>
-          <div class="smenu-label">{{ t('sessions.workspace.dock.change') }}</div>
+        <!-- Dock picker — right-click on the strip. Cùng lý do role=dialog như menu `+`. -->
+        <div
+          v-if="dockMenuOpen"
+          role="dialog"
+          data-state="open"
+          class="absolute top-[calc(100%+4px)] z-50 min-w-40 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md left-2"
+          @click.stop
+        >
+          <!-- Nhãn mục — cùng giọng DropdownMenuLabel. -->
+          <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">
+            {{ t('sessions.workspace.dock.change') }}
+          </div>
+          <!-- Vị trí dock hiện tại được đánh dấu. -->
           <div
             v-for="opt in DOCK_OPTS"
             :key="opt.side"
-            class="mi"
-            :class="{ on: opt.side === dock }"
+            class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            :class="{ 'bg-accent text-foreground': opt.side === dock }"
             @click="pickDock(opt.side)"
           >
             <component :is="opt.icon" class="size-3.5" />
             {{ t(opt.label) }}
-            <Check v-if="opt.side === dock" class="ck size-3.5" />
+            <Check v-if="opt.side === dock" class="ml-auto size-3.5 text-primary" />
           </div>
         </div>
       </div>
     </Tabs>
 
-    <div class="wpbody" :class="{ flush: isFlushTab }">
+    <!-- Diff/Files/Terminal/Preview/Browser tự lo chrome tràn mép (danh sách file,
+         viewer, canvas PTY) nên chiếm cả thân, không đệm + không cuộn mặc định. -->
+    <div
+      class="min-h-0 flex-1 text-sm text-muted-foreground"
+      :class="isFlushTab ? 'overflow-hidden p-0' : 'overflow-auto p-3'"
+    >
       <!-- Diff -->
       <WorkspaceDiff v-if="active === 'Diff'" :session="session" />
 
@@ -144,8 +170,8 @@
       <WorkspaceInfo v-if="active === 'Info'" :session="session" />
 
       <!-- fallback (Preview / any unhandled view) -->
-      <div v-if="isFallbackTab" class="empty" style="padding: 30px">
-        <div class="et">{{ t('sessions.workspace.noPreview') }}</div>
+      <div v-if="isFallbackTab" class="p-7.5 text-center text-muted-foreground">
+        {{ t('sessions.workspace.noPreview') }}
       </div>
     </div>
 
@@ -214,6 +240,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Khung panel; `border-0` gỡ viền trái của `.wpanel` cũ (xem comment ở template).
+const PANEL_CLASS = 'flex h-full flex-col overflow-hidden border-0 bg-sidebar'
 
 // View → lucide glyph (the tab strip is icon-first). Same names the old sprite
 // map carried (useSessionsData.WPVIEWS), expressed in the shadcn icon set.
@@ -312,60 +341,3 @@ function onTabPick(v: string | number) {
   emit('set-active', String(v))
 }
 </script>
-
-<style scoped>
-/* Diff/Files/Terminal own their full chrome (file lists, viewers, the PTY canvas)
-   so they take over the whole body without the default 13px padding + scroll. */
-.wpbody.flush {
-  padding: 0;
-  overflow: hidden;
-}
-/* Docked-edge hairline — NONE on the panel itself. Every dock renders a `.rszwp`
-   drag handle flush against the panel, and the handle's ::after already paints
-   the divider; the global `.wpanel{border-left}` (+ the flips below) stacked a
-   second line right beside it. One hairline per edge, owned by the handle. */
-.wpanel {
-  border-left: none;
-}
-.wpanel.bottom {
-  border-left: none;
-  border-top: none;
-}
-.wpanel.left {
-  border-left: none;
-  border-right: none;
-}
-/* `position:fixed` comes from the global `.smenu`; these are anchored to the
-   strip instead. */
-.wpanel-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 50;
-}
-.wpanel-dockmenu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 8px;
-  z-index: 50;
-}
-/* Menu section label — same voice as a shadcn DropdownMenuLabel. */
-.smenu-label {
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--muted-foreground);
-}
-/* Mark the current dock position in the picker. */
-.smenu .mi.on {
-  color: var(--text);
-  background: var(--accent-wash);
-}
-/* Thin horizontal scrollbar on the tab strip (was `.wptabs2` in app-shell.css). */
-.wpanel-tabs::-webkit-scrollbar {
-  height: 5px;
-}
-.wpanel-tabs::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-}
-</style>

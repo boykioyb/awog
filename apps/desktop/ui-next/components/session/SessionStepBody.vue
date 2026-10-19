@@ -1,16 +1,23 @@
 <template>
+  <!-- Nhãn mục (Path / Input / Output) + khối pre; nhãn Output có hairline phía trên để
+       hai khối raw đọc thành hai phần riêng. -->
   <!-- Full path, above the code/diff. The step header can only ellipsise a long path
        (losing the filename) and the EMBEDDED code view hides its own filename header,
        so without this row the path is readable nowhere once it gets long. -->
-  <div v-if="pathText" class="sio">
-    <div class="siolbl">{{ t('sessions.step.path') }}</div>
-    <pre class="siopre break-all text-muted-foreground">{{ pathText }}</pre>
+  <div v-if="pathText" class="flex flex-col gap-0.5">
+    <div class="text-xs font-medium text-muted-foreground">{{ t('sessions.step.path') }}</div>
+    <!-- mono-ok: path / payload thô của tool -->
+    <pre class="m-0 font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground">{{
+      pathText
+    }}</pre>
   </div>
   <!-- Detail stub kept off the wire (sessions.get lite) — fetched lazily on
        expand via sessions.stepDetail; show a loading line instead of letting
        the branches below render "(no output)" / "(empty)". -->
-  <div v-if="pending" class="sio">
-    <pre class="siopre text-muted-foreground">{{ t('sessions.step.loading') }}</pre>
+  <div v-if="pending" class="flex flex-col gap-0.5">
+    <pre class="m-0 font-mono text-xs whitespace-pre-wrap text-muted-foreground">{{
+      t('sessions.step.loading')
+    }}</pre>
   </div>
   <!-- Real unified diff (Edit/MultiEdit) → parsed diff view. -->
   <template v-if="!pending">
@@ -26,16 +33,22 @@
     <SessionCodeView v-else-if="codeText !== null" :fname="target" :code="codeText" embedded />
     <!-- Terminal output / plain text / list → Input + Output split. The header
        truncates the input (command / query / url); here it shows in full,
-       clearly separated from the result. `.sout` is the hook SessionStepItem
+       clearly separated from the result. `data-sout` is the hook SessionStepItem
        tints destructive on a failed step. -->
     <template v-else>
-      <div v-if="inputText" class="sio">
-        <div class="siolbl">{{ t('sessions.step.input') }}</div>
-        <pre class="siopre break-all text-foreground/85">{{ inputText }}</pre>
+      <div v-if="inputText" class="flex flex-col gap-0.5">
+        <div class="text-xs font-medium text-muted-foreground">
+          {{ t('sessions.step.input') }}
+        </div>
+        <pre class="m-0 font-mono text-xs break-all whitespace-pre-wrap text-foreground/85">{{
+          inputText
+        }}</pre>
       </div>
-      <div class="sio">
-        <div v-if="inputText" class="siolbl siosep">{{ t('sessions.step.output') }}</div>
-        <pre class="siopre sout text-muted-foreground">{{
+      <div class="flex flex-col gap-0.5">
+        <div v-if="inputText" class="border-t pt-1.5 text-xs font-medium text-muted-foreground">
+          {{ t('sessions.step.output') }}
+        </div>
+        <pre data-sout class="m-0 font-mono text-xs whitespace-pre-wrap text-muted-foreground">{{
           detail || t('sessions.step.noOutput')
         }}</pre>
       </div>
@@ -113,34 +126,3 @@ function parseDiff(src: string): DiffLine[] {
   return out
 }
 </script>
-
-<style scoped>
-/* Section label — proto `text-[10px] uppercase tracking-wide font-semibold
-   text-muted-foreground`. */
-.siolbl {
-  font-size: 10px;
-  line-height: 14px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-/* Label + pre pair; the Output label gets a hairline above it so the two raw
-   blocks read as distinct sections (proto `border-t border-border pt-1.5`). */
-.sio {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.siosep {
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-}
-.siopre {
-  margin: 0;
-  font-family: var(--code); /* mono-ok: raw tool payload */
-  font-size: 11px;
-  line-height: 18px;
-  white-space: pre-wrap;
-}
-</style>

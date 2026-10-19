@@ -1,149 +1,162 @@
 <template>
-  <!-- Teleport to body so the modal escapes any session/panel stacking context.
-       Single instance, driven by useSessionExportModal(). -->
-  <Teleport to="body">
-    <div v-if="session" class="ovl on expovl" @click.self="close">
-      <div class="expmodal">
-        <div class="expmodal-head">
-          <Icon
-            name="save"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--primary)"
-          />
-          <span class="expmodal-title">{{ t('sessions.export.title') }}</span>
-          <span style="flex: 1" />
-          <button class="expmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
-
-        <div class="expmodal-bar">
-          <!-- Format toggle (segmented: transparent + border + accent tint when active). -->
-          <div class="expseg" role="tablist">
-            <button
-              class="expseg-btn"
-              :class="{ on: format === 'md' }"
-              role="tab"
-              :aria-selected="format === 'md'"
-              @click="format = 'md'"
-            >
-              <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              {{ t('sessions.export.md') }}
-            </button>
-            <button
-              class="expseg-btn"
-              :class="{ on: format === 'html' }"
-              role="tab"
-              :aria-selected="format === 'html'"
-              @click="format = 'html'"
-            >
-              <Icon name="code" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              {{ t('sessions.export.html') }}
-            </button>
-            <button
-              class="expseg-btn"
-              :class="{ on: format === 'prompt' }"
-              role="tab"
-              :aria-selected="format === 'prompt'"
-              :title="t('sessions.export.promptHint')"
-              @click="format = 'prompt'"
-            >
-              <Icon
-                name="sparkles"
-                :class="{ 'expseg-busy': promptLoading }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
-              />
-              {{ t('sessions.export.prompt') }}
-            </button>
-          </div>
-          <span style="flex: 1" />
-          <span v-if="status" class="expstatus" :class="{ err: statusErr }">{{ status }}</span>
-          <button
-            v-if="format === 'prompt'"
-            class="expbtn"
-            :disabled="promptLoading"
-            @click="onRegenerate"
-          >
-            <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('sessions.export.regenerate') }}
-          </button>
-          <button class="expbtn" :disabled="!contentReady" @click="onCopy">
-            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('sessions.export.copy') }}
-          </button>
-          <button
-            class="expbtn pri"
-            :disabled="!canSave || !contentReady"
-            :title="saveTitle"
-            @click="onSave"
-          >
-            <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('sessions.export.save') }}
-          </button>
-        </div>
-
-        <!-- Saved bar — appears after a successful save. Shows the destination in a
-             readable form (folder dimmed, filename bold, full path on hover) plus the
-             file actions: reveal in the OS file manager and open in VS Code. -->
-        <div v-if="saved" class="expsaved">
-          <div class="expsaved-top">
-            <Icon
-              name="check"
-              class="expsaved-ok"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            <span class="expsaved-label">{{ t('sessions.export.savedLabel') }}</span>
-            <span style="flex: 1" />
-            <button class="expbtn" @click="onReveal">
-              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.export.reveal') }}
-            </button>
-            <button v-if="vscodeAvailable" class="expbtn" @click="onOpenVscode">
-              <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.export.openInVscode') }}
-            </button>
-            <button class="expbtn" :title="t('sessions.export.copyPath')" @click="onCopyPath">
-              <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-          </div>
-          <div class="expsaved-path" :title="saved.path">
-            <span class="expsaved-dir">{{ savedDir }}</span>
-            <span class="expsaved-name">{{ savedName }}</span>
-          </div>
-        </div>
-
-        <div class="expmodal-body">
-          <template v-if="format === 'prompt'">
-            <div v-if="promptError" class="expgen err">
-              <span>{{ promptError }}</span>
-              <button class="expbtn" @click="onRegenerate">
-                <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                {{ t('sessions.export.retry') }}
-              </button>
-            </div>
-            <div v-else-if="promptLoading && !promptText" class="expgen">
-              <Icon
-                name="sparkles"
-                class="expgen-spin"
-                style="width: var(--icon-lg); height: var(--icon-lg)"
-              />
-              <span>{{ t('sessions.export.promptGenerating') }}</span>
-            </div>
-            <!-- Editable so the user can tweak the prompt before copy/save. Readonly
-                 while streaming (deltas append programmatically); editable once done. -->
-            <textarea
-              v-else
-              v-model="promptText"
-              class="exppromptarea"
-              :readonly="promptLoading"
-              :aria-label="t('sessions.export.prompt')"
-              spellcheck="false"
-            />
-          </template>
-          <pre v-else class="exppreview">{{ content }}</pre>
-        </div>
+  <!-- Dialog (reka) tự teleport ra body nên modal thoát mọi stacking context của
+       session/panel. Một instance duy nhất, lái bởi useSessionExportModal(). -->
+  <Dialog :open="!!session" @update:open="(v) => !v && close()">
+    <DialogContent
+      class="flex h-[82vh] w-[94vw] max-w-225 flex-col gap-0 overflow-hidden rounded-lg bg-card p-0 text-card-foreground sm:max-w-225"
+      :aria-describedby="undefined"
+    >
+      <div class="flex h-12 shrink-0 items-center gap-2 pr-12 pl-4">
+        <Icon name="save" class="size-3.5 text-primary" />
+        <DialogTitle>{{ t('sessions.export.title') }}</DialogTitle>
       </div>
-    </div>
-  </Teleport>
+      <Separator />
+
+      <div class="flex shrink-0 items-center gap-2 px-3.5 py-2">
+        <!-- Chọn định dạng (segmented: trong suốt + viền + tint accent khi chọn). Nhấp
+             lại mục đang chọn KHÔNG bỏ chọn — luôn có đúng một định dạng. -->
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          :spacing="1"
+          :model-value="format"
+          @update:model-value="(v) => v && (format = v as ExportFormat)"
+        >
+          <ToggleGroupItem
+            value="md"
+            class="h-auto gap-1 rounded-sm px-2.5 py-1 font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground data-[state=on]:border-ring data-[state=on]:bg-accent data-[state=on]:text-primary [&_svg]:size-3"
+          >
+            <Icon name="file" />
+            {{ t('sessions.export.md') }}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="html"
+            class="h-auto gap-1 rounded-sm px-2.5 py-1 font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground data-[state=on]:border-ring data-[state=on]:bg-accent data-[state=on]:text-primary [&_svg]:size-3"
+          >
+            <Icon name="code" />
+            {{ t('sessions.export.html') }}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="prompt"
+            class="h-auto gap-1 rounded-sm px-2.5 py-1 font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground data-[state=on]:border-ring data-[state=on]:bg-accent data-[state=on]:text-primary [&_svg]:size-3"
+            :title="t('sessions.export.promptHint')"
+          >
+            <!-- Icon tab Prompt nhấp nháy khi bản tóm tắt đang stream — tín hiệu tải trên tab. -->
+            <Icon
+              name="sparkles"
+              :class="promptLoading && 'animate-pulse text-primary motion-reduce:animate-none'"
+            />
+            {{ t('sessions.export.prompt') }}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <span class="flex-1" />
+        <span
+          v-if="status"
+          class="max-w-90 truncate text-sm"
+          :class="statusErr ? 'text-destructive' : 'text-muted-foreground'"
+        >
+          {{ status }}
+        </span>
+        <Button
+          v-if="format === 'prompt'"
+          variant="outline"
+          size="sm"
+          :disabled="promptLoading"
+          @click="onRegenerate"
+        >
+          <Icon name="refresh" class="size-3.5" />
+          {{ t('sessions.export.regenerate') }}
+        </Button>
+        <Button variant="outline" size="sm" :disabled="!contentReady" @click="onCopy">
+          <Icon name="copy" class="size-3.5" />
+          {{ t('sessions.export.copy') }}
+        </Button>
+        <Button size="sm" :disabled="!canSave || !contentReady" :title="saveTitle" @click="onSave">
+          <Icon name="save" class="size-3.5" />
+          {{ t('sessions.export.save') }}
+        </Button>
+      </div>
+      <Separator />
+
+      <!-- Saved bar — appears after a successful save. Shows the destination in a
+           readable form (folder dimmed, filename bold, full path on hover) plus the
+           file actions: reveal in the OS file manager and open in VS Code. -->
+      <template v-if="saved">
+        <div class="flex shrink-0 flex-col gap-1.5 bg-success/8 px-3.5 py-2.5">
+          <div class="flex items-center gap-2">
+            <Icon name="check" class="size-3.5 text-success" />
+            <span class="flex-1 font-semibold">{{ t('sessions.export.savedLabel') }}</span>
+            <Button variant="outline" size="sm" @click="onReveal">
+              <Icon name="folder" class="size-3.5" />
+              {{ t('sessions.export.reveal') }}
+            </Button>
+            <Button v-if="vscodeAvailable" variant="outline" size="sm" @click="onOpenVscode">
+              <Icon name="code" class="size-3.5" />
+              {{ t('sessions.export.openInVscode') }}
+            </Button>
+            <Button
+              variant="outline"
+              size="iconMd"
+              :title="t('sessions.export.copyPath')"
+              :aria-label="t('sessions.export.copyPath')"
+              @click="onCopyPath"
+            >
+              <Icon name="copy" class="size-3.5" />
+            </Button>
+          </div>
+          <!-- mono: đường dẫn file vừa export -->
+          <div class="font-mono text-sm wrap-anywhere" :title="saved.path">
+            <span class="text-muted-foreground">{{ savedDir }}</span>
+            <span class="font-semibold text-foreground">{{ savedName }}</span>
+          </div>
+        </div>
+        <Separator />
+      </template>
+
+      <div class="min-h-0 flex-1 overflow-auto p-3.5">
+        <template v-if="format === 'prompt'">
+          <div
+            v-if="promptError"
+            class="flex h-full flex-col items-center justify-center gap-3 text-center text-destructive"
+          >
+            <span>{{ promptError }}</span>
+            <Button variant="outline" size="sm" @click="onRegenerate">
+              <Icon name="refresh" class="size-3.5" />
+              {{ t('sessions.export.retry') }}
+            </Button>
+          </div>
+          <div
+            v-else-if="promptLoading && !promptText"
+            class="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground"
+          >
+            <Icon
+              name="sparkles"
+              class="size-5 animate-pulse text-primary motion-reduce:animate-none"
+            />
+            <span>{{ t('sessions.export.promptGenerating') }}</span>
+          </div>
+          <!-- Editable so the user can tweak the prompt before copy/save. Readonly
+               while streaming (deltas append programmatically); editable once done.
+               resize-none: thân modal quyết chiều cao (ô nhập của modal một mục đích).
+               mono: văn bản prompt được export. -->
+          <Textarea
+            v-else
+            v-model="promptText"
+            class="block size-full min-h-0 resize-none rounded-none border-none bg-transparent p-0 font-mono text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-foreground shadow-none focus-visible:ring-0"
+            :readonly="promptLoading"
+            :aria-label="t('sessions.export.prompt')"
+            spellcheck="false"
+          />
+        </template>
+        <!-- mono: bản xem trước markdown export -->
+        <pre
+          v-else
+          class="m-0 font-mono text-sm leading-5 wrap-anywhere whitespace-pre-wrap text-foreground"
+          >{{ content }}</pre
+        >
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -306,228 +319,3 @@ function onKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
-<style scoped>
-.expovl {
-  align-items: center;
-  padding: 24px;
-  z-index: 130;
-}
-.expmodal {
-  width: min(900px, 94vw);
-  height: 82vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  color: var(--card-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
-}
-.expmodal-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.expmodal-title {
-  font-weight: 600;
-}
-.expmodal-x {
-  background: transparent;
-  border: none;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  display: inline-flex;
-}
-.expmodal-x:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.expmodal-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.expseg {
-  display: inline-flex;
-  gap: 4px;
-}
-.expseg-btn {
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.expseg-btn:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.expseg-btn.on {
-  color: var(--primary);
-  border-color: var(--ring);
-  background: var(--accent-wash);
-}
-.expstatus {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 18px;
-  max-width: 360px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.expstatus.err {
-  color: var(--destructive);
-}
-.expbtn {
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--foreground);
-  cursor: pointer;
-}
-.expbtn:hover {
-  background: var(--accent-wash);
-}
-.expbtn.pri {
-  border-color: transparent;
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-.expbtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.expsaved {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: rgb(from var(--success) r g b / 0.08);
-}
-.expsaved-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.expsaved-ok {
-  color: var(--success);
-}
-.expsaved-label {
-  font-weight: 600;
-}
-.expsaved-path {
-  /* mono-ok: path the export was written to */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-}
-.expsaved-dir {
-  color: var(--muted-foreground);
-}
-.expsaved-name {
-  color: var(--foreground);
-  font-weight: 600;
-}
-.expmodal-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 14px;
-}
-.exppreview {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  /* mono-ok: preview of the exported markdown */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--foreground);
-}
-/* Prompt mode: editable text area filling the body — user can tweak before copy/save.
-   resize:none because the modal body governs the height (single-purpose modal input). */
-.exppromptarea {
-  display: block;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  resize: none;
-  border: none;
-  outline: none;
-  background: transparent;
-  /* mono-ok: exported prompt text */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--foreground);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-/* Prompt tab icon pulses while the summary is streaming — a loading cue on the tab. */
-.expseg-busy {
-  color: var(--primary);
-  animation: expgen-pulse 1.2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .expseg-busy {
-    animation: none;
-  }
-}
-/* Prompt-mode placeholder: centered generating / error state. */
-.expgen {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--muted-foreground);
-  text-align: center;
-}
-.expgen.err {
-  color: var(--destructive);
-}
-.expgen-spin {
-  color: var(--primary);
-  animation: expgen-pulse 1.2s ease-in-out infinite;
-}
-@keyframes expgen-pulse {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .expgen-spin {
-    animation: none;
-  }
-}
-</style>

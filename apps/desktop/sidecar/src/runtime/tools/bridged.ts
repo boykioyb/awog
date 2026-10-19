@@ -27,6 +27,7 @@ import {
   SESSION_MESSAGING_TOOL_NAMES,
   TEAM_MCP_SERVER,
   TEAM_TOOL_NAMES,
+  TERMINAL_SNIPPET_TOOL_NAMES,
 } from './tool-names.js'
 import { INFRA_MCP_SERVER, INFRA_TOOL_NAMES } from './infra-tools.js'
 import { INFRA_APP_TOOL_NAMES } from './infra-app-tools.js'
@@ -41,7 +42,7 @@ import { SLACK_MCP_SERVER, SLACK_TOOL_NAMES } from './slack-tools.js'
 // còn khai tay; ai thêm hằng cho chúng thì chuyển lên nhánh dẫn xuất.
 const BRIDGED_SERVERS: readonly (readonly [string, readonly string[]])[] = [
   [SURFACE_MCP_SERVER, SURFACE_TOOL_NAMES],
-  [TERMINAL_MCP_SERVER, READ_TERMINAL_TOOL_NAMES],
+  [TERMINAL_MCP_SERVER, [...READ_TERMINAL_TOOL_NAMES, ...TERMINAL_SNIPPET_TOOL_NAMES]],
   [BROWSER_MCP_SERVER, [BROWSER_TOOL_NAME]],
   [DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES],
   [CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES],

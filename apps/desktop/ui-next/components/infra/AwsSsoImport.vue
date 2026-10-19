@@ -6,7 +6,7 @@
     :lock-scrim="busy"
     @close="onClose"
   >
-    <div class="asi">
+    <div class="flex min-h-0 flex-col gap-3.5">
       <!-- Bước 1: đăng nhập SSO — ghi [sso-session x] rồi mở trình duyệt (tách
            riêng, xem AwsSsoImportLoginStep.vue). -->
       <AwsSsoImportLoginStep
@@ -44,44 +44,55 @@
       />
 
       <!-- Bước 4: kết quả. -->
-      <div v-else class="asi-result">
-        <Icon
-          name="check"
-          style="width: var(--icon-lg); height: var(--icon-lg); color: var(--green)"
-        />
-        <div class="asi-result-title">{{ t('infra.import.sso.result.title') }}</div>
-        <div class="asi-result-line">
+      <div v-else class="flex flex-col items-center gap-1.5 px-2 pt-5 pb-2 text-center">
+        <Icon name="check" class="size-5 text-success" />
+        <div class="mt-1 text-lg font-semibold text-foreground">
+          {{ t('infra.import.sso.result.title') }}
+        </div>
+        <div class="text-sm text-muted-foreground">
           {{ t('infra.import.sso.result.created', { n: createResult?.created.length ?? 0 }) }}
         </div>
-        <div class="asi-result-line">
+        <div class="text-sm text-muted-foreground">
           {{ t('infra.import.sso.result.skipped', { n: createResult?.skipped.length ?? 0 }) }}
         </div>
         <!-- Ghi đè một profile static ⇒ sidecar đã GỠ khoá dài hạn cũ khỏi
              ~/.aws/credentials. Đó là một lần xoá credential — phải nói ra, chứ
              không để người dùng phát hiện sau bằng cách mở file. -->
-        <div v-if="createResult && createResult.clearedStaticKeys.length > 0" class="asi-warn">
+        <div
+          v-if="createResult && createResult.clearedStaticKeys.length > 0"
+          class="text-center text-sm text-warning"
+        >
           {{
             t('infra.import.sso.result.clearedStaticKeys', {
               names: createResult.clearedStaticKeys.join(', '),
             })
           }}
         </div>
-        <div v-for="w in createResult?.warnings ?? []" :key="w" class="asi-warn">
+        <div
+          v-for="w in createResult?.warnings ?? []"
+          :key="w"
+          class="text-center text-sm text-warning"
+        >
           {{ w }}
         </div>
-        <div v-if="createResult && createResult.backups.length > 0" class="asi-hint">
+        <div v-if="createResult && createResult.backups.length > 0" class="text-xs text-dim">
           {{ t('infra.import.backupsNote', { n: createResult.backups.length }) }}
         </div>
       </div>
 
-      <div v-if="errorMsg && step !== 'result'" class="asi-error">{{ errorMsg }}</div>
+      <div
+        v-if="errorMsg && step !== 'result'"
+        class="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
+        {{ errorMsg }}
+      </div>
     </div>
 
     <template #footer>
-      <span v-if="step === 'accounts'" class="asi-count">
+      <span v-if="step === 'accounts'" class="text-sm text-dim">
         {{ t('infra.import.sso.accounts.selectedCount', { n: selectedKeys.size }) }}
       </span>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <template v-if="step === 'login'">
         <Button type="button" :disabled="loggingIn" variant="outline" @click="onClose">
           {{ t('common.cancel') }}
@@ -453,58 +464,3 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 </script>
-
-<style scoped>
-.asi {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
-}
-.asi-error {
-  padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--dangerDim);
-  border: 1px solid var(--dangerBorder);
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.asi-count {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.asi-result {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 20px 8px 8px;
-  text-align: center;
-}
-.asi-result-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-  margin-top: 4px;
-}
-.asi-result-line {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
-.asi-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Gỡ khoá dài hạn là một lần xoá credential — đọc phải nặng hơn `asi-hint`. */
-.asi-warn {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-  text-align: center;
-}
-</style>

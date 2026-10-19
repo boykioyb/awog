@@ -1,40 +1,44 @@
 <template>
-  <section class="page on tpl-page" data-page="templates">
-    <div class="tpl-bar">
-      <span class="tpl-bar-title">{{ t('templates.title') }}</span>
-      <span style="flex: 1" />
+  <section class="flex min-w-0 flex-1 flex-col overflow-hidden" data-page="templates">
+    <!-- Thanh hành động mảnh nằm trên khung master-detail. -->
+    <div class="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+      <h1 class="flex-1 text-lg font-semibold text-foreground">{{ t('templates.title') }}</h1>
       <Button :disabled="refreshing" variant="outline" size="sm" @click="refresh()">
-        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="refresh" class="size-3.5" />
         {{ t('templates.refresh') }}
       </Button>
       <Button variant="outline" size="sm" @click="openDiscoverDialog">
-        <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="layers" class="size-3.5" />
         {{ t('templatesDiscover.open') }}
       </Button>
       <Button variant="outline" size="sm" @click="openFetchDialog">
-        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="globe" class="size-3.5" />
         {{ t('templates.fetchGithub') }}
       </Button>
       <Button variant="default" size="sm" @click="openSaveDialog">
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="plus" class="size-3.5" />
         {{ t('templates.new') }}
       </Button>
     </div>
 
+    <!-- min-h-0: cho khung LibraryView (flex-1) co lại và tự cuộn trong cột. -->
     <LibraryView
+      class="min-h-0"
       :items="templates"
       :item-key="templateKey"
       :search-text="(tpl) => tpl.name + tpl.description"
       :placeholder="t('templates.search')"
     >
       <template #row="{ item: tpl }">
-        <div class="lrow">
-          <span class="ttl">{{ tpl.name }}</span>
-          <span class="tag">
+        <div class="flex items-center gap-2">
+          <span class="min-w-0 flex-1 truncate text-base font-medium">{{ tpl.name }}</span>
+          <Badge variant="outline" class="text-muted-foreground">
             {{ t('templates.detail.entityCount', { n: tpl.entities.length }) }}
-          </span>
+          </Badge>
         </div>
-        <div class="sub">{{ tpl.description || t('templates.noDescription') }}</div>
+        <div class="mt-1 truncate text-sm text-muted-foreground">
+          {{ tpl.description || t('templates.noDescription') }}
+        </div>
       </template>
 
       <template #detail="{ item: tpl }">
@@ -148,28 +152,3 @@ const {
   confirmDelete,
 } = useTemplatesPage()
 </script>
-
-<style scoped>
-/* Column layout — a slim action bar above the master-detail shell. */
-.tpl-page {
-  flex-direction: column;
-}
-/* Let the LibraryView shell (.md, flex:1) shrink + scroll inside the column. */
-.tpl-page :deep(.md) {
-  min-height: 0;
-}
-.tpl-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.tpl-bar-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-</style>

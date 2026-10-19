@@ -1,16 +1,17 @@
 <template>
-  <div class="ghcommits">
-    <div v-if="loading" class="fd" style="padding: 16px 4px">
+  <div>
+    <div v-if="loading" class="px-1 py-4 text-sm text-dim">
       {{ t('projects.drawer.commitsLoading') }}
     </div>
-    <div v-else-if="!commits.length" class="fd" style="padding: 16px 4px">
+    <div v-else-if="!commits.length" class="px-1 py-4 text-sm text-dim">
       {{ t('projects.drawer.commitsEmpty') }}
     </div>
-    <div v-else class="ghcommit-list">
-      <div v-for="c in commits" :key="c.sha" class="ghcommit-row">
-        <span class="ghcommit-sha mono">{{ shortSha(c.sha) }}</span>
-        <span class="ghcommit-msg">{{ c.message }}</span>
-        <span class="ghcommit-meta">{{ metaLine(c) }}</span>
+    <div v-else class="flex flex-col divide-y overflow-hidden rounded-md border">
+      <div v-for="c in commits" :key="c.sha" class="flex items-center gap-2.5 px-3 py-2">
+        <!-- mono-ok: commit SHA -->
+        <span class="flex-none font-mono text-xs text-primary">{{ shortSha(c.sha) }}</span>
+        <span class="min-w-0 flex-1 truncate text-foreground">{{ c.message }}</span>
+        <span class="flex-none text-xs text-dim">{{ metaLine(c) }}</span>
       </div>
     </div>
   </div>
@@ -55,46 +56,3 @@ function relativeWhen(iso: string): string {
   return new Date(ms).toLocaleDateString()
 }
 </script>
-
-<style scoped>
-.ghcommit-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-.ghcommit-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 11px;
-  border-top: 1px solid var(--border);
-}
-.ghcommit-list > .ghcommit-row:first-child {
-  border-top: none;
-}
-.ghcommit-sha {
-  flex: 0 0 auto;
-  /* mono-ok: commit SHA */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--accent);
-}
-.ghcommit-msg {
-  flex: 1;
-  min-width: 0;
-  font-size: 1em;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ghcommit-meta {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

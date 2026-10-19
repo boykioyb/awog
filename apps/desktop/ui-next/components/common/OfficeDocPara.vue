@@ -1,11 +1,18 @@
 <template>
-  <p class="odp" :class="[para.style, { list: !!para.marker }]" :style="paraStyle">
-    <span v-if="para.marker" class="odmk">{{ para.marker }}</span>
-    <span class="odtx">
+  <p
+    :class="cn('text-foreground', para.marker ? LIST_ROW : STYLE_CLASS[para.style])"
+    :style="paraStyle"
+  >
+    <!-- Hàng list: marker cột riêng để chữ xuống dòng thẳng hàng dưới chữ. -->
+    <span v-if="para.marker" class="min-w-4.5 shrink-0 text-dim tabular-nums">
+      {{ para.marker }}
+    </span>
+    <!-- Run DOCX mang xuống dòng (w:br) và tab của chính nó — giữ nguyên (pre-wrap). -->
+    <span class="min-w-0 whitespace-pre-wrap">
       <template v-for="(run, i) in para.runs" :key="i">
         <a
           v-if="run.href"
-          class="odrun odlink"
+          class="text-primary underline"
           :class="runClass(run)"
           :href="run.href"
           target="_blank"
@@ -13,13 +20,13 @@
         >
           {{ run.text }}
         </a>
-        <sub v-else-if="run.vert === 'sub'" class="odrun" :class="runClass(run)">
+        <sub v-else-if="run.vert === 'sub'" :class="runClass(run)">
           {{ run.text }}
         </sub>
-        <sup v-else-if="run.vert === 'sup'" class="odrun" :class="runClass(run)">
+        <sup v-else-if="run.vert === 'sup'" :class="runClass(run)">
           {{ run.text }}
         </sup>
-        <span v-else class="odrun" :class="runClass(run)">{{ run.text }}</span>
+        <span v-else :class="runClass(run)">{{ run.text }}</span>
       </template>
     </span>
   </p>
@@ -29,7 +36,8 @@
 // One DOCX paragraph: optional list marker + its formatted runs. Shared by the
 // document body and by table cells (which hold paragraphs too), which is why this
 // is its own component rather than markup inlined in OfficeDocView.
-import type { DocxParagraph, DocxRun } from '~/utils/office-docx'
+import { cn } from '~/lib/utils'
+import type { DocxParaStyle, DocxParagraph, DocxRun } from '~/utils/office-docx'
 
 const props = defineProps<{ para: DocxParagraph }>()
 
@@ -39,104 +47,41 @@ const paraStyle = computed(() => ({
   ...(props.para.align ? { textAlign: props.para.align } : {}),
 }))
 
-const runClass = (run: DocxRun) => ({
-  b: run.bold,
-  i: run.italic,
-  u: run.underline,
-  s: run.strike,
-  mono: run.mono,
-})
-</script>
+// Kiểu đoạn → class. Cỡ heading tính bằng `em` (tương đối với cột đọc), nên leading
+// cũng là hệ số tương đối — không có một px chẵn nào đúng cho cả nhóm h1…h4.
+// `leading-*` luôn đứng SAU cỡ chữ: tailwind-merge coi cỡ chữ đứng sau là ghi đè leading.
+const PROSE = 'leading-(--lh-prose)'
+const HEADING = 'mt-[1.15em] mb-[0.5em] font-semibold'
+const STYLE_CLASS: Record<DocxParaStyle, string> = {
+  body: `my-[0.55em] ${PROSE}`,
+  h1: `${HEADING} border-b pb-[0.3em] text-[1.6em] leading-[1.3]`,
+  h2: `${HEADING} text-[1.35em] leading-[1.3]`,
+  h3: `${HEADING} text-[1.15em] leading-[1.3]`,
+  h4: `${HEADING} text-[1.05em] leading-[1.3]`,
+  quote: `my-[0.55em] border-l-3 pl-[1em] text-muted-foreground ${PROSE}`,
+  // mono: đoạn code trong .docx
+  code: `my-[0.55em] rounded-md border bg-muted px-3 py-2.5 font-mono text-[0.9em] ${PROSE}`,
+  caption: 'my-[0.55em] text-sm text-faint',
+}
 
-<style scoped>
-.odp {
-  margin: 0.55em 0;
-  line-height: var(--lh-prose);
-  color: var(--text);
+// Hàng list: marker cột riêng để chữ xuống dòng thẳng hàng dưới chữ.
+const LIST_ROW = `my-[0.2em] flex gap-2 ${PROSE}`
+
+// Gạch chân + gạch ngang cùng lúc phải gộp vào MỘT text-decoration-line (hai utility
+// `underline` / `line-through` ghi đè nhau).
+const runClass = (run: DocxRun) => {
+  let decoration = ''
+  if (run.underline && run.strike) decoration = '[text-decoration-line:underline_line-through]'
+  else if (run.underline) decoration = 'underline'
+  else if (run.strike) decoration = 'line-through'
+  return [
+    decoration,
+    {
+      'font-semibold': run.bold,
+      italic: run.italic,
+      // mono: run monospace mang từ .docx
+      'font-mono text-[0.9em]': run.mono,
+    },
+  ]
 }
-.odp.h1,
-.odp.h2,
-.odp.h3,
-.odp.h4 {
-  font-weight: 700;
-  /* design-token-ok: heading font-size is em-relative (ADR 0079 leaves `em` alone), so
-     no single whole-pixel leading exists for the whole h1…h6 group. */
-  line-height: 1.3;
-  margin: 1.15em 0 0.5em;
-}
-.odp.h1 {
-  font-size: 1.6em;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.3em;
-}
-.odp.h2 {
-  font-size: 1.35em;
-}
-.odp.h3 {
-  font-size: 1.15em;
-}
-.odp.h4 {
-  font-size: 1.05em;
-}
-.odp.quote {
-  border-left: 3px solid var(--border);
-  padding-left: 1em;
-  color: var(--textMuted);
-}
-.odp.code {
-  /* mono-ok: code paragraph in a .docx render */
-  font-family: var(--code);
-  font-size: 0.9em;
-  background: var(--bgSubtle);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 10px 12px;
-}
-.odp.caption {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-/* List rows: marker in its own column so wrapped text aligns under the text. */
-.odp.list {
-  display: flex;
-  gap: 8px;
-  margin: 0.2em 0;
-}
-.odmk {
-  flex: 0 0 auto;
-  min-width: 18px;
-  color: var(--textDim);
-  font-variant-numeric: tabular-nums;
-}
-/* DOCX runs carry their own line breaks (w:br) and tabs — keep them. Scoped to the
-   run container so the surrounding template's own indentation can't leak in. */
-.odtx {
-  min-width: 0;
-  white-space: pre-wrap;
-}
-.odrun.b {
-  font-weight: 700;
-}
-.odrun.i {
-  font-style: italic;
-}
-.odrun.u {
-  text-decoration: underline;
-}
-.odrun.s {
-  text-decoration: line-through;
-}
-.odrun.u.s {
-  text-decoration: underline line-through;
-}
-.odrun.mono {
-  /* mono-ok: monospace run carried over from the .docx */
-  font-family: var(--code);
-  font-size: 0.9em;
-}
-.odlink {
-  color: var(--accent);
-  text-decoration: underline;
-}
-</style>
+</script>

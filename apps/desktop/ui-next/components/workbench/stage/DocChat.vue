@@ -22,9 +22,9 @@
       />
       <div
         v-else
-        class="grid flex-1 place-content-center justify-items-center gap-2.5 text-center text-base text-[var(--textFaint)]"
+        class="grid flex-1 place-content-center justify-items-center gap-2.5 text-center text-base text-faint"
       >
-        <span class="text-dim"><Icon name="sessions" style="width: 22px; height: 22px" /></span>
+        <span class="text-dim"><Icon class="size-5.5" name="sessions" /></span>
         <div>
           {{ t('sessions.empty.title') }}
           <br />

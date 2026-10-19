@@ -1,11 +1,17 @@
 <template>
-  <div class="fnode" :class="{ current: data.isCurrent }" :title="data.title">
+  <div
+    class="w-47 cursor-pointer rounded-lg border px-3 py-2 transition-colors"
+    :class="data.isCurrent ? 'border-ring bg-accent' : 'bg-card hover:border-input hover:bg-accent'"
+    :title="data.title"
+  >
     <Handle type="target" :position="Position.Left" :connectable="false" />
-    <div class="fnode-title">{{ data.title }}</div>
-    <div class="fnode-when">
-      <Icon name="fork" style="width: 10px; height: 10px" />
+    <div class="truncate font-semibold text-foreground">{{ data.title }}</div>
+    <div class="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+      <Icon name="fork" class="size-2.5" />
       {{ data.when }}
-      <span v-if="data.isCurrent" class="fnode-cur">{{ t('sessions.fork.current') }}</span>
+      <span v-if="data.isCurrent" class="ml-auto text-primary">
+        {{ t('sessions.fork.current') }}
+      </span>
     </div>
     <Handle type="source" :position="Position.Right" :connectable="false" />
   </div>
@@ -22,45 +28,3 @@ defineProps<{
 }>()
 const { t } = useI18n()
 </script>
-
-<style scoped>
-.fnode {
-  width: 188px;
-  padding: 9px 11px;
-  border-radius: var(--radius); /* rounded-lg */
-  background: var(--card);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.fnode:hover {
-  border-color: var(--input);
-  background: var(--accent-wash);
-}
-.fnode.current {
-  border-color: var(--ring);
-  background: var(--accent-wash);
-}
-.fnode-title {
-  font-weight: 600;
-  color: var(--foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fnode-when {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-}
-.fnode-cur {
-  margin-left: auto;
-  color: var(--primary);
-}
-</style>

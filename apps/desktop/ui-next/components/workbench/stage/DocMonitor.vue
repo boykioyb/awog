@@ -7,11 +7,11 @@
     <div class="flex flex-none items-center gap-2 px-3 py-2 shadow-[inset_0_-1px_0_var(--border)]">
       <DocButtonGroup :options="scopeOptions" :active="scope" @select="scope = $event" />
       <span class="flex-1" />
-      <span class="text-xs text-[var(--textFaint)]">{{ t('workbench.monitor.embedHint') }}</span>
+      <span class="text-xs text-faint">{{ t('workbench.monitor.embedHint') }}</span>
     </div>
     <div
       v-if="error"
-      class="mx-3 my-2 rounded-[var(--r-xs)] bg-[var(--dangerDim)] px-2.5 py-2 text-sm text-destructive"
+      class="mx-3 my-2 rounded-sm bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
     >
       {{ error }}
     </div>

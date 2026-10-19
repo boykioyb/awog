@@ -1,49 +1,59 @@
 <template>
-  <Teleport to="body">
-    <Transition name="ob">
-      <div v-if="wizardOpen" class="ob-ovl">
-        <div
-          class="ob-card"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="t('onboarding.welcome.title')"
+  <!-- Dialog không tự đóng: không Esc, không bấm nền — chỉ thoát bằng nút X (= bỏ qua
+       toàn bộ) hoặc các lối ra của bước Finish, như overlay cũ. Nút đóng mặc định của
+       DialogContent bị ẩn; X riêng trong header giữ tooltip "bỏ qua". -->
+  <Dialog :open="wizardOpen">
+    <DialogContent
+      class="flex max-h-[88vh] w-full max-w-140 flex-col gap-0 overflow-hidden bg-card p-0 sm:rounded-xl [&>button:last-child]:hidden"
+      @escape-key-down.prevent
+      @pointer-down-outside.prevent
+      @interact-outside.prevent
+    >
+      <DialogHeader class="flex shrink-0 flex-row items-center gap-2.5 px-4 py-3.5">
+        <DialogTitle class="text-lg font-semibold text-foreground">{{ t(titleKey) }}</DialogTitle>
+        <span class="ml-auto text-sm text-faint tabular-nums">
+          {{ t('onboarding.stepOf', { n: stepIndex + 1, total: STEPS.length }) }}
+        </span>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="text-dim"
+          :title="t('onboarding.skipAll')"
+          :aria-label="t('onboarding.skipAll')"
+          @click="complete"
         >
-          <header class="ob-head">
-            <span class="ob-title">{{ t(titleKey) }}</span>
-            <span class="ob-count">
-              {{ t('onboarding.stepOf', { n: stepIndex + 1, total: STEPS.length }) }}
-            </span>
-            <button class="ob-x" :title="t('onboarding.skipAll')" @click="complete">
-              <Icon name="x" />
-            </button>
-          </header>
+          <Icon name="x" />
+        </Button>
+      </DialogHeader>
+      <Separator />
 
-          <div class="ob-body">
-            <component :is="stepComponent" />
-          </div>
-
-          <footer class="ob-foot">
-            <div class="ob-dots">
-              <button
-                v-for="(s, i) in STEPS"
-                :key="s"
-                class="ob-dot"
-                :class="{ on: i === stepIndex, done: i < stepIndex }"
-                :aria-label="t('onboarding.stepOf', { n: i + 1, total: STEPS.length })"
-                @click="goTo(i)"
-              />
-            </div>
-            <div class="ob-nav">
-              <Button v-if="stepIndex > 0" variant="outline" @click="back">
-                {{ t('onboarding.back') }}
-              </Button>
-              <Button v-if="!isLast" variant="default" @click="advance">{{ nextLabel }}</Button>
-            </div>
-          </footer>
-        </div>
+      <div class="min-h-0 flex-1 overflow-y-auto px-5.5 py-5">
+        <component :is="stepComponent" />
       </div>
-    </Transition>
-  </Teleport>
+
+      <Separator />
+      <DialogFooter class="flex shrink-0 flex-row items-center gap-3 px-4 py-3 sm:justify-start">
+        <div class="flex gap-2">
+          <!-- raw-ok: chấm tiến độ 8px — Button nhỏ nhất vẫn quá to cho chấm tròn -->
+          <button
+            v-for="(s, i) in STEPS"
+            :key="s"
+            type="button"
+            class="size-2 cursor-pointer rounded-full border-0 p-0 transition-colors motion-reduce:transition-none"
+            :class="dotClass(i)"
+            :aria-label="t('onboarding.stepOf', { n: i + 1, total: STEPS.length })"
+            @click="goTo(i)"
+          />
+        </div>
+        <div class="ml-auto flex gap-2">
+          <Button v-if="stepIndex > 0" variant="outline" @click="back">
+            {{ t('onboarding.back') }}
+          </Button>
+          <Button v-if="!isLast" variant="default" @click="advance">{{ nextLabel }}</Button>
+        </div>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -53,7 +63,6 @@ import StepAccount from '~/components/onboarding/steps/StepAccount.vue'
 import StepAppearance from '~/components/onboarding/steps/StepAppearance.vue'
 import StepProject from '~/components/onboarding/steps/StepProject.vue'
 import StepFinish from '~/components/onboarding/steps/StepFinish.vue'
-import Button from '~/components/ui/button/Button.vue'
 
 // First-run setup wizard host (§9 global, mounted once in the layout). Owns the
 // chrome (header / progress dots / back-next); each step renders its own content
@@ -98,124 +107,12 @@ const advance = () => {
 const back = () => {
   if (stepIndex.value > 0) stepIndex.value -= 1
 }
+// Chấm tiến độ: bước hiện tại = primary, bước đã qua = viền accent nhạt, còn lại = viền.
+const dotClass = (i: number): string => {
+  if (i === stepIndex.value) return 'bg-primary'
+  return i < stepIndex.value ? 'bg-selected-border' : 'bg-border'
+}
 const goTo = (i: number) => {
   if (i >= 0 && i < STEPS.length) stepIndex.value = i
 }
 </script>
-
-<style scoped>
-/* Onboarding overlay — top of the modal band (above the ⌘K palette at 200, below
-   the mermaid tooltip at 300). Backdrop matches the app's other overlays. */
-.ob-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 250;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.55);
-}
-.ob-card {
-  width: 100%;
-  max-width: 560px;
-  display: flex;
-  flex-direction: column;
-  max-height: 88vh;
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-.ob-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.ob-title {
-  font-size: 1.08em;
-  font-weight: 600;
-  color: var(--text);
-}
-.ob-count {
-  margin-left: auto;
-  font-size: 12px;
-  line-height: 18px;
-  font-variant-numeric: tabular-nums;
-  color: var(--textFaint);
-}
-.ob-x {
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  color: var(--textDim);
-  background: transparent;
-  cursor: pointer;
-}
-.ob-x:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.ob-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 20px 22px;
-}
-.ob-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.ob-dots {
-  display: flex;
-  gap: 7px;
-}
-.ob-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  background: var(--border);
-  transition: background 140ms ease;
-}
-.ob-dot.done {
-  background: var(--accentBorder);
-}
-.ob-dot.on {
-  background: var(--accent);
-}
-.ob-nav {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-
-.ob-enter-active,
-.ob-leave-active {
-  transition: opacity 140ms ease;
-}
-.ob-enter-from,
-.ob-leave-to {
-  opacity: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ob-enter-active,
-  .ob-leave-active,
-  .ob-dot {
-    transition: none;
-  }
-}
-</style>

@@ -1,13 +1,26 @@
 <template>
-  <div class="procind" role="status" aria-live="polite">
-    <span class="procspin">
-      <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+  <div
+    class="mt-0.5 flex items-center gap-2 px-3 py-1 text-muted-foreground"
+    role="status"
+    aria-live="polite"
+  >
+    <span class="grid size-3 flex-none place-items-center">
+      <Icon name="refresh" class="size-3 animate-spin motion-reduce:animate-none" />
     </span>
-    <span class="procwrap">
-      <Transition name="pxfade" mode="out-in">
-        <span :key="displayWord" class="procword">{{ displayWord }}</span>
+    <span class="inline-flex min-h-4.5 items-center">
+      <!-- Crossfade khi đổi chữ (mode="out-in": chữ cũ mờ đi, chữ mới hiện lên). -->
+      <Transition
+        mode="out-in"
+        enter-active-class="transition-opacity duration-400 ease-in-out motion-reduce:transition-none"
+        leave-active-class="transition-opacity duration-400 ease-in-out motion-reduce:transition-none"
+        enter-from-class="opacity-0"
+        leave-to-class="opacity-0"
+      >
+        <span :key="displayWord">{{ displayWord }}</span>
       </Transition>
-      <span v-if="elapsedSec >= 1" class="procelapsed">{{ elapsedLabel }}</span>
+      <span v-if="elapsedSec >= 1" class="ml-1.5 text-sm opacity-60 tabular-nums">
+        {{ elapsedLabel }}
+      </span>
     </span>
   </div>
 </template>
@@ -18,7 +31,7 @@
 // generating: a cycling status word (a new random word every 10s, crossfaded) plus
 // a live elapsed clock seeded from the turn's `startedAt`. When `statusMessage` is
 // supplied (e.g. compaction) it overrides the cycling word and freezes it, matching
-// craft. Colours go through the ui-next CSS theme tokens (var(--…)).
+// craft. Màu đi qua utility ngữ nghĩa của Tailwind.
 const props = defineProps<{ startedAt?: number; statusMessage?: string }>()
 const { t } = useI18n()
 
@@ -116,64 +129,3 @@ const elapsedLabel = computed(() => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 })
 </script>
-
-<style scoped>
-.procind {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  margin-top: 2px;
-  color: var(--muted-foreground);
-}
-.procspin {
-  display: grid;
-  place-items: center;
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-}
-.procspin .icn {
-  animation: procspin 0.9s linear infinite;
-}
-@keyframes procspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.procwrap {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-}
-.procword {
-  font-size: 1em;
-}
-.procelapsed {
-  margin-left: 6px;
-  font-size: 12px;
-  line-height: 12px;
-  opacity: 0.6;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Crossfade on word change (mode="out-in": old fades out, new fades in). */
-.pxfade-enter-active,
-.pxfade-leave-active {
-  transition: opacity 0.4s ease-in-out;
-}
-.pxfade-enter-from,
-.pxfade-leave-to {
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .procspin .icn {
-    animation: none;
-  }
-  .pxfade-enter-active,
-  .pxfade-leave-active {
-    transition: none;
-  }
-}
-</style>

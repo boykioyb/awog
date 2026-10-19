@@ -1,7 +1,10 @@
 <template>
   <div class="h-full min-h-0 overflow-y-auto">
-    <div v-if="!plan && !total" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.plan.empty') }}</div>
+    <div
+      v-if="!plan && !total"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-dim"
+    >
+      <div class="text-lg text-muted-foreground">{{ t('sessions.workspace.plan.empty') }}</div>
     </div>
 
     <div v-else class="flex flex-col gap-3">

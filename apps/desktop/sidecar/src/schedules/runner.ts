@@ -8,19 +8,26 @@
 // KHÔNG dựng đường chạy thứ hai:
 //   • session-prompt → sessions.upsert (create) + sessions.sendMessage
 //   • workflow-task  → tasks.create
+// (riêng `command` không có RPC tương ứng — chạy thẳng chương trình đã duyệt, runCommand)
 // Nhờ vậy lịch thừa hưởng nguyên vẹn phần lắp ráp context, cổng quyền, ghi JSONL
 // và luồng event của đường chạy thường — không có nhánh "chạy nền" nào để lệch.
 
+import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { homedir } from 'node:os'
 import { dispatch } from '../transport/rpc.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
+import { envWithoutSecrets } from '../util/child-env.js'
+import { redactString } from '../sessions/redact.js'
 import { activeSessionIds } from '../sessions/runner.js'
 import { listSessionSummaries } from '../sessions/store.js'
 import { loadTask } from '../tasks/store.js'
 import { CATCH_UP_THRESHOLD_MS, computeNextRun, isDue } from './cron.js'
 import { tickWakeup } from './wakeup.js'
 import { listSchedules, loadSchedule, saveSchedule } from './store.js'
+import { isCommandApproved } from './command-approval.js'
+import { writeRunLog } from './run-log.js'
 
 // Trần chi tiêu MẶC ĐỊNH cho một lượt chạy theo lịch. Lượt này chạy khi không có
 // ai ngồi trước máy, và ở mode `execute` thì không có cổng quyền nào bấm phanh —
@@ -45,7 +52,12 @@ function defaultScheduleBudget(): {
     maxWallclockMs: envNumber('AWOG_SCHEDULE_MAX_WALLCLOCK_MS', 15 * 60_000),
   }
 }
-import { MAX_RUN_HISTORY, type Schedule, type ScheduleRun } from './schema.js'
+import {
+  DEFAULT_COMMAND_TIMEOUT_MINUTES,
+  MAX_RUN_HISTORY,
+  type Schedule,
+  type ScheduleRun,
+} from './schema.js'
 
 // Trạng thái task coi như đã xong — lần chạy sau được phép bấm cò.
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed'])
@@ -143,6 +155,127 @@ async function runWorkflowTask(schedule: Schedule, run: ScheduleRun): Promise<vo
   })
   run.taskId = taskId
   await patchRun(schedule.id, run)
+}
+
+// Dòng cuối có chữ của output — đủ để lịch sử chạy nói "đã làm gì" mà không chép cả log.
+// Qua redact: output của script lưu vào file lịch và hiện lên UI.
+function lastLine(text: string): string {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  return redactString(lines.at(-1) ?? '').slice(0, 500)
+}
+
+// Giữ ĐUÔI output (dòng kết luận nằm cuối), trần mỗi luồng — một script xả log vô hạn
+// không làm phình bộ nhớ sidecar.
+const OUTPUT_TAIL_BYTES = 64 * 1024
+// Hết giờ: SIGTERM cho cả process group, chừng này sau mà còn sống thì SIGKILL.
+const KILL_GRACE_MS = 5_000
+
+// Process group của lệnh đang chạy — giết nốt khi sidecar tắt (killCommandGroups),
+// không để lệnh mồ côi chạy tiếp ngoài tầm của lịch.
+const liveGroups = new Set<number>()
+
+function killGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal)
+  } catch {
+    /* group đã hết — không còn gì để giết */
+  }
+}
+
+export function killCommandGroups(): void {
+  for (const pid of liveGroups) killGroup(pid, 'SIGKILL')
+  liveGroups.clear()
+}
+
+export type ProcessResult = {
+  code: number | null
+  signal: NodeJS.Signals | null
+  stdout: string
+  stderr: string
+  timedOut: boolean
+}
+
+// Chạy một chương trình. Mảng tham số, không shell (không injection qua args); cwd = home
+// (job không mang thư mục — cùng lý do lịch chỉ mang projectId); env đã gỡ token + cờ
+// runtime của host (util/child-env.ts); `detached` ⇒ process group riêng để hết giờ giết
+// được cả cháu chắt (`sh -c 'a & b'`), không chỉ tiến trình con trực tiếp.
+export function runProcess(program: string, args: string[], timeoutMs: number): Promise<ProcessResult> {
+  return new Promise<ProcessResult>((resolve, reject) => {
+    const child = spawn(program, args, {
+      cwd: homedir(),
+      env: envWithoutSecrets(),
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const pid = child.pid
+    if (pid !== undefined) liveGroups.add(pid)
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (c: Buffer) => {
+      out = (out + c.toString('utf8')).slice(-OUTPUT_TAIL_BYTES)
+    })
+    child.stderr.on('data', (c: Buffer) => {
+      err = (err + c.toString('utf8')).slice(-OUTPUT_TAIL_BYTES)
+    })
+    let timedOut = false
+    let killTimer: NodeJS.Timeout | undefined
+    const timer = setTimeout(() => {
+      if (pid === undefined) return
+      timedOut = true
+      killGroup(pid, 'SIGTERM')
+      killTimer = setTimeout(() => killGroup(pid, 'SIGKILL'), KILL_GRACE_MS)
+    }, timeoutMs)
+    const done = (): void => {
+      clearTimeout(timer)
+      clearTimeout(killTimer)
+      if (pid !== undefined) {
+        // Tiến trình chính xong mà còn cháu chạy nền ⇒ dọn luôn, lần sau mới chạy sạch.
+        killGroup(pid, 'SIGKILL')
+        liveGroups.delete(pid)
+      }
+    }
+    child.on('error', (e) => {
+      done()
+      reject(e)
+    })
+    child.on('close', (exitCode, exitSignal) => {
+      done()
+      resolve({ code: exitCode, signal: exitSignal, stdout: out, stderr: err, timedOut })
+    })
+  })
+}
+
+async function runCommand(schedule: Schedule, run: ScheduleRun): Promise<void> {
+  if (schedule.job.kind !== 'command') return
+  const job = schedule.job
+  if (!(await isCommandApproved(schedule.id, job))) {
+    throw new Error(
+      'command is not approved — it is new, or it or a file it runs changed since approval; review and approve it in AWOG',
+    )
+  }
+  const timeoutMs = (job.timeoutMinutes ?? DEFAULT_COMMAND_TIMEOUT_MINUTES) * 60_000
+  const started = Date.now()
+  const { code, signal, stdout, stderr, timedOut } = await runProcess(job.program, job.args, timeoutMs)
+  // Log đầy đủ cho người dùng xem lại (redact trong writeRunLog). Ghi hỏng thì lượt chạy
+  // vẫn tính theo kết quả của lệnh — log là phần phụ.
+  const outcome = timedOut ? `timed out after ${timeoutMs / 60_000} min` : `exit ${code ?? signal}`
+  await writeRunLog(
+    schedule.id,
+    run.id,
+    `$ ${[job.program, ...job.args].join(' ')}\n# ${outcome} · ${((Date.now() - started) / 1000).toFixed(1)}s\n\n` +
+      `── stdout ──\n${stdout || '(empty)'}\n\n── stderr ──\n${stderr || '(empty)'}\n`,
+  )
+    .then(() => {
+      run.hasLog = true
+    })
+    .catch((err: unknown) => log.warn('schedules: run log write failed', { id: schedule.id, err: shortMessage(err) }))
+  if (timedOut) {
+    throw new Error(`timed out after ${timeoutMs / 60_000} min: ${lastLine(stderr) || lastLine(stdout)}`)
+  }
+  if (code !== 0) {
+    throw new Error(`exit ${code ?? signal}: ${lastLine(stderr) || lastLine(stdout)}`)
+  }
+  run.message = lastLine(stdout) || lastLine(stderr) || undefined
 }
 
 // ─── Lịch sử chạy ────────────────────────────────────────────────────────────
@@ -301,7 +434,9 @@ async function fire(
   const work =
     schedule.job.kind === 'session-prompt'
       ? runSessionPrompt(schedule, run, nowMs)
-      : runWorkflowTask(schedule, run)
+      : schedule.job.kind === 'command'
+        ? runCommand(schedule, run)
+        : runWorkflowTask(schedule, run)
 
   void work
     .then(
@@ -336,6 +471,9 @@ export async function runScheduleNow(id: string): Promise<ScheduleRun> {
   // mở một dòng lịch sử rồi không làm gì.
   if (schedule.job.kind === 'session-wakeup') {
     throw new Error(`Schedule ${id} is an agent wake-up; it cannot be run on demand.`)
+  }
+  if (schedule.proposedBy) {
+    throw new Error(`Schedule ${id} was proposed by an agent — open it, review it and save it first.`)
   }
   const busy = await busyReason(schedule)
   if (busy) {
@@ -385,7 +523,9 @@ export async function tickSchedules(): Promise<TickResult> {
       }
       // eslint-disable-next-line no-await-in-loop
       await reconcileInterrupted(schedule)
-      if (!schedule.enabled) continue
+      // Đề xuất của agent chưa được người dùng lưu thì không bao giờ chạy, kể cả khi
+      // file nói `enabled: true` (ADR 0108).
+      if (!schedule.enabled || schedule.proposedBy) continue
       const nowMs = Date.now()
       const parsed = schedule.nextRunAt ? Date.parse(schedule.nextRunAt) : NaN
       const dueAtMs = Number.isNaN(parsed) ? null : parsed

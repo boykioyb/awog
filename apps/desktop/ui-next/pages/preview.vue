@@ -1,6 +1,9 @@
 <template>
   <PreviewModal window-mode @close="closeWindow" />
-  <div v-if="!requested" class="pvwmiss">{{ t('common.preview.windowMissingFile') }}</div>
+  <!-- Chỉ tới được khi cửa sổ mở mà thiếu file (URL hỏng). -->
+  <div v-if="!requested" class="grid h-screen place-items-center text-faint">
+    {{ t('common.preview.windowMissingFile') }}
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -60,13 +63,3 @@ useHead({
 // The modal's ✕ / Esc close the OS window — there is no app behind it to return to.
 const closeWindow = () => void sc.closeSelf()
 </script>
-
-<style scoped>
-/* Only reachable when the window was opened without a file (a malformed URL). */
-.pvwmiss {
-  display: grid;
-  place-items: center;
-  height: 100vh;
-  color: var(--textFaint);
-}
-</style>

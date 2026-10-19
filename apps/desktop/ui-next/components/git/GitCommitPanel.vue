@@ -1,31 +1,39 @@
 <template>
-  <div class="gcommitpanel">
-    <div class="gcph">
-      <span class="gcplbl">{{ t('git.commit.header') }}</span>
-      <span style="flex: 1" />
+  <div class="flex flex-none flex-col border-t bg-card">
+    <div class="flex items-center gap-2 px-3.5 py-2">
+      <span class="font-sans text-xs font-semibold text-muted-foreground">
+        {{ t('git.commit.header') }}
+      </span>
+      <span class="flex-1" />
       <Button
         variant="outline"
         size="xs"
-        class="gcpgen"
+        class="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary disabled:text-muted-foreground"
         :disabled="!stagedCount || generating || committing"
         @click="emit('generate')"
       >
-        <Icon v-if="generating" name="refresh" class="gcpspin size-3" />
+        <Icon
+          v-if="generating"
+          name="refresh"
+          class="size-3 animate-spin motion-reduce:animate-none"
+        />
         <span v-else aria-hidden="true">✨</span>
         {{ generating ? t('git.commit.generating') : t('git.commit.generate') }}
       </Button>
-      <span class="gcpcount">{{ t('git.commit.filesStaged', { n: stagedCount }) }}</span>
+      <span class="text-xs text-faint tabular-nums">
+        {{ t('git.commit.filesStaged', { n: stagedCount }) }}
+      </span>
     </div>
-    <div class="gcpbody">
+    <div class="px-3.5 pb-2">
       <Textarea
-        class="gcpta font-mono"
+        class="max-h-45 min-h-18 resize-y font-mono"
         :model-value="msg"
         :placeholder="t('git.changes.commitPlaceholder')"
         @update:model-value="emit('update-msg', String($event))"
         @keydown.meta.enter="onCommitShortcut"
       />
     </div>
-    <div class="gcpfoot">
+    <div class="flex justify-end gap-2 border-t px-3.5 py-2">
       <Button
         variant="outline"
         size="sm"
@@ -35,7 +43,11 @@
         {{ t('git.commit.amend') }}
       </Button>
       <Button size="sm" :disabled="commitDisabled" @click="emit('commit')">
-        <Icon v-if="committing" name="refresh" class="gcpspin size-3.5" />
+        <Icon
+          v-if="committing"
+          name="refresh"
+          class="size-3.5 animate-spin motion-reduce:animate-none"
+        />
         <Icon v-else name="check" class="size-3.5" />
         {{
           stagedCount ? t('git.changes.commitCount', { n: stagedCount }) : t('git.changes.commit')
@@ -78,21 +90,3 @@ const onCommitShortcut = () => {
   if (!commitDisabled.value) emit('commit')
 }
 </script>
-
-<style scoped>
-/* Spinner for the in-flight generate/commit buttons (no rotate keyframe in the
-   shared prototype.css). Disabled under reduced-motion. */
-.gcpspin {
-  animation: gcpspin 0.8s linear infinite;
-}
-@keyframes gcpspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .gcpspin {
-    animation: none;
-  }
-}
-</style>

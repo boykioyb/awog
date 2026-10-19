@@ -6,30 +6,40 @@
     :width="760"
     @close="emit('close')"
   >
-    <div class="pid">
-      <p class="pid-note">{{ t('projectsInit.intro') }}</p>
+    <div class="flex flex-col gap-3">
+      <p class="text-sm text-dim">{{ t('projectsInit.intro') }}</p>
 
-      <p v-if="!project.path" class="pid-warn">{{ t('projectsInit.noPath') }}</p>
-      <p v-else-if="error" class="pid-warn">{{ error }}</p>
+      <p v-if="!project.path" class="text-sm text-warning">{{ t('projectsInit.noPath') }}</p>
+      <p v-else-if="error" class="text-sm text-warning">{{ error }}</p>
 
       <template v-if="draft !== null">
-        <div class="pid-meta">
+        <div class="flex flex-wrap gap-2.5 text-xs text-dim">
           <span>
             {{ t('projectsInit.scanSummary', { n: scan.fileCount, source: sourceLabel }) }}
           </span>
-          <span v-if="scan.truncated" class="pid-warn">{{ t('projectsInit.truncated') }}</span>
+          <span v-if="scan.truncated" class="text-sm text-warning">
+            {{ t('projectsInit.truncated') }}
+          </span>
         </div>
-        <p v-if="claudeMdExists" class="pid-warn">
+        <p v-if="claudeMdExists" class="text-sm text-warning">
           {{ t('projectsInit.exists', { path: suggestedPath }) }}
         </p>
-        <textarea v-model="draft" class="pid-ta" spellcheck="false" />
-        <p class="pid-hint">{{ t('projectsInit.editHint') }}</p>
-        <p v-if="savedPath" class="pid-ok">{{ t('projectsInit.saved', { path: savedPath }) }}</p>
+        <!-- mono-ok: nội dung file markdown người dùng sẽ lưu ra đĩa / dán vào editor -->
+        <Textarea
+          :model-value="draft"
+          class="min-h-88 resize-y font-mono"
+          spellcheck="false"
+          @update:model-value="draft = String($event)"
+        />
+        <p class="text-sm text-dim">{{ t('projectsInit.editHint') }}</p>
+        <p v-if="savedPath" class="text-sm text-success">
+          {{ t('projectsInit.saved', { path: savedPath }) }}
+        </p>
       </template>
     </div>
 
     <template #footer>
-      <span v-if="draft !== null" class="pid-target">
+      <span v-if="draft !== null" class="mr-auto text-xs text-dim">
         {{ t('projectsInit.target', { path: suggestedPath }) }}
       </span>
       <Button :disabled="busy || saving" variant="outline" @click="emit('close')">
@@ -40,7 +50,7 @@
         {{ copied ? t('projectsInit.copied') : t('projectsInit.copy') }}
       </Button>
       <Button :disabled="!project.path || busy || saving" variant="outline" @click="onGenerate">
-        <Icon name="refresh" :class="{ spin: busy }" />
+        <Icon name="refresh" :class="{ 'animate-spin': busy }" />
         {{
           busy
             ? t('projectsInit.generating')
@@ -78,6 +88,7 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import type { Project } from '~/types'
 import Button from '~/components/ui/button/Button.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
 
 interface InitDocsScan {
   fileCount: number
@@ -183,58 +194,3 @@ const onCopy = async () => {
   }, 1500)
 }
 </script>
-
-<style scoped>
-.pid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pid-note,
-.pid-hint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.pid-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.pid-warn {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-}
-.pid-ok {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--green);
-}
-.pid-target {
-  margin-right: auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.pid-ta {
-  /* mono-ok: nội dung file markdown người dùng sẽ lưu ra đĩa / dán vào editor */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--text);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 10px 12px;
-  min-height: 22rem;
-  resize: vertical;
-}
-.pid-ta:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
-</style>

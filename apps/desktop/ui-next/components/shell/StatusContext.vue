@@ -1,114 +1,125 @@
 <template>
-  <span class="sb-wrap">
-    <button
-      class="sb-item ctxmini"
-      :title="t('sessions.detail.contextUsage')"
-      :aria-expanded="open"
-      @click.stop="open = !open"
-    >
-      <span class="ctxbar">
+  <!-- Popover (portal ra <body>, mở LÊN trên vì thanh ghim ở đáy cửa sổ). Màu từng
+       đoạn thanh là màu chú giải theo hạng mục, đến từ useSessionContextUsage (dữ
+       liệu), nên đi qua :style chứ không phải class. -->
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <!-- Số "274k/1.00M" ngắn + cố định, không cắt `…` — chip này không co. -->
+      <StatusChip class="shrink-0 gap-2" :title="t('sessions.detail.contextUsage')">
+        <span class="flex h-1.5 w-18.5 overflow-hidden rounded-full bg-muted">
+          <i
+            v-for="s in barSegments"
+            :key="s.key"
+            class="h-full"
+            :style="{ width: `${s.pct}%`, background: s.color }"
+          />
+        </span>
+        <span class="text-xs text-dim tabular-nums">{{ tokLabel }}/{{ limitLabel }}</span>
+      </StatusChip>
+    </PopoverTrigger>
+    <PopoverContent side="top" align="end" :side-offset="8" class="w-71 p-3.5">
+      <div class="mb-2 flex justify-between gap-2.5 text-sm whitespace-nowrap text-dim">
+        <span class="truncate">{{ t('sessions.detail.contextWindow') }}</span>
+        <span class="shrink-0 text-xs tabular-nums">
+          {{ tokLabel }} / {{ limitLabel }} · {{ Math.round(pct) }}%
+        </span>
+      </div>
+      <!-- mono-ok: model id, e.g. claude-sonnet-4-5 -->
+      <div class="mt-0.5 mb-2 font-mono text-sm text-dim">{{ model }}</div>
+      <div
+        v-if="sessionCost != null"
+        class="-mt-1 mb-2 flex items-center justify-between gap-2 text-sm text-dim"
+      >
+        <span>{{ t('sessions.detail.cat.cost') }}</span>
+        <span class="text-xs tabular-nums">{{ fmtUsd(sessionCost) }}</span>
+      </div>
+      <span class="flex h-2 w-full overflow-hidden rounded-full bg-muted">
         <i
           v-for="s in barSegments"
           :key="s.key"
+          class="h-full"
           :style="{ width: `${s.pct}%`, background: s.color }"
         />
       </span>
-      <span class="ctxn">{{ tokLabel }}/{{ limitLabel }}</span>
-    </button>
 
-    <template v-if="open">
-      <div class="sb-backdrop" @click="open = false" />
-      <div class="pop sb-pop" @click.stop>
-        <div class="pr2">
-          <div class="pl plnowrap">
-            <span>{{ t('sessions.detail.contextWindow') }}</span>
-            <span class="ctxn">{{ tokLabel }} / {{ limitLabel }} · {{ Math.round(pct) }}%</span>
-          </div>
-          <div class="ctxmodel">{{ model }}</div>
-          <div v-if="sessionCost != null" class="ctxcost">
-            <span>{{ t('sessions.detail.cat.cost') }}</span>
-            <span class="ctxn">{{ fmtUsd(sessionCost) }}</span>
-          </div>
-          <span class="ctxbar" style="width: 100%; height: 8px">
-            <i
-              v-for="s in barSegments"
-              :key="s.key"
-              :style="{ width: `${s.pct}%`, background: s.color }"
-            />
+      <!-- Bảng hạng mục kiểu `/context` của Claude Code. -->
+      <div class="mt-2.5 flex flex-col">
+        <div class="flex items-center gap-2 pt-0.5 pb-1 text-sm text-faint">
+          <!-- Ô trống cùng cỡ ô màu để cột nhãn thẳng hàng với các hàng bên dưới. -->
+          <span class="size-2.25 shrink-0" />
+          <span class="min-w-0 flex-1 truncate">{{ t('sessions.detail.cat.category') }}</span>
+          <span class="min-w-14 shrink-0 text-right">{{ t('sessions.detail.cat.tokens') }}</span>
+          <span class="min-w-12 shrink-0 text-right">{{ t('sessions.detail.cat.usage') }}</span>
+        </div>
+        <Separator class="mb-0.5" />
+        <div v-for="row in catRows" :key="row.key" class="flex items-center gap-2 py-0.5">
+          <span class="size-2.25 shrink-0 rounded-xs" :style="{ background: row.color }" />
+          <span class="min-w-0 flex-1 truncate text-foreground">{{ row.label }}</span>
+          <span class="min-w-14 shrink-0 text-right text-sm text-dim tabular-nums">
+            {{ formatTokenCount(row.tokens) }}
           </span>
-          <div class="cattbl">
-            <div class="cathead">
-              <span class="catlbl">{{ t('sessions.detail.cat.category') }}</span>
-              <span class="catnum">{{ t('sessions.detail.cat.tokens') }}</span>
-              <span class="catpct">{{ t('sessions.detail.cat.usage') }}</span>
-            </div>
-            <div v-for="row in catRows" :key="row.key" class="catrow">
-              <span class="catsq" :style="{ background: row.color }" />
-              <span class="catlbl">{{ row.label }}</span>
-              <span class="catnum">{{ formatTokenCount(row.tokens) }}</span>
-              <span class="catpct">{{ pctLabel(row) }}</span>
-            </div>
-          </div>
-
-          <!-- Expandable detail: bulk-loaded memory files + custom agents. -->
-          <div v-if="memoryFilesList.length" class="ctxsec">
-            <button class="ctxsechead" @click.stop="memoryFilesOpen = !memoryFilesOpen">
-              <Icon
-                name="chev"
-                class="ctxchev"
-                :class="{ open: memoryFilesOpen }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
-              />
-              {{ t('sessions.detail.cat.memoryFilesSection') }}
-              <span class="ctxcount">{{ memoryFilesList.length }}</span>
-            </button>
-            <div v-if="memoryFilesOpen" class="ctxitems">
-              <div v-for="it in memoryFilesList" :key="it.label" class="ctxitem">
-                <span class="ctxipath">{{ it.label }}</span>
-                <span class="ctxinum">{{ formatTokenCount(it.tokens) }}</span>
-              </div>
-            </div>
-          </div>
-          <div v-if="agentsList.length" class="ctxsec">
-            <button class="ctxsechead" @click.stop="agentsOpen = !agentsOpen">
-              <Icon
-                name="chev"
-                class="ctxchev"
-                :class="{ open: agentsOpen }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
-              />
-              {{ t('sessions.detail.cat.agentsSection') }}
-              <span class="ctxcount">{{ agentsList.length }}</span>
-            </button>
-            <div v-if="agentsOpen" class="ctxitems">
-              <div v-for="it in agentsList" :key="it.label" class="ctxitem">
-                <span class="ctxipath">{{ it.label }}</span>
-                <span class="ctxinum">{{ formatTokenCount(it.tokens) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Footer action: /compact — summarise older turns to free budget (ADR 0047),
-               same RPC as the composer's `/compact`. Locked + spinner while it runs. -->
-          <div v-if="canCompact" class="ctxfoot">
-            <button
-              class="ctxaction"
-              :disabled="compacting"
-              :title="t('sessions.detail.compactHint')"
-              @click.stop="onCompact"
-            >
-              <Icon
-                :name="compacting ? 'refresh' : 'foldv'"
-                :class="{ ctxspin: compacting }"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-              {{ compacting ? t('sessions.composer.compacting') : t('sessions.detail.compact') }}
-            </button>
-          </div>
+          <span class="min-w-12 shrink-0 text-right text-sm text-faint tabular-nums">
+            {{ pctLabel(row) }}
+          </span>
         </div>
       </div>
-    </template>
-  </span>
+
+      <!-- Expandable detail: bulk-loaded memory files + custom agents. -->
+      <template v-for="sec in sections" :key="sec.key">
+        <Separator class="mt-2" />
+        <Collapsible
+          :open="openSections.has(sec.key)"
+          class="pt-1.5"
+          @update:open="toggleSection(sec.key)"
+        >
+          <CollapsibleTrigger as-child>
+            <Button
+              variant="ghost"
+              size="xs"
+              class="h-auto w-full justify-start gap-1.5 px-0 py-0.5 text-sm font-normal text-faint hover:bg-transparent hover:text-foreground"
+            >
+              <Icon
+                name="chev"
+                class="size-3! transition-transform motion-reduce:transition-none"
+                :class="openSections.has(sec.key) && 'rotate-90'"
+              />
+              {{ sec.label }}
+              <span class="ml-auto text-sm text-dim tabular-nums">{{ sec.items.length }}</span>
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent class="mt-1 flex max-h-46 flex-col overflow-y-auto">
+            <div v-for="it in sec.items" :key="it.label" class="flex items-center gap-2 py-0.5">
+              <!-- mono-ok: path of an injected context file -->
+              <span class="min-w-0 flex-1 truncate font-mono text-sm text-dim">{{ it.label }}</span>
+              <span class="shrink-0 text-right text-sm text-faint tabular-nums">
+                {{ formatTokenCount(it.tokens) }}
+              </span>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </template>
+
+      <!-- Footer action: /compact — summarise older turns to free budget (ADR 0047),
+           same RPC as the composer's `/compact`. Locked + spinner while it runs. -->
+      <template v-if="canCompact">
+        <Separator class="mt-2.5 mb-2" />
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full font-normal"
+          :disabled="isCompacting"
+          :title="t('sessions.detail.compactHint')"
+          @click="onCompact"
+        >
+          <Icon
+            :name="isCompacting ? 'refresh' : 'foldv'"
+            :class="isCompacting && 'animate-spin motion-reduce:animate-none'"
+          />
+          {{ isCompacting ? t('sessions.composer.compacting') : t('sessions.detail.compact') }}
+        </Button>
+      </template>
+    </PopoverContent>
+  </Popover>
 </template>
 
 <script setup lang="ts">
@@ -139,8 +150,29 @@ const {
 } = useSessionContextUsage(() => props.session)
 
 const open = ref(false)
-const memoryFilesOpen = ref(false)
-const agentsOpen = ref(false)
+
+// Hai mục bung/gập (memory files · custom agents) — chỉ hiện mục có dữ liệu.
+type SectionKey = 'memory' | 'agents'
+const sections = computed(() =>
+  [
+    {
+      key: 'memory' as SectionKey,
+      label: t('sessions.detail.cat.memoryFilesSection'),
+      items: memoryFilesList.value,
+    },
+    {
+      key: 'agents' as SectionKey,
+      label: t('sessions.detail.cat.agentsSection'),
+      items: agentsList.value,
+    },
+  ].filter((sec) => sec.items.length),
+)
+const openSections = ref(new Set<SectionKey>())
+function toggleSection(key: SectionKey) {
+  const next = new Set(openSections.value)
+  if (!next.delete(key)) next.add(key)
+  openSections.value = next
+}
 
 function pctLabel(row: CatRow): string {
   return row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%`
@@ -149,9 +181,9 @@ function pctLabel(row: CatRow): string {
 // Manual `/compact` from the context popover — only for a live (engine-backed)
 // session; the store guards overlapping calls + drives `compacting`.
 const canCompact = computed(() => !!props.session.engineId)
-const compacting = computed(() => props.session.compacting === true)
+const isCompacting = computed(() => props.session.compacting === true)
 function onCompact() {
-  if (compacting.value) return
+  if (isCompacting.value) return
   void store.compactSession(props.session.id).then((r) => {
     if (r === 'compacted')
       useToast().add({ title: t('sessions.command.notice.compacted'), color: 'success' })
@@ -161,228 +193,3 @@ function onCompact() {
   })
 }
 </script>
-
-<style scoped>
-.sb-wrap {
-  position: relative;
-  display: inline-flex;
-}
-/* The status-bar popover opens UPWARD (the bar is pinned to the window bottom):
-   anchor it above the chip, right-aligned. Override the global `.pop` fixed/z. */
-.sb-pop {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  z-index: 95;
-}
-.sb-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 94;
-}
-
-/* ── Context-window breakdown table (Claude-Code /context style) ───────────── */
-.ctxmodel {
-  /* mono-ok: model id, e.g. claude-sonnet-4-5 */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  margin: 2px 0 8px;
-}
-.ctxcost {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: -4px 0 8px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.plnowrap {
-  white-space: nowrap;
-  gap: 10px;
-}
-.plnowrap > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.plnowrap > .ctxn {
-  flex: 0 0 auto;
-}
-.cattbl {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-}
-.cathead,
-.catrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-}
-.cathead {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 5px;
-  margin-bottom: 2px;
-}
-.catsq {
-  width: 9px;
-  height: 9px;
-  /* design-token-ok: a 9px square legend swatch — the --r-xs token (6px) clamps to
-     4.5px on it and turns the square into a dot. */
-  border-radius: 2px;
-  flex: 0 0 auto;
-}
-.cathead .catlbl {
-  margin-left: 17px;
-}
-.catlbl {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--foreground);
-}
-.catnum,
-.catpct {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  text-align: right;
-}
-.catnum {
-  min-width: 56px;
-}
-.catpct {
-  min-width: 48px;
-  color: var(--textFaint);
-}
-
-/* ── Expandable bulk-load sections (MEMORY FILES / CUSTOM AGENTS) ──────────── */
-.ctxsec {
-  margin-top: 8px;
-  border-top: 1px solid var(--border);
-  padding-top: 6px;
-}
-.ctxsechead {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 2px 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--textFaint);
-  font-size: 12px;
-  line-height: 18px;
-}
-.ctxsechead:hover {
-  color: var(--foreground);
-}
-.ctxchev {
-  transition: transform 0.12s ease;
-}
-.ctxchev.open {
-  transform: rotate(90deg);
-}
-.ctxcount {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 12px;
-  color: var(--textDim);
-}
-.ctxitems {
-  display: flex;
-  flex-direction: column;
-  margin-top: 4px;
-  max-height: 184px;
-  overflow-y: auto;
-}
-.ctxitem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-}
-.ctxipath {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* mono-ok: path of an injected context file */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.ctxinum {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  text-align: right;
-}
-/* ── Footer action (/compact) ─────────────────────────────────────────────── */
-.ctxfoot {
-  margin-top: 10px;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-}
-.ctxaction {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--foreground);
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-.ctxaction:hover:not(:disabled) {
-  background: var(--accent-wash);
-  border-color: var(--ring);
-  color: var(--primary);
-}
-.ctxaction:disabled {
-  cursor: default;
-  color: var(--textDim);
-}
-.ctxspin {
-  animation: ctxspin 0.9s linear infinite;
-}
-@keyframes ctxspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ctxchev {
-    transition: none;
-  }
-  .ctxspin {
-    animation: none;
-  }
-}
-</style>

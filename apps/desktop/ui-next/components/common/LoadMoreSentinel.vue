@@ -5,10 +5,18 @@
        button-only so scrolling never auto-expands every group at once. Render only
        while there's more (parent gates with v-if) so the observer tears down once
        the list is fully shown. -->
-  <button ref="el" type="button" class="loadmore" @click="emit('load')">
-    <Icon name="chev" class="lm-chev" />
+  <!-- Affordance nhẹ, không phải CTA: link chữ nhỏ thụt lề dưới các hàng của nhóm,
+       không viền + chữ mờ để không tranh với item; số đếm tabular-nums (không giật). -->
+  <Button
+    ref="el"
+    variant="ghost"
+    size="xs"
+    class="mt-px mb-1 ml-2.5 h-auto gap-1 px-1.5 py-0.5 font-normal text-muted-foreground tabular-nums [&_svg]:size-3"
+    @click="emit('load')"
+  >
+    <Icon name="chev" />
     {{ t('common.loadMore', { n: remaining }) }}
-  </button>
+  </Button>
 </template>
 
 <script setup lang="ts">
@@ -17,7 +25,8 @@ const emit = defineEmits<{ (e: 'load'): void }>()
 
 const { t } = useI18n()
 
-const el = useTemplateRef<HTMLElement>('el')
+// Button shadcn là component ⇒ template ref là instance, phần tử nằm ở `$el`.
+const el = useTemplateRef<{ $el: HTMLElement }>('el')
 let observer: IntersectionObserver | null = null
 
 // Match the observer's root to the actual scroller (the list's `.lscroll`) rather
@@ -34,7 +43,7 @@ function scrollParent(node: HTMLElement | null): HTMLElement | null {
 }
 
 onMounted(() => {
-  const target = el.value
+  const target = el.value?.$el ?? null
   if (!props.auto || !target || typeof IntersectionObserver === 'undefined') return
   observer = new IntersectionObserver(
     (entries) => {
@@ -51,40 +60,3 @@ onBeforeUnmount(() => {
   observer = null
 })
 </script>
-
-<style scoped>
-/* Subtle inline affordance, not a CTA: a small left-aligned text link indented to
-   sit under the group's rows. Borderless + faint so it never competes with the
-   list items; the count stays mono (no width jitter). */
-.loadmore {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 1px 0 5px 10px;
-  padding: 2px 6px;
-  border: none;
-  border-radius: var(--r-xs); /* rounded-sm */
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 12px;
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-.loadmore:hover {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-.loadmore:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.loadmore .lm-chev {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
-}
-</style>

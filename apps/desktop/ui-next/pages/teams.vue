@@ -1,5 +1,5 @@
 <template>
-  <section class="page on teampage" data-page="teams">
+  <section class="flex min-w-0 flex-1 flex-col overflow-hidden" data-page="teams">
     <!-- ══ LIST — khuôn Multica squads-page (giống hệt Agents): CollectionHeader
          + toolbar (search · scope tabs có count · project picker · sort) +
          ListGrid (avatar+name/desc | Status | Access | Leader | Members stack |
@@ -17,7 +17,7 @@
         </Button>
       </CollectionHeader>
 
-      <div class="tp-bar">
+      <div class="flex shrink-0 items-center gap-2 border-b px-4 py-2">
         <div class="relative">
           <Icon
             name="search"
@@ -28,15 +28,15 @@
         <!-- Scope — segmented tabs có count, cùng khuôn Agents/Multica. -->
         <Tabs :model-value="scope" @update:model-value="(v) => (scope = v as typeof scope)">
           <TabsList>
-            <TabsTrigger value="global" class="h-[var(--ctrl-h-xs)] gap-1.5 px-3 text-xs">
+            <TabsTrigger value="global" class="h-(--ctrl-h-xs) gap-1.5 px-3 text-xs">
               {{ t('teams.scopeGlobal') }}
               <span class="text-muted-foreground">{{ scopeCounts.global }}</span>
             </TabsTrigger>
-            <TabsTrigger value="project" class="h-[var(--ctrl-h-xs)] gap-1.5 px-3 text-xs">
+            <TabsTrigger value="project" class="h-(--ctrl-h-xs) gap-1.5 px-3 text-xs">
               {{ t('teams.scopeProject') }}
               <span class="text-muted-foreground">{{ scopeCounts.project }}</span>
             </TabsTrigger>
-            <TabsTrigger value="all" class="h-[var(--ctrl-h-xs)] gap-1.5 px-3 text-xs">
+            <TabsTrigger value="all" class="h-(--ctrl-h-xs) gap-1.5 px-3 text-xs">
               {{ t('teams.scope.all') }}
               <span class="text-muted-foreground">{{ scopeCounts.all }}</span>
             </TabsTrigger>
@@ -47,7 +47,7 @@
           v-model="scopeProjectSel"
           :options="scopeProjectOpts"
         />
-        <span class="tp-flex" />
+        <span class="flex-1" />
         <AppSelect v-model="sortBy" :options="sortOpts" />
       </div>
 
@@ -59,33 +59,42 @@
           <span>{{ t('teams.col.leader') }}</span>
           <span>{{ t('teams.col.members') }}</span>
           <span>{{ t('teams.col.lastActive') }}</span>
-          <span class="tp-head-r">{{ t('teams.col.runs') }}</span>
+          <span class="text-right">{{ t('teams.col.runs') }}</span>
           <span />
         </template>
         <div
           v-for="tm in filteredTeams"
           :key="teamsStore.teamKey(tm)"
-          class="cl-row"
+          class="cl-row group"
           @click="openDetail(tm)"
         >
-          <div class="cl-cell tp-id">
-            <span class="tp-avw">
+          <div class="cl-cell gap-2.5">
+            <span class="relative inline-flex shrink-0">
               <EntityAvatar
                 :name="tm.name"
                 :seed="teamsStore.teamKey(tm)"
                 variant="squad"
                 size="md"
               />
-              <span v-if="teamLive(tm)" class="tp-avdot" />
+              <!-- Chấm "live" đè góc avatar; viền màu nền hàng để chấm "cắt" avatar. -->
+              <span
+                v-if="teamLive(tm)"
+                class="absolute -right-px -bottom-px size-2.5 rounded-full border-2 border-background bg-success"
+              />
             </span>
-            <div class="tp-idt">
-              <span class="tp-name">{{ tm.name }}</span>
-              <span v-if="tm.desc" class="tp-desc">{{ tm.desc }}</span>
+            <div class="flex min-w-0 flex-col">
+              <span class="truncate text-sm font-medium text-foreground">{{ tm.name }}</span>
+              <span v-if="tm.desc" class="truncate text-xs text-muted-foreground">
+                {{ tm.desc }}
+              </span>
             </div>
           </div>
           <div class="cl-cell">
-            <span class="tp-st" :class="{ on: teamLive(tm) }">
-              <span class="tp-std" />
+            <span
+              class="inline-flex items-center gap-1.5 text-sm"
+              :class="teamLive(tm) ? 'text-success' : 'text-muted-foreground'"
+            >
+              <span class="size-2 rounded-full bg-current" />
               {{ teamLive(tm) ? t('teams.status.active') : t('teams.status.idle') }}
             </span>
           </div>
@@ -93,29 +102,41 @@
           <div class="cl-cell">
             <template v-if="leadOf(tm)">
               <EntityAvatar :name="leadOf(tm)!.name" :seed="leadKeyOf(tm)" size="sm" />
-              <span class="tp-celltext">{{ leadOf(tm)!.name }}</span>
+              <span class="min-w-0 truncate">{{ leadOf(tm)!.name }}</span>
             </template>
-            <span v-else class="tp-none">—</span>
+            <span v-else>—</span>
           </div>
           <div class="cl-cell">
-            <span v-if="tm.members.length" class="tp-stack">
-              <EntityAvatar
-                v-for="m in tm.members.slice(0, 3)"
-                :key="m.title"
-                :name="agentName(m.agent) ?? m.title"
-                :seed="m.agent ? agentKeyOf(m.agent) : m.title"
-                size="sm"
-              />
-              <span v-if="tm.members.length > 3" class="tp-more">+{{ tm.members.length - 3 }}</span>
+            <span v-if="tm.members.length" class="inline-flex items-center">
+              <!-- Chồng avatar: lấn trái 6px, viền màu nền hàng tách từng cái. -->
+              <span class="flex -space-x-1.5">
+                <EntityAvatar
+                  v-for="m in tm.members.slice(0, 3)"
+                  :key="m.title"
+                  class="ring-2 ring-background"
+                  :name="agentName(m.agent) ?? m.title"
+                  :seed="m.agent ? agentKeyOf(m.agent) : m.title"
+                  size="sm"
+                />
+              </span>
+              <span v-if="tm.members.length > 3" class="ml-1 text-xs text-muted-foreground">
+                +{{ tm.members.length - 3 }}
+              </span>
             </span>
-            <span v-else class="tp-none">—</span>
+            <span v-else>—</span>
           </div>
           <div class="cl-cell">{{ relTime(lastIsoOf(tm)) }}</div>
-          <div class="cl-cell tp-runs">{{ runsFor(tm).length }}</div>
-          <div class="cl-cell tp-kebab">
+          <div class="cl-cell justify-end tabular-nums">{{ runsFor(tm).length }}</div>
+          <div class="cl-cell justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="iconSm" class="tp-kebab-btn" @click.stop>
+                <!-- Kebab chỉ hiện khi hover hàng / focus / menu đang mở. -->
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  class="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                  @click.stop
+                >
                   <Icon name="dots" class="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -148,10 +169,16 @@
         </div>
       </CollectionList>
 
-      <div v-else class="tp-empty">
-        <span class="tp-empty-ic"><Icon name="users" class="size-5" /></span>
-        <div class="tp-empty-t">{{ t('teams.empty') }}</div>
-        <div class="tp-empty-d">{{ t('teams.emptyDesc') }}</div>
+      <div v-else class="flex flex-1 flex-col items-center justify-center gap-2">
+        <span
+          class="mb-1 inline-flex size-11 items-center justify-center rounded-lg border bg-muted text-muted-foreground"
+        >
+          <Icon name="users" class="size-5" />
+        </span>
+        <div class="text-base font-semibold text-foreground">{{ t('teams.empty') }}</div>
+        <div class="mb-2 max-w-md text-center text-sm text-muted-foreground">
+          {{ t('teams.emptyDesc') }}
+        </div>
         <Button @click="chooserOpen = true">
           <Icon name="plus" class="size-3.5" />
           {{ t('teams.page.new') }}
@@ -164,14 +191,14 @@
          (name/desc inline, leader, scope, timestamps). Một surface edit cho
          cả create lẫn update — dirty ⇒ thanh Save nổi trên đầu. ══ -->
     <template v-else>
-      <header class="tpd-back">
+      <header class="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Button variant="ghost" size="iconSm" :title="t('teams.detail.back')" @click="closeDetail">
           <Icon name="arrow-left" class="size-4" />
         </Button>
-        <span class="tpd-back-t">
+        <span class="min-w-0 truncate text-sm font-semibold text-foreground">
           {{ isNew ? t('teams.new') : draft.name || t('teams.page.title') }}
         </span>
-        <span class="tpd-flex" />
+        <span class="flex-1" />
         <Button variant="ghost" size="iconSm" :title="t('teams.aiRevise')" @click="openAi">
           <Icon name="sparkles" class="size-4" />
         </Button>
@@ -228,7 +255,10 @@
         </DropdownMenu>
       </header>
 
-      <div v-if="dirty" class="tpd-dirty">
+      <div
+        v-if="dirty"
+        class="flex shrink-0 items-center justify-end gap-2 border-b bg-secondary px-5 py-1.5 text-xs text-secondary-foreground"
+      >
         <span>{{ t('teams.detail.unsaved') }}</span>
         <Button variant="ghost" size="sm" @click="resetDraft">{{ t('common.discard') }}</Button>
         <Button size="sm" :disabled="!canSave || saving" @click="saveDraft">
@@ -236,8 +266,8 @@
         </Button>
       </div>
 
-      <div class="tpd-body">
-        <div class="tpd-main">
+      <div class="flex min-h-0 flex-auto max-[860px]:flex-col">
+        <div class="min-w-0 flex-auto overflow-y-auto px-6 pt-4 pb-6 [scrollbar-width:thin]">
           <Tabs
             :model-value="detailTab"
             @update:model-value="(v) => (detailTab = v as typeof detailTab)"
@@ -253,53 +283,69 @@
               >
                 <Icon :name="tab.icon" class="size-3.5" />
                 {{ tab.label }}
-                <span v-if="tab.count != null" class="tpd-tabc">{{ tab.count }}</span>
+                <span
+                  v-if="tab.count != null"
+                  class="rounded-full bg-muted px-1.5 text-xs text-muted-foreground"
+                >
+                  {{ tab.count }}
+                </span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
 
           <!-- MEMBERS — lead (vương miện) + member rows: title + agent picker +
                set-leader + remove; "+ Thêm member". Khuôn members tab Multica. -->
-          <div v-if="detailTab === 'members'" class="tpd-pane">
-            <div class="tpd-mrow tp-lead">
-              <Icon name="crown" class="tpd-crown" />
-              <div class="tpd-mid">
-                <div class="tpd-magent">
+          <div v-if="detailTab === 'members'" class="pt-4">
+            <div class="flex items-center gap-2.5 border-b pt-2 pb-3">
+              <Icon name="crown" class="size-3.5 shrink-0 text-warning" />
+              <div class="flex min-w-0 flex-1 items-center gap-2">
+                <div class="flex min-w-0 flex-1 items-center gap-2">
                   <AppSelect
                     v-model="draft.leadKey"
                     :options="leadOpts"
-                    class="tpd-msel"
+                    class="min-w-0 flex-1"
                     searchable
                     :search-placeholder="t('common.search')"
                     :placeholder="t('teams.leadNone')"
                   />
-                  <span v-if="createAgents && !draft.leadKey" class="tpd-auto-chip">
+                  <span
+                    v-if="createAgents && !draft.leadKey"
+                    class="inline-flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-primary"
+                  >
                     <Icon name="sparkles" class="size-3" />
                     {{ t('teams.autoAgent') }}
                   </span>
                 </div>
-                <span class="tpd-role">{{ t('teams.detail.leadHint') }}</span>
+                <span class="text-xs text-muted-foreground">{{ t('teams.detail.leadHint') }}</span>
               </div>
             </div>
-            <div v-for="(m, i) in draft.members" :key="i" class="tpd-mrow">
+            <div
+              v-for="(m, i) in draft.members"
+              :key="i"
+              class="flex items-center gap-2.5 border-b py-2"
+            >
               <EntityAvatar :name="m.title || '?'" :seed="m.agentKey || m.title" size="sm" />
-              <div class="tpd-mid">
+              <div class="flex min-w-0 flex-1 items-center gap-2">
+                <!-- Giữ chiều cao mặc định để bằng AppSelect đứng cạnh. -->
                 <Input
                   v-model="m.title"
-                  class="tpd-min"
+                  class="min-w-35 flex-1"
                   :placeholder="t('teams.memberTitlePh')"
                   maxlength="80"
                 />
-                <div class="tpd-magent">
+                <div class="flex min-w-0 flex-1 items-center gap-2">
                   <AppSelect
                     v-model="m.agentKey"
                     :options="agentOpts"
-                    class="tpd-msel"
+                    class="min-w-0 flex-1"
                     searchable
                     :search-placeholder="t('common.search')"
                     :placeholder="t('teams.agentNone')"
                   />
-                  <span v-if="createAgents && !m.agentKey" class="tpd-auto-chip">
+                  <span
+                    v-if="createAgents && !m.agentKey"
+                    class="inline-flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-primary"
+                  >
                     <Icon name="sparkles" class="size-3" />
                     {{ t('teams.autoAgent') }}
                   </span>
@@ -325,7 +371,7 @@
             </div>
             <Button
               variant="outline"
-              class="tpd-add"
+              class="mt-3 w-full border-dashed text-muted-foreground hover:text-foreground"
               @click="draft.members.push({ title: '', agentKey: '' })"
             >
               <Icon name="plus" class="size-3.5" />
@@ -333,22 +379,26 @@
             </Button>
             <!-- Option: member/lead chưa chọn agent → lưu team sẽ tạo AGENT.md
                  tương ứng cùng tầng rồi bind vào spec. -->
-            <div class="tpd-autorow">
+            <div class="mt-3.5 flex items-start gap-2.5 border-t pt-3.5">
               <Switch v-model:checked="createAgents" />
-              <div class="tpd-autotext">
+              <div class="flex flex-col gap-0.5 text-sm">
                 <span>{{ t('teams.autoCreateAgents') }}</span>
-                <span class="tpd-autohint">{{ t('teams.autoCreateAgentsHint') }}</span>
+                <span class="text-xs text-muted-foreground">
+                  {{ t('teams.autoCreateAgentsHint') }}
+                </span>
               </div>
             </div>
           </div>
 
           <!-- INSTRUCTIONS — chỉ dẫn cấp đội, chỉ lead nhận (Multica). -->
-          <div v-else-if="detailTab === 'instructions'" class="tpd-pane">
-            <p class="tpd-hint">{{ t('teams.detail.instructionsHint') }}</p>
+          <div v-else-if="detailTab === 'instructions'" class="pt-4">
+            <p class="mb-2.5 text-xs text-muted-foreground">
+              {{ t('teams.detail.instructionsHint') }}
+            </p>
             <!-- Chỉnh bằng AI — user gõ yêu cầu, model viết lại riêng ô
                  instructions (teams.instructionsDraft); áp vào textarea để
                  duyệt, Save như tay gõ. -->
-            <div class="tpd-insai">
+            <div class="mb-2.5 flex gap-2">
               <Input
                 v-model="insAiPrompt"
                 class="flex-1"
@@ -358,14 +408,14 @@
               />
               <Button
                 variant="outline"
-                class="flex-shrink-0"
+                class="shrink-0"
                 :disabled="insAiBusy || !insAiPrompt.trim()"
                 @click="runInstructionsDraft"
               >
                 <Icon
                   :name="insAiBusy ? 'refresh' : 'sparkles'"
                   class="size-3.5"
-                  :class="{ spin: insAiBusy }"
+                  :class="{ 'animate-spin': insAiBusy }"
                 />
                 {{ insAiBusy ? t('teams.aiDrafting') : t('teams.detail.insAiGo') }}
               </Button>
@@ -378,25 +428,35 @@
           </div>
 
           <!-- RUNS — các lần materialize đang sống của spec này. -->
-          <div v-else class="tpd-pane">
-            <div v-if="!detailRuns.length" class="tpd-pane-empty">
+          <div v-else class="pt-4">
+            <div v-if="!detailRuns.length" class="py-6 text-center text-sm text-muted-foreground">
               {{ t('teams.detail.noRuns') }}
             </div>
-            <button v-for="r in detailRuns" :key="r.root.id" class="tpd-run" @click="openRun(r)">
-              <span class="tpd-dot" :style="{ background: runColor(r.root) }" />
-              <span class="tpd-run-title">{{ r.root.title }}</span>
-              <span class="tpd-run-proj">{{ runProject(r.root) }}</span>
-              <span class="tpd-run-meta">{{ t('teams.runMembers', { n: r.members.length }) }}</span>
-              <span class="tpd-run-meta">{{ runWhen(r.root) }}</span>
-              <Icon name="chev" class="size-3.5 text-muted-foreground" />
-            </button>
+            <Button
+              v-for="r in detailRuns"
+              :key="r.root.id"
+              variant="ghost"
+              class="mb-0.5 h-auto w-full justify-start gap-2.5 px-2.5 py-2 text-left font-normal text-foreground [&_svg]:size-3.5"
+              @click="openRun(r)"
+            >
+              <span class="size-2 shrink-0 rounded-full" :class="runDot(r.root)" />
+              <span class="min-w-0 flex-1 truncate">{{ r.root.title }}</span>
+              <span class="shrink-0 text-xs text-muted-foreground">{{ runProject(r.root) }}</span>
+              <span class="shrink-0 text-xs text-muted-foreground">
+                {{ t('teams.runMembers', { n: r.members.length }) }}
+              </span>
+              <span class="shrink-0 text-xs text-muted-foreground">{{ runWhen(r.root) }}</span>
+              <Icon name="chev" class="text-muted-foreground" />
+            </Button>
           </div>
         </div>
 
         <!-- Inspector — name/desc inline edit + properties đọc (scope, leader,
              created/updated). Khuôn inspector 320px của squad-detail. -->
-        <aside class="tpd-insp">
-          <div class="tpd-avrow">
+        <aside
+          class="w-70 shrink-0 overflow-y-auto border-l p-4 [scrollbar-width:thin] max-[860px]:w-auto max-[860px]:border-t max-[860px]:border-l-0"
+        >
+          <div class="mb-2.5">
             <EntityAvatar
               :name="draft.name || '?'"
               :seed="draft.id || draft.name"
@@ -418,31 +478,42 @@
             maxlength="2000"
           />
 
-          <div class="tpd-insp-h">{{ t('teams.detail.props') }}</div>
-          <div class="tpd-prop">
-            <span class="tpd-prop-l">{{ t('teams.fieldScope') }}</span>
+          <div class="mt-1.5 mb-1 text-xs font-medium text-muted-foreground">
+            {{ t('teams.detail.props') }}
+          </div>
+          <div class="flex items-center justify-between gap-2 py-1.5">
+            <span class="text-xs text-muted-foreground">{{ t('teams.fieldScope') }}</span>
             <AppSelect
               v-model="draft.scopeKey"
+              class="min-w-32.5"
               :options="scopeOpts"
               :disabled="!isNew"
-              style="min-width: 130px"
             />
           </div>
-          <div class="tpd-prop">
-            <span class="tpd-prop-l">{{ t('teams.col.members') }}</span>
-            <span class="tpd-prop-v">{{ draft.members.length + (draft.leadKey ? 1 : 0) }}</span>
+          <div class="flex items-center justify-between gap-2 py-1.5">
+            <span class="text-xs text-muted-foreground">{{ t('teams.col.members') }}</span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ draft.members.length + (draft.leadKey ? 1 : 0) }}
+            </span>
           </div>
-          <div v-if="!isNew" class="tpd-prop">
-            <span class="tpd-prop-l">{{ t('teams.col.created') }}</span>
-            <span class="tpd-prop-v">{{ fmtDate(detail.createdAt) }}</span>
+          <div v-if="!isNew" class="flex items-center justify-between gap-2 py-1.5">
+            <span class="text-xs text-muted-foreground">{{ t('teams.col.created') }}</span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ fmtDate(detail.createdAt) }}
+            </span>
           </div>
-          <div v-if="!isNew" class="tpd-prop">
-            <span class="tpd-prop-l">{{ t('teams.detail.updated') }}</span>
-            <span class="tpd-prop-v">{{ fmtDate(detail.updatedAt) }}</span>
+          <div v-if="!isNew" class="flex items-center justify-between gap-2 py-1.5">
+            <span class="text-xs text-muted-foreground">{{ t('teams.detail.updated') }}</span>
+            <span class="min-w-0 truncate text-right text-xs text-foreground">
+              {{ fmtDate(detail.updatedAt) }}
+            </span>
           </div>
-          <div v-if="!isNew" class="tpd-prop">
-            <span class="tpd-prop-l">ID</span>
-            <span class="tpd-prop-v mono">{{ detail.id }}</span>
+          <div v-if="!isNew" class="flex items-center justify-between gap-2 py-1.5">
+            <span class="text-xs text-muted-foreground">ID</span>
+            <!-- font-mono: team id là định danh (mono-ok). -->
+            <span class="min-w-0 truncate text-right font-mono text-xs text-foreground">
+              {{ detail.id }}
+            </span>
           </div>
         </aside>
       </div>
@@ -466,8 +537,8 @@
       :width="480"
       @close="aiOpen = false"
     >
-      <div class="tpai">
-        <p class="tpd-hint">{{ t('teams.aiHint') }}</p>
+      <div class="flex flex-col gap-2">
+        <p class="mb-2.5 text-xs text-muted-foreground">{{ t('teams.aiHint') }}</p>
         <Textarea
           v-model="aiBrief"
           rows="4"
@@ -483,7 +554,7 @@
           <Icon
             :name="aiBusy ? 'refresh' : 'sparkles'"
             class="size-3.5"
-            :class="{ spin: aiBusy }"
+            :class="{ 'animate-spin': aiBusy }"
           />
           {{ aiBusy ? t('teams.aiDrafting') : t('teams.aiGo') }}
         </Button>
@@ -525,7 +596,6 @@ import { dispatchRunSettings } from '~/composables/useProjectLlmDefaults'
 import { useTeamsStore, type TeamSpec } from '~/stores/teams'
 import { sidecarErrorText } from '~/composables/useSidecar'
 import type { Session, SessionAgentRef } from '~/composables/useSessionsData'
-import { STATUS_COLOR } from '~/composables/useSessionsData'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
@@ -672,7 +742,16 @@ function runsFor(tm: TeamSpec): LiveRun[] {
     }))
     .sort((a, b) => (b.root.createdAt ?? '').localeCompare(a.root.createdAt ?? ''))
 }
-const runColor = (s: Session): string => STATUS_COLOR[s.status] ?? 'var(--muted-foreground)'
+// Chấm trạng thái phiên run — class màu ngữ nghĩa (cùng ý nghĩa với STATUS_COLOR ở
+// useSessionsData, nhưng ở dạng utility thay cho var màu inline).
+const RUN_DOT: Record<Session['status'], string> = {
+  idle: 'bg-faint',
+  streaming: 'bg-primary',
+  awaiting: 'bg-warning',
+  done: 'bg-success',
+  error: 'bg-destructive',
+}
+const runDot = (s: Session): string => RUN_DOT[s.status] ?? 'bg-muted-foreground'
 const runProject = (s: Session): string =>
   s.project ? (projectsStore.projectById(s.project)?.name ?? s.project) : t('teams.runLoose')
 const runWhen = (s: Session): string => fmtDate(s.createdAt ?? '')
@@ -1211,427 +1290,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.teampage.page {
-  flex-direction: column;
-}
-/* ── Toolbar ── */
-.tp-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-.tp-flex {
-  flex: 1;
-}
-/* ── Identity cell + members stack ── */
-.tp-id {
-  gap: 10px;
-}
-/* Chấm "live" đè góc avatar — khuôn status overlay của Multica. */
-.tp-avw {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-}
-.tp-avdot {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--success);
-  border: 2px solid var(--background);
-}
-/* Status cell: dot + label (Active xanh / Idle muted). */
-.tp-st {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-}
-.tp-std {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted-foreground);
-}
-.tp-st.on {
-  color: var(--success);
-}
-.tp-st.on .tp-std {
-  background: var(--success);
-}
-/* Runs — cột số căn phải. */
-.tp-runs {
-  justify-content: flex-end;
-  font-variant-numeric: tabular-nums;
-}
-.tp-head-r {
-  text-align: right;
-}
-.tp-idt {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.tp-name {
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tp-desc {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tp-celltext {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tp-none {
-  color: var(--muted-foreground);
-}
-.tp-stack {
-  display: inline-flex;
-  align-items: center;
-}
-.tp-stack :deep(.eav) {
-  margin-left: -6px;
-  border: 2px solid var(--background);
-}
-.tp-stack :deep(.eav:first-child) {
-  margin-left: 0;
-}
-.tp-more {
-  margin-left: 4px;
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-.tp-kebab {
-  justify-content: flex-end;
-}
-.tp-kebab .tp-kebab-btn {
-  opacity: 0;
-  transition: opacity 0.1s ease;
-}
-.cl-row:hover .tp-kebab .tp-kebab-btn,
-.tp-kebab .tp-kebab-btn:focus-visible {
-  opacity: 1;
-}
-
-/* ── Empty ── */
-.tp-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.tp-empty-ic {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--border);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  margin-bottom: 4px;
-}
-.tp-empty-t {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--foreground);
-}
-.tp-empty-d {
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  margin-bottom: 8px;
-  max-width: 420px;
-  text-align: center;
-}
-
-/* ── Detail chrome ── */
-.tpd-back {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 48px;
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--border);
-}
-.tpd-back-t {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--foreground);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tpd-flex {
-  flex: 1;
-}
-.tpd-dirty {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 6px 20px;
-  flex: 0 0 auto;
-  background: var(--secondary);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  color: var(--secondary-foreground);
-}
-.tpd-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-.tpd-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 16px 24px 24px;
-}
-.tpd-tabc {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  background: var(--muted);
-  border-radius: var(--r-pill);
-  padding: 0 6px;
-}
-.tpd-pane {
-  padding-top: 16px;
-}
-.tpd-hint {
-  margin: 0 0 10px;
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-.tpd-pane-empty {
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  padding: 24px 0;
-  text-align: center;
-}
-.tpd-insai {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-/* ── Members tab ── */
-.tpd-mrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-.tpd-mrow.tp-lead {
-  padding-bottom: 12px;
-}
-.tpd-crown {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--warning);
-  flex: 0 0 auto;
-}
-.tpd-mid {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* Input primitive đã mang border/radius/focus — đây chỉ là sizing; chiều cao
-   giữ mặc định h-9 để bằng AppSelect đứng cạnh trong cùng hàng member. */
-.tpd-min {
-  flex: 1;
-  min-width: 140px;
-}
-.tpd-role {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-/* "Thêm member" — outline dashed full-width, override trên Button. */
-.tpd-add {
-  width: 100%;
-  margin-top: 12px;
-  border-style: dashed;
-  color: var(--muted-foreground);
-}
-.tpd-add:hover {
-  color: var(--foreground);
-}
-/* Agent picker + chip "tự tạo" trong cùng hàng member. */
-.tpd-magent {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tpd-msel {
-  flex: 1;
-  min-width: 0;
-}
-.tpd-auto-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  color: var(--accent, var(--primary));
-  white-space: nowrap;
-}
-/* Option "tự tạo agent" — switch + label/hint dưới danh sách member. */
-.tpd-autorow {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-.tpd-autotext {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--fs-sm);
-}
-.tpd-autohint {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-
-/* ── Runs tab ── */
-.tpd-run {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  margin-bottom: 2px;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--foreground);
-  font-size: var(--fs-sm);
-  font-family: var(--sans);
-  cursor: pointer;
-  text-align: left;
-}
-.tpd-run:hover {
-  background: var(--accent-wash);
-}
-.tpd-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.tpd-run-title {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tpd-run-proj,
-.tpd-run-meta {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  flex: 0 0 auto;
-}
-
-/* ── Inspector ── */
-.tpd-insp {
-  flex: 0 0 280px;
-  border-left: 1px solid var(--border);
-  padding: 16px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-.tpd-avrow {
-  margin-bottom: 10px;
-}
-.tpd-insp-h {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-  margin: 6px 0 4px;
-}
-.tpd-prop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-}
-.tpd-prop-l {
-  font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-}
-.tpd-prop-v {
-  font-size: var(--fs-xs);
-  color: var(--foreground);
-  text-align: right;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tpd-prop-v.mono {
-  font-family: var(--code); /* mono-ok: hiển thị team id (identifier). */
-}
-
-/* ── AI brief modal ── */
-.tpai {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-@media (max-width: 860px) {
-  .tpd-body {
-    flex-direction: column;
-  }
-  .tpd-insp {
-    flex: 0 0 auto;
-    border-left: none;
-    border-top: 1px solid var(--border);
-  }
-}
-</style>
-<style>
-/* Spin cho icon refresh khi AI đang dựng — cùng khuôn AgentBodyEditModal. */
-.spin {
-  animation: tpspin 0.9s linear infinite;
-}
-@keyframes tpspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

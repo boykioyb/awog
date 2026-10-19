@@ -1,5 +1,10 @@
 <template>
-  <span class="ssdot" :style="dotStyle" :title="tooltip" />
+  <span
+    class="inline-block flex-none rounded-full"
+    :class="SIZE_CLASS[size]"
+    :style="dotStyle"
+    :title="tooltip"
+  />
 </template>
 
 <script setup lang="ts">
@@ -22,13 +27,12 @@ const props = withDefaults(
 
 const { t } = useI18n()
 
-const SIZE_PX = { sm: 7, md: 9 } as const
+// 7px / 9px — chấm trạng thái nhỏ theo thang spacing (0.25 = 1px).
+const SIZE_CLASS = { sm: 'size-1.75', md: 'size-2.25' } as const
 
-const dotStyle = computed(() => ({
-  width: `${SIZE_PX[props.size]}px`,
-  height: `${SIZE_PX[props.size]}px`,
-  background: SOURCE_STATUS_COLORS[props.status],
-}))
+// Màu lấy từ bảng SOURCE_STATUS_COLORS dùng chung (token theme) — một nguồn cho mọi
+// chỗ vẽ trạng thái source.
+const dotStyle = computed(() => ({ background: SOURCE_STATUS_COLORS[props.status] }))
 
 const tooltip = computed(() => {
   const label = t('connections.status.' + props.status)
@@ -36,11 +40,3 @@ const tooltip = computed(() => {
   return label
 })
 </script>
-
-<style scoped>
-.ssdot {
-  display: inline-block;
-  flex: 0 0 auto;
-  border-radius: 50%;
-}
-</style>

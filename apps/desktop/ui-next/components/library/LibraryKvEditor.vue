@@ -1,13 +1,13 @@
 <template>
-  <div class="lkv">
-    <div v-if="label" class="lkv-label">{{ label }}</div>
-    <div class="lkv-rows">
-      <div v-for="(entry, i) in modelValue" :key="i" class="lkv-row">
+  <div>
+    <div v-if="label" class="mb-2 text-sm font-medium text-dim">{{ label }}</div>
+    <div class="flex flex-col gap-2">
+      <div v-for="(entry, i) in modelValue" :key="i" class="flex items-center gap-2">
         <Input
           :model-value="entry.key"
           :placeholder="t('library.kv.key')"
           spellcheck="false"
-          class="lkv-key"
+          class="w-[38%] font-mono"
           @update:model-value="updateKey(i, $event)"
         />
         <Input
@@ -16,42 +16,41 @@
           :disabled="isSecretRow(entry.value)"
           :placeholder="t('library.kv.value')"
           spellcheck="false"
-          class="lkv-val"
+          class="min-w-0 flex-1 font-mono"
           @update:model-value="updateVal(i, $event)"
         />
         <Button
           v-if="secretMode"
-          :class="{ on: isSecretRow(entry.value) }"
+          :class="{ 'border-selected-border text-primary': isSecretRow(entry.value) }"
           :disabled="secretBusy === i || !entry.key.trim() || !entry.value.trim()"
           :title="
             isSecretRow(entry.value) ? t('library.kv.secretStored') : t('library.kv.secretMove')
           "
-          class="lkv-btn"
+          class="flex-none"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="toggleSecret(i)"
         >
           <Icon
             :name="secretBusy === i ? 'refresh' : isSecretRow(entry.value) ? 'shield' : 'globe'"
-            :class="{ spin: secretBusy === i }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
+            :class="{ 'animate-spin': secretBusy === i }"
           />
         </Button>
         <Button
           :title="t('library.kv.remove')"
-          class="lkv-btn"
+          class="flex-none"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
           @click="remove(i)"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="x" />
         </Button>
       </div>
       <Button variant="outline" size="sm" @click="add">
         <Icon name="plus" />
         {{ t('library.kv.add') }}
       </Button>
-      <div v-if="secretError" class="lkv-err">{{ secretError }}</div>
+      <div v-if="secretError" class="pt-0.5 text-sm text-destructive">{{ secretError }}</div>
     </div>
   </div>
 </template>
@@ -144,76 +143,3 @@ const toggleSecret = async (i: number) => {
   }
 }
 </script>
-
-<style scoped>
-.lkv-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--textDim);
-  margin-bottom: 8px;
-}
-.lkv-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.lkv-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.lkv-input {
-  padding: 6px 9px;
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  /* mono-ok: frontmatter key/value — identifiers */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.lkv-input:focus {
-  border-color: var(--accent);
-}
-.lkv-input:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-.lkv-key {
-  width: 38%;
-}
-.lkv-val {
-  flex: 1;
-  min-width: 0;
-}
-.lkv-btn {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-}
-.lkv-btn.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.lkv-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.lkv-err {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  padding-top: 2px;
-}
-.spin {
-  animation: lkv-spin 0.9s linear infinite;
-}
-@keyframes lkv-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

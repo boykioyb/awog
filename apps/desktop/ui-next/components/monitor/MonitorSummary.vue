@@ -2,80 +2,96 @@
   <!-- Wrapper chỉ để làm CONTAINER cho container-query: số cột phải theo bề rộng
        của PANEL, không theo bề rộng cửa sổ (nav rail và drawer làm hai cái lệch
        nhau vài trăm px). -->
-  <div class="moncardswrap">
-    <div class="moncards">
-      <div class="tile moncard">
-        <div class="monclbl">{{ t('monitor.cards.cpu', { scope: scopeLabel }) }}</div>
-        <div class="moncbig tnum" :style="{ color: levelColor(cpuLvl) }">
+  <div class="@container">
+    <!-- 2 hoặc 4 cột, KHÔNG BAO GIỜ 3: bốn thẻ chia làm 3 cột thì thẻ thứ tư đứng lẻ
+         một mình một hàng. Ngưỡng 760px = mỗi thẻ còn ≥ 180px, đủ cho dòng chú
+         thích không bị cắt. Vạch mức 4px (h-1) là HÌNH DẠNG, không phải cỡ chữ. -->
+    <div class="grid grid-cols-2 gap-2.5 @min-[760px]:grid-cols-4">
+      <Card class="flex min-w-0 flex-col gap-1 px-3.5 py-3">
+        <div class="text-xs text-faint">{{ t('monitor.cards.cpu', { scope: scopeLabel }) }}</div>
+        <div class="text-2xl tabular-nums" :class="levelText(cpuLvl)">
           {{ warmingUp ? '…' : formatCpuLoad(totals.cpuPercent) }}
         </div>
         <!-- Vạch mức = phần công suất đã dùng trên TỔNG của máy. Con số "134%" một
              mình không nói được nó là nhiều hay ít; cùng con số đó trên máy 2 lõi
              và máy 10 lõi là hai câu chuyện khác nhau. -->
-        <div class="monmeter" :aria-hidden="true">
+        <div class="h-1 overflow-hidden rounded-full bg-muted" :aria-hidden="true">
           <i
-            :style="{
-              width: `${cpuFill(totals.cpuPercent, coreCount) * 100}%`,
-              background: levelColor(cpuLvl),
-            }"
+            class="block h-full rounded-full transition-[width] duration-250"
+            :class="levelBg(cpuLvl)"
+            :style="{ width: `${cpuFill(totals.cpuPercent, coreCount) * 100}%` }"
           />
         </div>
-        <div class="moncsub">{{ t('monitor.cards.cpuHint', { cores: coreCount }) }}</div>
-      </div>
+        <div class="truncate text-xs text-dim">
+          {{ t('monitor.cards.cpuHint', { cores: coreCount }) }}
+        </div>
+      </Card>
 
-      <div class="tile moncard">
-        <div class="monclbl">{{ t('monitor.cards.mem', { scope: scopeLabel }) }}</div>
-        <div class="moncbig tnum" :style="{ color: levelColor(memLvl) }">
+      <Card class="flex min-w-0 flex-col gap-1 px-3.5 py-3">
+        <div class="text-xs text-faint">{{ t('monitor.cards.mem', { scope: scopeLabel }) }}</div>
+        <div class="text-2xl tabular-nums" :class="levelText(memLvl)">
           {{ formatMem(totals.rssKb) }}
         </div>
-        <div v-if="totalMemKb > 0" class="monmeter" :aria-hidden="true">
+        <div
+          v-if="totalMemKb > 0"
+          class="h-1 overflow-hidden rounded-full bg-muted"
+          :aria-hidden="true"
+        >
           <i
-            :style="{
-              width: `${memFill(totals.rssKb, totalMemKb) * 100}%`,
-              background: levelColor(memLvl),
-            }"
+            class="block h-full rounded-full transition-[width] duration-250"
+            :class="levelBg(memLvl)"
+            :style="{ width: `${memFill(totals.rssKb, totalMemKb) * 100}%` }"
           />
         </div>
-        <div class="moncsub">{{ memSub }}</div>
-      </div>
+        <div class="truncate text-xs text-dim">{{ memSub }}</div>
+      </Card>
 
-      <div class="tile moncard">
-        <div class="monclbl">{{ gpuLabel }}</div>
+      <Card class="flex min-w-0 flex-col gap-1 px-3.5 py-3">
+        <div class="text-xs text-faint">{{ gpuLabel }}</div>
         <!-- Ưu tiên GPU của ĐÚNG tập đang xem (cộng từ `accumulatedGPUTime` của
              từng tiến trình). `Device Utilization %` của cả máy tụt xuống dòng chú
              thích: nó trả lời câu hỏi khác. -->
-        <div class="moncbig tnum" :style="{ color: levelColor(gpuLvl) }">
+        <div class="text-2xl tabular-nums" :class="levelText(gpuLvl)">
           {{ gpuValue }}
         </div>
-        <div v-if="gpuPercent !== null" class="monmeter" :aria-hidden="true">
-          <i :style="{ width: `${Math.min(100, gpuPercent)}%`, background: levelColor(gpuLvl) }" />
+        <div
+          v-if="gpuPercent !== null"
+          class="h-1 overflow-hidden rounded-full bg-muted"
+          :aria-hidden="true"
+        >
+          <i
+            class="block h-full rounded-full transition-[width] duration-250"
+            :class="levelBg(gpuLvl)"
+            :style="{ width: `${Math.min(100, gpuPercent)}%` }"
+          />
         </div>
         <!-- Nói thẳng đây là số của CẢ MÁY: GPU tách theo tiến trình cần quyền root,
            gán con số này cho AWOG là để người dùng đọc sai. -->
-        <div class="moncsub">{{ gpuHint }}</div>
-      </div>
+        <div class="truncate text-xs text-dim">{{ gpuHint }}</div>
+      </Card>
 
-      <div class="tile moncard">
-        <div class="monclbl">{{ t('monitor.cards.top') }}</div>
-        <div class="moncbig moncbigsm" :style="{ color: levelColor(topLvl) }">
+      <Card class="flex min-w-0 flex-col gap-1 px-3.5 py-3">
+        <div class="text-xs text-faint">{{ t('monitor.cards.top') }}</div>
+        <!-- Tên tiến trình là chữ, không phải số — cỡ nhỏ hơn để không tràn thẻ, nhưng
+             giữ chiều cao dòng của số lớn để bốn thẻ thẳng hàng. -->
+        <div class="truncate text-lg leading-(--lh-2xl)" :class="levelText(topLvl)">
           {{ top ? top.label : '—' }}
         </div>
-        <div v-if="top" class="monmeter" :aria-hidden="true">
+        <div v-if="top" class="h-1 overflow-hidden rounded-full bg-muted" :aria-hidden="true">
           <i
-            :style="{
-              width: `${Math.min(100, top.cpuPercent ?? 0)}%`,
-              background: levelColor(topLvl),
-            }"
+            class="block h-full rounded-full transition-[width] duration-250"
+            :class="levelBg(topLvl)"
+            :style="{ width: `${Math.min(100, top.cpuPercent ?? 0)}%` }"
           />
         </div>
-        <div class="moncsub">
+        <div class="truncate text-xs text-dim">
           {{
             top
               ? t('monitor.cards.topHint', { cpu: formatCpuLoad(top.cpuPercent), pid: top.pid })
               : t('monitor.cards.topNone')
           }}
         </div>
-      </div>
+      </Card>
     </div>
   </div>
 </template>
@@ -88,13 +104,13 @@ import {
   formatCpuLoad,
   formatMem,
   gpuLevel,
-  levelColor,
   memFill,
   totalCpuLevel,
   totalMemLevel,
   type MonitorProcess,
   type MonitorScope,
 } from '~/composables/useMonitorManager'
+import { levelBg, levelText } from './monitor-level'
 
 const props = defineProps<{
   totals: {
@@ -172,69 +188,3 @@ const scopeLabel = computed(() => {
   return 'AWOG'
 })
 </script>
-
-<style scoped>
-.moncardswrap {
-  container-type: inline-size;
-}
-/* 2 hoặc 4 cột, KHÔNG BAO GIỜ 3: bốn thẻ chia làm 3 cột thì thẻ thứ tư đứng lẻ
-   một mình một hàng. `auto-fit` + `minmax` cho đúng cái đó ở bề rộng panel thường
-   gặp (611px đo được), nên số cột phải khai tường minh. Ngưỡng 760px = mỗi thẻ
-   còn ≥ 180px, đủ cho dòng chú thích không bị cắt. */
-.moncards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-@container (min-width: 760px) {
-  .moncards {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-.moncard {
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.monclbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.moncbig {
-  font-size: var(--fs-2xl);
-  line-height: var(--lh-2xl);
-  color: var(--text);
-}
-/* Tên tiến trình là chữ, không phải số — cỡ nhỏ hơn để không tràn thẻ. */
-.moncbigsm {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-2xl);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Vạch mức. 4px là HÌNH DẠNG (một sợi chỉ), không phải cỡ chữ. */
-.monmeter {
-  height: 4px; /* design-token-ok: độ dày của vạch chính là hình dạng */
-  border-radius: var(--r-pill);
-  background: var(--bgActive);
-  overflow: hidden;
-}
-.monmeter > i {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  transition: width 0.25s ease;
-}
-.moncsub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>

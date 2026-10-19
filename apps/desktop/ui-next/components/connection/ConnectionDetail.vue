@@ -1,220 +1,265 @@
 <template>
-  <div class="cnd">
-    <!-- header card: large avatar + name + tagline + transport tag + status pill + actions -->
-    <div class="cnd-hero">
+  <div class="flex min-h-0 flex-1 flex-col">
+    <!-- Header card: avatar + name + tagline + meta on the left, action buttons docked
+         top-right on ONE row. A floating card (matches the content cards) with the pane
+         gutter around it, not a flat header bar. -->
+    <Card class="mx-3.5 mt-3.5 flex-none flex-row items-start gap-3 rounded-lg p-4 shadow-none">
       <SourceAvatar :source="source" size="lg" />
-      <div class="cnd-hero-main">
-        <div class="cnd-hero-name">{{ source.name || source.slug }}</div>
-        <div v-if="source.tagline" class="cnd-hero-tagline">{{ source.tagline }}</div>
-        <div class="cnd-hero-meta">
-          <span class="tag mono">{{ transport }}</span>
-          <span class="chip cnd-status">
+      <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <div class="text-lg font-semibold break-words text-foreground">
+          {{ source.name || source.slug }}
+        </div>
+        <div v-if="source.tagline" class="text-sm text-muted-foreground">{{ source.tagline }}</div>
+        <div class="mt-0.5 flex flex-wrap items-center gap-2">
+          <!-- Transport (stdio/http/sse…) là định danh kỹ thuật ⇒ mono. -->
+          <Badge variant="outline" class="font-mono">{{ transport }}</Badge>
+          <Badge variant="outline" class="gap-1.5 capitalize">
             <SourceStatusDot :status="status" :error-message="source.connectionError" />
             {{ t('connections.status.' + status) }}
-          </span>
+          </Badge>
         </div>
       </div>
-      <div class="cnd-actions">
+      <div class="flex flex-none items-center gap-2">
         <Button
           v-if="isOAuthSource"
+          variant="outline"
+          size="iconSm"
           :disabled="oauthPending"
           :title="oauthTitle"
-          class="cnd-act"
-          variant="outline"
-          size="iconMd"
+          :aria-label="oauthTitle"
           @click="onConnectOAuth"
         >
-          <Icon
-            :name="oauthPending ? 'refresh' : 'link'"
-            :class="{ spin: oauthPending }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="oauthPending ? 'refresh' : 'link'" :class="oauthPending && 'animate-spin'" />
         </Button>
         <Button
           v-if="source.type === 'api'"
-          :title="t('connections.detail.setCredential')"
-          class="cnd-act"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
+          :title="t('connections.detail.setCredential')"
+          :aria-label="t('connections.detail.setCredential')"
           @click="emit('edit')"
         >
-          <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="shield" />
         </Button>
         <Button
+          variant="outline"
+          size="iconSm"
           :disabled="testing"
           :title="t('connections.detail.test')"
-          class="cnd-act"
-          variant="outline"
-          size="iconMd"
+          :aria-label="t('connections.detail.test')"
           @click="onTest"
         >
-          <Icon
-            :name="testing ? 'refresh' : 'check'"
-            :class="{ spin: testing }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
+          <Icon :name="testing ? 'refresh' : 'check'" :class="testing && 'animate-spin'" />
         </Button>
         <Button
           v-if="canReveal"
-          :title="t('connections.detail.showInFolder')"
-          class="cnd-act"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
+          :title="t('connections.detail.showInFolder')"
+          :aria-label="t('connections.detail.showInFolder')"
           @click="emit('reveal')"
         >
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="folder" />
         </Button>
         <Button
-          :title="t('connections.detail.edit')"
-          class="cnd-act"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
+          :title="t('connections.detail.edit')"
+          :aria-label="t('connections.detail.edit')"
           @click="emit('edit')"
         >
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="edit" />
         </Button>
         <Button
-          :title="t('connections.detail.delete')"
-          class="cnd-act cnd-danger"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
+          class="hover:border-destructive hover:text-destructive"
+          :title="t('connections.detail.delete')"
+          :aria-label="t('connections.detail.delete')"
           @click="emit('delete')"
         >
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="trash" />
         </Button>
       </div>
-    </div>
+    </Card>
 
     <!-- transient feedback (Test/OAuth live in the hero, so keep their result visible
-         on every tab, not buried inside one) -->
-    <div v-if="oauthPending || testResult" class="cnd-feedback">
+         on every tab, not buried inside one) — fixed above the tabs. -->
+    <div v-if="oauthPending || testResult" class="flex-none px-3.5">
       <!-- OAuth in-flight: the sidecar opened the browser; wait for the callback. -->
-      <div v-if="oauthPending" class="cnd-banner cnd-oauth">
-        <span class="cnd-oauth-spin" />
-        <div class="cnd-banner-body">
-          <div class="cnd-banner-title">{{ t('connections.detail.oauthWaitingTitle') }}</div>
-          <div class="cnd-banner-sum">{{ t('connections.detail.oauthWaiting') }}</div>
+      <div
+        v-if="oauthPending"
+        class="mt-3.5 flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 text-sm text-muted-foreground"
+      >
+        <span
+          class="size-3.5 flex-none animate-spin rounded-full border-2 border-border border-t-primary"
+        />
+        <div class="min-w-0 flex-1">
+          <div class="mb-0.5 font-semibold">{{ t('connections.detail.oauthWaitingTitle') }}</div>
+          <div class="break-words">{{ t('connections.detail.oauthWaiting') }}</div>
         </div>
         <Button
-          :title="t('connections.detail.oauthCancel')"
-          class="cnd-act cnd-danger"
           variant="outline"
-          size="iconMd"
+          size="iconSm"
+          class="hover:border-destructive hover:text-destructive"
+          :title="t('connections.detail.oauthCancel')"
+          :aria-label="t('connections.detail.oauthCancel')"
           @click="onCancelOAuth"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="x" />
         </Button>
       </div>
 
       <!-- transient test-result banner -->
-      <div v-if="testResult" class="cnd-banner" :class="{ ok: bannerOk, err: !bannerOk }">
-        <Icon
-          :name="bannerOk ? 'check' : 'alert'"
-          style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
-        />
-        <div class="cnd-banner-body">
-          <div class="cnd-banner-title">{{ bannerTitle }}</div>
-          <div class="mono cnd-banner-sum">{{ testSummary }}</div>
-          <div v-if="testResult.probe" class="cnd-probe" :class="{ bad: !testResult.probe.ok }">
-            <Icon
-              :name="testResult.probe.ok ? 'check' : 'alert'"
-              style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-            />
+      <Alert
+        v-if="testResult"
+        :variant="bannerOk ? 'default' : 'destructive'"
+        class="mt-3.5 px-3 py-2.5"
+        :class="bannerOk ? 'border-selected-border text-primary' : 'border-destructive/40'"
+      >
+        <Icon :name="bannerOk ? 'check' : 'alert'" />
+        <div class="col-start-2 min-w-0">
+          <div class="mb-0.5 font-semibold">{{ bannerTitle }}</div>
+          <div class="font-mono break-words">{{ testSummary }}</div>
+          <div
+            v-if="testResult.probe"
+            class="mt-1.5 flex items-center gap-1.5 break-words [&_svg]:size-3 [&_svg]:flex-none"
+            :class="testResult.probe.ok ? 'text-success' : 'text-destructive'"
+          >
+            <Icon :name="testResult.probe.ok ? 'check' : 'alert'" />
             <span>{{ probeSummary }}</span>
           </div>
-          <pre v-if="testResult.stderr?.length" class="cnd-pre">{{
-            testResult.stderr.join('\n')
-          }}</pre>
+          <!-- stderr thô của tiến trình ⇒ mono. -->
+          <pre
+            v-if="testResult.stderr?.length"
+            class="mt-2 max-h-32 overflow-y-auto rounded-md bg-sidebar px-3 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
+            >{{ testResult.stderr.join('\n') }}</pre
+          >
         </div>
-      </div>
+      </Alert>
     </div>
 
-    <!-- section tabs (fit the pane without scrolling the whole page) -->
-    <div class="seg cnd-tabs">
-      <span
-        v-for="tab in tabs"
-        :key="tab"
-        :class="{ on: activeTab === tab }"
-        @click="activeTab = tab"
-      >
-        {{ t('connections.section.' + tab) }}
-      </span>
-    </div>
+    <!-- section tabs (fit the pane without scrolling the whole page): hugs content,
+         sits between the header card + the scroll body, aligned to the same gutter. -->
+    <Tabs v-model="activeTab" class="mx-3.5 mt-3 max-w-[calc(100%-1.75rem)] flex-none self-start">
+      <TabsList class="max-w-full justify-start overflow-x-auto">
+        <TabsTrigger v-for="tab in tabs" :key="tab" :value="tab">
+          {{ t('connections.section.' + tab) }}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
 
-    <div class="dscroll cnd-body">
+    <!-- The scroll body owns the vertical space left after hero + tabs; only its content
+         scrolls, so the page itself never does. -->
+    <div class="flex-1 overflow-y-auto p-3.5">
       <!-- ── General (description + settings card + connection card) ──────── -->
       <template v-if="activeTab === 'general'">
-        <p v-if="source.description" class="cnd-lead">{{ source.description }}</p>
+        <p v-if="source.description" class="mb-3.5 text-base leading-relaxed text-muted-foreground">
+          {{ source.description }}
+        </p>
 
         <!-- Settings card: enabled + trust as tidy rows -->
-        <div class="cnd-card">
-          <div class="cnd-card-row">
-            <div class="cnd-row-text">
-              <span class="cnd-row-label">{{ t('connections.detail.enabled') }}</span>
-              <span class="cnd-row-hint">{{ t('connections.detail.enabledHint') }}</span>
-            </div>
-            <span
-              class="tog2 sm"
-              :class="{ off: !source.enabled }"
-              :title="t('connections.enableToggle')"
-              @click="emit('toggle')"
-            />
-          </div>
-          <div class="cnd-card-sep" />
-          <div class="cnd-card-row">
-            <div class="cnd-row-text">
-              <span class="cnd-row-label">{{ t('connections.detail.trust') }}</span>
-              <span class="cnd-row-hint">{{ t('connections.detail.trustHint') }}</span>
-            </div>
-            <span class="chip cnd-trust">{{ source.trust }}</span>
-          </div>
-        </div>
-
-        <!-- Connection card: config detail as a clean key/value list -->
-        <div class="cnd-card">
-          <div class="cnd-card-head">
-            <Icon name="conn" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('connections.section.connection') }}
-          </div>
-          <div class="cnd-kv">
-            <div class="cnd-kv-row">
-              <span class="cnd-kv-k">{{ t('connections.info.type') }}</span>
-              <span class="cnd-kv-v">{{ source.type.toUpperCase() }}</span>
-            </div>
-            <div v-if="sourceUrl" class="cnd-kv-row">
-              <span class="cnd-kv-k">{{ t('connections.info.' + urlLabel) }}</span>
-              <span class="cnd-kv-v mono">{{ sourceUrl }}</span>
-            </div>
-            <div v-for="row in configRows" :key="row.key" class="cnd-kv-row">
-              <span class="cnd-kv-k mono">{{ row.key }}</span>
-              <span class="cnd-kv-v" :class="{ mono: row.mono }">
-                <span>{{ row.value }}</span>
-                <span v-if="row.secretKey" class="cnd-kv-badge">
-                  <Icon name="shield" style="width: 10px; height: 10px" />
-                  {{ row.secretKey }}
-                </span>
+        <Card class="gap-0 overflow-hidden rounded-lg py-0 shadow-none">
+          <div class="flex items-center justify-between gap-3.5 px-3.5 py-3">
+            <div class="flex min-w-0 flex-col gap-0.5">
+              <span class="text-base font-medium text-foreground">
+                {{ t('connections.detail.enabled') }}
+              </span>
+              <span class="text-xs text-muted-foreground">
+                {{ t('connections.detail.enabledHint') }}
               </span>
             </div>
-            <div class="cnd-kv-row">
-              <span class="cnd-kv-k">{{ t('connections.info.lastTested') }}</span>
-              <span class="cnd-kv-v">{{ lastTestedRelative }}</span>
+            <Switch
+              :checked="source.enabled"
+              :title="t('connections.enableToggle')"
+              :aria-label="t('connections.enableToggle')"
+              @update:checked="emit('toggle')"
+            />
+          </div>
+          <Separator />
+          <div class="flex items-center justify-between gap-3.5 px-3.5 py-3">
+            <div class="flex min-w-0 flex-col gap-0.5">
+              <span class="text-base font-medium text-foreground">
+                {{ t('connections.detail.trust') }}
+              </span>
+              <span class="text-xs text-muted-foreground">
+                {{ t('connections.detail.trustHint') }}
+              </span>
+            </div>
+            <Badge variant="outline" class="capitalize">{{ source.trust }}</Badge>
+          </div>
+        </Card>
+
+        <!-- Connection card: config detail as a clean key/value list -->
+        <Card class="mt-3 gap-0 overflow-hidden rounded-lg py-0 shadow-none">
+          <div
+            class="flex items-center gap-2 border-b px-3.5 py-2.5 text-xs text-muted-foreground [&_svg]:size-3.5"
+          >
+            <Icon name="conn" />
+            {{ t('connections.section.connection') }}
+          </div>
+          <div class="flex flex-col divide-y">
+            <div class="flex gap-3.5 px-3.5 py-2.5 text-sm">
+              <span class="min-w-26 flex-none text-muted-foreground">
+                {{ t('connections.info.type') }}
+              </span>
+              <span class="min-w-0 flex-1 break-words text-foreground">
+                {{ source.type.toUpperCase() }}
+              </span>
+            </div>
+            <div v-if="sourceUrl" class="flex gap-3.5 px-3.5 py-2.5 text-sm">
+              <span class="min-w-26 flex-none text-muted-foreground">
+                {{ t('connections.info.' + urlLabel) }}
+              </span>
+              <span class="min-w-0 flex-1 font-mono break-words text-foreground">
+                {{ sourceUrl }}
+              </span>
+            </div>
+            <div
+              v-for="row in configRows"
+              :key="row.key"
+              class="flex gap-3.5 px-3.5 py-2.5 text-sm"
+            >
+              <!-- Khoá config là identifier ⇒ mono. -->
+              <span class="min-w-26 flex-none font-mono text-muted-foreground">{{ row.key }}</span>
+              <span
+                class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 break-words text-foreground"
+                :class="row.mono && 'font-mono'"
+              >
+                <span>{{ row.value }}</span>
+                <!-- Keychain reference badge — accent-tinted pill naming the stored key. -->
+                <Badge
+                  v-if="row.secretKey"
+                  variant="outline"
+                  class="rounded-sm border-selected-border px-2 py-0 text-sm font-normal text-primary [&_svg]:size-2.5"
+                >
+                  <Icon name="shield" />
+                  {{ row.secretKey }}
+                </Badge>
+              </span>
+            </div>
+            <div class="flex gap-3.5 px-3.5 py-2.5 text-sm">
+              <span class="min-w-26 flex-none text-muted-foreground">
+                {{ t('connections.info.lastTested') }}
+              </span>
+              <span class="min-w-0 flex-1 text-foreground">{{ lastTestedRelative }}</span>
             </div>
           </div>
-          <div v-if="connectionError" class="cnd-card-err">
-            <Icon
-              name="alert"
-              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 2px"
-            />
+          <div
+            v-if="connectionError"
+            class="flex gap-2 border-t border-destructive/40 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
+          >
+            <Icon name="alert" class="mt-0.5 size-3.5 flex-none" />
             <!-- URLs inside a provider error (e.g. Slack's "enable it here:
                  https://api.slack.com/apps/…/app-assistant") become real links
                  opening in the system browser — the raw JSON string was
                  unreadable and unclickable. -->
-            <span class="mono cnd-err-text">
+            <span class="font-mono break-words">
               <template v-for="(part, i) in errorParts" :key="i">
                 <a
                   v-if="part.isUrl"
                   :href="part.text"
-                  class="cnd-err-link"
+                  class="cursor-pointer text-primary underline underline-offset-2 hover:opacity-85"
                   @click.prevent="openErrorLink(part.text)"
                 >
                   {{ part.text }}
@@ -223,35 +268,34 @@
               </template>
             </span>
           </div>
-        </div>
+        </Card>
       </template>
 
       <!-- ── Tools (mcp + api) ──────────────────────────────────────────── -->
       <template v-else-if="activeTab === 'tools'">
         <!-- Loading: header + live activity console (what the handshake is doing). -->
         <template v-if="toolsLoading">
-          <div class="fd cnd-loading">
-            <span class="cnd-oauth-spin cnd-spin-sm" />
+          <div class="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              class="size-3 flex-none animate-spin rounded-full border-2 border-border border-t-primary"
+            />
             {{ t('connections.tools.loading') }}
           </div>
-          <ConnectionToolsLog v-if="toolsLog.length" class="cnd-log" :lines="toolsLog" live />
+          <ConnectionToolsLog v-if="toolsLog.length" class="mt-2" :lines="toolsLog" live />
         </template>
 
         <!-- Error: banner + the full transcript (it explains the failure). -->
         <template v-else-if="toolsError">
-          <div class="cnd-banner err">
-            <Icon
-              name="alert"
-              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
-            />
-            <div class="cnd-banner-body">
-              <div class="cnd-banner-title">{{ t('connections.tools.errorTitle') }}</div>
-              <div class="mono cnd-banner-sum cnd-err-text">
+          <Alert variant="destructive" class="mt-3.5 border-destructive/40 px-3 py-2.5">
+            <Icon name="alert" />
+            <div class="col-start-2 min-w-0">
+              <div class="mb-0.5 font-semibold">{{ t('connections.tools.errorTitle') }}</div>
+              <div class="font-mono break-words">
                 <template v-for="(part, i) in toolsErrorParts" :key="i">
                   <a
                     v-if="part.isUrl"
                     :href="part.text"
-                    class="cnd-err-link"
+                    class="cursor-pointer text-primary underline underline-offset-2 hover:opacity-85"
                     @click.prevent="openErrorLink(part.text)"
                   >
                     {{ part.text }}
@@ -260,146 +304,173 @@
                 </template>
               </div>
             </div>
-          </div>
-          <ConnectionToolsLog v-if="toolsLog.length" class="cnd-log" :lines="toolsLog" />
+          </Alert>
+          <ConnectionToolsLog v-if="toolsLog.length" class="mt-2" :lines="toolsLog" />
         </template>
 
         <!-- No tools: empty note + collapsible transcript. -->
         <template v-else-if="!tools.length">
-          <div class="fd">{{ t('connections.tools.empty') }}</div>
-          <div v-if="toolsLog.length" class="cnd-log-foot">
-            <button class="cnd-log-toggle" @click="logOpen = !logOpen">
-              <Icon
-                name="chev"
-                class="cnd-log-chev"
-                :class="{ closed: !logOpen }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
-              />
+          <div class="text-sm text-muted-foreground">{{ t('connections.tools.empty') }}</div>
+          <div v-if="toolsLog.length" class="mt-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              class="-ml-1.5 gap-1.5 px-1.5 font-normal text-muted-foreground [&_svg]:size-3"
+              @click="logOpen = !logOpen"
+            >
+              <Icon name="chev" class="transition-transform" :class="!logOpen && '-rotate-90'" />
               {{ t(logOpen ? 'connections.tools.hideLog' : 'connections.tools.showLog') }}
-            </button>
-            <ConnectionToolsLog v-if="logOpen" class="cnd-log" :lines="toolsLog" />
+            </Button>
+            <ConnectionToolsLog v-if="logOpen" class="mt-2" :lines="toolsLog" />
           </div>
         </template>
 
         <!-- Tools listed: the list + a collapsible transcript beneath. -->
         <template v-else>
-          <div class="cnd-tools">
+          <div class="flex flex-col gap-1.5">
             <div
               v-for="tool in tools"
               :key="tool.name"
-              class="cnd-tool"
-              :class="{ blocked: !tool.allowed }"
+              class="flex items-start gap-2 rounded-md border bg-card px-2.5 py-2 text-muted-foreground"
+              :class="!tool.allowed && 'opacity-70'"
             >
-              <Icon
-                name="zap"
-                style="
-                  width: var(--icon-xs);
-                  height: var(--icon-xs);
-                  flex: 0 0 auto;
-                  margin-top: 3px;
-                "
-              />
-              <div class="cnd-tool-body">
-                <div class="cnd-tool-head">
-                  <span class="mono cnd-tool-name">{{ tool.display }}</span>
-                  <span class="tag" :class="tool.allowed ? 'cnd-allowed' : 'cnd-blocked'">
+              <Icon name="zap" class="mt-0.5 size-3 flex-none" />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <!-- Tên tool là identifier ⇒ mono. -->
+                  <span class="font-mono text-sm font-medium text-foreground">
+                    {{ tool.display }}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    class="uppercase"
+                    :class="
+                      tool.allowed
+                        ? 'border-success text-success'
+                        : 'border-destructive/40 text-destructive'
+                    "
+                  >
                     {{
                       t(tool.allowed ? 'connections.tools.allowed' : 'connections.tools.blocked')
                     }}
-                  </span>
+                  </Badge>
                 </div>
-                <div v-if="tool.description" class="cnd-tool-desc">{{ tool.description }}</div>
+                <div v-if="tool.description" class="mt-0.5 text-sm text-muted-foreground">
+                  {{ tool.description }}
+                </div>
               </div>
             </div>
           </div>
-          <div v-if="toolsLog.length" class="cnd-log-foot">
-            <button class="cnd-log-toggle" @click="logOpen = !logOpen">
-              <Icon
-                name="chev"
-                class="cnd-log-chev"
-                :class="{ closed: !logOpen }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
-              />
+          <div v-if="toolsLog.length" class="mt-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              class="-ml-1.5 gap-1.5 px-1.5 font-normal text-muted-foreground [&_svg]:size-3"
+              @click="logOpen = !logOpen"
+            >
+              <Icon name="chev" class="transition-transform" :class="!logOpen && '-rotate-90'" />
               {{ t(logOpen ? 'connections.tools.hideLog' : 'connections.tools.showLog') }}
-            </button>
-            <ConnectionToolsLog v-if="logOpen" class="cnd-log" :lines="toolsLog" />
+            </Button>
+            <ConnectionToolsLog v-if="logOpen" class="mt-2" :lines="toolsLog" />
           </div>
         </template>
       </template>
 
       <!-- ── Permissions ────────────────────────────────────────────────── -->
       <template v-else-if="activeTab === 'permissions'">
-        <div v-if="!permsEditing" class="cnd-tab-actions">
+        <!-- Right-aligned edit affordance (the tab label already names the section, so
+             no redundant header text). Documentation folds its Edit into the markdown
+             toolbar row instead. -->
+        <div v-if="!permsEditing" class="mb-2 flex justify-end">
           <Button
-            :title="t('connections.perms.edit')"
-            class="cnd-sech-edit"
             variant="outline"
-            size="iconMd"
+            size="iconSm"
+            class="size-6 [&_svg]:size-3"
+            :title="t('connections.perms.edit')"
+            :aria-label="t('connections.perms.edit')"
             @click="startPermsEdit"
           >
-            <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="edit" />
           </Button>
         </div>
 
-        <!-- permissions: edit (structured, line-based) -->
-        <div v-if="permsEditing" class="cnd-edit">
-          <div class="cnd-edit-field">
-            <label class="cnd-edit-label">{{ t('connections.perms.mcp') }}</label>
-            <textarea
+        <!-- permissions: edit (structured, line-based). Pattern/path là code ⇒ mono. -->
+        <div v-if="permsEditing" class="flex flex-col gap-3">
+          <div class="flex flex-col gap-1.5">
+            <Label for="cnd-perm-mcp" class="text-xs font-normal text-muted-foreground">
+              {{ t('connections.perms.mcp') }}
+            </Label>
+            <Textarea
+              id="cnd-perm-mcp"
               v-model="permsMcpText"
-              class="cnd-edit-ta"
+              class="min-h-18 resize-y font-mono text-sm"
               spellcheck="false"
               :placeholder="t('connections.perms.mcpPh')"
             />
           </div>
-          <div class="cnd-edit-field">
-            <label class="cnd-edit-label">{{ t('connections.perms.api') }}</label>
-            <textarea
+          <div class="flex flex-col gap-1.5">
+            <Label for="cnd-perm-api" class="text-xs font-normal text-muted-foreground">
+              {{ t('connections.perms.api') }}
+            </Label>
+            <Textarea
+              id="cnd-perm-api"
               v-model="permsApiText"
-              class="cnd-edit-ta"
+              class="min-h-18 resize-y font-mono text-sm"
               spellcheck="false"
               :placeholder="t('connections.perms.apiPh')"
             />
-            <div class="cnd-edit-hint">{{ t('connections.perms.apiHint') }}</div>
+            <div class="text-xs text-faint">{{ t('connections.perms.apiHint') }}</div>
           </div>
-          <div class="cnd-edit-field">
-            <label class="cnd-edit-label">{{ t('connections.perms.bash') }}</label>
-            <textarea
+          <div class="flex flex-col gap-1.5">
+            <Label for="cnd-perm-bash" class="text-xs font-normal text-muted-foreground">
+              {{ t('connections.perms.bash') }}
+            </Label>
+            <Textarea
+              id="cnd-perm-bash"
               v-model="permsBashText"
-              class="cnd-edit-ta"
+              class="min-h-18 resize-y font-mono text-sm"
               spellcheck="false"
               :placeholder="t('connections.perms.bashPh')"
             />
           </div>
-          <div class="cnd-edit-field">
-            <label class="cnd-edit-label">{{ t('connections.perms.write') }}</label>
-            <textarea
+          <div class="flex flex-col gap-1.5">
+            <Label for="cnd-perm-write" class="text-xs font-normal text-muted-foreground">
+              {{ t('connections.perms.write') }}
+            </Label>
+            <Textarea
+              id="cnd-perm-write"
               v-model="permsWriteText"
-              class="cnd-edit-ta"
+              class="min-h-18 resize-y font-mono text-sm"
               spellcheck="false"
               :placeholder="t('connections.perms.writePh')"
             />
           </div>
-          <div class="cnd-edit-hint">{{ t('connections.perms.editHint') }}</div>
-          <div v-if="permsError" class="cnd-banner err">
-            <Icon
-              name="alert"
-              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
-            />
-            <div class="cnd-banner-body">
-              <div class="cnd-banner-title">{{ t('connections.perms.saveError') }}</div>
-              <div class="mono cnd-banner-sum">{{ permsError }}</div>
+          <div class="text-xs text-faint">{{ t('connections.perms.editHint') }}</div>
+          <Alert
+            v-if="permsError"
+            variant="destructive"
+            class="mt-3.5 border-destructive/40 px-3 py-2.5"
+          >
+            <Icon name="alert" />
+            <div class="col-start-2 min-w-0">
+              <div class="mb-0.5 font-semibold">{{ t('connections.perms.saveError') }}</div>
+              <div class="font-mono break-words">{{ permsError }}</div>
             </div>
-          </div>
-          <div class="cnd-edit-actions">
+          </Alert>
+          <div class="flex justify-end gap-2">
             <Button :disabled="permsSaving" variant="outline" size="sm" @click="cancelPermsEdit">
               {{ t('common.cancel') }}
             </Button>
-            <Button :disabled="permsSaving" variant="default" size="sm" @click="savePermsEdit">
+            <Button
+              :disabled="permsSaving"
+              variant="default"
+              size="sm"
+              class="[&_svg]:size-3"
+              @click="savePermsEdit"
+            >
               <Icon
                 :name="permsSaving ? 'refresh' : 'check'"
-                :class="{ spin: permsSaving }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
+                :class="permsSaving && 'animate-spin'"
               />
               {{ permsSaving ? t('connections.edit.saving') : t('common.save') }}
             </Button>
@@ -408,31 +479,53 @@
 
         <!-- permissions: view -->
         <template v-else>
-          <div v-if="permsLoading" class="fd cnd-loading">
-            <span class="cnd-oauth-spin cnd-spin-sm" />
+          <div v-if="permsLoading" class="flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              class="size-3 flex-none animate-spin rounded-full border-2 border-border border-t-primary"
+            />
             {{ t('connections.perms.loading') }}
           </div>
-          <div v-else-if="!hasPermissions" class="fd">{{ t('connections.perms.empty') }}</div>
-          <div v-else class="cnd-perms">
-            <div v-if="permissions?.allowedMcpPatterns?.length" class="cnd-perm-group">
-              <div class="cnd-perm-label">{{ t('connections.perms.mcp') }}</div>
-              <div v-for="p in permissions.allowedMcpPatterns" :key="p" class="cnd-perm-item mono">
+          <div v-else-if="!hasPermissions" class="text-sm text-muted-foreground">
+            {{ t('connections.perms.empty') }}
+          </div>
+          <div v-else class="flex flex-col gap-3">
+            <div v-if="permissions?.allowedMcpPatterns?.length" class="flex flex-col gap-1">
+              <div class="text-xs text-muted-foreground">{{ t('connections.perms.mcp') }}</div>
+              <div
+                v-for="p in permissions.allowedMcpPatterns"
+                :key="p"
+                class="rounded-md border bg-muted px-2.5 py-1.5 font-mono text-sm break-all text-muted-foreground"
+              >
                 {{ p }}
               </div>
             </div>
-            <div v-if="apiEndpointLines.length" class="cnd-perm-group">
-              <div class="cnd-perm-label">{{ t('connections.perms.api') }}</div>
-              <div v-for="p in apiEndpointLines" :key="p" class="cnd-perm-item mono">{{ p }}</div>
-            </div>
-            <div v-if="permissions?.allowedBashPatterns?.length" class="cnd-perm-group">
-              <div class="cnd-perm-label">{{ t('connections.perms.bash') }}</div>
-              <div v-for="p in permissions.allowedBashPatterns" :key="p" class="cnd-perm-item mono">
+            <div v-if="apiEndpointLines.length" class="flex flex-col gap-1">
+              <div class="text-xs text-muted-foreground">{{ t('connections.perms.api') }}</div>
+              <div
+                v-for="p in apiEndpointLines"
+                :key="p"
+                class="rounded-md border bg-muted px-2.5 py-1.5 font-mono text-sm break-all text-muted-foreground"
+              >
                 {{ p }}
               </div>
             </div>
-            <div v-if="permissions?.allowedWritePaths?.length" class="cnd-perm-group">
-              <div class="cnd-perm-label">{{ t('connections.perms.write') }}</div>
-              <div v-for="p in permissions.allowedWritePaths" :key="p" class="cnd-perm-item mono">
+            <div v-if="permissions?.allowedBashPatterns?.length" class="flex flex-col gap-1">
+              <div class="text-xs text-muted-foreground">{{ t('connections.perms.bash') }}</div>
+              <div
+                v-for="p in permissions.allowedBashPatterns"
+                :key="p"
+                class="rounded-md border bg-muted px-2.5 py-1.5 font-mono text-sm break-all text-muted-foreground"
+              >
+                {{ p }}
+              </div>
+            </div>
+            <div v-if="permissions?.allowedWritePaths?.length" class="flex flex-col gap-1">
+              <div class="text-xs text-muted-foreground">{{ t('connections.perms.write') }}</div>
+              <div
+                v-for="p in permissions.allowedWritePaths"
+                :key="p"
+                class="rounded-md border bg-muted px-2.5 py-1.5 font-mono text-sm break-all text-muted-foreground"
+              >
                 {{ p }}
               </div>
             </div>
@@ -445,33 +538,39 @@
         <!-- documentation: edit (direct markdown textarea — no AI). The Edit
              trigger lives in the markdown toolbar row below (allow-edit), so view
              mode shows a single controls row (Render/Raw · Copy · Edit). -->
-        <div v-if="guideEditing" class="cnd-edit">
-          <textarea
+        <div v-if="guideEditing" class="flex flex-col gap-3">
+          <Textarea
             v-model="guideDraft"
-            class="cnd-edit-ta lg"
+            class="min-h-72 resize-y font-mono text-sm"
             spellcheck="false"
             :placeholder="t('connections.doc.editPlaceholder')"
           />
-          <div class="cnd-edit-hint">{{ t('connections.doc.editHint') }}</div>
-          <div v-if="guideError" class="cnd-banner err">
-            <Icon
-              name="alert"
-              style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto"
-            />
-            <div class="cnd-banner-body">
-              <div class="cnd-banner-title">{{ t('connections.doc.saveError') }}</div>
-              <div class="mono cnd-banner-sum">{{ guideError }}</div>
+          <div class="text-xs text-faint">{{ t('connections.doc.editHint') }}</div>
+          <Alert
+            v-if="guideError"
+            variant="destructive"
+            class="mt-3.5 border-destructive/40 px-3 py-2.5"
+          >
+            <Icon name="alert" />
+            <div class="col-start-2 min-w-0">
+              <div class="mb-0.5 font-semibold">{{ t('connections.doc.saveError') }}</div>
+              <div class="font-mono break-words">{{ guideError }}</div>
             </div>
-          </div>
-          <div class="cnd-edit-actions">
+          </Alert>
+          <div class="flex justify-end gap-2">
             <Button :disabled="guideSaving" variant="outline" size="sm" @click="cancelGuideEdit">
               {{ t('common.cancel') }}
             </Button>
-            <Button :disabled="guideSaving" variant="default" size="sm" @click="saveGuideEdit">
+            <Button
+              :disabled="guideSaving"
+              variant="default"
+              size="sm"
+              class="[&_svg]:size-3"
+              @click="saveGuideEdit"
+            >
               <Icon
                 :name="guideSaving ? 'refresh' : 'check'"
-                :class="{ spin: guideSaving }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
+                :class="guideSaving && 'animate-spin'"
               />
               {{ guideSaving ? t('connections.edit.saving') : t('common.save') }}
             </Button>
@@ -479,13 +578,17 @@
         </div>
 
         <!-- documentation: view -->
-        <div v-else-if="guideLoading" class="fd cnd-loading">
-          <span class="cnd-oauth-spin cnd-spin-sm" />
+        <div v-else-if="guideLoading" class="flex items-center gap-2 text-sm text-muted-foreground">
+          <span
+            class="size-3 flex-none animate-spin rounded-full border-2 border-border border-t-primary"
+          />
           {{ t('connections.doc.loading') }}
         </div>
+        <!-- hook-ok: `.lmb-head` / `.lmb-title` là class gốc của LibraryMarkdownBody — viewer
+             dùng lại nằm đầu tab nên bỏ margin trên + giấu tiêu đề rỗng của nó. -->
         <LibraryMarkdownBody
           v-else
-          class="cnd-guide-body"
+          class="[&_.lmb-head]:mt-0 [&_.lmb-title]:hidden"
           :title="''"
           :content="guide"
           :empty-text="t('connections.doc.empty')"
@@ -729,479 +832,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.cnd {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1;
-}
-/* Header card: avatar + name + tagline + meta on the left, action buttons docked
-   top-right on ONE row. A floating card (matches the content cards) with the pane
-   gutter around it, not a flat header bar. */
-.cnd-hero {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-start;
-  gap: 13px;
-  margin: 14px 14px 0;
-  padding: 15px 16px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-}
-.cnd-hero-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.cnd-hero-name {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-  word-break: break-word;
-}
-.cnd-hero-tagline {
-  font-size: var(--fs-sm);
-  color: var(--textMuted);
-  line-height: var(--lh-sm);
-}
-.cnd-hero-meta {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-}
-.cnd-actions {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-}
-/* Transient Test/OAuth feedback — fixed above the tabs so it shows on any tab. */
-.cnd-feedback {
-  flex: 0 0 auto;
-  padding: 0 14px;
-}
-/* Section tab bar (reuses .seg but on a card surface): hugs content, sits between
-   the header card + the scroll body, aligned to the same gutter. */
-.cnd-tabs {
-  flex: 0 0 auto;
-  align-self: flex-start;
-  margin: 12px 14px 0;
-  max-width: calc(100% - 28px);
-  overflow-x: auto;
-  background: var(--bgInput);
-}
-/* The scroll body owns the vertical space left after hero + tabs; only its content
-   scrolls, so the page itself never does. Same 14px gutter as the header/tabs. */
-.cnd-body {
-  padding: 14px;
-}
-/* Right-aligned edit affordance for the Permissions tab (the tab label already
-   names the section, so no redundant header text). Documentation folds its Edit
-   into the markdown toolbar row instead. */
-.cnd-tab-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-.cnd-act {
-  width: 28px;
-  height: 28px;
-}
-.cnd-act:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.cnd-danger:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-.cnd-status {
-  text-transform: capitalize;
-}
-.cnd-lead {
-  font-size: var(--fs-md);
-  color: var(--textMuted);
-  line-height: var(--lh-prose);
-  margin: 0 0 14px;
-}
-/* ── Card system (General tab + shared) ─────────────────────────────────────
-   Subtle surface + hairline border + radius (flat, no heavy shadow) — the app's
-   card language (shadcn-style neutral). */
-.cnd-card {
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  overflow: hidden;
-}
-.cnd-card + .cnd-card {
-  margin-top: 12px;
-}
-/* Card header: icon + uppercase mono label, hairline underline. */
-.cnd-card-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 14px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  border-bottom: 1px solid var(--border);
-}
-/* A settings row: label + hint on the left, control on the right. */
-.cnd-card-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-}
-.cnd-card-sep {
-  height: 1px;
-  background: var(--border);
-}
-.cnd-row-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.cnd-row-label {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-  color: var(--text);
-}
-.cnd-row-hint {
-  font-size: var(--fs-xs);
-  color: var(--textDim);
-  line-height: var(--lh-xs);
-}
-.cnd-trust {
-  text-transform: capitalize;
-}
-/* Key/value list inside a card. */
-.cnd-kv {
-  display: flex;
-  flex-direction: column;
-}
-.cnd-kv-row {
-  display: flex;
-  gap: 14px;
-  padding: 10px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cnd-kv-row + .cnd-kv-row {
-  border-top: 1px solid var(--border);
-}
-.cnd-kv-k {
-  flex: 0 0 auto;
-  min-width: 104px;
-  color: var(--textDim);
-}
-.cnd-kv-v {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  padding: 9px 11px;
-  flex-wrap: wrap;
-  color: var(--text);
-  word-break: break-word;
-}
-/* Keychain reference badge — accent-tinted pill naming the stored key. */
-.cnd-kv-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
-  font-size: 12px;
-  line-height: 18px;
-}
-.cnd-card-err {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--dangerDim);
-  border-top: 1px solid var(--dangerBorder);
-}
-.cnd-err-text {
-  word-break: break-word;
-}
-.cnd-err-link {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.cnd-err-link:hover {
-  opacity: 0.85;
-}
-.cnd-banner {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-  padding: 11px 13px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.cnd-banner.ok {
-  border-color: var(--accentBorder);
-  color: var(--accent);
-}
-.cnd-banner.err {
-  border-color: var(--dangerBorder);
-  color: var(--danger);
-}
-.cnd-oauth {
-  align-items: center;
-  color: var(--textMuted);
-}
-.cnd-oauth-spin {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: cnd-spin 0.7s linear infinite;
-}
-.cnd-spin-sm {
-  width: 12px;
-  height: 12px;
-}
-.cnd-banner-body {
-  flex: 1;
-  min-width: 0;
-}
-.cnd-banner-title {
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-.cnd-banner-sum {
-  word-break: break-word;
-}
-.cnd-probe {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  color: var(--green);
-  word-break: break-word;
-}
-.cnd-probe.bad {
-  color: var(--danger);
-}
-.cnd-pre {
-  /* mono-ok: JSON / env block */
-  font-family: var(--code);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  margin-top: 9px;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-  color: var(--textDim);
-  max-height: 8rem;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-.cnd-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cnd-tools {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* Activity console (ConnectionToolsLog) placement: a small gap under whatever it
-   follows (loading row / error banner / tools list). */
-.cnd-log {
-  margin-top: 9px;
-}
-.cnd-log-foot {
-  margin-top: 8px;
-}
-.cnd-log-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  margin-left: -6px;
-  border: 0;
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-  border-radius: var(--r-xs);
-}
-.cnd-log-toggle:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.cnd-log-chev {
-  transition: transform 0.15s ease;
-}
-.cnd-log-chev.closed {
-  transform: rotate(-90deg);
-}
-.cnd-tool {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-}
-.cnd-tool.blocked {
-  opacity: 0.7;
-}
-.cnd-tool-body {
-  flex: 1;
-  min-width: 0;
-}
-.cnd-tool-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.cnd-tool-name {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.cnd-tool-desc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  margin-top: 2px;
-}
-.cnd-allowed {
-  color: var(--green);
-  border-color: var(--green);
-  text-transform: uppercase;
-}
-.cnd-blocked {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-  text-transform: uppercase;
-}
-.cnd-perms {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.cnd-perm-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.cnd-perm-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.cnd-perm-item {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-  padding: 6px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  word-break: break-all;
-}
-/* Icon-only edit affordance in the Permissions / Documentation tab-action row. */
-.cnd-sech-edit {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-}
-/* The reused markdown viewer sits at the top of the Documentation tab, so drop its
-   built-in top margin (its empty title is hidden). */
-.cnd-guide-body :deep(.lmb-head) {
-  margin-top: 0;
-}
-.cnd-guide-body :deep(.lmb-title) {
-  display: none;
-}
-/* Inline direct editors (guide markdown / permissions arrays). */
-.cnd-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.cnd-edit-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cnd-edit-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.cnd-edit-ta {
-  width: 100%;
-  min-height: 4.5rem;
-  resize: vertical;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
-  color: var(--text);
-  /* mono-ok: JSON config editor */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-  outline: none;
-}
-.cnd-edit-ta.lg {
-  min-height: 18rem;
-}
-.cnd-edit-ta:focus {
-  border-color: var(--accentBorder);
-}
-.cnd-edit-hint {
-  font-size: var(--fs-xs);
-  color: var(--textFaint);
-  line-height: var(--lh-sm);
-}
-.cnd-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.spin {
-  animation: cnd-spin 0.9s linear infinite;
-}
-@keyframes cnd-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

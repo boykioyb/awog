@@ -1,10 +1,13 @@
 <template>
-  <div class="cap-repeater">
-    <div class="cap-rep-col">
-      <div class="cap-bar">
-        <span class="cap-dim">{{ t('capture.repeater.request') }}</span>
-        <span class="cap-grow" />
-        <label class="rep-follow" :title="t('capture.repeater.followHint')">
+  <div class="grid min-h-0 flex-auto grid-cols-2">
+    <div class="flex min-h-0 min-w-0 flex-col overflow-auto">
+      <div :class="CAP_BAR">
+        <span class="text-dim">{{ t('capture.repeater.request') }}</span>
+        <span class="flex-auto" />
+        <label
+          class="inline-flex cursor-pointer items-center gap-1.5 text-dim"
+          :title="t('capture.repeater.followHint')"
+        >
           <Switch v-model:checked="cap.repeaterFollow.value" />
           <span>{{ t('capture.repeater.follow') }}</span>
         </label>
@@ -16,7 +19,7 @@
         >
           <Icon
             :name="cap.repeaterSending.value ? 'refresh' : 'send'"
-            :class="{ 'rep-spin': cap.repeaterSending.value }"
+            :class="cap.repeaterSending.value && 'animate-spin'"
           />
           {{
             cap.repeaterSending.value ? t('capture.repeater.sending') : t('capture.repeater.send')
@@ -25,58 +28,61 @@
       </div>
       <Textarea
         v-model="cap.repeaterDraft.value"
-        class="rep-editor cap-code"
+        class="mx-2 min-h-55 w-auto flex-none resize-y overflow-auto font-mono text-sm whitespace-pre"
         spellcheck="false"
         :placeholder="t('capture.repeater.placeholder')"
         @keydown.meta.enter.prevent="cap.sendRepeater()"
         @keydown.ctrl.enter.prevent="cap.sendRepeater()"
       />
-      <div class="cap-note">{{ t('capture.repeater.note') }}</div>
+      <div :class="CAP_NOTE">{{ t('capture.repeater.note') }}</div>
 
-      <div class="cap-bar">
-        <span class="cap-dim">
+      <div :class="CAP_BAR">
+        <span class="text-dim">
           {{ t('capture.repeater.history', { n: cap.repeaterHistory.value.length }) }}
         </span>
       </div>
-      <div class="rep-hist">
-        <button
+      <div class="flex flex-col">
+        <!-- Cả dòng là một vùng bấm; đang xem = accent-tint + thanh accent 2px. -->
+        <Button
           v-for="h in cap.repeaterHistory.value"
           :key="h.n"
-          type="button"
-          class="rep-hist-row"
-          :class="{ on: toRaw(h.result) === toRaw(result) }"
+          variant="ghost"
+          class="grid h-auto grid-cols-[auto_auto_1fr_auto] justify-normal gap-2 rounded-none px-2 py-1 text-left font-normal text-foreground"
+          :class="toRaw(h.result) === toRaw(result) && CAP_ROW_SEL"
           @click="cap.loadHistory(h)"
         >
-          <Badge variant="outline" class="rep-meth">{{ h.method }}</Badge>
+          <Badge variant="outline" class="min-w-13 justify-center">{{ h.method }}</Badge>
           <Badge
             :variant="h.result.ok ? statusVariant(h.result.status) : 'destructive'"
             class="tnum"
           >
             {{ h.result.ok ? h.result.status : t('capture.status.failed') }}
           </Badge>
-          <span class="cap-cut cap-code" :title="h.url">{{ h.url }}</span>
-          <span class="cap-dim tnum">
+          <span class="min-w-0 truncate font-mono" :title="h.url">{{ h.url }}</span>
+          <span class="tnum text-dim">
             {{ h.result.ok ? `${Math.round(h.result.timeMs)} ms` : '' }}
           </span>
-        </button>
+        </Button>
       </div>
     </div>
 
-    <div class="cap-rep-col">
-      <div class="cap-bar">
-        <span class="cap-dim">{{ t('capture.repeater.response') }}</span>
+    <div
+      class="flex min-h-0 min-w-0 flex-col overflow-auto shadow-[inset_1px_0_0_var(--color-border)]"
+    >
+      <div :class="CAP_BAR">
+        <span class="text-dim">{{ t('capture.repeater.response') }}</span>
         <template v-if="result && result.ok">
           <Badge :variant="statusVariant(result.status)" class="tnum">
             {{ result.status }} {{ result.statusText }}
           </Badge>
-          <span class="cap-dim tnum">{{ Math.round(result.timeMs) }} ms</span>
+          <span class="tnum text-dim">{{ Math.round(result.timeMs) }} ms</span>
         </template>
       </div>
-      <div v-if="!result" class="cap-empty">{{ t('capture.repeater.empty') }}</div>
-      <div v-else-if="!result.ok" class="cap-note bad">{{ result.error }}</div>
-      <div v-else class="cap-tab">
-        <section class="cap-sec">
-          <h4>
+      <div v-if="!result" :class="CAP_EMPTY">{{ t('capture.repeater.empty') }}</div>
+      <div v-else-if="!result.ok" :class="CAP_NOTE_BAD">{{ result.error }}</div>
+      <div v-else :class="CAP_TAB">
+        <section :class="CAP_SEC">
+          <h4 :class="CAP_SEC_TITLE">
             {{ t('capture.headers.response', { n: result.headers.length }) }}
             <Button
               variant="ghost"
@@ -87,26 +93,26 @@
             >
               <Icon
                 :name="copy.iconFor('rep-headers')"
-                :style="
-                  copy.copiedKey.value === 'rep-headers' ? { color: 'var(--green)' } : undefined
-                "
+                :class="copy.copiedKey.value === 'rep-headers' && 'text-success'"
               />
             </Button>
-            <span class="rep-live" aria-live="polite">
+            <span class="sr-only" aria-live="polite">
               {{ copy.copiedKey.value === 'rep-headers' ? t('capture.toast.copied') : '' }}
             </span>
           </h4>
-          <table class="cap-kv">
-            <tbody>
-              <tr v-for="(h, i) in result.headers" :key="i">
-                <th class="cap-code">{{ h[0] }}</th>
-                <td class="cap-code cap-wrap">{{ h[1] }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <Table :class="CAP_KV">
+            <TableBody>
+              <TableRow v-for="(h, i) in result.headers" :key="i">
+                <TableHead class="font-mono">{{ h[0] }}</TableHead>
+                <TableCell class="font-mono whitespace-pre-wrap wrap-anywhere">
+                  {{ h[1] }}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </section>
-        <section class="cap-sec">
-          <h4>{{ t('capture.tab.response') }}</h4>
+        <section :class="CAP_SEC">
+          <h4 :class="CAP_SEC_TITLE">{{ t('capture.tab.response') }}</h4>
           <CaptureBodyView :body="result.body" :mime-type="resultMime" />
         </section>
       </div>
@@ -122,6 +128,17 @@ import Switch from '~/components/ui/switch/Switch.vue'
 import Textarea from '~/components/ui/textarea/Textarea.vue'
 import { useNetworkCaptureContext } from '~/composables/useNetworkCapture'
 import CaptureBodyView from './CaptureBodyView.vue'
+import {
+  CAP_BAR,
+  CAP_EMPTY,
+  CAP_KV,
+  CAP_NOTE,
+  CAP_NOTE_BAD,
+  CAP_ROW_SEL,
+  CAP_SEC,
+  CAP_SEC_TITLE,
+  CAP_TAB,
+} from './capture-ui'
 
 const { t } = useI18n()
 const cap = useNetworkCaptureContext()
@@ -142,68 +159,3 @@ const headersText = computed(() => {
 const statusVariant = (status: number) =>
   status >= 500 ? 'destructive' : status >= 400 ? 'warning' : status >= 300 ? 'info' : 'success'
 </script>
-
-<style scoped>
-.rep-follow {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.rep-editor {
-  flex: 0 0 auto;
-  width: auto;
-  min-height: 220px;
-  margin: 0 8px;
-  resize: vertical;
-  background: var(--bgInput);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre;
-  overflow: auto;
-}
-.rep-hist {
-  display: flex;
-  flex-direction: column;
-}
-.rep-hist-row {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.rep-hist-row:hover {
-  background: var(--bgHover);
-}
-.rep-hist-row.on {
-  background: var(--accentDim);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.rep-meth {
-  min-width: 52px;
-  justify-content: center;
-}
-.rep-live {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-.rep-spin {
-  animation: rep-spin 1s linear infinite;
-}
-@keyframes rep-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

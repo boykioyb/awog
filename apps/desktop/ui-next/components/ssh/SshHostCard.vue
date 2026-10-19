@@ -1,60 +1,77 @@
 <template>
-  <div class="ssh-row" @contextmenu.prevent="emit('menu', $event)">
-    <div class="ssh-row-top">
-      <span class="ssh-av" :style="avatarStyle">{{ initial }}</span>
-      <span class="ssh-name">{{ host.name || host.host }}</span>
+  <div class="group flex min-w-0 flex-col gap-1" @contextmenu.prevent="emit('menu', $event)">
+    <div class="flex items-center gap-2">
+      <!-- Màu monogram sinh theo từng host (HSL dữ liệu, không phải token theme). -->
       <span
-        class="ssh-dot"
-        :style="{ background: statusColor }"
+        class="grid size-6 shrink-0 place-items-center rounded-sm text-sm font-semibold"
+        :style="avatarStyle"
+      >
+        {{ initial }}
+      </span>
+      <span class="min-w-0 flex-1 truncate text-base font-medium text-foreground">
+        {{ host.name || host.host }}
+      </span>
+      <span
+        class="size-2 shrink-0 rounded-full"
+        :class="statusDot"
         :title="statusLabel"
         :aria-label="statusLabel"
       />
-      <div class="ssh-row-acts">
+      <!-- Quick-action + ⋯ hiện khi hover hàng — giữ chỗ trong layout (opacity, không
+           display) để lúc hiện không đẩy chấm trạng thái / tag. -->
+      <div class="flex shrink-0 items-center gap-0.5">
         <Button
           :title="t('ssh.detail.connect')"
           :aria-label="t('ssh.detail.connect')"
-          class="ssh-qa"
-          variant="outline"
-          size="iconMd"
+          :class="qa"
+          variant="ghost"
+          size="iconSm"
           @click.stop="emit('connect')"
         >
-          <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="play" />
         </Button>
         <Button
           :title="t('ssh.detail.sftp')"
           :aria-label="t('ssh.detail.sftp')"
-          class="ssh-qa"
-          variant="outline"
-          size="iconMd"
+          :class="qa"
+          variant="ghost"
+          size="iconSm"
           @click.stop="emit('sftp')"
         >
-          <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="folder" />
         </Button>
         <Button
           :title="t('ssh.detail.forward')"
           :aria-label="t('ssh.detail.forward')"
-          class="ssh-qa"
-          variant="outline"
-          size="iconMd"
+          :class="qa"
+          variant="ghost"
+          size="iconSm"
           @click.stop="emit('forward')"
         >
-          <Icon name="move" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="move" />
         </Button>
         <Button
           :title="t('ssh.menu.more')"
           :aria-label="t('ssh.menu.more')"
-          class="ssh-qa ssh-menu"
-          variant="outline"
-          size="iconMd"
+          :class="qa"
+          variant="ghost"
+          size="iconSm"
           @click.stop="emit('menu', $event)"
         >
-          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="dots" />
         </Button>
       </div>
     </div>
-    <div class="ssh-sub">
-      <span class="ssh-endpoint mono">{{ endpoint }}</span>
-      <span v-for="tag in tags" :key="tag" class="tag ssh-tag">{{ tag }}</span>
+    <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+      <span class="min-w-0 truncate font-mono text-xs text-muted-foreground">{{ endpoint }}</span>
+      <Badge
+        v-for="tag in tags"
+        :key="tag"
+        variant="outline"
+        class="font-normal text-muted-foreground"
+      >
+        {{ tag }}
+      </Badge>
     </div>
   </div>
 </template>
@@ -66,7 +83,8 @@
 // Connect / SFTP / Forward quick-actions fade in on row hover (kept in layout so
 // the fade never shifts the badges — the app's .hoveract idiom).
 import { computed } from 'vue'
-import { hostAccent, SSH_STATUS_COLORS, type SshHost } from '~/stores/ssh'
+import { hostAccent, type SshHost } from '~/stores/ssh'
+import { SSH_STATUS_DOT } from '~/components/ssh/ssh-status'
 import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ host: SshHost }>()
@@ -80,10 +98,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const qa = 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100'
+
 const initial = computed(() => (props.host.name || props.host.host || '?').charAt(0).toUpperCase())
 const endpoint = computed(() => `${props.host.user}@${props.host.host}:${props.host.port}`)
 const tags = computed(() => props.host.tags ?? [])
-const statusColor = computed(() => SSH_STATUS_COLORS[props.host.connectionStatus ?? 'unknown'])
+const statusDot = computed(() => SSH_STATUS_DOT[props.host.connectionStatus ?? 'unknown'])
 const statusLabel = computed(() => t(`ssh.status.${props.host.connectionStatus ?? 'unknown'}`))
 
 // Monogram tile colored by a stable per-host hue (seed by folder so a group
@@ -93,94 +113,3 @@ const avatarStyle = computed(() => {
   return { background: a.bg, color: a.fg, border: `1px solid ${a.border}` }
 })
 </script>
-
-<style scoped>
-.ssh-row {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.ssh-row-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ssh-av {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-  flex: 0 0 auto;
-}
-.ssh-name {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 550;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ssh-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.ssh-row-acts {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-}
-/* Quick-actions + ⋯ reveal on row hover — kept in layout (opacity, not display)
-   so fading them in never shifts the status dot / tags. */
-.ssh-qa {
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: var(--r-xs);
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.libli:hover .ssh-qa {
-  opacity: 1;
-}
-.ssh-qa:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ssh-qa:focus-visible {
-  opacity: 1;
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.ssh-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-.ssh-endpoint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.ssh-tag {
-  font-size: 12px;
-  line-height: 18px;
-  padding: 1px 6px;
-}
-</style>

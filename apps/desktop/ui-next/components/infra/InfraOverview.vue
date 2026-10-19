@@ -1,8 +1,8 @@
 <template>
-  <div class="scroll">
-    <div class="iov-head">
-      <h2 class="iov-title">{{ t('infra.ov.title') }}</h2>
-      <span v-if="updatedAt" class="iov-when">
+  <div class="flex-1 overflow-y-auto p-4.5">
+    <div class="flex items-baseline gap-2">
+      <h2 class="m-0 text-lg font-semibold">{{ t('infra.ov.title') }}</h2>
+      <span v-if="updatedAt" class="ml-auto text-xs text-faint tabular-nums">
         {{ t('infra.ov.updated', { when: updatedLabel }) }}
       </span>
       <Button type="button" :disabled="loading" variant="outline" size="sm" @click="refresh">
@@ -10,75 +10,92 @@
         {{ t('infra.ov.refresh') }}
       </Button>
     </div>
-    <p class="iov-sub">{{ t('infra.ov.subtitle') }}</p>
-    <p v-if="!pinnedProfile" class="iov-note">
-      <Icon name="alert" class="iov-note-ic" />
+    <p class="mt-0 mb-3.5 text-sm text-dim">{{ t('infra.ov.subtitle') }}</p>
+    <p
+      v-if="!pinnedProfile"
+      class="mt-0 mb-3 flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-sm text-muted-foreground"
+    >
+      <Icon name="alert" class="size-3.5 flex-none text-warning" />
       <span>{{ t('infra.ov.noProfile') }}</span>
     </p>
 
-    <!-- Bento của app: 12 cột, mỗi thẻ một ô. Đây là màn DUY NHẤT nạp nhiều nguồn
-         cùng lúc, nên nó ghi rõ thời điểm đọc và chỉ đọc lại khi người dùng bấm. -->
-    <div class="bento">
-      <div class="tile c12">
-        <div class="th">
-          <Icon name="layers" />
-          <span class="tt">{{ t('infra.ov.facts') }}</span>
+    <!-- Bento của app: 12 cột (6 ở cửa sổ ≤980px, 1 ở ≤620px), mỗi thẻ một ô. Đây là
+         màn DUY NHẤT nạp nhiều nguồn cùng lúc, nên nó ghi rõ thời điểm đọc và chỉ đọc
+         lại khi người dùng bấm. Thẻ "span 12" PHẢI co theo lưới hẹp — bỏ sót thì lưới
+         6 cột đẻ ra cột ẩn và các thẻ chồng lên nhau (đo 2026-09-14, viewport 884px). -->
+    <div class="grid grid-cols-1 gap-3.5 min-[621px]:grid-cols-6 min-[981px]:grid-cols-12">
+      <Card class="col-span-1 min-w-0 gap-0 p-4 min-[621px]:col-span-6 min-[981px]:col-span-12">
+        <div class="mb-3 flex items-center gap-2">
+          <Icon name="layers" class="text-dim" />
+          <span class="text-sm text-dim">{{ t('infra.ov.facts') }}</span>
         </div>
-        <div class="iov-facts">
-          <div v-for="f in facts" :key="f.key" class="iov-fact">
-            <span class="iov-fact-k">{{ f.label }}</span>
-            <span class="iov-fact-v">{{ f.value }}</span>
-            <span v-if="f.sub" class="iov-fact-s">{{ f.sub }}</span>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3.5">
+          <div v-for="f in facts" :key="f.key" class="flex min-w-0 flex-col gap-1">
+            <span class="text-xs text-dim">{{ f.label }}</span>
+            <span class="text-base wrap-anywhere text-foreground">{{ f.value }}</span>
+            <span v-if="f.sub" class="text-xs text-faint">{{ f.sub }}</span>
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div v-for="card in cards" :key="card.id" class="tile c4 iov-card">
-        <div class="th">
+      <Card
+        v-for="card in cards"
+        :key="card.id"
+        class="col-span-1 min-h-42 min-w-0 gap-0 p-4 min-[621px]:col-span-3 min-[981px]:col-span-4"
+      >
+        <div class="mb-3 flex items-center gap-2">
           <span
-            class="iov-lamp"
-            :class="`lamp-${card.lamp}`"
+            class="size-3 flex-none rounded-full"
+            :class="{
+              'bg-success': card.lamp === 'ok',
+              'bg-warning': card.lamp === 'warn',
+              'bg-destructive': card.lamp === 'bad',
+              'bg-faint': card.lamp === 'unknown',
+            }"
             role="img"
             :title="lampLabel(card.lamp)"
             :aria-label="lampLabel(card.lamp)"
           />
-          <span class="tt">{{ card.title }}</span>
+          <span class="text-sm text-dim">{{ card.title }}</span>
         </div>
-        <p class="iov-text">{{ card.text }}</p>
-        <p v-if="card.note" class="iov-card-note">{{ card.note }}</p>
-        <div class="iov-acts">
+        <p class="mt-0 mb-2 text-sm text-muted-foreground">{{ card.text }}</p>
+        <p v-if="card.note" class="mt-0 mb-2.5 text-xs wrap-anywhere text-faint tabular-nums">
+          {{ card.note }}
+        </p>
+        <div class="mt-auto flex flex-wrap gap-1.5">
           <Button
             v-for="action in card.actions"
             :key="action.id"
-            :class="{ pri: action.kind === 'primary' }"
             type="button"
             :disabled="action.disabled"
-            variant="outline"
+            :variant="action.kind === 'primary' ? 'default' : 'outline'"
             size="sm"
             @click="action.run()"
           >
             {{ action.label }}
           </Button>
         </div>
-      </div>
+      </Card>
 
-      <div class="tile c12">
-        <div class="th">
-          <Icon name="message" />
-          <span class="tt">{{ t('infra.ov.askHint') }}</span>
+      <Card class="col-span-1 min-w-0 gap-0 p-4 min-[621px]:col-span-6 min-[981px]:col-span-12">
+        <div class="mb-3 flex items-center gap-2">
+          <Icon name="message" class="text-dim" />
+          <span class="text-sm text-dim">{{ t('infra.ov.askHint') }}</span>
         </div>
-        <div class="iov-chips">
-          <button
+        <div class="flex flex-wrap gap-1.5">
+          <Button
             v-for="chip in suggestions"
             :key="chip"
-            class="chip iov-chip"
             type="button"
+            variant="outline"
+            size="xs"
+            class="rounded-sm font-medium text-muted-foreground hover:text-foreground"
             @click="askAgent(chip)"
           >
             {{ chip }}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   </div>
 </template>
@@ -437,148 +454,3 @@ onMounted(() => {
   void refresh()
 })
 </script>
-
-<style scoped>
-.iov-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.iov-title {
-  margin: 0;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-}
-
-.iov-when {
-  margin-left: auto;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.iov-sub {
-  margin: 0 0 14px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-}
-
-.iov-note {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--amberBorder);
-  border-radius: var(--r-sm);
-  background: var(--amberDim);
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.iov-note-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--amber);
-}
-
-.iov-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 14px;
-}
-
-.iov-fact {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.iov-fact-k {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.iov-fact-v {
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  overflow-wrap: anywhere;
-}
-
-.iov-fact-s {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-
-.iov-card {
-  min-height: 168px;
-}
-
-.iov-lamp {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
-  border-radius: var(--r-pill);
-  background: var(--textFaint);
-}
-
-.iov-lamp.lamp-ok {
-  background: var(--green);
-}
-
-.iov-lamp.lamp-warn {
-  background: var(--amber);
-}
-
-.iov-lamp.lamp-bad {
-  background: var(--danger);
-}
-
-.iov-text {
-  margin: 0 0 8px;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
-}
-
-.iov-card-note {
-  margin: 0 0 10px;
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.iov-acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: auto;
-}
-
-.iov-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.iov-chip {
-  cursor: pointer;
-}
-
-.iov-chip:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-</style>

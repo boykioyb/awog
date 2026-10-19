@@ -3,13 +3,17 @@
        NGƯỜI DÙNG — chỉ hiện khi member có branch + một board item đang
        in_review/changes được giao cho nó. Lỗi conflict hiện inline, không toast. -->
   <div>
-    <div v-if="mergeErr" class="mt-1.5 whitespace-pre-wrap break-words text-xs text-destructive">
+    <div
+      v-if="mergeErr"
+      class="mt-1.5 whitespace-pre-wrap wrap-break-word text-xs text-destructive"
+    >
       {{ mergeErr }}
     </div>
     <div v-if="reviewItem" class="mt-1.5 flex min-w-0 items-center gap-2">
       <Button
         variant="outline"
-        class="h-auto p-0 inline-flex items-center gap-1 rounded-full border border-primary/40 px-2.5 py-0.5 text-xs text-primary transition-colors hover:bg-primary/10 disabled:opacity-45"
+        size="xs"
+        class="h-auto gap-1 rounded-full border-primary/40 px-2.5 py-0.5 font-normal text-primary hover:bg-primary/10 hover:text-primary disabled:opacity-45 [&_svg]:size-3"
         :disabled="merging"
         @click.stop="merge"
       >

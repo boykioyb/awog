@@ -80,6 +80,12 @@ export const ScheduleBudgetSchema = z.object({
   maxWallclockMs: z.number().int().positive().max(86_400_000).optional(),
 })
 
+// Job `command`: trần thời gian một lần chạy (phút) và trần số tham số. Lệnh chạy
+// không người trực nên luôn có trần — treo thì bị giết, không giữ lịch "đang chạy" mãi.
+export const MAX_COMMAND_TIMEOUT_MINUTES = 60
+export const DEFAULT_COMMAND_TIMEOUT_MINUTES = 10
+export const MAX_COMMAND_ARGS = 32
+
 // Loại việc lịch chạy.
 export const ScheduleJobSchema = z.discriminatedUnion('kind', [
   // Mở một phiên chat MỚI và gửi sẵn một prompt vào đó.
@@ -102,9 +108,23 @@ export const ScheduleJobSchema = z.discriminatedUnion('kind', [
     title: z.string().min(1).max(200),
     description: z.string().max(20_000).default(''),
   }),
+  // Chạy MỘT chương trình (không qua shell, không qua model) — vd script đồng bộ việc
+  // vào board. Không lượt LLM nào, nên không `settings`/`budget`.
+  //
+  // File lịch là L1: agent có quyền ghi file mà tự cấy được một lịch `command` thì đó là
+  // đường chạy lệnh vòng qua cổng quyền. Nên "đã duyệt" KHÔNG nằm trong file — runner hỏi
+  // sổ duyệt trong Keychain (command-approval.ts, ADR 0108).
+  z.object({
+    kind: z.literal('command'),
+    // Đường dẫn tuyệt đối tới file thực thi — không tra PATH lúc chạy, để thứ được
+    // duyệt đúng là thứ được chạy.
+    program: z.string().min(1).max(1000),
+    args: z.array(z.string().max(2000)).max(MAX_COMMAND_ARGS).default([]),
+    timeoutMinutes: z.number().int().min(1).max(MAX_COMMAND_TIMEOUT_MINUTES).optional(),
+  }),
   // Lời hẹn agent tự đặt cho CHÍNH phiên nó đang chạy (gói #14).
   //
-  // Khác hai loại trên ở điểm quan trọng nhất: nó KHÔNG chạy lượt LLM nào. Tới
+  // Khác các loại trên ở điểm quan trọng nhất: nó KHÔNG chạy lượt LLM nào. Tới
   // giờ, runner chỉ đặt một lời nhắc vào hộp thư của phiên (`session.inbox-message`)
   // rồi tự xoá mình; người dùng bấm giao thì mới có một lượt. Vì thế nó không có
   // `settings`, không có `budget` và không sinh dòng lịch sử chạy nào.
@@ -135,6 +155,8 @@ export const ScheduleRunSchema = z.object({
   sessionId: z.string().max(200).optional(),
   // Lý do lỗi / lý do bỏ qua, đã cắt ngắn cho UI.
   message: z.string().max(500).optional(),
+  // Job `command`: lượt này có log đầy đủ (schedules/run-log.ts, RPC `schedules.runLog`).
+  hasLog: z.boolean().optional(),
 })
 
 export const ScheduleSchema = z.object({
@@ -150,6 +172,12 @@ export const ScheduleSchema = z.object({
   lastRunAt: z.string().max(40).optional(),
   lastStatus: ScheduleRunStatusSchema.optional(),
   runs: z.array(ScheduleRunSchema).max(MAX_RUN_HISTORY).default([]),
+  // Lịch do AGENT đề xuất qua tool `propose_schedule` (ADR 0108): luôn tắt, không bật bằng
+  // công tắc (`schedules.setEnabled` từ chối), runner bỏ qua. Người dùng mở ra Sửa → Lưu —
+  // `schedules.upsert` dựng lại lịch từ payload nên trường này rơi mất, lịch thành của họ.
+  proposedBy: z
+    .object({ sessionId: z.string().min(1).max(200), at: z.string().max(40) })
+    .optional(),
 })
 
 export type ScheduleTrigger = z.infer<typeof ScheduleTriggerSchema>

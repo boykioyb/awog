@@ -1,6 +1,9 @@
 <template>
+  <!-- hook-ok: `.detail` — app-shell.css `[data-page='sessions'] .md > .detail` chừa chỗ
+       cho dock terminal (padding-bottom). Cột phiên là một HÀNG: dock trái/phải là anh em
+       của cột chính nên chạy hết chiều cao khung; `relative` neo vùng thả file. -->
   <div
-    class="detail sdrow"
+    class="detail relative flex min-w-0 flex-1 flex-row overflow-hidden bg-background"
     @dragenter.prevent="onDragEnter"
     @dragover.prevent="onDragOver"
     @dragleave="onDragLeave"
@@ -39,22 +42,34 @@
         @move-dock="moveDock"
       />
       <div
-        class="rszwp"
-        :class="{ drag: wpDragging }"
+        :class="[GRIP_COL, wpDragging && GRIP_COL_DRAG]"
         @pointerdown="(e) => onWpResize(e, 'left')"
       />
     </template>
 
-    <div class="sdmain">
-      <div class="dh">
+    <!-- Cột chính: header + chat + dock dưới. -->
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <!-- Header h-11, một hàng không wrap; tiêu đề co, mọi nút shrink-0. KHÔNG
+           overflow-hidden: menu neo absolute dưới nút mở QUA cạnh dưới thanh. Hairline
+           bằng inset shadow (thanh cao cố định). -->
+      <div
+        class="flex h-11 shrink-0 items-center gap-1.5 px-(--padX) shadow-[inset_0_-1px_0_var(--border)]"
+      >
         <!-- ProtoSessionDetail header order: title → status badge → agent · model
              (icon ~12px) → spacer (.dt flex-1) → workspace toggle → ⋯ overflow. -->
-        <div class="dt">
-          <span class="dttitle" :title="session.title">{{ session.title }}</span>
-          <Badge :variant="statusVariant" class="dhbadge">{{ statusLabel }}</Badge>
-          <span class="dhwho" :title="whoLabel">
+        <div class="flex min-w-0 flex-auto items-center gap-2 text-base font-semibold">
+          <span class="min-w-0 max-w-full truncate" :title="session.title">
+            {{ session.title }}
+          </span>
+          <!-- Badge trạng thái không co khi tiêu đề dài — meta co trước. -->
+          <Badge :variant="statusVariant" class="shrink-0">{{ statusLabel }}</Badge>
+          <!-- "agent · model": co + cắt trước tiêu đề khi hẹp. -->
+          <span
+            class="inline-flex min-w-0 shrink items-center gap-1 text-xs font-normal whitespace-nowrap text-muted-foreground"
+            :title="whoLabel"
+          >
             <UserRound class="size-3 shrink-0" />
-            <span class="dhwhotext">{{ whoLabel }}</span>
+            <span class="min-w-0 truncate">{{ whoLabel }}</span>
           </span>
         </div>
 
@@ -73,8 +88,8 @@
         <Button
           variant="ghost"
           size="iconSm"
-          class="dhb shrink-0"
-          :class="{ on: settings.sessions.assistantBubble }"
+          class="shrink-0"
+          :class="settings.sessions.assistantBubble && DHB_ON"
           :title="t('settings.sessions.bubble.name')"
           :aria-label="t('settings.sessions.bubble.name')"
           :aria-pressed="settings.sessions.assistantBubble"
@@ -85,32 +100,40 @@
 
         <!-- Views. Điều khiển duy nhất ở ngoài, vì nó là thứ được bấm nhiều lần trong
              một phiên; mở/tắt từng khung làm việc, khung đang mở có dấu tick. -->
-        <span v-if="!embedded" class="dhanchor">
+        <span v-if="!embedded" class="relative shrink-0">
           <Button
             variant="ghost"
             size="iconSm"
-            class="dhb shrink-0"
-            :class="{ on: wpOpen || menu === 'workspace' }"
+            class="shrink-0"
+            :class="(wpOpen || menu === 'workspace') && DHB_ON"
             :title="t('sessions.detail.workspacePanel')"
             :aria-label="t('sessions.detail.workspacePanel')"
             @click.stop="openMenu('workspace')"
           >
             <Icon name="workflows" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </Button>
+          <!-- Menu tự vẽ neo dưới nút. `role="menu"` + `data-state="open"` thay class
+               `.smenu` cũ để OVERLAYS (useEmbeddedBrowser.ts) bắt — xem báo cáo. -->
           <div
             v-if="menu === 'workspace'"
-            class="smenu"
-            style="position: absolute; top: 130%; right: 0; z-index: 50"
+            role="menu"
+            data-state="open"
+            :class="MENU_CLASS"
             @click.stop
           >
-            <div v-for="v in ALL_VIEWS" :key="v" class="mi" @click="toggleView(v)">
-              <Icon :name="wpIcon(v)" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <div
+              v-for="v in ALL_VIEWS"
+              :key="v"
+              role="menuitem"
+              :class="MENU_ITEM_CLASS"
+              @click="toggleView(v)"
+            >
+              <Icon :name="wpIcon(v)" class="size-3.5" />
               {{ v }}
               <Icon
                 v-if="openViews.includes(v)"
                 name="check"
-                class="ck"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
+                class="ml-auto size-3.5 text-primary"
               />
             </div>
           </div>
@@ -124,7 +147,7 @@
           <Button
             variant="ghost"
             size="iconSm"
-            class="dhb shrink-0"
+            class="shrink-0"
             :disabled="cliSyncing"
             :title="t('sessions.cli.syncHint')"
             :aria-label="t('sessions.cli.syncHint')"
@@ -135,7 +158,7 @@
           <Button
             variant="ghost"
             size="iconSm"
-            class="dhb shrink-0"
+            class="shrink-0"
             :disabled="cliDetaching"
             :title="t('sessions.cli.detachHint')"
             :aria-label="t('sessions.cli.detachHint')"
@@ -146,7 +169,7 @@
           <Button
             variant="ghost"
             size="iconSm"
-            class="dhb shrink-0"
+            class="shrink-0"
             :title="t('ssh.appearance.title')"
             :aria-label="t('ssh.appearance.title')"
             @click="cliPane?.toggleAppearance?.()"
@@ -156,7 +179,7 @@
           <Button
             variant="ghost"
             size="iconSm"
-            class="dhb shrink-0"
+            class="shrink-0"
             :title="t('sessions.cli.backToChat')"
             :aria-label="t('sessions.cli.backToChat')"
             @click="cliMode = false"
@@ -168,14 +191,14 @@
         <!-- Overflow ⋯ — DropdownMenu chuẩn shadcn (proto parity): mọi hành động
              hiếm/phá transcript nằm sau nó. Hai submenu `.smenu` (`proj` · `config`)
              vẫn neo vào span này, nên mở menu con từ trong ⋯ không cần thêm điểm neo. -->
-        <span class="dhanchor">
+        <span class="relative shrink-0">
           <DropdownMenu v-model:open="ddOpen">
             <DropdownMenuTrigger as-child>
               <Button
                 variant="ghost"
                 size="iconSm"
-                class="dhb shrink-0"
-                :class="{ on: ddOpen || menu === 'proj' || menu === 'config' }"
+                class="shrink-0"
+                :class="(ddOpen || menu === 'proj' || menu === 'config') && DHB_ON"
                 :title="t('sessions.detail.moreActions')"
                 :aria-label="t('sessions.detail.moreActions')"
               >
@@ -261,19 +284,19 @@
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div
-            v-if="menu === 'proj'"
-            class="smenu"
-            style="position: absolute; top: 130%; right: 0; z-index: 50"
-            @click.stop
-          >
-            <div v-for="p in projects" :key="p.id" class="mi" @click="selectProj(p.id)">
+          <div v-if="menu === 'proj'" role="menu" data-state="open" :class="MENU_CLASS" @click.stop>
+            <div
+              v-for="p in projects"
+              :key="p.id"
+              role="menuitem"
+              :class="MENU_ITEM_CLASS"
+              @click="selectProj(p.id)"
+            >
               {{ p.name }}
               <Icon
                 v-if="p.id === session.project"
                 name="check"
-                class="ck"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
+                class="ml-auto size-3.5 text-primary"
               />
             </div>
           </div>
@@ -293,11 +316,18 @@
            content ngay dưới. Danh sách tab = tab của scope phiên này (agent mở
            cũng hiện — chỉ là không giật focus). Luôn render: mất nó thì mất chỗ
            nút "+" và strip nhảy layout lúc link đầu tiên mở. -->
-      <div v-if="!embedded" class="mtabs" role="tablist">
-        <button
+      <!-- Hàng tab ngang dưới header: tab đang chọn nhận nền content + bo góc trên nên
+           đọc như "đầu của vùng content" (idiom trình duyệt). Cuộn ngang khi nhiều tab
+           (ẩn thanh cuộn); nút × chỉ lóe khi hover. -->
+      <div
+        v-if="!embedded"
+        class="flex h-9.25 shrink-0 items-end gap-0.5 overflow-x-auto px-2 shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+      >
+        <Button
+          variant="ghost"
           type="button"
-          class="mtab mtab-discuss"
-          :class="{ on: mainTab === DISCUSS_TAB }"
+          :class="[MTAB_CLASS, mainTab === DISCUSS_TAB ? MTAB_ON : MTAB_OFF]"
           role="tab"
           :aria-selected="mainTab === DISCUSS_TAB"
           @pointerenter="mbPrefetchFrame"
@@ -311,14 +341,14 @@
           @keyup.space="onDiscussPressEnd"
           @click="selectMainTab(DISCUSS_TAB)"
         >
-          <span class="mtab-lbl">{{ t('sessions.mainTabs.discuss') }}</span>
-        </button>
-        <button
+          <span class="min-w-0 truncate">{{ t('sessions.mainTabs.discuss') }}</span>
+        </Button>
+        <Button
           v-for="tab in mbTabs"
           :key="tab.tabId"
+          variant="ghost"
           type="button"
-          class="mtab"
-          :class="{ on: mainTab === tab.tabId }"
+          :class="[MTAB_CLASS, mainTab === tab.tabId ? MTAB_ON : MTAB_OFF]"
           role="tab"
           :aria-selected="mainTab === tab.tabId"
           :title="tab.url || tab.title"
@@ -328,39 +358,47 @@
           <Icon
             v-if="tab.loading"
             name="refresh"
-            class="mtab-spin"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
+            class="shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
           />
-          <img v-else-if="tab.favicon" class="mtab-fav" :src="tab.favicon" alt="" />
-          <Icon
-            v-else
-            name="globe"
-            style="width: var(--icon-xs); height: var(--icon-xs); flex-shrink: 0"
+          <img
+            v-else-if="tab.favicon"
+            class="size-3 shrink-0 rounded-sm"
+            :src="tab.favicon"
+            alt=""
           />
-          <span class="mtab-lbl">{{ tab.title || tab.url || t('sessions.mainTabs.newTab') }}</span>
+          <Icon v-else name="globe" class="shrink-0" />
+          <span class="min-w-0 truncate">
+            {{ tab.title || tab.url || t('sessions.mainTabs.newTab') }}
+          </span>
           <!-- Activity: tab NỀN đang tải (agent vừa mở/điều hướng mà không giật
                focus) — chấm nhỏ báo "có gì mới ở đó". Tab active thì spinner đã
                thay favicon nói điều đó rồi. -->
-          <span v-if="tab.loading && mainTab !== tab.tabId" class="mtab-dot" aria-hidden="true" />
           <span
-            class="mtab-x"
+            v-if="tab.loading && mainTab !== tab.tabId"
+            class="size-1.25 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+          <span
+            class="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-base text-muted-foreground group-hover/mtab:opacity-90 hover:bg-accent hover:text-foreground focus-visible:opacity-90"
+            :class="mainTab === tab.tabId ? 'opacity-90' : 'opacity-0'"
             role="button"
             :aria-label="t('sessions.mainTabs.closeTab')"
             @click.stop="closeMainTab(tab.tabId)"
           >
             ×
           </span>
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="mbAvailable"
-          type="button"
-          class="mtab-add"
+          variant="ghost"
+          size="iconSm"
+          class="mb-0.5 ml-0.5 size-6.5 shrink-0 self-center text-muted-foreground hover:text-foreground"
           :title="t('sessions.mainTabs.newTab')"
           :aria-label="t('sessions.mainTabs.newTab')"
           @click="addMainTab"
         >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="plus" class="size-3.5" />
+        </Button>
       </div>
 
       <!-- Menu chuột phải của một tab web trên strip — Teleport ra body giống
@@ -381,11 +419,13 @@
            instances so e.g. Terminal (bottom) and Files (right) coexist. -->
 
       <!-- chat + dock dưới xếp chồng trong cột chính. -->
-      <div class="chatwrap">
-        <div class="wptop">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <!-- hook-ok: `.chat` — script (selection quote) dò `closest('.chat')`. `relative`
+               là ancestor định vị cho SessionDoneFlash + thanh tìm. -->
           <div
             v-show="mainTab === DISCUSS_TAB || embedded"
-            class="chat"
+            class="chat relative flex min-w-0 flex-1 flex-col overflow-hidden"
             @mouseup="onSelectQuote"
             @mousedown="onChatMouseDown"
             @contextmenu="onQuoteContextMenu"
@@ -394,13 +434,9 @@
                  bắn giấu view — tới lúc click đổi `mainTab` thì layer native đã
                  đi). KHÔNG đặt cover ảnh ở đây: ảnh trang phủ lên chat dù chỉ
                  1-2 frame cũng chính là cú "nháy" người dùng nhìn thấy. -->
-            <!-- Cute family only (spec §13): a brief "Done!" celebration when a turn
-                 finishes. `.chat` is its positioned ancestor (below) so it floats over
-                 the top of the conversation without shifting layout. -->
-            <SessionDoneFlash v-if="isCute" :status="session.status" />
             <!-- Find-in-session (⌘/Ctrl+F): floats over the top-right of the chat column,
                  left of the transcript's fold-all button, so nothing shifts when it opens. -->
-            <div v-if="findOpen" class="findwrap">
+            <div v-if="findOpen" class="absolute top-0 right-9.5 z-6">
               <FindBar
                 v-model:query="findQuery"
                 v-model:match-case="findMatchCase"
@@ -453,12 +489,12 @@
             <!-- Phiên đang gắn một CLI (PTY còn sống, pane chỉ đang ẩn): composer bị
                  khoá — gõ ở đây sẽ không tới được CLI. Dòng báo gọn kiểu `.cmdnotice`
                  + nút Sync gấp tin phía CLI vào transcript ngay tại chỗ. -->
-            <div v-if="cliLinked && !gridMode && !cliMode" class="clinotice">
-              <Icon
-                name="commands"
-                style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-              />
-              <span class="clinoticetxt">
+            <div
+              v-if="cliLinked && !gridMode && !cliMode"
+              class="mx-(--padX) mb-2 flex items-center gap-2 rounded-md border bg-muted px-2.5 py-1 text-sm text-muted-foreground"
+            >
+              <Icon name="commands" class="size-3 shrink-0" />
+              <span class="min-w-0 flex-1">
                 {{
                   cliEngineLinked
                     ? t('sessions.cli.attachedNotice')
@@ -467,10 +503,16 @@
               </span>
               <!-- Notice bảo "chuyển sang pane CLI" — nút này làm đúng việc đó
                    thay vì bắt người dùng đi vòng qua menu ⋯. -->
-              <button class="clinoticebtn" @click="cliMode = true">
+              <Button variant="ghost" size="xs" :class="CLI_BTN" @click="cliMode = true">
                 {{ t('sessions.cli.open') }}
-              </button>
-              <button class="clinoticebtn" :disabled="cliSyncing" @click="syncCliTranscript">
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                :class="CLI_BTN"
+                :disabled="cliSyncing"
+                @click="syncCliTranscript"
+              >
                 {{
                   cliSyncing
                     ? t('sessions.cli.syncing')
@@ -478,19 +520,21 @@
                       ? t('sessions.cli.syncNow')
                       : t('sessions.cli.synced', { n: cliSyncedN })
                 }}
-              </button>
+              </Button>
               <!-- "Ngắt CLI": kill PTY từ ngay đây — lối thoát khỏi composer bị
                    khoá không cần mở pane gõ `exit`. Engine (onExit) dọn link +
                    import transcript; nút Sync còn lại thì chỉ để gấp tin GIỮA
                    chừng trong lúc CLI còn sống. -->
-              <button
-                class="clinoticebtn"
+              <Button
+                variant="ghost"
+                size="xs"
+                :class="CLI_BTN"
                 :disabled="cliDetaching"
                 :title="t('sessions.cli.detachHint')"
                 @click="detachCli"
               >
                 {{ cliDetaching ? t('sessions.cli.detaching') : t('sessions.cli.detach') }}
-              </button>
+              </Button>
             </div>
             <SessionComposer
               v-if="!gridMode && !cliMode"
@@ -513,7 +557,11 @@
                `visible()` trong useEmbeddedBrowser. Pane ẩn TỨC THÌ theo mainTab
                — view native đã được giấu từ `pointerdown` của tab Trao đổi nên
                không còn nhịp phủ trễ nào để che. -->
-          <div v-if="!embedded" v-show="mainTab !== DISCUSS_TAB" class="mbpane">
+          <div
+            v-if="!embedded"
+            v-show="mainTab !== DISCUSS_TAB"
+            class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+          >
             <BrowserNavBar
               v-model:url="mbUrlDraft"
               :tab="mbActiveTab"
@@ -536,11 +584,20 @@
             >
               {{ mbError }}
             </div>
-            <div ref="mbVpEl" class="mbview">
+            <div
+              ref="mbVpEl"
+              class="relative flex min-h-0 flex-1 items-center justify-center bg-background"
+            >
               <!-- Frame đông cứng: menu/dialog phủ lên bắt view native ẩn đi —
                    ảnh JPEG của trang đứng thay chỗ cho tới khi view reattach,
                    khỏi nháy trắng cả viewport. -->
-              <img v-if="mbFrozen" class="mbfrozen" :src="mbFrozen" alt="" />
+              <!-- pointer-events none: menu bấm-nơi-khác-để-đóng phải nhìn xuyên qua nó. -->
+              <img
+                v-if="mbFrozen"
+                class="pointer-events-none absolute inset-0 size-full object-fill"
+                :src="mbFrozen"
+                alt=""
+              />
               <!-- Tab trắng (Tab mới) → empty-state thắng: không có trang thì
                    "hiện ở chỗ khác" là vô nghĩa — elsewhere chỉ dành cho tab có
                    nội dung bị bề mặt khác chiếm. -->
@@ -555,8 +612,7 @@
         </div>
         <template v-if="wpOpen && !embedded && bottomTabs.length">
           <div
-            class="rszwp vert"
-            :class="{ drag: wpDragging }"
+            :class="[GRIP_ROW, wpDragging && GRIP_ROW_DRAG]"
             @pointerdown="(e) => onWpResize(e, 'bottom')"
           />
           <SessionWorkspacePanel
@@ -579,8 +635,7 @@
 
     <template v-if="wpOpen && !embedded && rightTabs.length">
       <div
-        class="rszwp"
-        :class="{ drag: wpDragging }"
+        :class="[GRIP_COL, wpDragging && GRIP_COL_DRAG]"
         @pointerdown="(e) => onWpResize(e, 'right')"
       />
       <SessionWorkspacePanel
@@ -600,87 +655,129 @@
     </template>
 
     <!-- Hidden picker behind the composer's clip button -->
-    <input ref="fileInput" type="file" multiple style="display: none" @change="onPick" />
+    <!-- raw-ok: input file ẩn — chỉ để mở hộp chọn file của OS -->
+    <input ref="fileInput" type="file" multiple class="hidden" @change="onPick" />
 
     <!-- Drop anywhere on the detail to attach (pointer-events:none so drop/leave fire on .detail) -->
-    <div v-if="dragActive" class="dropzone">
-      <div class="dropzone-inner">
-        <Icon name="clip" style="width: 22px; height: 22px" />
+    <!-- `dropzone` là hook của OVERLAYS (useEmbeddedBrowser.ts). Khung accent đứt nét +
+         gợi ý ở giữa; pointer-events none để dragleave/drop bắn trên chính root. -->
+    <div
+      v-if="dragActive"
+      class="dropzone pointer-events-none absolute inset-0 z-60 grid place-items-center rounded-lg border-2 border-dashed border-primary bg-background/72"
+    >
+      <div
+        class="flex items-center gap-2 rounded-lg border border-ring bg-popover px-4.5 py-3 font-semibold text-primary"
+      >
+        <Icon name="clip" class="size-5.5" />
         {{ t('sessions.composer.dropHint') }}
       </div>
     </div>
 
     <!-- Select (highlight) text in a message → floating action bar (Quote + Translate + Copy MD) -->
+    <!-- Thanh nổi cạnh vùng bôi đen. Đặt ở gốc viewport rồi dời HOÀN TOÀN bằng translate:
+         `fixed` + `left: x` làm bề rộng khả dụng = viewport − x, thanh shrink-to-fit nên
+         selection sát mép phải bóp nút tới mức nhãn gãy dòng. Neo ở 0 thì luôn đo theo cả
+         viewport; % trong translate tính theo hộp của chính thanh nên kẹp được trong màn
+         hình mà không đo bằng JS: x căn giữa selection, cách mép ≥ 8px; y nằm trên
+         selection, không vượt đỉnh viewport. -->
     <div
       v-if="quoteSel"
-      class="selactions"
+      class="fixed top-0 left-0 z-80 inline-flex max-w-[calc(100vw_-_16px)] translate-x-[clamp(8px,calc(var(--sel-x,0px)_-_50%),calc(100vw_-_100%_-_8px))] translate-y-[max(8px,calc(var(--sel-y,0px)_-_100%))] items-center gap-0.5 rounded-lg border bg-popover p-1 shadow-lg"
       :style="{ '--sel-x': `${quoteSel.x}px`, '--sel-y': `${quoteSel.y}px` }"
       @mousedown.prevent
     >
       <!-- Quote chỉ khi selection nằm TRONG một message (cần neo `src`). Ngoài
            message (AskQuestion, step log…) thì chỉ còn Translate + Copy MD. -->
-      <button v-if="quoteSel?.src != null" class="selquote" @click="openNote">
-        <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <Button v-if="quoteSel?.src != null" variant="ghost" :class="SELQ_CLASS" @click="openNote">
+        <Icon name="quote" />
         {{ t('sessions.quote.action') }}
-      </button>
-      <button class="selquote" @click="onTranslate">
-        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </Button>
+      <Button variant="ghost" :class="SELQ_CLASS" @click="onTranslate">
+        <Icon name="globe" />
         {{ t('translate.action') }}
-      </button>
-      <button class="selquote" @click="onCopyMarkdown">
-        <Icon
-          :name="mdCopied ? 'check' : 'copy'"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
+      </Button>
+      <Button variant="ghost" :class="SELQ_CLASS" @click="onCopyMarkdown">
+        <Icon :name="mdCopied ? 'check' : 'copy'" />
         {{ mdCopied ? t('common.copied') : t('common.copyMarkdown') }}
-      </button>
+      </Button>
       <!-- Chạy đoạn bôi đen trong terminal của phiên — chỉ mọc khi selection nằm
            trong code block shell (`quoteSel.shell`), cùng luật với nút Run của
            block: fence trần/output không có nút. ⌥-bấm = chỉ dán, không Enter. -->
-      <button
+      <Button
         v-if="quoteSel?.shell"
-        class="selquote"
+        variant="ghost"
+        :class="SELQ_CLASS"
         :disabled="runBusy"
         :title="t('sessions.code.run')"
         @click="onRunSelection"
       >
-        <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="play" />
         {{ t('sessions.code.runShort') }}
-      </button>
+      </Button>
     </div>
 
     <!-- note popover for a selection quote -->
     <template v-if="notePop">
-      <div class="notebackdrop" />
+      <div class="fixed inset-0 z-80" />
+      <!-- `notepop` là hook: kéo/đổi cỡ dò `closest('.notepop')`. Đã kéo/đổi cỡ thì neo
+           theo top-left tường minh (bỏ translate neo selection). -->
       <div
-        class="notepop"
-        :class="{ moved: notePos, dragging: notePopDragging }"
+        class="notepop fixed z-81 flex w-70 flex-col gap-2 rounded-lg border bg-popover p-2.5 shadow-md"
+        :class="[
+          !notePos && '-translate-x-1/2 -translate-y-full',
+          notePopDragging && 'select-none',
+        ]"
         :style="notePopStyle"
         @mousedown.stop
       >
-        <div class="npq" @pointerdown="onNoteDragStart">
-          <Icon name="quote" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <span class="npex">{{ notePop.text }}</span>
+        <div
+          class="flex touch-none items-start gap-1.5 text-xs text-primary"
+          :class="notePopDragging ? 'cursor-grabbing' : 'cursor-grab'"
+          @pointerdown="onNoteDragStart"
+        >
+          <Icon name="quote" class="mt-0.5 size-3 shrink-0" />
+          <span
+            class="max-h-[8em] overflow-y-auto break-words whitespace-pre-wrap text-muted-foreground"
+          >
+            {{ notePop.text }}
+          </span>
         </div>
+        <!-- Ô nhập kiểu shadcn: viền input, nền trong suốt, focus = viền ring + halo 1px.
+             Khi popover đã có chiều cao tường minh (đổi cỡ), textarea giãn lấp đầy và tay
+             nắm đổi cỡ của popover thay cho resize của textarea. -->
         <textarea
           ref="noteInput"
           v-model="noteText"
-          class="npinput"
+          class="min-h-[4.5em] w-full rounded-md border border-input bg-transparent px-2 py-1.5 font-sans text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          :class="notePos ? 'flex-auto resize-none' : 'resize-y'"
           rows="3"
           :placeholder="t('sessions.quote.notePlaceholder')"
           @keydown.enter.exact.prevent="saveQuote"
           @keydown.enter.meta.prevent="saveQuote"
           @keydown.enter.ctrl.prevent="saveQuote"
         />
-        <div class="nprow">
-          <button class="npbtn" @click="notePop = null">{{ t('common.close') }}</button>
-          <button class="npbtn pri" @click="saveQuote">{{ t('sessions.quote.save') }}</button>
+        <div class="flex justify-end gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-auto rounded-sm px-3 py-1 text-muted-foreground hover:text-foreground"
+            @click="notePop = null"
+          >
+            {{ t('common.close') }}
+          </Button>
+          <Button size="sm" class="h-auto rounded-sm px-3 py-1" @click="saveQuote">
+            {{ t('sessions.quote.save') }}
+          </Button>
         </div>
-        <div class="npresize" @pointerdown="onNoteResizeStart" />
+        <!-- Tay nắm đổi cỡ góc phải-dưới (một góc duy nhất — AN-2 / OQ-B3). -->
+        <div
+          class="absolute right-0.5 bottom-0.5 size-3.5 cursor-nwse-resize touch-none bg-[linear-gradient(135deg,transparent_0_50%,var(--border)_50%_60%,transparent_60%_75%,var(--border)_75%_85%,transparent_85%)]"
+          @pointerdown="onNoteResizeStart"
+        />
       </div>
     </template>
 
-    <div v-if="menu" style="position: fixed; inset: 0; z-index: 40" @click="menu = null" />
+    <div v-if="menu" class="fixed inset-0 z-40" @click="menu = null" />
 
     <SessionAttachmentsModal
       :open="moreOpen"
@@ -737,7 +834,6 @@ const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
 const spawnDlg = useSessionSpawnDialog()
 const translate = useSelectionTranslate()
-const { isCute } = useThemeFamily()
 
 // Whether THIS instance is the one currently shown. Under <KeepAlive> (pages/sessions
 // caches recent detail instances so switching back is instant) inactive instances stay
@@ -2087,610 +2183,35 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   handle.addEventListener('pointermove', onMove)
   handle.addEventListener('pointerup', onUp)
 }
+
+// ── Class Tailwind dùng lặp trong template (thay skin `.dhb.on` / `.smenu .mi` /
+// `.mtab` / `.rszwp` / `.selquote` / `.clinoticebtn` cũ). Chỉ là chuỗi class.
+// Nút header ở trạng thái "on" (panel/menu đang mở) = wash accent, idiom toggle proto.
+const DHB_ON = 'bg-accent text-accent-foreground'
+// Menu tự vẽ neo dưới nút header (workspace views · đổi project).
+const MENU_CLASS =
+  'absolute top-[130%] right-0 z-50 max-h-[calc(100vh-24px)] min-w-42 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md'
+const MENU_ITEM_CLASS =
+  'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+// Tab của hàng tab chính. Tab ON: nền = nền content + hai cạnh viền dọc + cạnh trên để
+// "chảy" vào content (không viền dưới — hàng tab đã vẽ đường chân).
+const MTAB_CLASS =
+  'group/mtab relative h-7.75 max-w-50 min-w-0 shrink justify-start gap-1.5 rounded-none rounded-t-md px-2.5 py-0 text-sm font-normal whitespace-nowrap [&_svg]:size-3'
+const MTAB_ON =
+  'bg-background text-foreground shadow-[inset_1px_0_0_var(--border),inset_-1px_0_0_var(--border),inset_0_1px_0_var(--border)] hover:bg-background hover:text-foreground'
+const MTAB_OFF = 'text-muted-foreground hover:bg-accent hover:text-foreground'
+// Grip kéo đổi cỡ dock: cột (trái/phải) và hàng (dưới) — vạch 1px giữa vùng 6px,
+// dày 2px + màu accent khi hover/kéo.
+const GRIP_COL =
+  "relative shrink-0 basis-1.5 cursor-col-resize self-stretch after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:content-[''] hover:after:w-0.5 hover:after:bg-primary"
+const GRIP_COL_DRAG = 'after:w-0.5 after:bg-primary'
+const GRIP_ROW =
+  "relative shrink-0 basis-1.5 cursor-row-resize self-stretch after:absolute after:inset-x-0 after:top-1/2 after:h-px after:-translate-y-1/2 after:content-[''] hover:after:h-0.5 hover:after:bg-primary"
+const GRIP_ROW_DRAG = 'after:h-0.5 after:bg-primary'
+// Nút ghost nhỏ trong dòng báo "phiên đang gắn CLI".
+const CLI_BTN =
+  'h-auto shrink-0 rounded-sm px-2 py-0.5 text-sm font-normal text-muted-foreground hover:text-foreground disabled:opacity-60'
+// Item ghost phẳng của thanh hành động selection (một thanh popover, không khung riêng).
+const SELQ_CLASS =
+  'h-auto gap-1.25 rounded-md px-2.5 py-1 text-sm font-normal whitespace-nowrap text-popover-foreground [&_svg]:size-3.5'
 </script>
-
-<style scoped>
-/* Anchor the drop overlay to the detail. */
-.detail {
-  position: relative;
-}
-/* Cột session là một HÀNG: dock trái/phải là anh em của cột chính nên chúng chạy
-   hết chiều cao khung, còn header phiên chỉ trải trên cột chat. `.detail` gốc ở
-   prototype.css là `flex-direction: column` và được DÙNG CHUNG với mọi trang
-   detail khác (Skills/Agents/Tasks…), nên phải đổi qua class riêng `.sdrow` chứ
-   không sửa `.detail`. */
-.detail.sdrow {
-  flex-direction: row;
-}
-/* Cột chính: header + chat + dock dưới. */
-.sdmain {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* Detail header — shadcn idiom (spec §7): h-11, một hàng không wrap. `.dh` global
-   là 50px/gap-10 cho mọi trang detail; ở đây siết về nhịp session: tiêu đề co
-   (`.dttitle` đã truncate trong app-shell), mọi nút shrink-0.
-   KHÔNG `overflow:hidden` ở đây (dù proto có): ba `.smenu` của header neo absolute
-   trong `.dhanchor` và mở xuống QUA cạnh dưới thanh — clip ở `.dh` sẽ chặt đứt
-   menu. Không-wrap đã đủ chặt nhờ flex-nowrap mặc định + `.dt{min-width:0}` +
-   `.dttitle` ellipsis; khi panel hẹp chỉ title co.
-   Giữ selector ở `.dh` trần: theme-cute (attr + class + element) phải thắng. */
-.dh {
-  height: 44px;
-  gap: 6px;
-}
-.dh .dt {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  gap: 8px;
-}
-/* Status badge (proto `Badge`): không co khi title dài — meta co trước. */
-.dhbadge {
-  flex: 0 0 auto;
-}
-/* "agent · model" who-line (proto `text-xs text-muted-foreground` + icon 12px).
-   Co + truncate trước title khi hẹp — proto `min-w-0 shrink truncate`; title
-   `.dttitle` vẫn là phần tử đầu tiên nên thông tin không bao giờ mất hẳn. */
-.dhwho {
-  flex: 0 1 auto;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 400;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-}
-.dhwhotext {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Anchor tương đối cho các menu `.smenu` neo dưới nút — flex item không được co
-   (khi co, menu `absolute` tuỳ thuộc anchor vẫn đúng chỗ). */
-.dhanchor {
-  position: relative;
-  flex: 0 0 auto;
-}
-/* Nút header = ghost iconSm của ui/Button (hover = accent-wash trung tính). Trạng
-   thái "on" (panel đang mở / menu đang mở) = `bg-accent text-accent-foreground`
-   đúng idiom toggle của proto. */
-.dhb.on {
-  color: var(--accent-foreground);
-  background: var(--accent-wash);
-}
-/* Discuss banner (ADR 0055) — links a discussion session back to its task.
-   Primary-tint callout: cùng ngôn ngữ "lit chip" của `.stab-btn.on`. */
-.aboutbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 14px 8px;
-  padding: 7px 11px;
-  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
-  color: var(--foreground);
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s ease;
-}
-.aboutbar:hover {
-  background: color-mix(in srgb, var(--primary) 14%, transparent);
-}
-.aboutbar-icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  color: var(--primary);
-}
-.aboutbar-lbl {
-  font-weight: 500;
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-}
-.aboutbar-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-.aboutbar-chev {
-  flex: 0 0 auto;
-  opacity: 0.6;
-}
-/* SSH work banner (ADR 0064): the open-host button + per-session approval selector
-   (governs the agent's mutating ssh_exec / ssh_write_file). */
-.sshbar {
-  margin: 0 14px 8px;
-}
-.sshbar-open {
-  margin: 0 0 6px;
-  width: 100%;
-}
-.sshbar-approval {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 2px;
-}
-.sshbar-approval-lbl {
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.sshbar-warn {
-  margin: 6px 2px 0;
-  color: var(--warning);
-  line-height: var(--lh-sm);
-}
-/* Two-axis dock: .chatwrap stacks the top row (chat + right panel) over the
-   full-width bottom panel; .wptop is the horizontal row the prototype's .chatwrap
-   used to be. */
-.chatwrap {
-  flex-direction: column;
-}
-.wptop {
-  flex: 1;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-/* Positioned ancestor for the cute-only SessionDoneFlash chip (`position: absolute`
-   inside it) — scoped, so it only affects `.chat` as rendered by this component. */
-.chat {
-  position: relative;
-}
-/* Notice "session is attached to a CLI" — muted bar, canh theo --padX như chính
-   composer. Nút bên trong là ghost nhỏ: hover = accent-wash trung tính. */
-.clinotice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 var(--padX) 8px;
-  padding: 5px 10px;
-  border-radius: var(--r-sm);
-  background: var(--muted);
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.clinoticetxt {
-  flex: 1;
-  min-width: 0;
-}
-.clinoticebtn {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border-radius: var(--r-xs);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.clinoticebtn:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.clinoticebtn:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-/* Containing block for the find bar (absolute inside it): offsets it clear of the
-   transcript's fold-all button at the same corner, without touching FindBar itself. */
-.findwrap {
-  position: absolute;
-  top: 0;
-  right: 38px;
-  z-index: 6;
-}
-/* Resize handle docked at the bottom: a full-width row gripper (the prototype's
-   .rszwp is a vertical col-resize bar for the right dock). The ::after divider
-   runs horizontally instead of vertically. */
-.rszwp.vert {
-  flex: 0 0 6px;
-  width: auto;
-  align-self: stretch;
-  cursor: row-resize;
-}
-.rszwp.vert::after {
-  left: 0;
-  right: 0;
-  top: 2.5px;
-  bottom: auto;
-  width: auto;
-  height: 1px;
-}
-.rszwp.vert:hover::after,
-.rszwp.vert.drag::after {
-  height: 2px;
-  top: 2px;
-  width: auto;
-  left: 0;
-}
-/* Drop-anywhere overlay — dashed accent frame + centred hint. pointer-events:none
-   so dragleave/drop fire on .detail itself (no flicker, the drop always lands). */
-.dropzone {
-  position: absolute;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  background: color-mix(in srgb, var(--background) 72%, transparent);
-  border: 2px dashed var(--primary);
-  border-radius: var(--radius);
-}
-.dropzone-inner {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 12px 18px;
-  font-weight: 600;
-  color: var(--primary);
-  background: var(--popover);
-  border: 1px solid var(--ring);
-  border-radius: var(--radius);
-}
-/* Floating action bar next to a text selection (anchored to viewport coords). */
-/* Floating selection action bar. Laid out at the viewport origin and moved ENTIRELY by
-   `transform`, on purpose:
-   `position: fixed` + `left: x` makes the available width `viewport - x`, and this bar is
-   shrink-to-fit — so a selection near the right edge (every short, right-aligned USER
-   bubble) squeezed the row until each button collapsed to min-content and its label broke
-   mid-phrase ("Trích / dẫn"). Anchored at 0 the bar always measures against the full
-   viewport.
-   The percentages inside translate() resolve against the BAR's own box, so clamping
-   there also keeps it fully on screen without measuring anything in JS:
-     x → centred on the selection, but never closer than 8px to either edge
-     y → above the selection, but never above the viewport top. */
-.selactions {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 80;
-  transform: translate(
-    clamp(8px, calc(var(--sel-x, 0px) - 50%), calc(100vw - 100% - 8px)),
-    max(8px, calc(var(--sel-y, 0px) - 100%))
-  );
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  max-width: calc(100vw - 16px);
-  /* Proto idiom: MỘT thanh popover (rounded-lg + border + bg-popover + shadow-lg,
-     p-1) với các item ghost phẳng bên trong — không phải từng nút có khung riêng. */
-  padding: 4px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-}
-.selquote {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  /* A two-word label is one label — never break it across lines. */
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--popover-foreground);
-  background: transparent;
-  border: none;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.selquote:hover {
-  background: var(--accent-wash);
-}
-.selquote:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-/* Note popover (after clicking the floating Quote button). */
-.notebackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-}
-.notepop {
-  position: fixed;
-  z-index: 81;
-  transform: translate(-50%, -100%);
-  width: 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-}
-/* Once dragged/resized, anchor by explicit top-left (drop the selection transform). */
-.notepop.moved {
-  transform: none;
-}
-.notepop.dragging {
-  user-select: none;
-}
-.npq {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: var(--primary);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: grab;
-  touch-action: none;
-}
-.notepop.dragging .npq {
-  cursor: grabbing;
-}
-.npq svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.npex {
-  color: var(--muted-foreground);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 8em;
-  overflow-y: auto;
-}
-/* Input theo idiom shadcn: border-input, nền trong suốt trên popover, focus =
-   viền ring + halo ring 1px (không outline — giữ shape rounded). */
-.npinput {
-  width: 100%;
-  padding: 6px 9px;
-  border: 1px solid var(--input);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--foreground);
-  outline: none;
-  resize: vertical;
-  min-height: 4.5em;
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-}
-/* When the popover has an explicit height (resized), grow the textarea to fill and
-   let the popover own the sizing — its own resize handle replaces textarea resize. */
-.notepop.moved .npinput {
-  flex: 1 1 auto;
-  resize: none;
-}
-.npinput:focus {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.nprow {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.npbtn {
-  padding: 4px 12px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.npbtn:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.npbtn.pri {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-.npbtn.pri:hover {
-  background: color-mix(in srgb, var(--primary) 90%, transparent);
-  color: var(--primary-foreground);
-}
-/* ── Main tab strip (session-main-tabs) ────────────────────────────────────
-   Hàng tab ngang dưới `.dh`, trước `.chatwrap`: tab đang chọn nhận nền content
-   + bo góc trên nên nó đọc như "đầu của vùng content" (idiom browser/Orca).
-   Cuộn ngang khi nhiều tab; nút × chỉ lóe khi hover để hàng gọn. */
-.mtabs {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 37px;
-  padding: 0 8px;
-  box-shadow: inset 0 -1px 0 var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.mtabs::-webkit-scrollbar {
-  display: none;
-}
-.mtab {
-  position: relative;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 200px;
-  height: 31px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.mtab:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-/* Tab ON: nền = nền vùng content dưới nó + hai cạnh viền dọc để "chảy" vào
-   content — không có viền dưới vì `.mtabs` đã vẽ đường chân hàng. */
-.mtab.on {
-  background: var(--background);
-  color: var(--foreground);
-  box-shadow:
-    inset 1px 0 0 var(--border),
-    inset -1px 0 0 var(--border),
-    inset 0 1px 0 var(--border);
-}
-.mtab:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-.mtab-lbl {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mtab-fav {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  border-radius: var(--r-xs);
-  flex-shrink: 0;
-}
-.mtab-spin {
-  flex-shrink: 0;
-  color: var(--muted-foreground);
-  animation: mtab-spin 1s linear infinite;
-}
-@keyframes mtab-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mtab-spin,
-  .mtab-dot {
-    animation: none;
-  }
-}
-/* Activity dot: tab nền đang tải (agent mở mà không giật focus). */
-.mtab-dot {
-  flex: 0 0 auto;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--primary);
-  animation: mtab-pulse 1.4s ease-in-out infinite;
-}
-@keyframes mtab-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-.mtab-x {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-md);
-  color: var(--muted-foreground);
-  opacity: 0;
-}
-.mtab:hover .mtab-x,
-.mtab.on .mtab-x,
-.mtab-x:focus-visible {
-  opacity: 0.9;
-}
-.mtab-x:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.mtab-add {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  margin: 0 0 2px 2px;
-  align-self: center;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.mtab-add:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-/* Pane nội dung của tab web — sibling của `.chat` trong `.wptop`, chiếm đúng
-   chỗ `.chat` để lại. Navbar + khung placeholder cho native view. */
-.mbpane {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.mbview {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--background);
-}
-/* Ảnh đông cứng phủ nguyên viewport trong lúc view native bị overlay bắt ẩn.
-   pointer-events none: menu bấm-nơi-khác-để-đóng phải nhìn xuyên qua nó. */
-.mbfrozen {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  pointer-events: none;
-}
-/* Chips ngữ cảnh giờ sống TRONG header — `.ctxstrip` gốc là một hàng 30px với
-   lề + đường kẻ riêng; trong `.dh` nó chỉ là một cụm chip inline co được. Popover
-   của chip vẫn neo absolute trong `.ctxwrap` nên không cần đụng thêm. */
-.dh :deep(.ctxstrip) {
-  flex: 0 1 auto;
-  height: auto;
-  min-width: 0;
-  padding: 0;
-  box-shadow: none;
-  /* theme-cute skin `.ctxstrip` bằng border-bottom (không phải box-shadow) —
-     phải xoá cả hai nếu không chips trong header lòi một đường kẻ dưới. */
-  border-bottom: 0;
-}
-
-/* Bottom-right resize handle (single corner — AN-2 / OQ-B3). */
-.npresize {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  width: 14px;
-  height: 14px;
-  cursor: nwse-resize;
-  touch-action: none;
-  background: linear-gradient(
-    135deg,
-    transparent 0 50%,
-    var(--border) 50% 60%,
-    transparent 60% 75%,
-    var(--border) 75% 85%,
-    transparent 85%
-  );
-}
-</style>

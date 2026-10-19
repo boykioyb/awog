@@ -1,15 +1,27 @@
 <template>
-  <div class="gcbanner" :class="{ ready: !hasConflict }">
-    <Icon name="alert" class="gcbicon" />
-    <strong v-if="pendingOp" class="gcbop">{{ opLabel }}</strong>
-    <span class="gcbtext">
+  <!-- Cùng nhịp với banner detached-HEAD để hai dải trạng thái đọc như một họ.
+       `flex-wrap` là mấu chốt: cửa sổ hẹp thì nút rớt xuống dòng hai thay vì tràn,
+       nên Abort luôn bấm được. -->
+  <div
+    class="flex flex-none flex-wrap items-center gap-2 border-b px-3.5 py-2 text-sm"
+    :class="
+      hasConflict
+        ? 'border-destructive/40 bg-destructive/15 text-destructive'
+        : 'border-border bg-muted text-muted-foreground'
+    "
+  >
+    <Icon name="alert" class="size-3.5 flex-none" />
+    <strong v-if="pendingOp" class="flex-none font-semibold">{{ opLabel }}</strong>
+    <!-- Chỉ phần chữ được nhường chỗ — min-w-0 cho nó co lại trong hàng flex. -->
+    <span class="min-w-0 flex-1 basis-45">
       {{
         hasConflict
           ? t('git.conflict.banner.resolve', { count: conflictedCount })
           : t('git.conflict.banner.ready')
       }}
     </span>
-    <span class="gcbsp" />
+    <!-- Đẩy nút sang phải khi hàng rộng; co về 0 khi đã xuống dòng. -->
+    <span class="min-w-0 flex-1" />
     <!-- No actions when nothing is in flight: a stash apply/pop conflict has no
          sequencer state, so there is nothing to complete or abort — resolving and
          staging IS the finish. Offering buttons there would only fail. -->
@@ -77,48 +89,3 @@ const opLabel = computed(() => (props.pendingOp ? t(OP_KEY[props.pendingOp]) : '
 const completeLabel = computed(() => t(COMPLETE_KEY[props.pendingOp ?? 'merge']))
 const abortLabel = computed(() => t(ABORT_KEY[props.pendingOp ?? 'merge']))
 </script>
-
-<style scoped>
-/* Same metrics as .gbanner (detached HEAD) so the two state strips read as one
-   family. `flex-wrap` is the whole point: at a narrow window the buttons drop to
-   a second line instead of overflowing, so Abort is always reachable. */
-.gcbanner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  padding: 8px 14px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--destructive);
-  background: color-mix(in oklab, var(--destructive) 14%, transparent);
-  box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--destructive) 40%, transparent);
-}
-.gcbanner.ready {
-  color: var(--muted-foreground);
-  background: var(--muted);
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.gcbicon {
-  flex: 0 0 auto;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-.gcbop {
-  flex: 0 0 auto;
-  font-weight: 600;
-}
-/* The prose is the only thing allowed to give up space — min-width:0 is what lets
-   it actually shrink inside a flex row rather than pinning the line open. */
-.gcbtext {
-  flex: 1 1 180px;
-  min-width: 0;
-}
-/* Keeps the buttons right-aligned on a wide row; collapses to nothing once the
-   line wraps, so they sit left under the text instead of stranded far right. */
-.gcbsp {
-  flex: 1 1 0;
-  min-width: 0;
-}
-</style>

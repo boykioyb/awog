@@ -3,8 +3,8 @@
 > Quyết định kiến trúc: [ADR 0082](../decisions/0082-scheduled-runs.md).
 > Trang: `/schedules` · Nav: **Work → Lịch chạy**
 
-Đặt hẹn giờ cho agent: mỗi sáng gửi một prompt vào phiên mới, hoặc mỗi đêm chạy một workflow thành
-task. Mục tiêu là lớp use-case "agent làm việc lúc người dùng không ngồi máy".
+Đặt hẹn giờ cho agent: mỗi sáng gửi một prompt vào phiên mới, mỗi đêm chạy một workflow thành
+task, hoặc mỗi 15 phút chạy một lệnh không qua AI ([ADR 0108](../decisions/0108-schedule-command-job.md)). Mục tiêu là lớp use-case "agent làm việc lúc người dùng không ngồi máy".
 
 ## Giới hạn — đọc trước
 
@@ -68,6 +68,48 @@ Gọi `tasks.create` với `source: { type: 'manual' }`. Task chạy trên Task 
 ([ADR 0024](../decisions/0024-task-execution-engine-ipc-contract.md)) như mọi task khác — parallel
 scheduler, auto-commit theo phase, resume được sau restart.
 
+### `command` — chạy một lệnh, không qua AI
+
+Quyết định: [ADR 0108](../decisions/0108-schedule-command-job.md). Engine chạy thẳng một chương trình —
+không phiên, không lượt model, không tốn hạn mức. Ví dụ: script đồng bộ tag chờ trả lời vào board.
+
+| Trường | Ý nghĩa |
+|---|---|
+| `program` | đường dẫn **tuyệt đối**, phải thực thi được lúc lưu (không tra PATH lúc chạy) |
+| `args` | mảng tham số, ≤ 32 — UI nhập **mỗi dòng một tham số** (không có shell, không quote/biến/pipe) |
+| `timeoutMinutes` | 1–60, mặc định 10 |
+
+- **Duyệt**: bấm Lưu ⇒ hộp xác nhận liệt kê program + từng tham số; xác nhận thì `schedules.upsert`
+  mang `approve: true` và sidecar ghi **sổ duyệt trong Keychain** (`id → digest` của id + lệnh +
+  timeout + **nội dung** program và mọi tham số là file tuyệt đối). Lệnh hoặc file nó chạy đổi ⇒ nhãn
+  **Chưa duyệt** (`schedules.list` trả `approved`) và lượt chạy bị từ chối tới khi duyệt lại. Bật/tắt
+  (`schedules.setEnabled`) không bao giờ duyệt; xoá lịch thu hồi dòng sổ.
+- **Tiến trình con**: `cwd = home`; env đã gỡ `*_TOKEN|*_KEY|*_SECRET` và cờ runtime của host
+  (`util/child-env.ts`); process group riêng — hết giờ SIGTERM cả nhóm, 5s sau SIGKILL.
+- **Kết quả**: exit 0 ⇒ `ok`, dòng cuối stdout (đã redact) vào `message`; khác 0 / hết giờ ⇒ `error` kèm
+  dòng cuối stderr.
+- **Log**: mỗi lượt ghi lệnh + exit + thời gian + stdout/stderr (đuôi 64KB, đã redact) vào
+  `~/.awog/schedule-logs/<id>/<runId>.log`, giữ 20 lượt gần nhất, xoá theo lịch. Dòng lịch sử có
+  `hasLog` có log; bấm một dòng lịch sử bất kỳ ⇒ modal chi tiết lượt chạy (`ScheduleRunModal`: trạng
+  thái, giờ bắt đầu/kết thúc, thời lượng, lệnh, thông báo đầy đủ, log + nút chép — RPC `schedules.runLog`).
+- Script ghi vào `~/.awog/boards/*.json` thì board trên UI tự nạp lại: watcher phát `board.changed`
+  cho ghi từ ngoài sidecar.
+
+### Agent đề xuất lịch — tool `propose_schedule`
+
+Người dùng nói với agent "mỗi 15 phút quét tag cho tôi" ⇒ agent gọi `propose_schedule` (chỉ phiên
+chat, cả ba runtime). Kết quả là một lịch **tắt**, nhãn **Agent đề xuất**:
+
+- runner bỏ qua (kể cả khi file bị sửa thành `enabled: true`), **Chạy ngay** từ chối, công tắc không bật
+  được — bấm công tắc ở trang Lịch chạy thì mở form;
+- mở form ⇒ ô Bật đã tick sẵn; **Lưu** ⇒ lịch thành của người dùng (`proposedBy` mất). Job `command` còn
+  qua hộp duyệt lệnh như mọi lần lưu;
+- job phiên dùng model/tài khoản của phiên đề xuất, mode `plan` — đổi được khi duyệt;
+- trần: 3 đề xuất mỗi lượt, 10 đề xuất chờ duyệt toàn app.
+
+Agent **không** ghi được file trong `.awog/schedules/` / `.awog/hooks/`: permission gate chặn cứng
+Write/Edit/Bash đụng hai thư mục đó, ở cả phiên chat lẫn task (ADR 0108 §6).
+
 ## Cách nó chạy
 
 ```
@@ -81,6 +123,7 @@ powerMonitor                          │
                                       └─ bấm cò:
                                           session-prompt → sessions.upsert + sessions.sendMessage
                                           workflow-task  → tasks.create
+                                          command        → kiểm sổ duyệt → spawn (không shell)
 ```
 
 - **Bộ đếm giờ ở Electron main** vì nó là tiến trình sống lâu nhất (sidecar bị respawn khi crash/treo)
@@ -138,8 +181,9 @@ không phải mỗi 30 giây một dòng.
 | Method | Vào | Ra |
 |---|---|---|
 | `schedules.list` | — | `{ schedules }` |
-| `schedules.upsert` | `{ id, name, enabled, trigger, job }` | `{ schedule }` (đã tính `nextRunAt`) |
-| `schedules.delete` | `{ id }` | `{ ok: true }` |
+| `schedules.upsert` | `{ id, name, enabled, trigger, job, approve? }` | `{ schedule }` (đã tính `nextRunAt`; job `command` kèm `approved`) |
+| `schedules.delete` | `{ id }` | `{ ok: true }` — job `command` thì thu hồi dòng sổ duyệt |
+| `schedules.setEnabled` | `{ id, enabled }` | `{ schedule }` — chỉ đổi cờ + mốc kế tiếp, không nhận `job` |
 | `schedules.runNow` | `{ id }` | `{ run }` — dòng `running`, hoặc `skipped` |
 | `schedules.tick` | — | `{ checked, fired[], skipped[] }` |
 
@@ -189,8 +233,9 @@ Nhánh `workflow-task` đã có trần riêng ở cấp task
 
 ## Bảo mật
 
-- Lịch mang **id** (`projectId`, `workflowId`), không mang path/command/argv. Không có đường nào để
-  một file lịch bị sửa tay trỏ runtime vào thư mục bất kỳ.
+- Lịch `session-prompt` / `workflow-task` mang **id** (`projectId`, `workflowId`), không mang path. Job
+  `command` là ngoại lệ có chủ đích (ADR 0108): nó mang `program`/`args`, nên một file lịch bị sửa tay
+  KHÔNG đủ để chạy — chỉ lệnh có dòng khớp trong sổ duyệt (Keychain, ngoài tầm agent) mới chạy.
 - File trên đĩa và payload IPC đều là **L1**: validate zod trước khi dùng; `schedules.upsert` chỉ
   nhận đúng 5 trường người dùng đặt được (không spread payload).
 - `id` khớp `SCHEDULE_ID_RE` (`^[a-z0-9][a-z0-9_-]{0,120}$`) và vẫn đi qua `sanitizeChild` trước khi

@@ -8,24 +8,21 @@
   <section
     v-show="!wb.dockHidden"
     data-wb-dock
-    class="relative flex min-h-0 flex-none flex-col"
-    :style="{
-      height: wb.dockH + 'px',
-      borderTop: '1px solid var(--border)',
-      background: 'var(--bgPanel)',
-    }"
+    class="relative flex min-h-0 flex-none flex-col border-t bg-sidebar"
+    :style="{ height: wb.dockH + 'px' }"
   >
     <!-- Grip kéo tay CỐ Ý thay ResizablePanelGroup (ngoại lệ trong rule):
          dockH là pixel có toggle dockHidden + collapsed bar-only ở DOCK_MIN —
          SplitterGroup làm theo % không giữ được 3 trạng thái này. -->
     <div
-      class="absolute inset-x-0 -top-[3px] z-[5] h-1.5 cursor-row-resize"
+      class="absolute inset-x-0 -top-0.75 z-5 h-1.5 cursor-row-resize"
       title="Kéo đổi cao dock"
       @mousedown.prevent="startDockDrag"
     />
     <DockBar />
     <div v-show="wb.dockH > wb.DOCK_MIN + 1" class="flex min-h-0 flex-1">
-      <div class="dock-main flex min-h-0 min-w-0 flex-1 flex-col">
+      <!-- View con lấp phần cao còn lại: `*:` đặt flex-1 + min-h-0 lên root của view. -->
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col *:min-h-0 *:flex-1">
         <DockTerminal v-if="terminalMounted" v-show="wb.dockView === 'Terminal'" />
         <DockTasks v-if="wb.dockView === 'Tasks'" />
         <DockCost v-if="wb.dockView === 'Cost'" />
@@ -91,12 +88,3 @@ function startDockDrag(e: MouseEvent): void {
   window.addEventListener('mouseup', up)
 }
 </script>
-
-<style scoped>
-/* Child dock views fill remaining height — `:deep` cần thiết vì các view là
-   component con (Tailwind không đặt flex-1 trên slot con). */
-.dock-main > * {
-  flex: 1;
-  min-height: 0;
-}
-</style>

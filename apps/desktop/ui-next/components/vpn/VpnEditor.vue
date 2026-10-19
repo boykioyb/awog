@@ -5,120 +5,136 @@
     :width="600"
     @close="emit('cancel')"
   >
-    <div class="vpe">
-      <div class="vpe-grid">
-        <div class="vpe-field">
-          <label class="vpe-label">
+    <div class="flex flex-col gap-4">
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
             {{ t('vpn.editor.name') }}
-            <span class="vpe-req" aria-hidden="true">*</span>
-          </label>
+            <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+          </Label>
           <Input
             v-model="name"
-            :class="{ 'has-err': touched.name && nameError }"
+            :class="{ 'border-destructive': touched.name && nameError }"
             :placeholder="t('vpn.editor.namePh')"
             :aria-invalid="touched.name && !!nameError"
             @blur="touched.name = true"
           />
-          <div v-if="touched.name && nameError" class="vpe-err">{{ nameError }}</div>
+          <div v-if="touched.name && nameError" class="mt-1 text-sm text-destructive">
+            {{ nameError }}
+          </div>
         </div>
-        <div class="vpe-field">
-          <label class="vpe-label">{{ t('vpn.editor.folder') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
+            {{ t('vpn.editor.folder') }}
+          </Label>
           <AppSelect v-model="folderSelect" :options="folderOptions" width="100%" />
           <Input
             v-if="folderMode === 'new'"
             v-model="folder"
             :placeholder="t('vpn.editor.folderPh')"
             spellcheck="false"
-            class="mono"
+            class="font-mono"
           />
         </div>
       </div>
 
-      <div class="vpe-field">
-        <label class="vpe-label">
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
           {{ t('vpn.editor.configPath') }}
-          <span class="vpe-req" aria-hidden="true">*</span>
-        </label>
-        <div class="vpe-path-row">
+          <span class="font-semibold text-destructive" aria-hidden="true">*</span>
+        </Label>
+        <div class="flex items-center gap-2">
           <Input
             v-model="configPath"
-            :class="{ 'has-err': touched.configPath && configError }"
+            :class="{ 'border-destructive': touched.configPath && configError }"
             :placeholder="t('vpn.editor.configPathPh')"
             spellcheck="false"
             :aria-invalid="touched.configPath && !!configError"
-            class="mono"
+            class="min-w-0 flex-1 font-mono"
             @blur="touched.configPath = true"
           />
           <Button
             v-if="canBrowse"
             type="button"
-            class="vpe-browse"
+            class="shrink-0"
             variant="outline"
             size="sm"
             @click="browseConfig"
           >
-            <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <Icon name="folder" />
             {{ t('vpn.editor.browse') }}
           </Button>
         </div>
-        <div v-if="touched.configPath && configError" class="vpe-err">{{ configError }}</div>
-        <div class="vpe-hint">{{ t('vpn.editor.configPathHint') }}</div>
+        <div v-if="touched.configPath && configError" class="mt-1 text-sm text-destructive">
+          {{ configError }}
+        </div>
+        <div class="text-xs text-muted-foreground">{{ t('vpn.editor.configPathHint') }}</div>
       </div>
 
-      <div class="vpe-field">
-        <label class="vpe-label">{{ t('vpn.editor.authMode') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
+          {{ t('vpn.editor.authMode') }}
+        </Label>
         <AppSelect v-model="authModeSelect" :options="authModeOptions" width="100%" />
-        <div class="vpe-hint">{{ t('vpn.editor.authModeHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('vpn.editor.authModeHint') }}</div>
       </div>
 
-      <div class="vpe-field">
-        <label class="vpe-label">{{ t('vpn.editor.tags') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label class="gap-1 text-xs font-semibold text-foreground">
+          {{ t('vpn.editor.tags') }}
+        </Label>
         <Input v-model="tagsText" :placeholder="t('vpn.editor.tagsPh')" spellcheck="false" />
-        <div class="vpe-hint">{{ t('vpn.editor.tagsHint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('vpn.editor.tagsHint') }}</div>
       </div>
 
       <!-- Write-only credentials — blank on open, OMITTED when blank so an empty
            submit never clobbers a stored value. All three go straight to the OS
            keychain via vpn.setCredential; never written to the config or git. -->
-      <div class="vpe-secret">
-        <div class="vpe-secret-head">
-          <Icon
-            name="shield"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
-          <span class="vpe-secret-title">{{ t('vpn.editor.creds.title') }}</span>
+      <div
+        class="flex flex-col gap-3 rounded-lg border border-selected-border bg-selected px-3 py-3"
+      >
+        <div class="flex items-center gap-2">
+          <Icon name="shield" class="size-3.5 text-primary" />
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('vpn.editor.creds.title') }}
+          </span>
         </div>
 
         <!-- Username + password apply ONLY to "Username & password" auth. In "config /
              cert" mode the tunnel authenticates via its embedded cert, so showing these
              would be misleading (this is exactly the mode where they must NOT appear). -->
         <template v-if="authMode === 'user-pass'">
-          <div class="vpe-field">
-            <label class="vpe-sub-label">{{ t('vpn.editor.creds.username') }}</label>
+          <div class="flex flex-col gap-1.5">
+            <Label class="gap-1 text-xs font-semibold text-foreground">
+              {{ t('vpn.editor.creds.username') }}
+            </Label>
             <Input
               v-model="username"
               :placeholder="t('vpn.editor.creds.usernamePh')"
               spellcheck="false"
               autocomplete="off"
-              class="mono"
+              class="font-mono"
             />
           </div>
 
-          <div class="vpe-field">
-            <label class="vpe-sub-label">{{ t('vpn.editor.creds.password') }}</label>
-            <div class="vpe-pw">
+          <div class="flex flex-col gap-1.5">
+            <Label class="gap-1 text-xs font-semibold text-foreground">
+              {{ t('vpn.editor.creds.password') }}
+            </Label>
+            <div class="relative">
               <Input
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
                 :placeholder="t('vpn.editor.creds.passwordPh')"
                 spellcheck="false"
                 autocomplete="off"
-                class="mono has-eye"
+                class="pr-10 font-mono"
               />
-              <button
-                type="button"
-                class="vpe-eye"
-                :class="{ on: showPassword }"
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-70 hover:opacity-100"
+                :class="{ 'text-foreground opacity-100': showPassword }"
                 :title="showPassword ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')"
                 :aria-label="
                   showPassword ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')
@@ -126,30 +142,30 @@
                 :aria-pressed="showPassword"
                 @click="showPassword = !showPassword"
               >
-                <Icon
-                  :name="showPassword ? 'eye-off' : 'eye'"
-                  style="width: var(--icon-md); height: var(--icon-md)"
-                />
-              </button>
+                <Icon :name="showPassword ? 'eye-off' : 'eye'" />
+              </Button>
             </div>
           </div>
         </template>
 
-        <div class="vpe-field">
-          <label class="vpe-sub-label">{{ t('vpn.editor.creds.keyPassphrase') }}</label>
-          <div class="vpe-pw">
+        <div class="flex flex-col gap-1.5">
+          <Label class="gap-1 text-xs font-semibold text-foreground">
+            {{ t('vpn.editor.creds.keyPassphrase') }}
+          </Label>
+          <div class="relative">
             <Input
               v-model="keyPassphrase"
               :type="showPassphrase ? 'text' : 'password'"
               :placeholder="t('vpn.editor.creds.keyPassphrasePh')"
               spellcheck="false"
               autocomplete="off"
-              class="mono has-eye"
+              class="pr-10 font-mono"
             />
-            <button
-              type="button"
-              class="vpe-eye"
-              :class="{ on: showPassphrase }"
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-70 hover:opacity-100"
+              :class="{ 'text-foreground opacity-100': showPassphrase }"
               :title="showPassphrase ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')"
               :aria-label="
                 showPassphrase ? t('vpn.editor.creds.hide') : t('vpn.editor.creds.reveal')
@@ -157,20 +173,17 @@
               :aria-pressed="showPassphrase"
               @click="showPassphrase = !showPassphrase"
             >
-              <Icon
-                :name="showPassphrase ? 'eye-off' : 'eye'"
-                style="width: var(--icon-md); height: var(--icon-md)"
-              />
-            </button>
+              <Icon :name="showPassphrase ? 'eye-off' : 'eye'" />
+            </Button>
           </div>
         </div>
 
-        <div class="vpe-hint">{{ t('vpn.editor.creds.hint') }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('vpn.editor.creds.hint') }}</div>
       </div>
     </div>
 
     <template #footer>
-      <span style="flex: 1" />
+      <span class="flex-1" />
       <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('vpn.editor.save') }}
@@ -391,153 +404,3 @@ function parseTags(text: string): string[] {
   return out
 }
 </script>
-
-<style scoped>
-.vpe {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.vpe-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.vpe-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.vpe-label {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.vpe-sub-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
-}
-.vpe-set {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 2px 7px;
-  border-radius: var(--r-xs);
-  color: var(--accent);
-  background: var(--accentDim);
-  font-weight: 500;
-}
-.vpe-input {
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-family: var(--sans);
-  outline: none;
-}
-.vpe-input.mono {
-  /* mono-ok: the `.mono` opt-in variant — .ovpn path / host */
-  font-family: var(--code);
-}
-.vpe-input:focus {
-  border-color: var(--accent);
-}
-.vpe-input.has-err {
-  border-color: var(--danger);
-}
-.vpe-input.has-err:focus {
-  border-color: var(--danger);
-}
-/* Required-field marker + inline validation error. */
-.vpe-req {
-  color: var(--danger);
-  font-weight: 700;
-}
-.vpe-err {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--danger);
-}
-/* Masked secret field + its 👁 reveal toggle (mirrors SettingsKeyRow's .keyeye). */
-.vpe-pw {
-  position: relative;
-}
-.vpe-input.has-eye {
-  padding-right: 38px;
-}
-.vpe-eye {
-  position: absolute;
-  right: 5px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  opacity: 0.7;
-  transition:
-    opacity 0.12s ease,
-    color 0.12s ease;
-}
-.vpe-eye:hover,
-.vpe-eye.on {
-  opacity: 1;
-  color: var(--text);
-}
-.vpe-path-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.vpe-path-row .vpe-input {
-  flex: 1;
-  min-width: 0;
-}
-.vpe-browse {
-  flex: 0 0 auto;
-}
-.vpe-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Secret callout — a subtle accent-tinted card (mirrors SshEditor's .sse-secret):
-   write-only, goes straight to the OS keychain. */
-.vpe-secret {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 13px;
-  border-radius: var(--r-btn);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-}
-.vpe-secret-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.vpe-secret-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-</style>

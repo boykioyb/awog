@@ -1,50 +1,56 @@
 <template>
-  <div class="weditor">
-    <header class="we-head" :style="{ borderBottom: '1px solid var(--border)' }">
-      <span class="we-path" :style="{ color: 'var(--textFaint)' }">{{ path }}</span>
-      <div class="we-actions">
+  <div class="flex h-full min-w-0 flex-1 flex-col">
+    <header class="flex items-center gap-2 border-b px-2.5 py-1.5">
+      <!-- mono-ok: đường dẫn trang wiki -->
+      <span class="min-w-0 flex-1 truncate font-mono text-sm text-faint">{{ path }}</span>
+      <div class="flex gap-1.5">
         <Button :disabled="saving" variant="outline" size="sm" @click="emit('cancel')">
           {{ t('common.cancel') }}
         </Button>
         <Button :disabled="saving || !dirty" variant="default" size="sm" @click="emit('save')">
-          <Icon name="save" :size="13" />
+          <Icon name="save" class="size-3.5" />
           {{ saving ? t('common.saving') : t('common.save') }}
         </Button>
       </div>
     </header>
 
-    <div class="we-meta">
-      <label class="we-field">
-        <span class="sech">{{ t('wiki.editor.title') }}</span>
+    <div class="flex flex-wrap gap-2 px-2.5 py-2">
+      <label class="flex min-w-0 flex-1 basis-55 flex-col gap-0.5">
+        <span class="text-xs font-semibold text-dim">{{ t('wiki.editor.title') }}</span>
         <Input :model-value="draft.title" @update:model-value="update('title', $event)" />
       </label>
-      <label class="we-field">
-        <span class="sech">{{ t('wiki.editor.description') }}</span>
+      <label class="flex min-w-0 flex-1 basis-55 flex-col gap-0.5">
+        <span class="text-xs font-semibold text-dim">{{ t('wiki.editor.description') }}</span>
         <Input
           :model-value="draft.description"
           :placeholder="derivedDescription || t('wiki.editor.descriptionHint')"
           @update:model-value="update('description', $event)"
         />
       </label>
-      <label class="we-field short">
-        <span class="sech">{{ t('wiki.editor.tags') }}</span>
+      <label class="flex min-w-0 flex-none shrink basis-45 flex-col gap-0.5">
+        <span class="text-xs font-semibold text-dim">{{ t('wiki.editor.tags') }}</span>
         <Input
           :model-value="draft.tags"
           placeholder="architecture, ipc"
           @update:model-value="update('tags', $event)"
         />
       </label>
-      <label class="we-toggle" :title="t('wiki.editor.contextHint')">
-        <input
-          type="checkbox"
-          :checked="draft.context"
-          @change="update('context', ($event.target as HTMLInputElement).checked)"
+      <label
+        class="flex cursor-pointer items-center gap-1.5 self-end text-base text-dim"
+        :title="t('wiki.editor.contextHint')"
+      >
+        <Checkbox
+          :model-value="draft.context"
+          @update:model-value="(v) => update('context', v === true)"
         />
         <span>{{ t('wiki.editor.context') }}</span>
       </label>
     </div>
 
-    <div class="we-body" @keydown="onKeydown">
+    <div
+      class="mx-2.5 mb-2.5 min-h-0 flex-1 overflow-hidden rounded-md border"
+      @keydown="onKeydown"
+    >
       <MonacoEditor
         ref="editorRef"
         :path="modelPath"
@@ -73,6 +79,7 @@ import { defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import type { MonacoEditorHandle } from '~/components/editor/types'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
+import Checkbox from '~/components/ui/checkbox/Checkbox.vue'
 
 // Monaco is loaded only when the user actually edits. A static import would put the
 // editor AND its five `?worker` bundles into the /wiki page graph, so merely READING
@@ -150,79 +157,3 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 </script>
-
-<style scoped>
-.weditor {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-}
-.we-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-}
-.we-path {
-  flex: 1;
-  min-width: 0;
-  /* mono-ok: wiki page path */
-  font-family: var(--code);
-  font-size: 12px;
-  line-height: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.we-actions {
-  display: flex;
-  gap: 6px;
-}
-.we-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 10px;
-}
-.we-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 220px;
-  min-width: 0;
-}
-.we-field.short {
-  flex: 0 1 180px;
-}
-.we-input {
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  padding: 4px 6px;
-  font-size: 1em;
-  outline: none;
-}
-.we-input:focus {
-  border-color: var(--borderFocus);
-}
-.we-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-end;
-  color: var(--textDim);
-  font-size: 1em;
-  cursor: pointer;
-}
-.we-body {
-  flex: 1;
-  min-height: 0;
-  margin: 0 10px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-</style>

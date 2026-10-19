@@ -8,6 +8,8 @@ export type WorkbenchDocKind =
   | 'web'
   | 'img'
   | 'vid'
+  // Word / Excel (.docx/.xlsx…) — xem đọc-chỉ bằng trình xem Office của PreviewModal.
+  | 'office'
   | 'mmd'
   | 'diff'
   // Git Log kiểu JetBrains (graph + file đổi + chi tiết commit) — id `gitlog:<pid>`.

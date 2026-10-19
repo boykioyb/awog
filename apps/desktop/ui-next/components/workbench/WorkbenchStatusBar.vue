@@ -2,14 +2,16 @@
   <!-- Status bar riêng của Workbench (26px) — xếp DƯỚI `.wb`,
        còn AppStatusBar toàn app vẫn nằm dưới nó trong layout. Chip dùng
        `WbChip` (auto-import). Menu mở phía TRÊN qua WorkbenchContextMenu. -->
-  <footer class="flex h-[26px] min-w-0 flex-none items-center gap-2 overflow-hidden px-2.5">
+  <footer
+    class="flex h-6.5 min-w-0 flex-none items-center gap-2 overflow-hidden border-t bg-sidebar px-2.5 text-xs text-dim"
+  >
     <!-- Quota theo account (donut 5h + tooltip breakdown) — component toàn app. -->
     <StatusUsage />
-    <span class="h-3 w-px flex-none" style="background: var(--border)" />
+    <Separator orientation="vertical" class="h-3" />
 
     <!-- CPU/RAM của cây tiến trình AWOG — click mở doc monitor. -->
     <WbChip title="Giám sát — mở trang Monitor" @click="openMonitorDoc">
-      <Icon name="act" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon class="size-3" name="act" />
       <span class="tnum">
         <b>CPU {{ cpuLabel }}</b>
         · RAM {{ ramLabel }}
@@ -26,7 +28,8 @@
         data-wbi="ctx"
         @click="openCtxMenu"
       >
-        <span class="ctxbar"><i :style="{ width: ctxPct + '%' }" /></span>
+        <!-- Mini bar context: fill theo % cửa sổ. -->
+        <Progress :model-value="ctxPct" class="h-1 w-9.5 flex-none bg-muted" />
         <span class="tnum">{{ ctxLabel }}</span>
       </WbChip>
     </template>
@@ -38,15 +41,15 @@
       data-wbi="project"
       @click="openProjectMenu"
     >
-      <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="max-w-[160px] truncate">{{ currentProjectLabel }}</span>
+      <Icon class="size-3" name="folder" />
+      <span class="max-w-40 truncate">{{ currentProjectLabel }}</span>
     </WbChip>
-    <span class="h-3 w-px flex-none" style="background: var(--border)" />
+    <Separator orientation="vertical" class="h-3" />
 
     <!-- Phong cách trả lời của phiên đang mở (+ bỏ markdown) — WbStyleChip. -->
     <template v-if="active">
       <WbStyleChip :session="active" />
-      <span class="h-3 w-px flex-none" style="background: var(--border)" />
+      <Separator orientation="vertical" class="h-3" />
     </template>
 
     <!-- Account chip — menu account + model + settings (phong cách có chip riêng). -->
@@ -58,20 +61,20 @@
     >
       {{ accountLabel }}
     </WbChip>
-    <span class="h-3 w-px flex-none" style="background: var(--border)" />
+    <Separator orientation="vertical" class="h-3" />
 
     <!-- Toggles: explorer / agent browser tab / dock / settings. -->
     <WbChip :active="!wb.sideClosed" title="Explorer ⌘B" @click="wb.toggleSide()">
-      <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon class="size-3" name="folder" />
     </WbChip>
     <WbChip title="Mở tab browser của agent" @click="openBrowserDoc">
-      <Icon name="globe" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon class="size-3" name="globe" />
     </WbChip>
     <WbChip :active="!wb.dockHidden" title="Dock panel ⌘J" @click="wb.toggleDock()">
-      <Icon name="dock-bottom" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon class="size-3" name="dock-bottom" />
     </WbChip>
     <WbChip title="Settings" @click="openSettingsDoc('appearance')">
-      <Icon name="settings" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon class="size-3" name="settings" />
     </WbChip>
 
     <WorkbenchContextMenu />
@@ -269,28 +272,3 @@ function openAccountMenu(e: MouseEvent) {
 // hỏng render cả status bar.
 const menuFor = computed(() => menu.value?.anchor?.dataset?.wbi ?? '')
 </script>
-
-<style scoped>
-footer {
-  background: var(--bgPanel);
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-/* Mini bar context: track 38px, fill theo % cửa sổ. */
-.ctxbar {
-  width: 38px;
-  height: 4px;
-  flex: none;
-  border-radius: var(--r-pill);
-  background: var(--bgActive);
-  overflow: hidden;
-  display: inline-block;
-}
-.ctxbar i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-</style>

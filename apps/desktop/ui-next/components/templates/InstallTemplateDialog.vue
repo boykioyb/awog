@@ -6,9 +6,9 @@
     :width="480"
     @close="emit('close')"
   >
-    <div class="tpd">
-      <div v-if="!fixedTemplateId" class="tpd-field">
-        <label class="tpd-label">{{ t('templates.installDialog.template') }}</label>
+    <div class="flex flex-col gap-4">
+      <div v-if="!fixedTemplateId" class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.installDialog.template') }}</Label>
         <AppSelect
           v-model="templateId"
           :options="templateOptions"
@@ -17,8 +17,8 @@
         />
       </div>
 
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.installDialog.target') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.installDialog.target') }}</Label>
         <AppSelect
           v-model="projectId"
           :options="projectOptions"
@@ -27,12 +27,12 @@
         />
       </div>
 
-      <div class="tpd-field">
-        <label class="tpd-label">{{ t('templates.installDialog.conflict') }}</label>
+      <div class="flex flex-col gap-1.5">
+        <Label>{{ t('templates.installDialog.conflict') }}</Label>
         <AppSelect v-model="conflictPolicy" :options="conflictOptions" width="100%" />
       </div>
 
-      <div class="tpd-hint">{{ t('templates.installDialog.hint') }}</div>
+      <div class="text-xs text-dim">{{ t('templates.installDialog.hint') }}</div>
     </div>
 
     <template #footer>
@@ -46,8 +46,7 @@
 
 <script setup lang="ts">
 // Install-template dialog — write a template bundle into a target project's
-// project tier. Port of the old UI InstallTemplateDialog, rendered in prototype
-// CSS inside LibraryEntityModal. `fixedTemplateId` pins the template (Install
+// project tier, rendered inside LibraryEntityModal. `fixedTemplateId` pins the template (Install
 // launched from a template's detail pane) and hides its picker.
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
@@ -118,27 +117,3 @@ const onInstall = async () => {
   }
 }
 </script>
-
-<style scoped>
-.tpd {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.tpd-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tpd-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 550;
-  color: var(--text);
-}
-.tpd-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

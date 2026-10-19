@@ -6,28 +6,39 @@
        allowlist prefix — nên `kubectl_cli` luôn trả "Không tìm thấy kubectl".
        Không có khối này thì tính năng sống mà không chạy được, và cách duy nhất
        để sửa là tự gọi RPC bằng tay. -->
-  <div v-if="status && !status.found" class="ibin">
-    <p class="iwarn">{{ t('infra.binary.missing', { tool }) }}</p>
-    <p v-if="status.hint" class="ihint">{{ status.hint }}</p>
+  <div v-if="status && !status.found" class="mt-3 border-t pt-2.5">
+    <p class="mt-2 mb-0 text-xs text-warning">{{ t('infra.binary.missing', { tool }) }}</p>
+    <p v-if="status.hint" class="mt-1.5 mb-0 text-xs text-faint">{{ status.hint }}</p>
 
     <template v-if="status.rejectedPath">
-      <p class="ihint">{{ t('infra.binary.outside') }}</p>
-      <div class="iout">
-        <div class="iout-row">
-          <span class="iout-k">{{ t('infra.binary.path') }}</span>
-          <span class="iout-v">{{ status.rejectedPath }}</span>
+      <p class="mt-1.5 mb-0 text-xs text-faint">{{ t('infra.binary.outside') }}</p>
+      <div class="mt-2.5 grid gap-1">
+        <div class="flex gap-2 text-xs">
+          <span class="flex-none text-faint">{{ t('infra.binary.path') }}</span>
+          <!-- mono-ok: đường dẫn binary — người dùng copy-paste sang terminal. -->
+          <span class="min-w-0 font-mono break-all text-foreground">
+            {{ status.rejectedPath }}
+          </span>
         </div>
       </div>
-      <button type="button" class="iact" :disabled="busy" :aria-busy="busy" @click="vouch()">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        class="mt-3 w-full justify-start"
+        :disabled="busy"
+        :aria-busy="busy"
+        @click="vouch()"
+      >
         <Icon
           :name="busy ? 'refresh' : 'shield'"
-          :class="{ ikspin: busy }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5 text-dim"
+          :class="{ 'animate-spin': busy }"
         />
         {{ busy ? t('infra.binary.vouching') : t('infra.binary.vouch') }}
-      </button>
-      <p class="ihint">{{ t('infra.binary.vouchNote') }}</p>
-      <p v-if="error" class="ierr">{{ error }}</p>
+      </Button>
+      <p class="mt-1.5 mb-0 text-xs text-faint">{{ t('infra.binary.vouchNote') }}</p>
+      <p v-if="error" class="mt-1.5 mb-0 text-xs text-destructive">{{ error }}</p>
     </template>
   </div>
 </template>
@@ -131,11 +142,3 @@ onMounted(() => {
   void load()
 })
 </script>
-
-<style scoped>
-.ibin {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-</style>

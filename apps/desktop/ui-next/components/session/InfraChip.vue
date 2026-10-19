@@ -3,50 +3,53 @@
        chip SSH trong SessionContextStrip: một chip mở popover của CHÍNH nó, và
        không ghim gì thì VẮNG MẶT khỏi DOM — hàng ngữ cảnh không mất pixel nào cho
        tính năng người dùng chưa dùng. -->
-  <span v-if="visible" class="iwrap">
-    <button
-      ref="chipEl"
-      type="button"
-      class="ctxchip"
-      :class="{
-        on: open,
-        acc: !pinned,
-        danger: pinned && isProd,
-        warn: pinned && !isProd && bypassActive,
-      }"
+  <span v-if="visible" class="relative inline-flex min-w-0 shrink">
+    <SessionCtxChip
+      ref="chipRef"
+      icon="layers"
+      :label="chipLabel"
+      :sub="chipSub"
+      chev
+      :on="open"
+      :acc="!pinned"
+      :danger="pinned && isProd"
+      :warn="pinned && !isProd && bypassActive"
       :title="chipTitle"
       @click.stop="open = !open"
-    >
-      <Icon name="layers" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="ctxchip-lbl">{{ chipLabel }}</span>
-      <span v-if="chipSub" class="ctxchip-sub">{{ chipSub }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+    />
 
     <Teleport to="body">
-      <div v-if="open" class="ibackdrop" @click="open = false" />
-      <div v-if="open" ref="popEl" class="pop ipop" :style="popStyle" @click.stop>
-        <div class="pl">
+      <div v-if="open" class="fixed inset-0 z-40" @click="open = false" />
+      <SessionCtxPop v-if="open" ref="popRef" class="w-74" :style="popStyle" @click.stop>
+        <div class="mb-2 flex justify-between text-sm text-dim">
           <span>{{ t('infra.pop.title') }}</span>
-          <span v-if="pinned && isProd" class="ibadge prod">{{ t('infra.pop.prod') }}</span>
+          <Badge
+            v-if="pinned && isProd"
+            variant="outline"
+            class="rounded-sm border-destructive/45 bg-destructive/10 px-1.5 py-px font-normal text-destructive"
+          >
+            {{ t('infra.pop.prod') }}
+          </Badge>
         </div>
 
         <!-- Công tắc on/off của tool AWS cho phiên (2026-09-15). Tắt = xoá field
              AWS của phiên; bật = chọn sẵn một profile. -->
-        <div class="itoggle">
-          <span class="itoggle-lbl">{{ t('infra.toggle.aws') }}</span>
+        <div class="flex items-center justify-between gap-2.5">
+          <span class="text-sm text-foreground">{{ t('infra.toggle.aws') }}</span>
           <SettingsTog :model-value="pinned" @update:model-value="setEnabled" />
         </div>
-        <p v-if="!pinned" class="ihint">{{ t('infra.toggle.awsHint') }}</p>
+        <p v-if="!pinned" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+          {{ t('infra.toggle.awsHint') }}
+        </p>
 
         <template v-if="pinned">
-          <p v-if="bypassActive" class="iwarn">
+          <p v-if="bypassActive" class="mt-2 mb-0 text-xs leading-4.5 text-warning">
             {{ t('infra.pop.bypass', { left: bypassLeft }) }}
           </p>
 
           <!-- 1 · Profile -->
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.profile.label') }}</div>
+          <div class="mt-3">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.profile.label') }}</div>
             <AppSelect
               :model-value="effective.profile ?? ''"
               :options="profileOptions"
@@ -54,14 +57,20 @@
               width="100%"
               @update:model-value="onProfile"
             />
-            <p v-if="profilesError" class="ierr">{{ profilesError }}</p>
-            <p v-else-if="loadingProfiles" class="ihint">{{ t('infra.profile.loading') }}</p>
-            <p v-else-if="!profiles.length" class="ihint">{{ t('infra.profile.empty') }}</p>
+            <p v-if="profilesError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+              {{ profilesError }}
+            </p>
+            <p v-else-if="loadingProfiles" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.profile.loading') }}
+            </p>
+            <p v-else-if="!profiles.length" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+              {{ t('infra.profile.empty') }}
+            </p>
           </div>
 
           <!-- 2 · Region (rỗng = để chính profile quyết) -->
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.region.label') }}</div>
+          <div class="mt-3">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.region.label') }}</div>
             <AppSelect
               :model-value="effective.region ?? ''"
               :options="regionOptions"
@@ -71,44 +80,53 @@
           </div>
 
           <!-- 3 · Quyền của phiên — chỉ siết xuống được (ADR 0088 §5b) -->
-          <div class="ifield">
-            <div class="ilbl">{{ t('infra.floor.label') }}</div>
+          <div class="mt-3">
+            <div class="mb-1.5 text-sm text-dim">{{ t('infra.floor.label') }}</div>
             <AppSelect
               :model-value="floor"
               :options="floorOptions"
               width="100%"
               @update:model-value="onFloor"
             />
-            <p class="ihint">{{ t('infra.floor.note') }}</p>
+            <p class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">{{ t('infra.floor.note') }}</p>
           </div>
 
-          <p v-if="saveError" class="ierr">{{ saveError }}</p>
+          <p v-if="saveError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+            {{ saveError }}
+          </p>
 
           <!-- 4 · Kiểm tra danh tính — lệnh DUY NHẤT ở đây chạm mạng, nên nó chỉ chạy
              khi người dùng bấm, và mọi lỗi hiện ra chữ đọc được. -->
-          <button
-            type="button"
-            class="iact"
+          <Button
+            variant="outline"
+            size="sm"
+            class="mt-3 h-auto w-full justify-start gap-2 rounded-sm border-input px-2 py-1.5 text-sm font-normal text-foreground shadow-none disabled:opacity-55 [&_svg]:size-3.5 [&_svg]:text-dim"
             :disabled="identityRunning || !awsAvailable"
             @click="checkIdentity()"
           >
-            <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="shield" class="size-3.5" />
             {{ identityRunning ? t('infra.identity.running') : t('infra.identity.run') }}
-          </button>
-          <p v-if="!awsAvailable" class="ihint">{{ t('infra.identity.noBinary') }}</p>
-          <div v-if="identity" class="iout">
-            <div class="iout-row">
-              <span class="iout-k">{{ t('infra.identity.account') }}</span>
-              <span class="iout-v">{{ identity.accountId }}</span>
+          </Button>
+          <p v-if="!awsAvailable" class="mt-1.5 mb-0 text-xs leading-4.5 text-faint">
+            {{ t('infra.identity.noBinary') }}
+          </p>
+          <div v-if="identity" class="mt-2.5 grid gap-1">
+            <div class="flex gap-2 text-xs leading-4.5">
+              <span class="shrink-0 text-faint">{{ t('infra.identity.account') }}</span>
+              <span class="min-w-0 font-mono break-all text-foreground">
+                {{ identity.accountId }}
+              </span>
             </div>
-            <div v-if="identity.arn" class="iout-row">
-              <span class="iout-k">{{ t('infra.identity.arn') }}</span>
-              <span class="iout-v">{{ identity.arn }}</span>
+            <div v-if="identity.arn" class="flex gap-2 text-xs leading-4.5">
+              <span class="shrink-0 text-faint">{{ t('infra.identity.arn') }}</span>
+              <span class="min-w-0 font-mono break-all text-foreground">{{ identity.arn }}</span>
             </div>
           </div>
-          <p v-if="identityError" class="ierr">{{ identityError }}</p>
+          <p v-if="identityError" class="mt-1.5 mb-0 text-xs leading-4.5 text-destructive">
+            {{ identityError }}
+          </p>
         </template>
-      </div>
+      </SessionCtxPop>
     </Teleport>
   </span>
 </template>
@@ -241,8 +259,12 @@ const saveError = ref<string | null>(null)
 const open = ref(false)
 // Chip đứng trên hàng header `.dh`, có thể sát mép phải — neo `fixed` + kẹp
 // viewport thay vì `absolute` trong `.iwrap` (thò ra ngoài là bị cắt).
-const chipEl = ref<HTMLElement | null>(null)
-const popEl = ref<HTMLElement | null>(null)
+// Chip + popover là component (Button / SessionCtxPop) ⇒ template ref là instance,
+// phần tử DOM nằm ở `$el`.
+const chipRef = useTemplateRef<{ $el: HTMLElement }>('chipRef')
+const popRef = useTemplateRef<{ $el: HTMLElement }>('popRef')
+const chipEl = computed(() => chipRef.value?.$el ?? null)
+const popEl = computed(() => popRef.value?.$el ?? null)
 const { style: popStyle } = usePopoverAnchor(chipEl, popEl, open)
 
 // "Đã BẬT cho phiên này" = có profile hoặc region ghim. Công tắc on/off của chip
@@ -568,20 +590,3 @@ function parseIdentity(stdout: string): Identity | null {
   }
 }
 </script>
-
-<style scoped>
-/* Biến thể "account production" sống ở đây chứ không trong app-shell.css: chỉ
-   chip hạ tầng AWS mới có khái niệm tài khoản đánh dấu production. Phần CSS còn
-   lại của chip (`.iwrap`, `.ipop`, `.ifield`, `.iact`, …) đã được nâng lên
-   `assets/css/app-shell.css` để ba chip hạ tầng dùng chung một bản — file đó
-   ngoài phạm vi wave 1, nên ở đây chỉ đổi tint sang tên var chuẩn. */
-.ctxchip.danger {
-  border-color: rgb(from var(--destructive) r g b / 45%);
-  color: var(--destructive);
-  background: rgb(from var(--destructive) r g b / 10%);
-}
-.ctxchip.danger .ctxchip-lbl,
-.ctxchip.danger .ctxchip-sub {
-  color: inherit;
-}
-</style>

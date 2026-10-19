@@ -1,31 +1,40 @@
 <template>
-  <div class="slk-composer">
-    <div v-if="c.suggestions.value.length" class="slk-suggest" data-slack-overlay role="listbox">
+  <div class="relative flex flex-col gap-1.5 border-t px-4 pb-3 pt-2.5">
+    <div
+      v-if="c.suggestions.value.length"
+      class="absolute bottom-[calc(100%-4px)] left-4 right-4 z-20 flex flex-col rounded-md border bg-popover p-1 shadow-md"
+      data-slack-overlay
+      role="listbox"
+    >
       <Button
         v-for="(s, i) in c.suggestions.value"
         :key="s.key"
         variant="ghost"
         size="sm"
-        class="slk-sopt"
-        :class="{ on: i === c.activeIndex.value }"
+        class="justify-start gap-2 rounded-l-none border-l-2"
+        :class="i === c.activeIndex.value ? 'border-l-primary bg-selected' : 'border-l-transparent'"
         role="option"
         :aria-selected="i === c.activeIndex.value"
         @mousedown.prevent="c.pick(s)"
       >
         <template v-if="s.kind === 'user'">
-          <img v-if="s.avatar" :src="s.avatar" alt="" class="slk-savatar" />
+          <img v-if="s.avatar" :src="s.avatar" alt="" class="size-5 rounded-sm object-cover" />
           <span class="font-medium">{{ s.label }}</span>
           <span class="truncate text-dim">{{ s.sub }}</span>
         </template>
         <template v-else>
-          <img v-if="s.url" :src="s.url" alt="" class="slk-savatar" />
+          <img v-if="s.url" :src="s.url" alt="" class="size-5 rounded-sm object-cover" />
           <span v-else>{{ s.char }}</span>
           <span>:{{ s.label }}:</span>
         </template>
       </Button>
     </div>
 
-    <div v-if="c.hasPendingAgentDraft.value" class="slk-trbar" role="status">
+    <div
+      v-if="c.hasPendingAgentDraft.value"
+      class="flex items-center gap-1.5 rounded-md border border-selected-border bg-selected px-2 py-1 text-xs text-primary"
+      role="status"
+    >
       <Icon name="bot" />
       <span class="flex-1">{{ t('slack.composer.agentDraftPending') }}</span>
       <Button variant="ghost" size="xs" @click="c.acceptAgentDraft">
@@ -36,7 +45,10 @@
       </Button>
     </div>
 
-    <div v-if="c.isPreviewingTranslation.value" class="slk-trbar">
+    <div
+      v-if="c.isPreviewingTranslation.value"
+      class="flex items-center gap-1.5 rounded-md border border-selected-border bg-selected px-2 py-1 text-xs text-primary"
+    >
       <Icon name="globe" />
       <span class="flex-1">{{ t('slack.composer.translatedPreview') }}</span>
       <Button variant="ghost" size="xs" @click="c.restoreOriginal">
@@ -49,7 +61,7 @@
     <Textarea
       ref="taRef"
       v-model="c.draft.value"
-      class="slk-ta resize-y"
+      class="max-h-60 min-h-16 resize-y"
       :placeholder="t('slack.composer.placeholder', { channel: thread.channelName })"
       :disabled="c.sending.value"
       @input="c.onInput"
@@ -143,58 +155,3 @@ const c = useSlackComposer({
   fail: ctx.fail,
 })
 </script>
-
-<style scoped>
-.slk-composer {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 16px 12px;
-  box-shadow: inset 0 1px 0 var(--border);
-}
-.slk-ta {
-  min-height: 64px;
-  max-height: 240px;
-}
-.slk-trbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 1px solid var(--accentBorder);
-  border-radius: var(--r-sm);
-  background: var(--accentDim);
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.slk-suggest {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(100% - 4px);
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgPanel);
-  box-shadow: var(--shadow-md);
-}
-.slk-sopt {
-  justify-content: flex-start;
-  gap: 8px;
-}
-.slk-sopt.on {
-  background: var(--accentDim);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.slk-savatar {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-xs);
-  object-fit: cover;
-}
-</style>

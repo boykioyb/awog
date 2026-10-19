@@ -1,16 +1,18 @@
 <template>
   <TooltipProvider :delay-duration="300">
     <SidebarProvider class="h-svh">
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div
-            class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-          >
-            <Home class="size-4" />
-          </div>
-          <div class="flex flex-col group-data-[collapsible=icon]/sidebar:hidden">
-            <span class="text-sm font-semibold text-foreground">AWOG</span>
-            <span class="text-xs text-sidebar-foreground/70">shadcn proto</span>
+          <div class="flex items-center gap-2">
+            <div
+              class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+            >
+              <Home class="size-4" />
+            </div>
+            <div class="flex flex-col group-data-[collapsible=icon]:hidden">
+              <span class="text-sm font-semibold text-foreground">AWOG</span>
+              <span class="text-xs text-sidebar-foreground/70">shadcn proto</span>
+            </div>
           </div>
         </SidebarHeader>
 
@@ -58,7 +60,7 @@
           class="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3"
         >
           <SidebarTrigger />
-          <Separator orientation="vertical" class="!h-4" />
+          <Separator orientation="vertical" class="h-4!" />
           <span class="text-sm font-medium text-foreground">Sessions</span>
           <Badge variant="secondary" class="ml-1">awog</Badge>
           <span class="flex-1" />
@@ -86,7 +88,7 @@
               <DropdownMenuItem v-for="o in schemes" :key="o.value" @click="setMode(o.value)">
                 <component :is="o.icon" />
                 {{ o.label }}
-                <Check v-if="mode === o.value" class="ml-auto !text-foreground" />
+                <Check v-if="mode === o.value" class="ml-auto text-foreground!" />
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -108,7 +110,7 @@
             <GitBranch class="size-3" />
             main
           </span>
-          <Separator orientation="vertical" class="!h-3" />
+          <Separator orientation="vertical" class="h-3!" />
           <span>context 41.2k / 200k</span>
           <span class="flex-1" />
           <span class="tabular-nums">3 sessions · 2 running</span>

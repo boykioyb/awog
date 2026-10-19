@@ -79,7 +79,7 @@
       />
     </SettingsField>
 
-    <div class="sech">{{ t('settingsSessions.context.heading') }}</div>
+    <SettingsGroupLabel>{{ t('settingsSessions.context.heading') }}</SettingsGroupLabel>
 
     <SettingsField
       :name="t('settingsSessions.context.agentsCatalog.name')"
@@ -95,7 +95,7 @@
       <SettingsTog v-model="skillsCatalog" />
     </SettingsField>
 
-    <div class="sech">{{ t('settingsSessions.quota.heading') }}</div>
+    <SettingsGroupLabel>{{ t('settingsSessions.quota.heading') }}</SettingsGroupLabel>
 
     <SettingsField
       :name="t('settingsSessions.quota.warning.name')"
@@ -119,7 +119,7 @@
 
     <SettingsField v-if="quotaEnabled" :name="t('settingsSessions.quota.abort.name')">
       <template #desc>
-        <span :style="{ color: 'var(--danger)' }">
+        <span class="text-destructive">
           {{ t('settingsSessions.quota.abort.desc') }}
         </span>
       </template>

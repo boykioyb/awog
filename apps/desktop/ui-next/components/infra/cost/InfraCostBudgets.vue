@@ -4,11 +4,11 @@
        ra AWS (`create-budget`/`update-budget` đi qua cổng quyền) — đứng riêng thì
        ranh giới đọc/ghi của cả nhóm nhìn thấy được từ thanh tab. -->
   <!-- ── 7.4 Ngân sách ──────────────────────────────────────────────── -->
-  <section class="icst-sec">
-    <div class="icst-sec-hd">
-      <span class="icst-sec-ttl">{{ t('infra.cost.budget.title') }}</span>
-      <span class="icst-hint">{{ t('infra.cost.budget.why') }}</span>
-      <span class="icst-gap" />
+  <Card class="gap-2.5 px-3.5 py-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-base text-foreground">{{ t('infra.cost.budget.title') }}</span>
+      <span class="text-xs text-faint">{{ t('infra.cost.budget.why') }}</span>
+      <span class="flex-1" />
       <Button
         type="button"
         :disabled="budgetsLoading || !accountId"
@@ -17,38 +17,41 @@
         size="sm"
         @click="loadBudgets"
       >
-        <Icon name="refresh" class="icst-ic" :class="budgetsLoading ? 'icst-spin' : ''" />
+        <Icon name="refresh" class="size-3" :class="budgetsLoading ? 'animate-spin' : ''" />
         {{ t('infra.cost.budget.load') }}
       </Button>
     </div>
 
     <!-- Budgets đòi `--account-id` tường minh. Chưa giải được id thì nói ra và tắt
          nút, thay vì để người dùng bấm vào một lệnh chắc chắn hỏng. -->
-    <p v-if="!accountId" class="icst-empty">{{ t('infra.cost.budget.noAccountId') }}</p>
-    <p v-else-if="budgetsError" class="ierr">{{ budgetsError }}</p>
+    <p v-if="!accountId" class="m-0 text-xs text-faint">
+      {{ t('infra.cost.budget.noAccountId') }}
+    </p>
+    <p v-else-if="budgetsError" class="m-0 text-xs text-destructive">{{ budgetsError }}</p>
 
     <template v-if="budgets">
-      <ul v-if="budgets.length" class="icst-rows">
-        <li v-for="b in budgets" :key="b.name" class="icst-row">
-          <span class="icst-row-name">{{ b.name }}</span>
-          <span class="icst-muted">{{ b.timeUnit }}</span>
-          <span class="icst-row-val tnum">
+      <ul v-if="budgets.length" class="m-0 flex list-none flex-col gap-0.5 p-0">
+        <li v-for="b in budgets" :key="b.name" class="flex items-baseline gap-2 py-0.5 text-sm">
+          <span class="min-w-0 flex-1 truncate text-foreground">{{ b.name }}</span>
+          <span class="text-faint">{{ b.timeUnit }}</span>
+          <span class="text-dim tabular-nums">
             {{ b.actualUsd === null ? '—' : usd(b.actualUsd) }}
             /
             {{ b.limitUsd === null ? '—' : usd(b.limitUsd) }}
           </span>
         </li>
       </ul>
-      <p v-else class="icst-empty">{{ t('infra.cost.budget.none') }}</p>
+      <p v-else class="m-0 text-xs text-faint">{{ t('infra.cost.budget.none') }}</p>
     </template>
 
     <!-- Đặt ngân sách là lượt GHI duy nhất của tab này: nó đi qua ma trận quyền và
          có thể dừng ở hộp duyệt. Ba ô, không hơn. -->
-    <div class="icst-budget-form">
+    <div class="flex flex-wrap items-center gap-2">
       <Input
         v-model="budgetName"
         type="text"
         maxlength="100"
+        class="h-ctrl-sm w-auto min-w-36 flex-1 basis-50"
         :placeholder="t('infra.cost.budget.namePlaceholder')"
       />
       <Input
@@ -56,13 +59,14 @@
         type="number"
         min="1"
         step="1"
+        class="h-ctrl-sm w-32"
         :placeholder="t('infra.cost.budget.limitPlaceholder')"
-        class="ic-inp-sm"
       />
       <Input
         v-model="budgetEmails"
         type="text"
         autocomplete="off"
+        class="h-ctrl-sm w-auto min-w-36 flex-1 basis-50"
         :placeholder="t('infra.cost.budget.emailsPlaceholder')"
         :title="t('infra.cost.budget.emailsWhy')"
       />
@@ -74,12 +78,12 @@
         size="sm"
         @click="onSaveBudget"
       >
-        <Icon name="check" class="icst-ic" />
+        <Icon name="check" class="size-3" />
         {{ t('infra.cost.budget.save') }}
       </Button>
     </div>
-    <p class="icst-hint">{{ t('infra.cost.budget.thresholdWhy') }}</p>
-  </section>
+    <p class="m-0 text-xs text-faint">{{ t('infra.cost.budget.thresholdWhy') }}</p>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -136,86 +140,3 @@ function usd(v: number): string {
   return `$${v.toFixed(2)}`
 }
 </script>
-
-<style scoped>
-/* Vỏ khối (`.icst-sec*`, `.icst-hint`, `.icst-ic`, `.icst-spin`) lặp ở cả ba tab con.
-   Cố ý: ba bản sao của bảy luật ngắn rẻ hơn một stylesheet dùng chung hoặc một
-   chuỗi `:deep()` từ component cha — và giữ mỗi tab con đọc được một mình. */
-
-.icst-muted {
-  color: var(--textFaint);
-}
-
-.icst-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.icst-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.icst-row-name {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.icst-row-val {
-  color: var(--textDim);
-}
-
-.icst-empty {
-  margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-
-.icst-budget-form {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.icst-inp {
-  flex: 1 1 200px;
-  min-width: 140px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.icst-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex-shrink: 0;
-}
-
-.icst-spin {
-  animation: icst-rot 1s linear infinite;
-}
-
-@keyframes icst-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

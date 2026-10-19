@@ -6,7 +6,7 @@
         <Input
           v-model="query"
           placeholder="Search sessions…"
-          class="h-[var(--ctrl-h-sm)] border-transparent bg-muted pl-8 shadow-none focus-visible:ring-1"
+          class="h-(--ctrl-h-sm) border-transparent bg-muted pl-8 shadow-none focus-visible:ring-1"
         />
       </div>
       <Tooltip>
@@ -70,14 +70,14 @@
                   </DropdownMenuContent>
                 </DropdownMenu>
               </span>
-              <span class="flex items-center gap-2 pl-[22px] text-xs text-muted-foreground">
+              <span class="flex items-center gap-2 pl-5.5 text-xs text-muted-foreground">
                 <Pin v-if="s.pinned" class="size-3 shrink-0" />
                 <span class="truncate">{{ s.agent }} · {{ s.model }}</span>
                 <span class="ml-auto flex shrink-0 items-center gap-2 tabular-nums">
                   <span>{{ s.tokens }}</span>
                   <span
                     v-if="s.unread"
-                    class="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground"
+                    class="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground"
                   >
                     {{ s.unread }}
                   </span>

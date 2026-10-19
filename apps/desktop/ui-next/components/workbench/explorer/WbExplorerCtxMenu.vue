@@ -2,26 +2,30 @@
   <!-- Context menu chung của Workbench (file tree / SCM / doc tab). Fixed
        popover teleport ra body để không bị panel overflow clip. Hỗ trợ
        separator / danger / disabled / hint phím tắt — parity menu VS Code.
-       Skin dùng `.smenu`/`.mi` GLOBAL của app (contract migration giữ nguyên):
-       theme-cute + luật tương tác đã nhắm đúng từ vựng này; Tailwind chỉ lo
-       kích thước/neo/no-drag còn lại của `.wbm` cũ. -->
+       Class bám DropdownMenuContent/Item của shadcn; `.wbm` nằm trong OVERLAYS
+       (useEmbeddedBrowser.ts) để trình duyệt nhúng nhường chỗ. -->
   <Teleport to="body">
     <div
       v-if="exp.menuOpen.value"
       ref="menuEl"
-      class="smenu min-w-[184px] max-w-[260px] [-webkit-app-region:no-drag]"
+      class="wbm fixed z-130 max-h-[calc(100vh-24px)] min-w-46 max-w-65 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md [-webkit-app-region:no-drag]"
       :style="{ left: exp.menuX.value + 'px', top: exp.menuY.value + 'px' }"
     >
       <template v-for="(it, i) in exp.menuItems.value" :key="i">
-        <div v-if="it.separator" class="msep" />
+        <Separator v-if="it.separator" class="-mx-1 my-1 w-auto" />
         <div
           v-else
-          class="mi"
-          :class="{ dmi: it.danger, mdisabled: it.disabled }"
+          class="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-accent"
+          :class="[
+            it.danger
+              ? 'text-destructive hover:text-destructive'
+              : 'text-muted-foreground hover:text-accent-foreground',
+            { 'pointer-events-none opacity-45': it.disabled },
+          ]"
           @click="pick(it)"
         >
           <span class="min-w-0 flex-1 overflow-hidden text-ellipsis">{{ it.label }}</span>
-          <span v-if="it.hint" class="mhint">{{ it.hint }}</span>
+          <span v-if="it.hint" class="tnum ml-auto text-xs text-faint">{{ it.hint }}</span>
         </div>
       </template>
     </div>

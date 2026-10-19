@@ -1,97 +1,114 @@
 <template>
-  <Teleport to="body">
-    <div v-if="aiOpen" class="ovl on ltai-ovl" @click.self="aiOpen = false">
-      <div class="ltai-card" role="dialog" aria-modal="true" :aria-label="t('logtime.ai.title')">
-        <div class="ltai-head">
-          <div>
-            <div class="ltai-title">
-              {{ t('logtime.ai.titleWithDate', { d: longDateOf(date) }) }}
-            </div>
-            <div class="ltai-sub">{{ t('logtime.ai.sub') }}</div>
-          </div>
-          <span class="ltai-sp" />
-          <button class="ltai-x" :title="t('common.close')" @click="aiOpen = false">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+  <Dialog :open="aiOpen" @update:open="(v) => !v && (aiOpen = false)">
+    <DialogContent
+      class="flex max-h-[calc(100vh-48px)] w-full max-w-170 flex-col gap-0 overflow-hidden border-input bg-sidebar p-0 sm:max-w-170 sm:rounded-2xl"
+      :aria-label="t('logtime.ai.title')"
+    >
+      <DialogHeader class="flex-none border-b px-4 py-3 pr-12">
+        <DialogTitle class="text-lg font-semibold">
+          {{ t('logtime.ai.titleWithDate', { d: longDateOf(date) }) }}
+        </DialogTitle>
+        <DialogDescription class="text-xs text-dim">{{ t('logtime.ai.sub') }}</DialogDescription>
+      </DialogHeader>
+
+      <div class="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3.5">
+        <!-- Đang gọi model. -->
+        <div v-if="store.composeBusy" class="flex items-center gap-2 py-4.5 text-sm text-dim">
+          <Icon name="refresh" class="size-3.5 animate-spin motion-reduce:animate-none" />
+          <span>{{ t('logtime.ai.busy') }}</span>
         </div>
 
-        <div class="ltai-body">
-          <!-- Đang gọi model. -->
-          <div v-if="store.composeBusy" class="ltai-state">
-            <Icon name="refresh" class="ltai-spin" />
-            <span>{{ t('logtime.ai.busy') }}</span>
-          </div>
+        <!-- Lỗi: engine chưa chạy vs lỗi model, hai câu khác nhau. -->
+        <p
+          v-else-if="store.composeError"
+          class="flex items-center gap-1.5 py-3.5 text-sm text-destructive"
+        >
+          <Icon name="alert" class="size-3.5 shrink-0" />
+          <span>
+            {{
+              store.composeError === 'engine-unavailable'
+                ? t('logtime.ai.noEngine')
+                : t('logtime.ai.failed')
+            }}
+          </span>
+        </p>
 
-          <!-- Lỗi: engine chưa chạy vs lỗi model, hai câu khác nhau. -->
-          <p v-else-if="store.composeError" class="ltai-err">
-            <Icon name="alert" />
-            <span>
-              {{
-                store.composeError === 'engine-unavailable'
-                  ? t('logtime.ai.noEngine')
-                  : t('logtime.ai.failed')
-              }}
-            </span>
-          </p>
+        <template v-else>
+          <!-- Ngữ cảnh AWOG chèn vào lượt — hiện đúng như bản phác để người dùng thấy
+               model soạn dựa trên gì, không phải hộp đen. -->
+          <div class="flex items-center gap-1.5 text-xs text-dim">
+            <Icon name="inspect" class="size-3" />
+            <span>{{ t('logtime.ai.contextTitle') }}</span>
+          </div>
+          <!-- Khối ngữ cảnh dạng thẻ, đọc như code ⇒ mono hợp lệ. -->
+          <pre
+            class="overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-muted-foreground"
+            >{{ store.composeContext }}</pre
+          >
+
+          <div
+            v-if="store.composeLines.length === 0"
+            class="flex items-center gap-2 py-4.5 text-sm text-dim"
+          >
+            {{ t('logtime.ai.none') }}
+          </div>
 
           <template v-else>
-            <!-- Ngữ cảnh AWOG chèn vào lượt — hiện đúng như bản phác để người dùng thấy
-                 model soạn dựa trên gì, không phải hộp đen. -->
-            <div class="ltai-ctxh">
-              <Icon name="inspect" />
-              <span>{{ t('logtime.ai.contextTitle') }}</span>
+            <div class="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Icon name="check" class="size-3.5 text-primary" />
+              <span>
+                {{
+                  t('logtime.ai.draftCount', {
+                    n: store.composeLines.length,
+                    h: fmt(proposedTotal),
+                  })
+                }}
+              </span>
             </div>
-            <pre class="ltai-ctx">{{ store.composeContext }}</pre>
-
-            <div v-if="store.composeLines.length === 0" class="ltai-state">
-              {{ t('logtime.ai.none') }}
-            </div>
-
-            <template v-else>
-              <div class="ltai-sech">
-                <Icon name="check" class="ltai-sechic" />
-                <span>
-                  {{
-                    t('logtime.ai.draftCount', {
-                      n: store.composeLines.length,
-                      h: fmt(proposedTotal),
-                    })
-                  }}
+            <ul class="flex flex-col gap-1.5">
+              <li
+                v-for="(line, i) in store.composeLines"
+                :key="i"
+                class="flex items-baseline gap-2 rounded-lg border bg-muted px-2.5 py-2 text-sm"
+              >
+                <span class="min-w-10 shrink-0 font-semibold tabular-nums text-primary">
+                  {{ fmt(line.hours) }}h
                 </span>
-              </div>
-              <ul class="ltai-list">
-                <li v-for="(line, i) in store.composeLines" :key="i" class="ltai-row">
-                  <span class="ltai-hours tnum">{{ fmt(line.hours) }}h</span>
-                  <b class="ltai-proj">{{ labelOf(line.projectKey) }}</b>
-                  <span class="ltai-note">{{ line.note }}</span>
-                  <span v-if="line.issue !== undefined" class="chip">
-                    <Icon name="link" />
-                    <span>#{{ line.issue }}</span>
-                  </span>
-                </li>
-              </ul>
-            </template>
+                <b class="shrink-0 font-semibold">{{ labelOf(line.projectKey) }}</b>
+                <span class="min-w-0 flex-1 break-words text-muted-foreground">
+                  {{ line.note }}
+                </span>
+                <Badge
+                  v-if="line.issue !== undefined"
+                  variant="outline"
+                  class="rounded-sm text-muted-foreground"
+                >
+                  <Icon name="link" />
+                  <span>#{{ line.issue }}</span>
+                </Badge>
+              </li>
+            </ul>
           </template>
-        </div>
-
-        <div class="ltai-foot">
-          <span class="ltai-hint">{{ t('logtime.ai.hint') }}</span>
-          <span class="ltai-sp" />
-          <Button type="button" variant="outline" @click="aiOpen = false">
-            {{ t('logtime.ai.editManually') }}
-          </Button>
-          <Button
-            type="button"
-            :disabled="store.composeBusy || store.composeLines.length === 0"
-            variant="default"
-            @click="acceptCompose"
-          >
-            {{ t('logtime.ai.accept', { n: store.composeLines.length }) }}
-          </Button>
-        </div>
+        </template>
       </div>
-    </div>
-  </Teleport>
+
+      <div class="flex flex-none flex-wrap items-center gap-2 border-t px-4 py-3">
+        <span class="text-xs text-dim">{{ t('logtime.ai.hint') }}</span>
+        <span class="flex-1" />
+        <Button type="button" variant="outline" @click="aiOpen = false">
+          {{ t('logtime.ai.editManually') }}
+        </Button>
+        <Button
+          type="button"
+          :disabled="store.composeBusy || store.composeLines.length === 0"
+          variant="default"
+          @click="acceptCompose"
+        >
+          {{ t('logtime.ai.accept', { n: store.composeLines.length }) }}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -108,197 +125,3 @@ const { aiOpen, store, date, longDateOf, labelOf, fmt, acceptCompose } = useLogt
 
 const proposedTotal = computed(() => store.composeLines.reduce((s, l) => s + l.hours, 0))
 </script>
-
-<style scoped>
-.ltai-ovl {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.ltai-card {
-  background: var(--bgPanel);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-panel);
-  box-shadow: var(--shadow-lg);
-  width: 100%;
-  max-width: 680px;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.ltai-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-  flex: 0 0 auto;
-}
-.ltai-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-}
-.ltai-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ltai-sp {
-  flex: 1;
-}
-.ltai-x {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: none;
-  color: var(--textDim);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.ltai-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.ltai-body {
-  padding: 14px 16px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.ltai-state {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 18px 0;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ltai-spin {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  animation: ltai-rot 0.9s linear infinite;
-}
-@keyframes ltai-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ltai-spin {
-    animation: none;
-  }
-}
-.ltai-err {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  padding: 14px 0;
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ltai-err > .icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-}
-.ltai-ctxh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ltai-ctxh > .icn {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-.ltai-ctx {
-  margin: 0;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 11px;
-  font-family: var(--code); /* mono-ok: khối ngữ cảnh dạng thẻ, đọc như code */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textMuted);
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.ltai-sech {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-  color: var(--text);
-}
-.ltai-sechic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--accent);
-}
-.ltai-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.ltai-row {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  background: var(--bgSubtle);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ltai-hours {
-  flex: 0 0 auto;
-  font-weight: 650;
-  color: var(--accent);
-  min-width: 40px;
-}
-.ltai-proj {
-  flex: 0 0 auto;
-  font-weight: 600;
-}
-.ltai-note {
-  flex: 1;
-  min-width: 0;
-  color: var(--textMuted);
-  word-break: break-word;
-}
-.ltai-foot {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  padding: 11px 16px;
-  box-shadow: inset 0 1px 0 var(--border);
-  flex: 0 0 auto;
-}
-.ltai-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-</style>

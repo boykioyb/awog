@@ -1,26 +1,38 @@
 <template>
   <div>
     <SettingsPaneHeader :title="t('browser.profiles.settings.heading')" />
-    <p class="sb-intro">{{ t('browser.profiles.settings.intro') }}</p>
+    <p class="mt-0 mb-3 text-sm text-dim">{{ t('browser.profiles.settings.intro') }}</p>
 
-    <div v-if="!hasEngine" class="sb-intro">{{ t('browser.profiles.settings.unavailable') }}</div>
+    <div v-if="!hasEngine" class="mb-3 text-sm text-dim">
+      {{ t('browser.profiles.settings.unavailable') }}
+    </div>
 
     <template v-else>
-      <div v-for="p in profiles" :key="p.id" class="sb-row">
-        <div class="sb-head">
-          <span class="sb-dot" :style="{ background: p.color }" />
-          <span class="sb-name">{{ p.name }}</span>
-          <span v-if="p.id === defaultProfileId" class="chip">
+      <div
+        v-for="p in profiles"
+        :key="p.id"
+        class="mb-2 flex flex-col gap-2 rounded-xl border px-3 py-2.5"
+      >
+        <div class="flex items-center gap-2">
+          <!-- Chấm màu = màu dữ liệu người dùng chọn cho hồ sơ, không phải token theme. -->
+          <span class="size-2.5 shrink-0 rounded-full" :style="{ background: p.color }" />
+          <span class="text-base text-foreground">{{ p.name }}</span>
+          <Badge v-if="p.id === defaultProfileId" variant="outline" class="text-muted-foreground">
             {{ t('browser.profiles.settings.default') }}
-          </span>
-          <span v-if="p.proxy" class="chip" :title="t('browser.profiles.proxy.chipTitle')">
+          </Badge>
+          <Badge
+            v-if="p.proxy"
+            variant="outline"
+            class="text-muted-foreground"
+            :title="t('browser.profiles.proxy.chipTitle')"
+          >
             {{ proxyChip(p) }}
-          </span>
+          </Badge>
           <span class="flex-1" />
         </div>
 
         <!-- Sửa tên + màu tại chỗ — mở bằng nút "Đổi tên", không modal. -->
-        <div v-if="editingId === p.id" class="sb-edit">
+        <div v-if="editingId === p.id" class="flex flex-col gap-2">
           <Input
             v-model="draftName"
             type="text"
@@ -28,16 +40,19 @@
             @keydown.enter.prevent="saveEdit(p.id)"
           />
           <div
-            class="sb-swatches"
+            class="flex gap-1.5"
             role="radiogroup"
             :aria-label="t('browser.profiles.settings.color')"
           >
-            <button
+            <!-- Ô màu: nền inline là màu dữ liệu của hồ sơ (bảng PROFILE_COLORS). -->
+            <Button
               v-for="c in PROFILE_COLORS"
               :key="c"
               type="button"
-              class="sb-swatch"
-              :class="{ on: c === draftColor }"
+              variant="ghost"
+              size="iconSm"
+              class="size-5 rounded-full border-2 border-transparent p-0"
+              :class="{ 'border-foreground': c === draftColor }"
               :style="{ background: c }"
               :title="c"
               role="radio"
@@ -45,7 +60,7 @@
               @click="draftColor = c"
             />
           </div>
-          <div class="sb-actions">
+          <div class="flex flex-wrap gap-1.5">
             <Button
               size="sm"
               variant="default"
@@ -60,7 +75,7 @@
           </div>
         </div>
 
-        <div v-else class="sb-actions">
+        <div v-else class="flex flex-wrap gap-1.5">
           <Button size="sm" variant="outline" @click="startEdit(p)">
             {{ t('browser.profiles.settings.rename') }}
           </Button>
@@ -87,7 +102,7 @@
             v-if="p.id !== 'default'"
             size="sm"
             variant="outline"
-            class="sb-del"
+            class="text-destructive hover:text-destructive"
             @click="onDelete(p)"
           >
             {{ t('browser.profiles.settings.delete') }}
@@ -97,7 +112,7 @@
         <SettingsBrowserProxy v-if="proxyFor === p.id" :profile="p" @close="proxyFor = null" />
       </div>
 
-      <div class="sb-new">
+      <div class="mt-3 flex gap-2">
         <Input
           v-model="newName"
           type="text"
@@ -105,7 +120,7 @@
           @keydown.enter.prevent="onCreate"
         />
         <Button size="sm" variant="default" :disabled="!newName.trim()" @click="onCreate">
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="plus" class="size-3.5" />
           {{ t('browser.profiles.settings.create') }}
         </Button>
       </div>
@@ -131,8 +146,6 @@ import type { BrowserProfile } from '~/types'
 import { PROFILE_COLORS, useBrowserProfiles } from '~/composables/useBrowserProfiles'
 import { useConfirm } from '~/composables/useConfirm'
 import { sidecarErrorText, useSidecar } from '~/composables/useSidecar'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 import WorkspaceBrowserImport from '~/components/session/workspace/WorkspaceBrowserImport.vue'
 import SettingsBrowserProxy from '~/components/settings/SettingsBrowserProxy.vue'
 
@@ -218,73 +231,3 @@ const clearData = async (p: BrowserProfile): Promise<void> => {
   }
 }
 </script>
-
-<style scoped>
-.sb-intro {
-  margin: 0 0 12px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sb-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-}
-.sb-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sb-dot {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-.sb-name {
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.sb-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sb-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sb-swatches {
-  display: flex;
-  gap: 6px;
-}
-.sb-swatch {
-  width: 20px;
-  height: 20px;
-  border: 2px solid transparent;
-  border-radius: 50%;
-  cursor: pointer;
-}
-.sb-swatch.on {
-  border-color: var(--text);
-}
-.sb-swatch:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.sb-new {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-.sb-del {
-  color: var(--danger);
-}
-</style>

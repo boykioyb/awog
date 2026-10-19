@@ -3,48 +3,84 @@
        không popover — dùng khi nó nằm SẴN trong menu `⋯` của composer, nơi một
        popover lồng trong popover sẽ che mất chính menu chứa nó. -->
   <template v-if="variant === 'inline' && servers.length">
-    <div class="pl">{{ t('sessions.config.mcpHint') }}</div>
-    <div v-for="m in servers" :key="m.id" class="mrow" @click.stop="toggleMcp(m.id)">
+    <div class="mb-2 text-xs font-medium text-muted-foreground">
+      {{ t('sessions.config.mcpHint') }}
+    </div>
+    <div
+      v-for="m in servers"
+      :key="m.id"
+      class="flex cursor-pointer items-center gap-2 border-t py-2 text-base first-of-type:border-t-0"
+      @click.stop="toggleMcp(m.id)"
+    >
       <span
-        class="mdot"
-        :style="{ background: m.status === 'connected' ? 'var(--success)' : 'var(--textFaint)' }"
+        class="size-2 flex-none rounded-full"
+        :class="m.status === 'connected' ? 'bg-success' : 'bg-faint'"
       />
-      <span class="mname">{{ m.name }}</span>
-      <span class="mstat">{{ m.status }}</span>
-      <span class="tog2 sm" :class="{ off: !onSet.has(m.id) }" />
+      <span class="min-w-0 truncate text-foreground">{{ m.name }}</span>
+      <span class="ml-auto text-sm text-faint">{{ m.status }}</span>
+      <!-- Công tắc chỉ để hiển thị — cả hàng là vùng bấm, nên tắt pointer của Switch
+           cho khỏi lật hai lần. -->
+      <Switch
+        :checked="onSet.has(m.id)"
+        class="pointer-events-none"
+        tabindex="-1"
+        aria-hidden="true"
+      />
     </div>
   </template>
 
   <!-- No enabled source = no chip: an "MCP 0/0" control would only offer to
        whitelist servers that do not exist. -->
-  <span
-    v-else-if="servers.length"
-    class="chip sm chipbtn"
-    :title="t('sessions.config.mcpHint')"
-    style="position: relative"
-    :style="open || customized ? { borderColor: 'var(--ring)', color: 'var(--primary)' } : {}"
-    @click.stop="emit('toggle')"
-  >
-    <Icon name="conn" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    {{ t('sessions.composer.mcp') }}
-    <span class="mcpc">{{ onCount }}/{{ servers.length }}</span>
-    <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+  <span v-else-if="servers.length" class="relative inline-flex">
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      class="gap-1.5 font-normal text-dim shadow-none hover:text-foreground [&_svg]:size-3"
+      :class="{ 'border-ring text-primary': open || customized }"
+      :title="t('sessions.config.mcpHint')"
+      @click.stop="emit('toggle')"
+    >
+      <Icon name="conn" />
+      {{ t('sessions.composer.mcp') }}
+      <!-- Đếm cỡ cố định, số thẳng cột như các chip đếm khác. -->
+      <span class="text-faint tabular-nums">{{ onCount }}/{{ servers.length }}</span>
+      <Icon name="chev" />
+    </Button>
 
+    <!-- Popover mở lên trên từ thanh composer. -->
+    <!-- role=dialog + data-state=open: khớp selector `[role="dialog"][data-state="open"]`
+           trong OVERLAYS (useEmbeddedBrowser.ts) để trình duyệt nhúng nhường chỗ. -->
     <div
       v-if="open"
-      class="pop mcppop"
-      style="position: absolute; bottom: 130%; left: 0; z-index: 50"
+      role="dialog"
+      data-state="open"
+      class="absolute bottom-[130%] left-0 z-50 w-64 overflow-x-hidden overflow-y-auto rounded-lg border bg-popover p-3 font-sans whitespace-normal text-popover-foreground shadow-md"
       @click.stop
     >
-      <div class="pl">{{ t('sessions.config.mcpHint') }}</div>
-      <div v-for="m in servers" :key="m.id" class="mrow" @click="toggleMcp(m.id)">
+      <div class="mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('sessions.config.mcpHint') }}
+      </div>
+      <div
+        v-for="m in servers"
+        :key="m.id"
+        class="flex cursor-pointer items-center gap-2 border-t py-2 text-base first-of-type:border-t-0"
+        @click="toggleMcp(m.id)"
+      >
         <span
-          class="mdot"
-          :style="{ background: m.status === 'connected' ? 'var(--success)' : 'var(--textFaint)' }"
+          class="size-2 flex-none rounded-full"
+          :class="m.status === 'connected' ? 'bg-success' : 'bg-faint'"
         />
-        <span class="mname">{{ m.name }}</span>
-        <span class="mstat">{{ m.status }}</span>
-        <span class="tog2 sm" :class="{ off: !onSet.has(m.id) }" />
+        <span class="min-w-0 truncate text-foreground">{{ m.name }}</span>
+        <span class="ml-auto text-sm text-faint">{{ m.status }}</span>
+        <!-- Công tắc chỉ để hiển thị — cả hàng là vùng bấm, nên tắt pointer của Switch
+             cho khỏi lật hai lần. -->
+        <Switch
+          :checked="onSet.has(m.id)"
+          class="pointer-events-none"
+          tabindex="-1"
+          aria-hidden="true"
+        />
       </div>
     </div>
   </span>
@@ -107,58 +143,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-/* Fixed-size count badge (not em-scaled) — same rule as the other count chips. */
-.mcpc {
-  font-size: 12px;
-  line-height: 12px;
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-/* Popover opens upward from the composer bar; narrower than the header config pop.
-   `white-space: normal` resets the value inherited from the chip: the chip is nowrap,
-   which made the hint line one long row and gave the popover a horizontal scrollbar
-   (`.pop` sets overflow-y, so the x axis computes to auto). */
-.mcppop {
-  width: 258px;
-  white-space: normal;
-  overflow-x: hidden;
-  /* Chip text is the code font; popover content reads as UI text. */
-  font-family: var(--sans);
-}
-/* Server row — hairline-separated list row (replaces the legacy global `.mcprow`
-   so the row styling is owned here; `.tog2` stays the shared global switch). */
-.mrow {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 0;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
-  line-height: 18px;
-  cursor: pointer;
-}
-.mrow:first-of-type {
-  border-top: none;
-}
-.mdot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.mname {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--foreground);
-}
-.mstat {
-  margin-left: auto;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--textFaint);
-}
-</style>

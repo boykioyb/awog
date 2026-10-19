@@ -1,75 +1,89 @@
 <template>
-  <div ref="rootEl" class="wgt">
-    <div class="wgthead">
-      <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="wgttitle">
+  <!-- Thẻ widget — nền muted + viền + bo lg; nút icon wash trung tính khi hover, nút
+       bật (xem mã nguồn) nhuộm primary. -->
+  <div ref="rootEl" class="overflow-hidden rounded-lg border bg-muted">
+    <!-- Hairline trên thanh cao cố định (ADR 0079): border sẽ ăn 1px của hộp và đẩy
+         con căn giữa vào nửa pixel ⇒ dùng inset shadow. -->
+    <div
+      class="flex h-8.5 items-center gap-2 pr-2 pl-2.5 text-base text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]"
+    >
+      <Icon name="layers" class="size-3.5" />
+      <span class="font-medium text-foreground">
         {{ t(isSvg ? 'sessionsWidget.svgTitle' : 'sessionsWidget.title') }}
       </span>
-      <span class="wgtnote">
+      <span class="text-sm text-muted-foreground">
         {{ scripts ? t('sessionsWidget.scriptsOn') : t('sessionsWidget.sandboxed') }}
       </span>
-      <span class="wgtgrow" />
-      <button
+      <span class="flex-1" />
+      <Button
         v-if="!tooLarge && !scripts"
-        class="wgtbtn"
+        variant="outline"
+        size="xs"
+        class="h-6 gap-1 px-2 text-sm font-normal text-muted-foreground shadow-none hover:border-ring hover:text-foreground [&_svg]:size-3.5"
         :title="t('sessionsWidget.enableScriptsHint')"
         @click="enableScripts"
       >
-        <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="play" />
         <span>{{ t('sessionsWidget.enableScripts') }}</span>
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!tooLarge"
-        class="wgticon"
+        variant="ghost"
+        size="iconSm"
+        class="size-6.5 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
         :title="t('sessionsWidget.taller')"
         :aria-label="t('sessionsWidget.taller')"
         @click="cycleHeight"
       >
-        <Icon name="maximize" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
+        <Icon name="maximize" />
+      </Button>
+      <Button
         v-if="scripts"
-        class="wgticon"
+        variant="ghost"
+        size="iconSm"
+        class="size-6.5 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
         :title="t('sessionsWidget.openFull')"
         :aria-label="t('sessionsWidget.openFull')"
         @click="openFull"
       >
-        <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="wgticon"
-        :class="{ on: showSource }"
+        <Icon name="external" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-6.5 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
+        :class="{ 'bg-primary/10 text-primary hover:text-primary': showSource }"
         :title="t(showSource ? 'sessionsWidget.hideSource' : 'sessionsWidget.showSource')"
         :aria-label="t(showSource ? 'sessionsWidget.hideSource' : 'sessionsWidget.showSource')"
         @click="showSource = !showSource"
       >
-        <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="wgticon"
+        <Icon name="code" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
+        class="size-6.5 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
         :title="t('sessionsWidget.copy')"
         :aria-label="t('sessionsWidget.copy')"
         @click="copySource"
       >
-        <Icon
-          :name="copied ? 'check' : 'copy'"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-      </button>
+        <Icon :name="copied ? 'check' : 'copy'" />
+      </Button>
     </div>
 
-    <div v-if="tooLarge" class="wgtstate">
+    <div v-if="tooLarge" class="px-3 py-4 text-base text-muted-foreground">
       {{ t('sessionsWidget.tooLarge', { size: sizeLabel }) }}
     </div>
 
     <!-- Sandboxed, opaque-origin frame. `sandbox` never carries allow-same-origin, so the
          document cannot touch the app's DOM, storage or the `window.awog` bridge (which
          Electron does not inject into subframes anyway); scripts stay off until the user
-         asks for them. See docs/features/session-inline-widgets.md. -->
+         asks for them. See docs/features/session-inline-widgets.md.
+         Nền trắng cố ý: khớp canvas trắng của chính tài liệu srcdoc. -->
     <iframe
       v-else
       :key="frameKey"
-      class="wgtframe"
+      class="block w-full border-0 bg-white"
       :style="{ height: `${height}px` }"
       :sandbox="sandbox"
       referrerpolicy="no-referrer"
@@ -77,7 +91,12 @@
       :title="t('sessionsWidget.title')"
     />
 
-    <pre v-if="showSource" class="wgtsrc">{{ code }}</pre>
+    <!-- mono-ok: markup nguồn của widget, để đọc/chép như code -->
+    <pre
+      v-if="showSource"
+      class="m-0 max-h-80 overflow-auto px-3 py-2.5 font-mono text-base whitespace-pre-wrap text-muted-foreground shadow-[inset_0_1px_0_var(--border)]"
+      >{{ code }}</pre
+    >
   </div>
 </template>
 
@@ -211,9 +230,9 @@ function buildDocWith(body: string, withScripts: boolean): string {
     ? `${CSP_BASE}; script-src 'unsafe-inline'`
     : `${CSP_BASE}; script-src 'none'`
   const style =
-    'html,body{margin:0;padding:12px;background:#fff;color:#111;' +
+    'html,body{margin:0;padding:12px;background:white;color:rgb(17 17 17);' +
     'font:14px/1.5 system-ui,-apple-system,sans-serif}svg,img{max-width:100%;height:auto}'
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="color-scheme" content="light"><style>${style}</style></head><body>${body}</body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="color-scheme" content="light"><style>/* style-ok: CSS của tài liệu srcdoc trong iframe sandbox */${style}</style></head><body>${body}</body></html>`
 }
 
 // Lazy mount: the frame stays empty until the card scrolls into view, so a transcript with
@@ -242,109 +261,3 @@ onBeforeUnmount(() => {
 
 const srcdoc = computed(() => (visible.value && !tooLarge.value ? buildDoc(props.code) : ''))
 </script>
-
-<style scoped>
-/* Widget card — muted surface + border + lg radius; icon buttons use the
-   neutral hover wash, the toggle's active state tints primary. */
-.wgt {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--muted);
-}
-.wgthead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 8px 0 10px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 18px;
-  /* Hairline on a fixed-height bar (ADR 0079): a border would eat 1px of the box and
-     push the vertically centered children onto a half pixel. */
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-.wgttitle {
-  color: var(--foreground);
-  font-weight: 500;
-}
-.wgtnote {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 16px;
-}
-.wgtgrow {
-  flex: 1;
-}
-.wgtbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 16px;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-.wgtbtn:hover {
-  border-color: var(--ring);
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.wgticon {
-  padding: 5px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.wgticon:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-.wgticon.on {
-  background: rgb(from var(--primary) r g b / 12%);
-  color: var(--primary);
-}
-.wgtframe {
-  display: block;
-  width: 100%;
-  border: 0;
-  background: #fff; /* design-token-ok: matches the srcdoc's own white canvas */
-}
-.wgtsrc {
-  /* mono-ok: the widget's source markup, meant to be read/copied as code */
-  font-family: var(--code);
-  font-size: 13px;
-  line-height: 18px;
-  margin: 0;
-  padding: 10px 12px;
-  max-height: 320px;
-  overflow: auto;
-  white-space: pre-wrap;
-  color: var(--muted-foreground);
-  box-shadow: inset 0 1px 0 var(--border);
-}
-.wgtstate {
-  padding: 16px 12px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 18px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .wgticon,
-  .wgtbtn {
-    transition: none;
-  }
-}
-</style>

@@ -1,22 +1,39 @@
 <template>
   <div>
-    <button type="button" class="srow" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
+    <!-- Hàng step — phẳng, dày (proto `rounded-md px-1.5 py-1 text-xs`, hover wash), không
+         khung card: rail của lượt đã gom nhóm. Mặc định ĐÓNG, một dòng truncate. -->
+    <!-- raw-ok: hàng step cả dòng là một vùng bấm, bên trong có span role=button lồng -->
+    <button
+      type="button"
+      class="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-foreground select-none transition-colors hover:bg-accent motion-reduce:transition-none"
+      :aria-expanded="!collapsed"
+      @click="collapsed = !collapsed"
+    >
       <!-- Running indicator (proto idiom): the tool icon stays put and a thin arc
            ring spins AROUND it — animating the glyph itself reads sloppy. -->
       <span class="relative flex size-3.5 shrink-0 items-center justify-center">
         <Icon
           :name="isTodo ? 'tasks' : stepIcon(block.tool)"
-          class="stepic"
-          :class="{ err: block.status === 'error', run: block.status === 'running' }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5 flex-none"
+          :class="iconTone"
         />
         <span
           v-if="block.status === 'running'"
-          class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary border-r-primary/50"
+          class="absolute -inset-0.75 animate-spin rounded-full border border-transparent border-t-primary border-r-primary/50"
         />
       </span>
-      <span class="tname" :class="{ err: block.status === 'error' }">{{ block.tool }}</span>
-      <span class="starg" :title="resolvedTarget">
+      <span
+        class="flex-none font-medium"
+        :class="block.status === 'error' ? 'text-destructive' : 'text-foreground/90'"
+      >
+        {{ block.tool }}
+      </span>
+      <!-- mono-ok: tham số tool — path hoặc lệnh shell. Cặp [dir co được][tên file
+           không co] nằm trong; flex-1 đẩy các chip phía sau sang phải. -->
+      <span
+        class="flex min-w-0 flex-1 overflow-hidden font-mono whitespace-nowrap text-muted-foreground"
+        :title="resolvedTarget"
+      >
         <!-- dir half ellipsizes, filename stays visible — but a target with no "/"
              (a bare command) must truncate as one span, else the fixed name
              overflows into the result/elapsed chips (reported overflow bug). -->
@@ -29,85 +46,92 @@
       <SessionStepResult :text="isTodo ? todoCount : block.result" />
       <!-- Live per-tool elapsed (craft ActivityRow parity): surfaces only once a running
            tool has been going ≥2s, so fast reads/edits stay quiet. -->
-      <span v-if="showElapsed" class="sela">{{ elapsedSec }}s</span>
+      <span v-if="showElapsed" class="flex-none text-muted-foreground/70 tabular-nums">
+        {{ elapsedSec }}s
+      </span>
       <!-- File-op steps: open the touched file in the shared PreviewModal without
-           expanding. span[role=button] — a real <button> would nest inside the row
+           expanding. span[role=button] — a real button element would nest inside the row
            button. -->
       <span
         v-if="topFileTarget"
         role="button"
-        class="sview"
+        class="inline-flex flex-none cursor-pointer items-center rounded-sm p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground motion-reduce:transition-none"
         :title="t('sessions.step.viewFile')"
         @click.stop="viewFile(block.tool, block.target)"
       >
-        <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <Icon name="file" class="size-3" />
       </span>
+      <!-- Chevron mở/đóng — xoay -90° khi đóng. -->
       <Icon
         name="chev"
-        class="schev"
-        :class="{ off: collapsed }"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
+        class="size-3 flex-none text-muted-foreground/50 transition-transform motion-reduce:transition-none"
+        :class="[collapsed ? '-rotate-90' : '']"
       />
     </button>
     <Collapse :open="!collapsed">
-      <div class="sbody" :class="{ fail: block.status === 'error' }">
+      <!-- Thân: thụt vào dưới cột icon (proto `ml-6`). Step lỗi: khối OUTPUT trong
+           SessionStepBody (`data-sout`) nhuộm destructive. -->
+      <div
+        class="mt-0.5 mb-1 ml-6 flex flex-col gap-1.5"
+        :class="{ '[&_[data-sout]]:text-destructive/90': block.status === 'error' }"
+      >
         <!-- todo checklist (a TodoWrite note step rendered inline once the live banner
              has yielded — i.e. all done or the turn ended). Reuses the banner rows. -->
         <SessionTodoList v-if="isTodo" :todos="block.todos ?? []" />
 
-        <!-- subagent (has children) -->
-        <div v-else-if="block.sub" class="substep">
-          <div class="subhd">
-            <Icon name="agents" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <!-- subagent (has children) — rail accent gom nhóm lượt chạy lồng. -->
+        <div v-else-if="block.sub" class="mt-1 flex flex-col gap-0.5 border-l-2 border-ring pl-2.5">
+          <div class="flex items-center gap-1.5 text-xs font-medium text-primary">
+            <Icon name="agents" class="size-3" />
             {{ block.sub.agent }}
           </div>
-          <div v-for="(st, i) in block.sub.steps" :key="i">
+          <div v-for="(sub, i) in block.sub.steps" :key="i">
+            <!-- raw-ok: hàng sub-step cả dòng là một vùng bấm, có span role=button lồng -->
             <button
               type="button"
-              class="srow"
+              class="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-foreground select-none transition-colors hover:bg-accent motion-reduce:transition-none"
               :aria-expanded="subExpanded.has(i)"
               @click="toggleSub(i)"
             >
               <span class="relative flex size-3.5 shrink-0 items-center justify-center">
-                <Icon
-                  :name="stepIcon(st.tool)"
-                  class="stepic"
-                  style="width: var(--icon-sm); height: var(--icon-sm)"
-                />
+                <Icon :name="stepIcon(sub.tool)" class="size-3.5 flex-none text-muted-foreground" />
               </span>
-              <span class="tname">{{ st.tool }}</span>
-              <span class="starg" :title="subTarget(st)">
-                <template v-if="shortTarget(subTarget(st)).dir">
-                  <span class="min-w-0 truncate">{{ shortTarget(subTarget(st)).dir }}</span>
-                  <span class="shrink-0">{{ shortTarget(subTarget(st)).name }}</span>
-                </template>
-                <span v-else class="truncate">{{ subTarget(st) }}</span>
-              </span>
-              <SessionStepResult :text="st.result" />
+              <span class="flex-none font-medium text-foreground/90">{{ sub.tool }}</span>
+              <!-- mono-ok: tham số tool — path hoặc lệnh shell -->
               <span
-                v-if="fileTargetOf(st.tool, subTarget(st))"
-                role="button"
-                class="sview"
-                :title="t('sessions.step.viewFile')"
-                @click.stop="viewFile(st.tool, subTarget(st))"
+                class="flex min-w-0 flex-1 overflow-hidden font-mono whitespace-nowrap text-muted-foreground"
+                :title="subTarget(sub)"
               >
-                <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                <template v-if="shortTarget(subTarget(sub)).dir">
+                  <span class="min-w-0 truncate">{{ shortTarget(subTarget(sub)).dir }}</span>
+                  <span class="shrink-0">{{ shortTarget(subTarget(sub)).name }}</span>
+                </template>
+                <span v-else class="truncate">{{ subTarget(sub) }}</span>
+              </span>
+              <SessionStepResult :text="sub.result" />
+              <span
+                v-if="fileTargetOf(sub.tool, subTarget(sub))"
+                role="button"
+                class="inline-flex flex-none cursor-pointer items-center rounded-sm p-0.5 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground motion-reduce:transition-none"
+                :title="t('sessions.step.viewFile')"
+                @click.stop="viewFile(sub.tool, subTarget(sub))"
+              >
+                <Icon name="file" class="size-3" />
               </span>
               <Icon
                 name="chev"
-                class="schev"
-                :class="{ off: !subExpanded.has(i) }"
-                style="width: var(--icon-xs); height: var(--icon-xs)"
+                class="size-3 flex-none text-muted-foreground/50 transition-transform motion-reduce:transition-none"
+                :class="[subExpanded.has(i) ? '' : '-rotate-90']"
               />
             </button>
             <Collapse :open="subExpanded.has(i)">
-              <div class="sbody">
+              <div class="mt-0.5 mb-1 ml-6 flex flex-col gap-1.5">
                 <SessionStepBody
-                  :tool="st.tool"
-                  :target="subTarget(st)"
-                  :detail="subDetail(st)"
-                  :detail-kind="subDetailKind(st)"
-                  :pending="subDetailPending(st) || subTargetPending(st)"
+                  :tool="sub.tool"
+                  :target="subTarget(sub)"
+                  :detail="subDetail(sub)"
+                  :detail-kind="subDetailKind(sub)"
+                  :pending="subDetailPending(sub) || subTargetPending(sub)"
                 />
               </div>
             </Collapse>
@@ -115,29 +139,39 @@
           <!-- The subagent's final report — the summary it returns to the main agent
                (Task tool result). Without this the nested timeline ends at the last
                tool call and the handed-back summary is invisible. -->
-          <div v-if="summaryText" class="subsum">
-            <div class="subhd">
-              <Icon name="check" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <div v-if="summaryText" class="mt-1 flex flex-col gap-1 border-t pt-2">
+            <div class="flex items-center gap-1.5 text-xs font-medium text-primary">
+              <Icon name="check" class="size-3" />
               {{ t('sessions.step.subagentSummary') }}
-              <button
+              <!-- "Xem đủ báo cáo" — đẩy sang phải, mở báo cáo trong PreviewModal chung. -->
+              <Button
                 v-if="summaryTruncated"
                 type="button"
-                class="sview subview"
+                variant="ghost"
+                size="iconSm"
+                class="ml-auto size-5 text-muted-foreground/60 hover:text-foreground [&_svg]:size-3"
                 :title="t('sessions.step.viewSummary')"
                 @click.stop="openSummary"
               >
-                <Icon name="maximize" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              </button>
+                <Icon name="maximize" />
+              </Button>
             </div>
             <SessionTextBlock :text="summaryPreview" />
-            <button v-if="summaryTruncated" type="button" class="submore" @click.stop="openSummary">
+            <Button
+              v-if="summaryTruncated"
+              type="button"
+              variant="link"
+              size="xs"
+              class="h-auto self-start px-0 py-px font-normal hover:no-underline hover:opacity-75"
+              @click.stop="openSummary"
+            >
               {{ t('sessions.step.viewSummary') }}
-            </button>
+            </Button>
           </div>
         </div>
 
-        <!-- skill -->
-        <div v-else-if="isSkill" class="skilltxt">
+        <!-- skill — một dòng mô tả -->
+        <div v-else-if="isSkill" class="text-xs leading-(--lh-md) text-muted-foreground">
           {{ block.detail || t('sessions.step.skillRunning') }}
         </div>
 
@@ -416,6 +450,14 @@ function stepIcon(tool: string): string {
   return 'commands'
 }
 
+// Màu glyph theo trạng thái: lỗi = destructive, đang chạy = primary (vòng xoay quanh
+// nó lo phần chuyển động), còn lại muted.
+const iconTone = computed(() => {
+  if (props.block.status === 'error') return 'text-destructive'
+  if (props.block.status === 'running') return 'text-primary'
+  return 'text-muted-foreground'
+})
+
 // Collapsed-by-default: header click toggles the step body.
 const collapsed = ref(true)
 
@@ -458,170 +500,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-/* Step row — flat, dense (proto: `rounded-md px-1.5 py-1 text-xs`, hover wash).
-   No card chrome: the turn rail already groups the run. */
-.srow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  text-align: left;
-  color: var(--foreground);
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.12s ease;
-}
-.srow:hover {
-  background: var(--accent-wash);
-}
-/* Per-tool glyph — muted, tinted by state (destructive on error, primary while
-   running — the spinning ring around it carries the motion). */
-.stepic {
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
-}
-.stepic.err {
-  color: var(--destructive);
-}
-.stepic.run {
-  color: var(--primary);
-}
-/* Tool name — medium weight, no chip fill (proto `font-medium`). */
-.tname {
-  flex: 0 0 auto;
-  font-weight: 500;
-  color: rgb(from var(--foreground) r g b / 90%);
-}
-.tname.err {
-  color: var(--destructive);
-}
-/* Mono target: the [ellipsisable dirs][shrink-0 filename] pair lives inside —
-   a bare command renders as one truncating span. flex:1 makes it the flex
-   space-holder that pushes the trailing chips right. */
-.starg {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  font-family: var(--code); /* mono-ok: tool argument — path or shell command */
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-}
-/* Live "Ns" while a tool runs — quiet, tabular so it doesn't wobble. */
-.sela {
-  flex: 0 0 auto;
-  color: rgb(from var(--muted-foreground) r g b / 70%);
-  font-variant-numeric: tabular-nums;
-}
-/* "View file" affordance — icon-only, sits between the result chip and the
-   chevron; @click.stop keeps it from toggling collapse. */
-.sview {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  padding: 2px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: rgb(from var(--muted-foreground) r g b / 60%);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-.sview:hover {
-  background: var(--accent-wash);
-  color: var(--foreground);
-}
-/* Disclosure chevron — rotates 90° when collapsed. */
-.schev {
-  flex: 0 0 auto;
-  color: rgb(from var(--muted-foreground) r g b / 50%);
-  transition: transform 0.15s ease;
-}
-.schev.off {
-  transform: rotate(-90deg);
-}
-/* Body: indented under the icon column (proto `ml-6`), children bring their own
-   fonts/chrome. */
-.sbody {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 2px 0 4px 24px;
-}
-/* Failed step: the OUTPUT pre inside SessionStepBody tints destructive. */
-.sbody.fail :deep(.sout) {
-  color: rgb(from var(--destructive) r g b / 90%);
-}
-/* Subagent block: accent rail groups the nested run (proto tree idiom). */
-.substep {
-  margin-top: 4px;
-  padding-left: 11px;
-  border-left: 2px solid var(--ring);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.subhd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  color: var(--primary);
-}
-/* Subagent summary: the report handed back to the main agent, under the nested
-   steps. Compact markdown with a small top divider. */
-.subsum {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-/* "View full summary" button — trails the accent header row, opens the report in
-   the shared PreviewModal. Reuses .sview chrome; pushed to the far right. */
-.subview {
-  margin-left: auto;
-}
-/* Text affordance under a clipped preview: opens the same full-report modal. */
-.submore {
-  align-self: flex-start;
-  padding: 1px 0;
-  border: 0;
-  background: transparent;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--primary);
-  cursor: pointer;
-  transition: opacity 0.12s ease;
-}
-.submore:hover {
-  opacity: 0.75;
-}
-/* Skill step body — one descriptive line. */
-.skilltxt {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-md);
-  color: var(--muted-foreground);
-}
-@media (prefers-reduced-motion: reduce) {
-  .srow,
-  .sview,
-  .schev {
-    transition: none;
-  }
-}
-</style>

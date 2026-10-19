@@ -1,14 +1,17 @@
 <template>
-  <span class="savatar" :class="[`savatar--${size}`, { 'savatar--img': !!imgSrc }]">
-    <span v-if="showEmoji" class="savatar-emoji" :style="{ fontSize: `${glyphSize}px` }">
+  <span
+    class="relative inline-grid flex-none place-items-center border text-muted-foreground"
+    :class="[SIZE_CLASS[size], imgSrc ? 'bg-background' : 'bg-muted']"
+  >
+    <span v-if="showEmoji" class="leading-none" :style="{ fontSize: `${glyphSize}px` }">
       {{ emojiValue }}
     </span>
-    <img v-else-if="imgSrc" class="savatar-img" :src="imgSrc" :alt="alt" />
+    <img v-else-if="imgSrc" class="size-4/5 object-contain" :src="imgSrc" :alt="alt" />
     <BrandIcon v-else-if="brand" :provider="source.provider" :size="glyphSize" />
     <component :is="fallbackIcon" v-else :size="glyphSize" :stroke-width="1.75" />
     <span
       v-if="showStatus"
-      class="savatar-dot"
+      class="absolute -right-0.5 -bottom-0.5 size-2 rounded-full border-2 border-background"
       :style="{ background: dotColor }"
       :title="dotTooltip"
     />
@@ -49,6 +52,12 @@ const { t } = useI18n()
 const store = useConnectionsStore()
 
 const GLYPH_PX = { sm: 13, md: 16, lg: 22 } as const
+// Khung 26 / 34 / 46px theo thang spacing (0.25 = 1px); bo góc lớn dần theo cỡ.
+const SIZE_CLASS = {
+  sm: 'size-6.5 rounded-sm',
+  md: 'size-8.5 rounded-md',
+  lg: 'size-11.5 rounded-lg',
+} as const
 const glyphSize = computed(() => GLYPH_PX[props.size])
 
 const alt = computed(() => props.source.name || props.source.slug)
@@ -106,50 +115,3 @@ async function loadIcon(): Promise<void> {
 onMounted(loadIcon)
 watch(() => [props.source.slug, props.source.icon], loadIcon)
 </script>
-
-<style scoped>
-.savatar {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: var(--r-sm);
-  background: var(--bgActive);
-  color: var(--textMuted);
-  border: 1px solid var(--border);
-}
-.savatar--img {
-  background: var(--bg);
-}
-.savatar--sm {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-xs);
-}
-.savatar--md {
-  width: 34px;
-  height: 34px;
-}
-.savatar--lg {
-  width: 46px;
-  height: 46px;
-  border-radius: var(--r-btn);
-}
-.savatar-emoji {
-  line-height: var(--lh-xs);
-}
-.savatar-img {
-  width: 80%;
-  height: 80%;
-  object-fit: contain;
-}
-.savatar-dot {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 2px solid var(--bg);
-}
-</style>

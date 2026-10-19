@@ -1,120 +1,148 @@
 <template>
-  <div class="spr">
+  <div class="flex flex-col gap-3">
     <SettingsPaneHeader
       :title="t('settings.pricing.heading')"
       :subtitle="t('settings.pricing.intro')"
     />
 
-    <div class="sprtoolbar">
-      <span class="fd">
+    <div class="flex items-center gap-2.5">
+      <span class="flex-1 text-sm text-dim">
         <template v-if="fetchedAt">
           {{ t('settings.pricing.fetchedAt', { when: fetchedLabel }) }}
         </template>
         <template v-else>{{ t('settings.pricing.neverFetched') }}</template>
       </span>
-      <span style="flex: 1" />
       <Button type="button" :disabled="fetching" variant="outline" size="sm" @click="onFetch">
         <Icon
           name="refresh"
-          :class="{ spin: fetching }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
+          class="size-3.5"
+          :class="{ 'animate-spin motion-reduce:animate-none': fetching }"
         />
         {{ t('settings.pricing.fetch') }}
       </Button>
     </div>
 
-    <div v-if="error" class="pcarderror">{{ error }}</div>
+    <Alert
+      v-if="error"
+      variant="destructive"
+      class="border-destructive/50 bg-destructive/10 px-2.5 py-1.5"
+    >
+      <AlertDescription>{{ error }}</AlertDescription>
+    </Alert>
 
-    <div class="tile sprpanel">
-      <div v-if="loading && !models.length" class="sprhint">
+    <Card class="gap-0 overflow-hidden p-0 shadow-none">
+      <div v-if="loading && !models.length" class="p-4 text-sm text-faint">
         {{ t('settings.pricing.loading') }}
       </div>
-      <div v-else-if="!models.length" class="sprhint">{{ t('settings.pricing.empty') }}</div>
-      <table v-else class="sprtable">
-        <thead>
-          <tr>
-            <th class="tl">{{ t('settings.pricing.col.model') }}</th>
-            <th class="tr">{{ t('settings.pricing.col.input') }}</th>
-            <th class="tr">{{ t('settings.pricing.col.output') }}</th>
-            <th class="tr">{{ t('settings.pricing.col.cacheRead') }}</th>
-            <th class="tr">{{ t('settings.pricing.col.cacheWrite') }}</th>
-            <th class="tr" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in models" :key="m.model">
-            <td class="tl">
-              <div class="sprmdl">
-                <span class="mono">{{ m.model }}</span>
-                <span class="tag">{{ m.provider }}</span>
-                <span v-if="isOverridden(m.model)" class="tag acc">
+      <div v-else-if="!models.length" class="p-4 text-sm text-faint">
+        {{ t('settings.pricing.empty') }}
+      </div>
+      <Table v-else>
+        <TableHeader>
+          <TableRow class="hover:bg-transparent">
+            <TableHead class="px-3 text-xs text-dim">
+              {{ t('settings.pricing.col.model') }}
+            </TableHead>
+            <TableHead class="px-3 text-right text-xs text-dim">
+              {{ t('settings.pricing.col.input') }}
+            </TableHead>
+            <TableHead class="px-3 text-right text-xs text-dim">
+              {{ t('settings.pricing.col.output') }}
+            </TableHead>
+            <TableHead class="px-3 text-right text-xs text-dim">
+              {{ t('settings.pricing.col.cacheRead') }}
+            </TableHead>
+            <TableHead class="px-3 text-right text-xs text-dim">
+              {{ t('settings.pricing.col.cacheWrite') }}
+            </TableHead>
+            <TableHead class="px-3" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="m in models" :key="m.model" class="last:border-b-0">
+            <TableCell class="px-3 py-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <!-- mono-ok: id model -->
+                <span class="font-mono">{{ m.model }}</span>
+                <Badge variant="outline" class="text-muted-foreground">{{ m.provider }}</Badge>
+                <Badge
+                  v-if="isOverridden(m.model)"
+                  variant="outline"
+                  class="border-primary/45 bg-primary/10 text-primary"
+                >
                   {{ t('settings.pricing.overridden') }}
-                </span>
-                <span v-else-if="m.source === 'remote'" class="tag">
+                </Badge>
+                <Badge
+                  v-else-if="m.source === 'remote'"
+                  variant="outline"
+                  class="text-muted-foreground"
+                >
                   {{ t('settings.pricing.remote') }}
-                </span>
+                </Badge>
               </div>
-            </td>
-            <td class="tr">
+            </TableCell>
+            <TableCell class="px-3 py-2 text-right">
               <Input
                 type="number"
                 min="0"
                 step="0.01"
                 :model-value="effectivePrice(m).input"
-                class="mono"
+                class="tabular-nums"
                 @update:model-value="onInput(m, 'input', $event)"
               />
-            </td>
-            <td class="tr">
+            </TableCell>
+            <TableCell class="px-3 py-2 text-right">
               <Input
                 type="number"
                 min="0"
                 step="0.01"
                 :model-value="effectivePrice(m).output"
-                class="mono"
+                class="tabular-nums"
                 @update:model-value="onInput(m, 'output', $event)"
               />
-            </td>
-            <td class="tr">
+            </TableCell>
+            <TableCell class="px-3 py-2 text-right">
               <Input
                 type="number"
                 min="0"
                 step="0.01"
                 :model-value="effectivePrice(m).cacheRead"
-                class="mono"
+                class="tabular-nums"
                 @update:model-value="onInput(m, 'cacheRead', $event)"
               />
-            </td>
-            <td class="tr">
+            </TableCell>
+            <TableCell class="px-3 py-2 text-right">
               <Input
                 type="number"
                 min="0"
                 step="0.01"
                 :model-value="effectivePrice(m).cacheWrite"
-                class="mono"
+                class="tabular-nums"
                 @update:model-value="onInput(m, 'cacheWrite', $event)"
               />
-            </td>
-            <td class="tr">
-              <button
-                class="sprreset"
+            </TableCell>
+            <TableCell class="px-3 py-2 text-right">
+              <Button
                 type="button"
+                variant="outline"
+                size="iconSm"
+                class="text-dim disabled:opacity-40"
                 :disabled="!isOverridden(m.model)"
                 :title="t('settings.pricing.reset')"
+                :aria-label="t('settings.pricing.reset')"
                 @click="resetModel(m.model)"
               >
-                <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+                <Icon name="refresh" />
+              </Button>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Card>
 
-    <div class="sprfoot">
-      <span class="fd">{{ t('settings.pricing.unit') }}</span>
-      <span style="flex: 1" />
-      <span v-if="dirty" class="fd" style="color: var(--amber)">
+    <div class="flex items-center gap-2.5">
+      <span class="flex-1 text-sm text-dim">{{ t('settings.pricing.unit') }}</span>
+      <span v-if="dirty" class="text-sm text-warning">
         {{ t('settings.pricing.unsaved') }}
       </span>
       <Button type="button" :disabled="!dirty || loading" variant="default" size="sm" @click="save">
@@ -129,12 +157,10 @@
 // calc. Loads the effective table (default + override) from the sidecar via
 // useModelPricing; edits promote a row into the overrides map; Save persists the
 // whole map (settings.set 'modelPricing'). Reset drops a single override. All
-// strings via i18n; numeric inputs are plain <input type=number> (AppSelect is
-// for choice fields, not numeric entry).
+// strings via i18n; numeric inputs are Input type=number (AppSelect is for choice
+// fields, not numeric entry).
 import { computed, onMounted } from 'vue'
 import { useModelPricing, type ModelPrice, type PriceFields } from '~/composables/useModelPricing'
-import Button from '~/components/ui/button/Button.vue'
-import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const {
@@ -168,119 +194,3 @@ function onFetch(): void {
   void fetchRemote()
 }
 </script>
-
-<style scoped>
-.spr {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.sprtoolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.spin {
-  animation: sprspin 0.9s linear infinite;
-}
-@keyframes sprspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-.sprpanel {
-  padding: 0;
-  overflow: hidden;
-}
-.sprhint {
-  padding: 16px;
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sprtable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sprtable th {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  font-weight: 500;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.sprtable td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.sprtable tbody tr:last-child td {
-  border-bottom: 0;
-}
-.sprtable .tl {
-  text-align: left;
-}
-.sprtable .tr {
-  text-align: right;
-}
-.sprmdl {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sprinp {
-  width: 92px;
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  border-radius: var(--r-xs);
-  padding: 5px 8px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  outline: none;
-  text-align: right;
-}
-.sprinp:focus {
-  border-color: var(--borderFocus);
-}
-.sprreset {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.sprreset:hover:not(:disabled) {
-  border-color: var(--borderStrong);
-  color: var(--text);
-}
-.sprreset:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.sprfoot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pcarderror {
-  border-radius: var(--r-sm);
-  padding: 6px 10px;
-  font-size: 1em;
-  background: var(--dangerDim);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-}
-</style>

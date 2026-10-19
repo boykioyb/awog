@@ -1,25 +1,33 @@
 <template>
   <!-- Reactive wake, notify-only path (ADR 0066 P2). When a background command
        finishes while auto-continue is OFF, this card offers a one-click resume.
-       Hidden under auto-continue (the store fires the turn itself when idle). -->
-  <div v-if="visible" class="bgwake">
-    <Icon name="zap" class="bgwake-ic" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    <div class="bgwake-body">
-      <div class="bgwake-title">{{ title }}</div>
-      <div class="bgwake-sub" :title="lastCommand">{{ subtitle }}</div>
+       Hidden under auto-continue (the store fires the turn itself when idle).
+       Dải cảnh báo tô primary: phụ đề mono mờ, nút "tiếp tục" primary + nút bỏ ghost. -->
+  <div
+    v-if="visible"
+    class="mx-3 mt-1.5 flex items-center gap-2.5 rounded-lg border border-primary/40 bg-primary/8 px-2.5 py-1.5 text-foreground"
+  >
+    <Icon name="zap" class="size-3.5 shrink-0 text-primary" />
+    <div class="min-w-0 flex-1">
+      <div class="text-sm font-semibold">{{ title }}</div>
+      <!-- mono: lệnh shell vừa chạy -->
+      <div class="truncate font-mono text-sm text-muted-foreground" :title="lastCommand">
+        {{ subtitle }}
+      </div>
     </div>
     <Button size="xs" @click="onContinue">
-      <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon name="play" class="size-3" />
       <span>{{ t('sessions.bg.wake.continue') }}</span>
     </Button>
     <Button
       variant="ghost"
       size="iconSm"
-      class="bgwake-x"
+      class="text-muted-foreground hover:text-foreground"
       :title="t('sessions.bg.wake.dismiss')"
+      :aria-label="t('sessions.bg.wake.dismiss')"
       @click="onDismiss"
     >
-      <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon name="x" class="size-3" />
     </Button>
   </div>
 </template>
@@ -61,48 +69,3 @@ function onDismiss(): void {
   if (props.session.engineId) store.dismissBackgroundWakes(props.session.engineId)
 }
 </script>
-
-<style scoped>
-/* Wake card — primary-tinted alert strip (card shape, primary accent edge),
-   muted mono subtitle, primary "continue" + ghost dismiss actions. */
-.bgwake {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 12px 0;
-  padding: 6px 10px;
-  border-radius: var(--radius);
-  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
-  color: var(--foreground);
-}
-.bgwake-ic {
-  color: var(--primary);
-  flex: none;
-}
-.bgwake-body {
-  min-width: 0;
-  flex: 1;
-}
-.bgwake-title {
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-}
-.bgwake-sub {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--muted-foreground);
-  font-family: var(--code, monospace);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Ghost dismiss — quieter than the default ghost text until hovered. */
-.bgwake-x {
-  color: var(--muted-foreground);
-}
-.bgwake-x:hover {
-  color: var(--foreground);
-}
-</style>

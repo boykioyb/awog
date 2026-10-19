@@ -85,6 +85,7 @@ import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
 import { LOGTIME_MUTATING_TOOL_NAMES } from './tools/logtime-tools.js'
 import { INFRA_APP_MUTATING_TOOL_NAMES } from './tools/infra-app-tools.js'
+import { TERMINAL_SNIPPET_MUTATING_TOOL_NAMES } from './tools/tool-names.js'
 // Ma trận quyền hạ tầng (ADR 0088 §5). `classify` + `decide` là hàm THUẦN;
 // `loadInfraPolicy` đọc đĩa nhưng đã tự phòng thủ (không bao giờ ném, có cache).
 import {
@@ -192,6 +193,14 @@ function isInfraAppMutatingTool(name: string): boolean {
   return INFRA_APP_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
 }
 
+// Snippet của terminal: save/delete ghi vào thư viện của người dùng (gate như
+// `wiki_write`), run GÕ LỆNH vào shell họ đang mở (gate như `Bash`). Khớp cả tên
+// trần (Pi/Codex) lẫn `mcp__awogterm__terminal_snippet_run` (Claude SDK), nếu không
+// lời gọi bắc cầu lọt cổng — kể cả trong plan mode.
+function isTerminalSnippetMutatingTool(name: string): boolean {
+  return TERMINAL_SNIPPET_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
+}
+
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
 function isGatedTool(name: string, args: unknown): boolean {
@@ -220,7 +229,8 @@ function isGatedTool(name: string, args: unknown): boolean {
     isSourceMutatingTool(name) ||
     isWikiMutatingTool(name) ||
     isLogtimeMutatingTool(name) ||
-    isInfraAppMutatingTool(name)
+    isInfraAppMutatingTool(name) ||
+    isTerminalSnippetMutatingTool(name)
   )
 }
 
@@ -817,20 +827,42 @@ function bashInfraCall(
  */
 const PROTECTED_PATH_RE = /infra-policy\.json|infra-audit[/\\]|infra[/\\]account-ids\.json/
 
-export function touchesProtectedPath(toolName: string, args: unknown): boolean {
+/**
+ * Lịch chạy và hook của AWOG (`.awog/schedules/`, `.awog/hooks/`) — cùng lớp hàng rào
+ * độ sâu như trên. Cả hai là thứ engine TỰ chạy về sau, không người trực: một file lịch
+ * `session-prompt` chạy agent ở mode `execute`, một hook global chạy lệnh qua shell. Agent
+ * ghi được chúng là tự cấp cho mình quyền chạy sau lưng người dùng. Đường hợp lệ để agent
+ * đặt lịch là tool `propose_schedule` (lịch tắt, người dùng duyệt trong app — ADR 0108).
+ */
+const AWOG_AUTOMATION_RE = /\.awog[/\\](schedules|hooks)[/\\]/
+
+function argsTouchPath(re: RegExp, toolName: string, args: unknown): boolean {
   const bag = argBag(args)
   if (!bag) return false
   if (toolName === 'Bash') {
     const command = bag.command
-    return typeof command === 'string' && PROTECTED_PATH_RE.test(command)
+    return typeof command === 'string' && re.test(command)
   }
   if (!WRITE_TOOLS.has(toolName)) return false
   for (const key of ['file_path', 'path', 'notebook_path']) {
     const v = bag[key]
-    if (typeof v === 'string' && PROTECTED_PATH_RE.test(v)) return true
+    if (typeof v === 'string' && re.test(v)) return true
   }
   return false
 }
+
+export function touchesProtectedPath(toolName: string, args: unknown): boolean {
+  return argsTouchPath(PROTECTED_PATH_RE, toolName, args)
+}
+
+export function touchesAwogAutomation(toolName: string, args: unknown): boolean {
+  return argsTouchPath(AWOG_AUTOMATION_RE, toolName, args)
+}
+
+const AWOG_AUTOMATION_BLOCK_REASON =
+  'Blocked: AWOG schedules and hooks (.awog/schedules, .awog/hooks) run later without anyone watching, ' +
+  'so agents cannot write them. To set up a schedule, call propose_schedule — the user reviews and enables it in AWOG; ' +
+  'hooks are managed by the user in the Hooks page.'
 
 // ─── Approved argument override (`updatedInput`) ────────────────────────────
 // Answering a prompt may carry `updatedInput`: the user edited the tool's args
@@ -926,6 +958,10 @@ function denyReason(name: string): string {
 export function makeTaskToolGate(projectId?: string, cwd?: string): BeforeToolCall {
   return async (context) => {
     const toolName = context.toolCall.name
+    // Task chạy không người trực — càng không được tự cấy lịch/hook để chạy tiếp về sau.
+    if (touchesAwogAutomation(toolName, context.args)) {
+      return { block: true, reason: AWOG_AUTOMATION_BLOCK_REASON }
+    }
     try {
       const projectPath = projectId ? await resolveProjectPathById(projectId) : null
       const denied = await deniedToolName(toolName, context.args, {
@@ -1419,6 +1455,9 @@ export function makeBeforeToolCall(
           'AWOG không cho ghi vào chính sách quyền hạ tầng hoặc nhật ký hoạt động. ' +
           'Đổi ma trận ở Settings → Hạ tầng; nhật ký chỉ người dùng dọn được.',
       }
+    }
+    if (touchesAwogAutomation(toolName, context.args)) {
+      return { block: true, reason: AWOG_AUTOMATION_BLOCK_REASON }
     }
 
     const builtInGated = isGatedTool(toolName, context.args)

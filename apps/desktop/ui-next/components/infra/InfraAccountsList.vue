@@ -1,49 +1,83 @@
 <template>
-  <div class="list">
+  <div class="flex w-70 flex-none flex-col overflow-hidden border-r bg-sidebar max-[820px]:w-57.5">
     <div
       ref="scrollRef"
-      class="lscroll"
+      class="flex-1 overflow-y-auto px-3 py-2 outline-none"
       tabindex="0"
       role="listbox"
       :aria-label="t('infra.list.section.accounts')"
       @keydown="onKeydown"
     >
-      <div v-for="grp in groups" :key="grp.key" class="grp" :class="{ col: collapsed[grp.key] }">
-        <div class="grph" @click="toggleGroup(grp.key)">
-          <Icon name="chev" class="gchv" />
-          <span class="gnm">{{ grp.label }}</span>
-          <span class="gct">{{ grp.items.length }}</span>
+      <div v-for="grp in groups" :key="grp.key" class="mb-0.5 [&+&]:mt-3">
+        <!-- Đầu nhóm dính trên cùng khi cuộn để nhóm đang đọc luôn có nhãn. -->
+        <div
+          class="group/grph sticky top-0 z-2 flex cursor-pointer items-center gap-2 bg-sidebar px-2 py-1.5 select-none hover:bg-accent"
+          @click="toggleGroup(grp.key)"
+        >
+          <Icon
+            name="chev"
+            class="size-3 flex-none text-faint transition-transform"
+            :class="{ '-rotate-90': collapsed[grp.key] }"
+          />
+          <span
+            class="text-xs font-semibold text-muted-foreground group-hover/grph:text-foreground"
+          >
+            {{ grp.label }}
+          </span>
+          <span class="ml-auto text-xs text-faint tabular-nums">{{ grp.items.length }}</span>
         </div>
-        <div class="grpitems">
+        <div v-show="!collapsed[grp.key]" class="pt-1">
+          <!-- Hàng đang chọn = accent-tint + thanh accent 2px (không nền xám). -->
           <div
             v-for="row in grp.items"
             :key="row.name"
-            class="libli"
-            :class="{ on: row.name === selected }"
+            class="mb-0.5 cursor-pointer rounded-md border border-transparent px-2.5 py-2"
+            :class="
+              row.name === selected
+                ? 'border-selected-border bg-selected shadow-[inset_2px_0_0_var(--color-primary)]'
+                : 'hover:bg-accent'
+            "
             role="option"
             :aria-selected="row.name === selected"
             @click="onRowClick(row.name)"
           >
-            <div class="lrow">
-              <span class="ttl">{{ row.name }}</span>
+            <div class="flex items-center gap-2">
+              <span
+                class="min-w-0 flex-1 truncate text-base"
+                :class="row.name === selected ? 'font-semibold text-foreground' : 'font-medium'"
+              >
+                {{ row.name }}
+              </span>
               <span
                 v-if="row.name === defaultProfile"
-                class="ial-defdot"
+                class="size-1.5 flex-none rounded-full bg-primary"
                 :title="t('infra.list.default')"
               />
             </div>
-            <div class="sub">
-              <span v-if="row.accountId" class="mono">{{ row.accountId }}</span>
-              <span
+            <div class="mt-1 flex items-center gap-1.5 text-xs text-dim">
+              <!-- mono-ok: account id — định danh người dùng copy sang console/CLI. -->
+              <span v-if="row.accountId" class="font-mono">{{ row.accountId }}</span>
+              <!-- "Hết hạn"/lỗi là lỗi thật (không truy cập được), khác warn (chỉ là chú ý). -->
+              <Badge
                 v-else-if="row.accountIdFailure"
-                class="tag danger"
+                variant="outline"
+                class="rounded-sm border-destructive/40 px-1.5 py-0 font-normal text-destructive"
                 :title="row.accountIdFailure"
               >
                 {{ t('infra.list.accountId.failedTag') }}
-              </span>
-              <span v-if="row.expiry" class="tag" :class="{ danger: row.expiry.expired }">
+              </Badge>
+              <Badge
+                v-if="row.expiry"
+                variant="outline"
+                class="rounded-sm px-1.5 py-0 font-normal"
+                :class="
+                  row.expiry.expired
+                    ? 'border-destructive/40 text-destructive'
+                    : 'text-muted-foreground'
+                "
+              >
                 {{ row.expiry.label }}
-              </span>
+              </Badge>
             </div>
           </div>
         </div>
@@ -190,20 +224,3 @@ function onKeydown(e: KeyboardEvent): void {
   if (name !== undefined && name !== props.selected) emit('select', name)
 }
 </script>
-
-<style scoped>
-.ial-defdot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex: 0 0 auto;
-}
-
-/* `.tag` (prototype.css) có biến thể `.acc`/`.warn` sẵn nhưng không có "hết hạn" —
-   hồ sơ hết hạn là lỗi thật (không truy cập được), khác warn (chỉ là chú ý). */
-.tag.danger {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-}
-</style>

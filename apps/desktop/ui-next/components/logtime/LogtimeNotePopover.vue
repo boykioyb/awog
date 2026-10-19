@@ -1,34 +1,40 @@
 <template>
   <Teleport to="body">
-    <div v-if="open" class="ltnp-wrap">
-      <div class="ltnp-backdrop" @click="close" />
-      <div class="ltnp" :style="posStyle" role="dialog" aria-modal="true">
-        <textarea
+    <!-- Popover tự định vị theo `anchor` (đo lúc mở, mở lên hay xuống tuỳ chỗ trống) nên
+         không dùng `Popover` của reka: nó cần một PopoverAnchor trong cây, còn neo ở đây
+         là phần tử của form/hàng cha. Backdrop trong suốt bắt click ngoài. -->
+    <div v-if="open">
+      <div class="fixed inset-0 z-120" @click="close" />
+      <div
+        class="fixed z-121 flex flex-col gap-2 rounded-xl border border-input bg-sidebar p-3 shadow-lg"
+        :style="posStyle"
+        role="dialog"
+        data-state="open"
+        aria-modal="true"
+      >
+        <Textarea
           ref="areaRef"
-          :value="modelValue"
-          class="ltnp-area"
+          :model-value="modelValue"
+          class="max-h-[40vh] min-h-24 resize-y bg-muted px-3 py-2 text-base leading-relaxed focus-visible:border-selected-border"
           :placeholder="t('logtime.form.note')"
           :disabled="refining"
-          @input="onInput"
+          @update:model-value="emit('update:modelValue', String($event))"
           @keydown.esc.prevent="close"
           @keydown.meta.enter.prevent="close"
           @keydown.ctrl.enter.prevent="close"
         />
-        <div class="ltnp-foot">
+        <div class="flex flex-wrap items-center gap-2">
           <!-- Khai thác chữ đang gõ thành note nghiệp vụ đầy đủ. -->
-          <Button
-            type="button"
-            :disabled="refining"
-            class="ltnp-btn"
-            variant="outline"
-            @click="onRefine"
-          >
-            <Icon :name="refining ? 'refresh' : 'sparkles'" :class="{ 'ltnp-spin': refining }" />
+          <Button type="button" :disabled="refining" variant="outline" @click="onRefine">
+            <Icon
+              :name="refining ? 'refresh' : 'sparkles'"
+              :class="{ 'animate-spin motion-reduce:animate-none': refining }"
+            />
             {{ refining ? t('logtime.form.noteRefining') : t('logtime.form.noteRefine') }}
           </Button>
-          <span class="ltnp-hint">{{ t('logtime.form.noteHint') }}</span>
-          <span class="ltnp-sp" />
-          <Button type="button" class="ltnp-btn" variant="default" @click="close">
+          <span class="text-xs text-faint">{{ t('logtime.form.noteHint') }}</span>
+          <span class="flex-1" />
+          <Button type="button" variant="default" @click="close">
             {{ t('logtime.form.noteDone') }}
           </Button>
         </div>
@@ -45,6 +51,7 @@ import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import Button from '~/components/ui/button/Button.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
 
 const props = defineProps<{
   open: boolean
@@ -63,7 +70,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { refineText } = useLogtimeManager()
 
-const areaRef = useTemplateRef<HTMLTextAreaElement>('areaRef')
+// Textarea là component shadcn ⇒ template ref là instance, phần tử thật ở `$el`.
+const areaRef = useTemplateRef<{ $el: HTMLTextAreaElement }>('areaRef')
 const refining = ref(false)
 // Vị trí cố định tính lúc mở; `dir` = neo trên (mở lên) hay neo dưới (mở xuống).
 const pos = ref({ left: 0, width: 0, y: 0, dir: 'up' as 'up' | 'down' })
@@ -91,14 +99,10 @@ watch(
   (open) => {
     if (!open) return
     measure()
-    void nextTick(() => areaRef.value?.focus())
+    void nextTick(() => areaRef.value?.$el.focus())
   },
   { immediate: true },
 )
-
-function onInput(e: Event): void {
-  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
-}
 
 function close(): void {
   emit('update:open', false)
@@ -119,72 +123,3 @@ async function onRefine(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.ltnp-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-}
-.ltnp {
-  position: fixed;
-  z-index: 121;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 11px;
-  background: var(--bgPanel);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.ltnp-area {
-  width: 100%;
-  min-height: 96px;
-  max-height: 40vh;
-  resize: vertical;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-md);
-  line-height: var(--lh-prose);
-  padding: 9px 11px;
-  outline: none;
-}
-.ltnp-area:focus {
-  border-color: var(--accentBorder);
-}
-.ltnp-foot {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-}
-.ltnp-btn {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.ltnp-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.ltnp-sp {
-  flex: 1;
-}
-.ltnp-spin {
-  animation: ltnp-rot 0.9s linear infinite;
-}
-@keyframes ltnp-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ltnp-spin {
-    animation: none;
-  }
-}
-</style>

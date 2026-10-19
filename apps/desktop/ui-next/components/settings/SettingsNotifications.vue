@@ -14,7 +14,7 @@
       :name="t('settings.notifications.position.name')"
       :desc="t('settings.notifications.position.desc')"
     >
-      <div style="display: flex; align-items: center; gap: 8px">
+      <div class="flex items-center gap-2">
         <AppSelect v-model="toastPosition" :options="positionOptions" width="170px" />
         <Button type="button" variant="outline" size="sm" @click="previewToast">
           {{ t('settings.notifications.position.try') }}
@@ -32,7 +32,7 @@
       <SettingsTog v-model="notifyWhenClosed" />
     </SettingsField>
 
-    <div class="sech">{{ t('settings.notifications.sources.heading') }}</div>
+    <SettingsGroupLabel>{{ t('settings.notifications.sources.heading') }}</SettingsGroupLabel>
 
     <SettingsField
       :name="t('settings.notifications.sessionEvents.name')"
@@ -123,7 +123,6 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import { previewNativeNotification, type GhNativeProbe } from '~/composables/useGhNotifications'
 import { useSettingsStore } from '~/stores/settings'
 import type { NotifyDelivery, ToastPosition } from '~/stores/settings'
-import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const store = useSettingsStore()
@@ -273,5 +272,3 @@ const cicdEnabled = computed<boolean>({
   set: (value) => (store.notifications.cicdEvents = value),
 })
 </script>
-
-<style scoped></style>

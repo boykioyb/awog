@@ -1,9 +1,13 @@
 <template>
-  <div class="bwin">
+  <!-- Ghim vào cả cửa sổ: khung xem tự lo phần còn lại, thân cửa sổ không bao giờ cuộn. -->
+  <div class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
     <!-- Không có shell Electron (mở route này trong browser thường): không có
          Chromium nào để nhúng, nên nói thẳng thay vì hiện một cái chrome chết. -->
-    <div v-if="!available" class="empty" style="padding: 30px">
-      <div class="et">{{ t('sessions.workspace.browser.unavailable') }}</div>
+    <div
+      v-if="!available"
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground"
+    >
+      <div class="text-lg">{{ t('sessions.workspace.browser.unavailable') }}</div>
     </div>
 
     <template v-else>
@@ -25,12 +29,17 @@
         @tab-menu="onTabMenu"
       />
 
-      <div v-if="error" class="bwin-err">{{ error }}</div>
+      <div v-if="error" class="shrink-0 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+        {{ error }}
+      </div>
 
       <!-- Khung xem — placeholder cho view native, y như trong panel. Cơ chế attach
            lấy cửa sổ đích từ `event.sender`, nên trang này tự nhận view vào rect
            của CHÍNH nó mà không cần kênh IPC nào thêm. -->
-      <div ref="viewportEl" class="bwin-view">
+      <div
+        ref="viewportEl"
+        class="relative flex min-h-0 flex-auto items-center justify-center bg-background"
+      >
         <!-- Ở popout thì "chỗ khác" gần như luôn là cửa sổ CHÍNH (dock bất kỳ) —
              cửa sổ này là renderer riêng nên `!isOwner` không xảy ra được. -->
         <BrowserElsewhere v-if="elsewhere" where="window" @takeover="takeOver" />
@@ -155,33 +164,3 @@ useHead({
   }),
 })
 </script>
-
-<style scoped>
-/* Ghim vào cả cửa sổ: khung xem tự lo phần còn lại, thân cửa sổ không bao giờ cuộn. */
-.bwin {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--text);
-  overflow: hidden;
-}
-.bwin-err {
-  padding: 6px 10px;
-  color: var(--danger);
-  background: var(--dangerBg);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  flex-shrink: 0;
-}
-.bwin-view {
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-</style>

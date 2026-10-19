@@ -1,14 +1,14 @@
 <template>
-  <div class="cap-findings">
-    <div class="cap-bar">
-      <span class="cap-dim">
+  <div class="min-h-0 flex-auto overflow-auto">
+    <div :class="CAP_BAR">
+      <span class="text-dim">
         {{
           analyzing
             ? t('capture.findings.analyzing')
             : t('capture.findings.count', { n: cap.findings.value.length })
         }}
       </span>
-      <span class="cap-grow" />
+      <span class="flex-auto" />
       <Button
         v-if="cap.findings.value.length || scanFindings.length"
         variant="outline"
@@ -20,33 +20,34 @@
         {{ t('capture.sec.agent.go') }}
       </Button>
       <Button variant="outline" size="sm" :disabled="analyzing" @click="cap.runAnalysis()">
-        <Icon name="refresh" :class="{ 'fnd-spin': analyzing }" />
+        <Icon name="refresh" :class="analyzing && 'animate-spin'" />
         {{ t('capture.findings.rerun') }}
       </Button>
     </div>
-    <div v-if="!cap.findings.value.length && !analyzing" class="cap-empty">
+    <div v-if="!cap.findings.value.length && !analyzing" :class="CAP_EMPTY">
       {{ t('capture.findings.none') }}
     </div>
     <template v-for="g in groups" :key="g.severity">
-      <section v-if="g.items.length" class="cap-sec">
-        <h4>
+      <section v-if="g.items.length" :class="CAP_SEC">
+        <h4 :class="CAP_SEC_TITLE">
           <Badge :variant="SEVERITY_VARIANT[g.severity]">
             {{ t(`capture.severity.${g.severity}`) }}
           </Badge>
-          <span class="cap-dim tnum">{{ g.items.length }}</span>
+          <span class="tnum text-dim">{{ g.items.length }}</span>
         </h4>
-        <button
+        <!-- Cả dòng là một vùng bấm (tiêu đề + mô tả + bằng chứng xếp dọc). -->
+        <Button
           v-for="f in g.items"
           :key="`${f.id}:${f.entryId}`"
-          type="button"
-          class="fnd-row"
+          variant="ghost"
+          class="h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left font-normal whitespace-normal text-foreground focus-visible:bg-selected focus-visible:ring-selected-border"
           :title="t('capture.findings.show')"
           @click="cap.showFinding(f)"
         >
-          <span class="fnd-t">{{ t(f.title, f.params) }}</span>
-          <span class="fnd-d">{{ t(f.detail, f.params) }}</span>
-          <span v-if="f.evidence" class="fnd-e cap-code">{{ f.evidence }}</span>
-        </button>
+          <span class="font-semibold">{{ t(f.title, f.params) }}</span>
+          <span class="text-muted-foreground">{{ t(f.detail, f.params) }}</span>
+          <span v-if="f.evidence" class="font-mono wrap-anywhere text-dim">{{ f.evidence }}</span>
+        </Button>
       </section>
     </template>
   </div>
@@ -58,6 +59,7 @@ import { useNetworkCaptureContext } from '~/composables/useNetworkCapture'
 import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
 import type { CaptureFinding } from '~/utils/capture-findings'
+import { CAP_BAR, CAP_EMPTY, CAP_SEC, CAP_SEC_TITLE } from './capture-ui'
 
 const SEVERITIES: CaptureFinding['severity'][] = ['high', 'medium', 'low', 'info']
 
@@ -82,47 +84,3 @@ const groups = computed(() =>
   })),
 )
 </script>
-
-<style scoped>
-.fnd-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 6px 8px;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.fnd-row:hover {
-  background: var(--bgHover);
-}
-.fnd-row:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--accentBorder);
-  background: var(--accentDim);
-}
-.fnd-t {
-  font-weight: 600;
-}
-.fnd-d {
-  color: var(--textMuted);
-}
-.fnd-e {
-  color: var(--textDim);
-  overflow-wrap: anywhere;
-}
-.fnd-spin {
-  animation: fnd-spin 1s linear infinite;
-}
-@keyframes fnd-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

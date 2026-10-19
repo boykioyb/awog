@@ -1,5 +1,6 @@
 <template>
-  <span class="bom">
+  <!-- Chỉ là chỗ neo cho menu + modal (cả hai tự fixed / teleport ra body). -->
+  <span class="contents">
     <AppContextMenu
       :open="open"
       :position="position"
@@ -277,10 +278,3 @@ const onSelect = (id: string): void => {
   else if (userscripts.handles(id)) userscripts.select(id)
 }
 </script>
-
-<style scoped>
-/* Chỉ là chỗ neo cho menu + modal (cả hai tự fixed / teleport ra body). */
-.bom {
-  display: contents;
-}
-</style>
