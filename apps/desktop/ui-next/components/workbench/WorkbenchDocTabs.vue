@@ -2,33 +2,47 @@
   <!-- Dải tab tài liệu của stage (ADR 0098): Trao đổi ghim đầu (không đóng được),
        mỗi tab có icon theo kind + ● dirty + × hiện khi hover; click giữa hoặc ×
        đóng (dirty → hỏi), chuột phải mở menu tab; `＋` mở tab web trống.
-       Dùng reka `Tabs` thật (data-state thay .on); kind-color selectors scoped. -->
+       Dùng reka `Tabs` thật (data-state). Tab đang mở = accent-tint giống dải tab
+       phiên trên title bar (SessionTabBar → tabState). Ngoại lệ có chủ đích của
+       .claude/rules/workbench-ui.md: tab có close/pin/wheel-scroll custom. -->
   <Tabs :model-value="wb.activeDoc" @update:model-value="(v) => (wb.activeDoc = String(v))">
     <TabsList
       ref="stripEl"
-      class="dtabs flex h-10 flex-none items-center justify-start gap-0.5 overflow-x-auto rounded-none bg-transparent p-0 px-2"
+      class="flex h-10 flex-none items-center justify-start gap-0.5 overflow-x-auto rounded-none bg-sidebar p-0 px-2 text-sm shadow-[inset_0_-1px_0_var(--border)] [scrollbar-width:thin]"
       @wheel="onWheel"
     >
+      <!-- TabsTrigger gộp class qua cn() nên trạng thái đặt bằng data-[state] an toàn. -->
       <TabsTrigger
         v-for="d in wb.docs"
         :key="d.id"
         :value="d.id"
         :data-doc="d.id"
-        class="dtab group inline-flex h-7 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-[var(--r-xs)] border border-transparent px-2.5 py-0 text-[var(--fs-sm)] font-normal text-[var(--textMuted)] shadow-none transition-colors hover:text-[var(--text)] data-[state=active]:border-[var(--border)] data-[state=active]:bg-[var(--bgSubtle)] data-[state=active]:text-[var(--text)] data-[state=active]:shadow-none"
-        :class="[`k-${d.kind}`, { pin: d.pin }]"
+        class="group h-7 select-none gap-1.5 rounded-sm border border-transparent px-2.5 py-0 text-sm font-normal text-muted-foreground shadow-none hover:text-foreground data-[state=active]:border-selected-border data-[state=active]:bg-selected data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=inactive]:hover:bg-accent/55"
         :title="titleOf(d)"
         @auxclick="(e: MouseEvent) => onAux(d, e)"
         @contextmenu="(e: MouseEvent) => ctx.open(e, d)"
       >
-        <!-- eslint-disable-next-line vue/no-v-html -- icon là SVG constant trong `ICON`, không phải input -->
-        <span class="dtico" v-html="ICON[d.kind] ?? ICON.file" />
-        <span class="max-w-[180px] overflow-hidden text-ellipsis">{{ d.title }}</span>
-        <span v-if="d.dirty" class="dot">●</span>
-        <!-- eslint-disable-next-line vue/no-v-html -- pin SVG constant, không phải input -->
-        <span v-if="d.pin" class="pn" :title="t('workbench.tab.pin')" v-html="PIN_SVG" />
+        <!-- eslint-disable vue/no-v-html -- icon kind + pin là SVG constant trong file, không phải input -->
+        <!-- `!` để thắng `[&_svg]:size-3.5` gốc của TabsTrigger (cùng specificity). -->
+        <span
+          class="flex flex-none [&_svg]:size-(--icon-xs)!"
+          :class="iconClass(d)"
+          v-html="ICON[d.kind] ?? ICON.file"
+        />
+        <span class="max-w-55 truncate">{{ d.title }}</span>
+        <!-- px-ok: chấm dirty 8px là ký hiệu trạng thái dưới thang chữ, giữ như prototype -->
+        <span v-if="d.dirty" class="text-[8px] leading-[16px] text-warning">●</span>
+        <!-- px-ok: icon ghim 10px như prototype; `!` để thắng [&_svg] gốc của TabsTrigger -->
+        <span
+          v-if="d.pin"
+          class="grid place-items-center text-primary [&_svg]:size-[10px]!"
+          :title="t('workbench.tab.pin')"
+          v-html="PIN_SVG"
+        />
+        <!-- eslint-enable vue/no-v-html -->
         <span
           v-else
-          class="rounded-[var(--r-xs)] p-px text-[var(--fs-xs)] leading-[var(--lh-xs)] text-[var(--textFaint)] opacity-0 transition-opacity hover:bg-[var(--bgHover)] hover:text-[var(--text)] group-hover:opacity-100"
+          class="rounded-sm p-px text-xs text-faint opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
           @click.stop="void wbDocs.requestCloseDoc(d)"
         >
           ✕
@@ -37,7 +51,7 @@
       <Button
         variant="ghost"
         size="iconSm"
-        class="size-7 flex-none rounded-[var(--r-xs)] p-0 text-[var(--textFaint)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
+        class="size-7 flex-none rounded-sm p-0 text-faint hover:text-foreground"
         :title="t('workbench.tab.newWeb')"
         @click="void wbDocs.openNewWebDoc()"
       >
@@ -94,6 +108,20 @@ const PIN_SVG = `${SVG_OPEN}<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11
 const isFileDoc = (d: WorkbenchDoc) =>
   ['file', 'md', 'img', 'vid', 'office', 'mmd'].includes(d.kind)
 const titleOf = (d: WorkbenchDoc) => (isFileDoc(d) ? wbDocs.relPathOf(d) : d.title)
+
+// Màu icon theo kind giống prototype — chỉ khi tab đang mở; tab khác chữ mờ.
+// Kind 'vid' từng tô hồng (pink-400 của prototype) nhưng theme chưa có token hồng ⇒ tạm dùng màu
+// accent chung của tab đang mở.
+const ACTIVE_ICON: Partial<Record<WorkbenchDocKind, string>> = {
+  file: 'text-info',
+  md: 'text-muted-foreground',
+  img: 'text-lavender',
+  mmd: 'text-warning',
+}
+function iconClass(d: WorkbenchDoc): string {
+  if (d.id !== wb.activeDoc) return 'text-faint'
+  return ACTIVE_ICON[d.kind] ?? 'text-primary'
+}
 
 // Giữ tab đang mở trong khung nhìn khi strip tràn.
 const stripEl = useTemplateRef<{ $el: HTMLElement } | null>('stripEl')
@@ -195,63 +223,3 @@ async function onMenuSelect(id: string): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-/* Strip hairline + font giữ scoped (token); layout đã chuyển Tailwind.
-   `.on` không còn — tab dùng `data-state` của reka, nên compound selector đọc
-   `[data-state='active']` (kèm `.dtab` để giữ specificity như prototype). */
-.dtabs {
-  background: var(--bgPanel);
-  box-shadow: inset 0 -1px 0 var(--border);
-  scrollbar-width: thin;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-/* Icon nằm trong v-html ⇒ cỡ SVG ép qua :deep(). */
-.dtico {
-  display: flex;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  color: var(--textFaint);
-  flex: none;
-}
-.dtico :deep(svg) {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-.dtab[data-state='active'] .dtico {
-  color: var(--accent);
-}
-/* Màu icon theo kind giống prototype — chỉ khi tab đang mở. */
-.dtab[data-state='active'].k-file .dtico {
-  color: var(--blue);
-}
-.dtab[data-state='active'].k-md .dtico {
-  color: var(--textMuted);
-}
-.dtab[data-state='active'].k-img .dtico {
-  color: var(--violet);
-}
-.dtab[data-state='active'].k-vid .dtico {
-  color: #f472b6; /* design-token-ok: token pink không có trong ramp — giữ parity prototype */
-}
-.dtab[data-state='active'].k-mmd .dtico {
-  color: var(--amber);
-}
-/* Chấm dirty — ký hiệu trạng thái dưới thang --fs-*. */
-.dot {
-  color: var(--amber);
-  font-size: 8px; /* design-token-ok: chấm dirty 8px như prototype */
-  line-height: 16px;
-}
-/* Pin icon trong v-html ⇒ :deep() cho cỡ 10px. */
-.pn {
-  display: grid;
-  place-items: center;
-  color: var(--accent);
-}
-.pn :deep(svg) {
-  width: 10px;
-  height: 10px;
-}
-</style>

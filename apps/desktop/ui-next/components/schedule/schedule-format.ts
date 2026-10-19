@@ -40,12 +40,14 @@ export function formatWhen(iso: string, locale: string): string {
   })
 }
 
-// Màu chấm trạng thái một lượt chạy — dùng chung cho danh sách lịch sử và modal chi tiết.
-export function statusColor(status: ScheduleRunStatus): string {
-  if (status === 'ok') return 'var(--accent)'
-  if (status === 'error') return 'var(--danger)'
-  if (status === 'running') return 'var(--amber)'
-  return 'var(--textFaint)'
+// Class nền cho chấm trạng thái một lượt chạy — dùng chung cho danh sách lịch sử và modal
+// chi tiết. Trả utility ngữ nghĩa (không var thô) để màu đi theo theme; chuỗi class viết
+// nguyên văn để Tailwind quét được.
+export function statusDotClass(status: ScheduleRunStatus): string {
+  if (status === 'ok') return 'bg-primary'
+  if (status === 'error') return 'bg-destructive'
+  if (status === 'running') return 'bg-warning'
+  return 'bg-faint'
 }
 
 // Text mà ô tìm kiếm của LibraryView quét.

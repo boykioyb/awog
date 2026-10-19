@@ -9,10 +9,7 @@
         <component :is="surfaceOf(doc)" :key="surfaceKey(doc)" :doc="doc" />
       </KeepAlive>
     </template>
-    <div
-      v-else
-      class="grid h-full place-items-center text-[var(--fs-sm)] leading-[var(--lh-sm)] text-[var(--textFaint)]"
-    >
+    <div v-else class="grid h-full place-items-center text-sm text-faint">
       {{ t('workbench.unknown', { kind: '—' }) }}
     </div>
   </div>

@@ -1,8 +1,8 @@
 <template>
   <!-- Cây file của project — render phẳng theo `exp.rows` (DFS + expanded).
        Click: dir → expand/collapse + chọn; file → mở doc + chọn. Chuột phải →
-       context menu VS Code. Mọi hàng cùng màu `--text` (≈ #fff ở dark, tự đảo ở
-       light — KHÔNG ghim hex) + font-weight 400 (nhẹ hơn 500 cũ); hàng chọn chỉ
+       context menu VS Code. Mọi hàng cùng màu `text-foreground` (≈ trắng ở dark, tự
+       đảo ở light — KHÔNG ghim hex) + font-weight 400 (nhẹ hơn 500 cũ); hàng chọn chỉ
        khác ở nền + thanh accent; icon md/mmd giữ màu loại file. Chiều cao hàng =
        --lh-xl (giãn theo cỡ chữ Appearance, luôn px chẵn) — ghim 23px thì đổi cỡ chữ
        chữ to lên mà hàng không giãn, nhìn chật như chưa đổi. -->
@@ -19,11 +19,12 @@
       />
       <div
         v-else
-        class="flex h-[var(--lh-xl)] cursor-pointer select-none items-center gap-1.5 whitespace-nowrap pr-2 font-normal text-[color:var(--text)]"
-        :class="{
-          'bg-[color:var(--accentDim)] shadow-[inset_2px_0_0_var(--accent)]': wb.selPath === r.path,
-          'hover:bg-[color:var(--bgHover)]': wb.selPath !== r.path,
-        }"
+        class="flex h-(--lh-xl) cursor-pointer select-none items-center gap-1.5 whitespace-nowrap pr-2 font-normal text-foreground"
+        :class="
+          wb.selPath === r.path
+            ? 'bg-selected shadow-[inset_2px_0_0_var(--color-primary)]'
+            : 'hover:bg-accent'
+        "
         :data-wb-tree-path="r.path"
         :style="{ paddingLeft: 12 + r.depth * 14 + 'px' }"
         @click="exp.selectNode(r.path, r.isDir)"
@@ -37,11 +38,11 @@
         <span class="truncate">{{ r.name }}</span>
       </div>
     </template>
-    <div v-if="!exp.rows.value.length" class="p-3.5 text-sm text-[color:var(--textFaint)]">
+    <div v-if="!exp.rows.value.length" class="p-3.5 text-sm text-faint">
       {{ root ? 'Đang tải…' : 'Chưa có project' }}
     </div>
     <!-- đệm đáy để vùng trống còn nhận contextmenu -->
-    <div class="min-h-[60px] flex-1" @contextmenu.prevent="exp.blankCtxMenu" />
+    <div class="min-h-18 flex-1" @contextmenu.prevent="exp.blankCtxMenu" />
   </div>
 </template>
 
@@ -87,9 +88,9 @@ function iconCls(r: TreeRow): string {
   if (r.isDir) return ''
   switch (docKindFor(r.name)) {
     case 'md':
-      return 'text-[color:var(--blue)]'
+      return 'text-info'
     case 'mmd':
-      return 'text-[color:var(--violet)]'
+      return 'text-lavender'
     default:
       return ''
   }

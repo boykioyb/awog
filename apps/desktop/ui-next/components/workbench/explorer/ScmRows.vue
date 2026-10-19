@@ -7,7 +7,7 @@
     <!-- Dir row: toggle collapse + context menu (nếu có handler) + ops theo dir. -->
     <div
       v-if="n.isDir"
-      class="group/row flex h-[var(--lh-xl)] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--text)] hover:bg-[var(--bgHover)]"
+      class="group/row flex h-(--lh-xl) cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-foreground hover:bg-accent"
       :style="{ paddingLeft: 8 + n.depth * 12 + 'px' }"
       :title="n.path"
       @click="emit('toggleDir', n)"
@@ -15,8 +15,8 @@
     >
       <ChevronRight v-if="collapsed.has(n.path)" :size="10" class="flex-none" />
       <ChevronDown v-else :size="10" class="flex-none" />
-      <Folder :size="14" class="flex-none text-[var(--textFaint)]" />
-      <span class="truncate font-[560]">{{ n.name }}</span>
+      <Folder :size="14" class="flex-none text-faint" />
+      <span class="truncate font-medium">{{ n.name }}</span>
       <span
         v-if="onUnstageDir || onStageDir || onDiscardDir"
         class="ml-auto flex gap-1 opacity-0 transition-opacity group-hover/row:opacity-100"
@@ -53,23 +53,23 @@
     <!-- File row: click → diff; actions hiện khi hover, đè lên dir suffix. -->
     <div
       v-else
-      class="group/row relative flex h-[var(--lh-xl)] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
+      class="group/row relative flex h-(--lh-xl) cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-muted-foreground hover:bg-accent"
       :style="{ paddingLeft: 8 + n.depth * 12 + 'px' }"
       :title="n.file!.f"
       @click="emit('openDiff', n.file!.f)"
       @contextmenu.prevent="onFileCtx?.(n.file!, $event)"
     >
-      <component :is="fileIcon(n.file!.f)" :size="14" class="flex-none text-[var(--textFaint)]" />
+      <component :is="fileIcon(n.file!.f)" :size="14" class="flex-none text-faint" />
       <span class="truncate">{{ n.name }}</span>
       <span
         v-if="!treeMode"
-        class="min-w-0 flex-1 truncate text-xs text-[var(--textFaint)] opacity-100 transition-opacity group-hover/row:opacity-0"
+        class="min-w-0 flex-1 truncate text-xs text-faint opacity-100 transition-opacity group-hover/row:opacity-0"
       >
         {{ scmDirOf(n.file!.f) }}
       </span>
       <span
         v-if="onOpenFile || onUnstageFile || onDiscardFile || onStageFile"
-        class="absolute right-2.5 flex gap-1 bg-[var(--bgHover)] pl-1 opacity-0 transition-opacity group-hover/row:opacity-100"
+        class="absolute right-2.5 flex gap-1 bg-accent pl-1 opacity-0 transition-opacity group-hover/row:opacity-100"
       >
         <ScmIconBtn
           v-if="onOpenFile"
@@ -110,14 +110,14 @@
       </span>
       <span
         v-if="conflict"
-        class="ml-auto text-xs font-[650] tabular-nums text-[var(--del)] group-hover/row:ml-0"
+        class="ml-auto text-xs font-semibold tabular-nums text-diff-del group-hover/row:ml-0"
         title="Unmerged — đang conflict"
       >
         U
       </span>
       <span
         v-else
-        class="ml-auto text-xs font-[650] tabular-nums group-hover/row:ml-0"
+        class="ml-auto text-xs font-semibold tabular-nums group-hover/row:ml-0"
         :class="stClass(n.file!.st)"
         :title="stTitle(n.file!.st)"
       >
@@ -191,7 +191,8 @@ function fileIcon(p: string) {
   }
 }
 
-// Màu badge trạng thái (giống Files view): A/? xanh · M/C vàng · D đỏ.
+// Màu badge trạng thái (giống Files view): A/? xanh · M/C vàng · D đỏ. Xanh dùng
+// `text-success` như git-types.ts / GitLogDetail để giữ đúng màu cũ (--green).
 // '?' là untracked của git status -uall → hiện 'U' cho rõ chữ.
 function stLabel(st: string): string {
   return st === '?' ? 'U' : st
@@ -209,8 +210,8 @@ function stTitle(st: string): string {
   return ST_TITLE[st] ?? st
 }
 function stClass(st: string): string {
-  if (st === 'A' || st === '?' || st === 'U') return 'text-[var(--green)]'
-  if (st === 'D') return 'text-[var(--del)]'
-  return 'text-[var(--mod)]'
+  if (st === 'A' || st === '?' || st === 'U') return 'text-success'
+  if (st === 'D') return 'text-diff-del'
+  return 'text-diff-mod'
 }
 </script>

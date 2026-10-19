@@ -5,15 +5,17 @@
        doc tab. Rows dùng chung ScmRows; branch popover = BranchPopover. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div
-      class="flex h-[30px] flex-none items-center gap-1.5 px-2.5 text-sm text-[var(--textMuted)] shadow-[inset_0_-1px_0_var(--border)]"
+      class="flex h-ctrl-xs flex-none items-center gap-1.5 px-2.5 text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]"
     >
-      <GitBranch :size="14" class="text-[var(--textDim)]" />
-      <b class="min-w-0 flex-1 truncate font-[590]" :title="git.branch">{{ git.branch || '—' }}</b>
-      <span class="text-xs tabular-nums text-[var(--textFaint)]">
-        <span class="font-[620] text-[var(--add)]" title="Ahead — commit chưa push">
+      <GitBranch :size="14" class="text-dim" />
+      <b class="min-w-0 flex-1 truncate font-semibold" :title="git.branch">
+        {{ git.branch || '—' }}
+      </b>
+      <span class="text-xs tabular-nums text-faint">
+        <span class="font-semibold text-diff-add" title="Ahead — commit chưa push">
           ↑{{ git.ahead }}
         </span>
-        <span class="font-[620] text-[var(--del)]" title="Behind — commit chưa pull">
+        <span class="font-semibold text-diff-del" title="Behind — commit chưa pull">
           ↓{{ git.behind }}
         </span>
       </span>
@@ -39,23 +41,23 @@
       </span>
     </div>
 
-    <div class="flex flex-col gap-1.5 border-b border-[var(--border)] p-2">
+    <div class="flex flex-col gap-1.5 border-b p-2">
       <!-- Textarea một hàng riêng — message dài gõ được nhiều dòng (⌘Enter vẫn
            commit), các nút bên dưới. -->
       <Textarea
         v-model="git.commitMessage"
-        class="min-h-[44px] resize-y px-2 py-[5px] font-sans"
+        class="min-h-14 resize-y px-2 py-1.5 font-sans"
         placeholder="Message (⌘Enter to commit)"
         spellcheck="false"
         rows="2"
         @keydown="onCommitKey"
       />
-      <div class="flex items-center gap-[5px]">
+      <div class="flex items-center gap-1.5">
         <Button
           type="button"
           variant="outline"
           size="iconSm"
-          class="size-6 text-[var(--accent)] hover:text-[var(--text)]"
+          class="size-6 text-primary hover:text-foreground"
           :disabled="git.isGeneratingCommit"
           title="Generate commit message with AI"
           @click="genMsg"
@@ -80,8 +82,8 @@
           class="size-6"
           :class="
             treeMode
-              ? 'bg-[var(--accentDim)] text-[var(--accent)] hover:text-[var(--accent)]'
-              : 'text-[var(--textDim)] hover:text-[var(--text)]'
+              ? 'bg-selected text-primary hover:text-primary'
+              : 'text-dim hover:text-foreground'
           "
           :title="treeMode ? 'Xem dạng phẳng' : 'Xem dạng tree'"
           @click="treeMode = !treeMode"
@@ -93,13 +95,11 @@
 
     <div class="min-h-0 flex-1 overflow-y-auto pb-2.5 pt-1 text-sm">
       <template v-if="git.notARepo">
-        <div class="p-3.5 text-sm text-[var(--textFaint)]">Thư mục không phải git repository.</div>
+        <div class="p-3.5 text-sm text-faint">Thư mục không phải git repository.</div>
       </template>
       <template v-else>
         <template v-if="git.staged.length">
-          <div
-            class="group/sec flex h-[22px] cursor-pointer select-none items-center gap-[5px] px-2 text-xs font-[640] text-[var(--textDim)]"
-          >
+          <div :class="SEC_HEAD">
             Staged Changes
             <span class="flex gap-0.5 opacity-0 transition-opacity group-hover/sec:opacity-100">
               <ScmIconBtn
@@ -111,11 +111,9 @@
                 <Minus :size="14" />
               </ScmIconBtn>
             </span>
-            <span
-              class="ml-auto rounded-[var(--r-sm)] bg-[var(--bgEl)] px-1.5 text-xs tabular-nums text-[var(--textFaint)]"
-            >
+            <Badge variant="secondary" :class="[COUNT_BADGE, 'ml-auto']">
               {{ git.staged.length }}
-            </span>
+            </Badge>
           </div>
           <ScmRows
             :nodes="stagedNodes"
@@ -131,9 +129,7 @@
         </template>
 
         <template v-if="git.unstaged.length">
-          <div
-            class="group/sec flex h-[22px] cursor-pointer select-none items-center gap-[5px] px-2 text-xs font-[640] text-[var(--textDim)]"
-          >
+          <div :class="SEC_HEAD">
             Changes
             <span class="flex gap-0.5 opacity-0 transition-opacity group-hover/sec:opacity-100">
               <ScmIconBtn :size="16" hover="active" title="Stage tất cả ✓" @click="git.stageAll">
@@ -143,11 +139,9 @@
                 <Undo2 :size="14" />
               </ScmIconBtn>
             </span>
-            <span
-              class="ml-auto rounded-[var(--r-sm)] bg-[var(--bgEl)] px-1.5 text-xs tabular-nums text-[var(--textFaint)]"
-            >
+            <Badge variant="secondary" :class="[COUNT_BADGE, 'ml-auto']">
               {{ git.unstaged.length }}
-            </span>
+            </Badge>
           </div>
           <ScmRows
             :nodes="unstagedNodes"
@@ -166,15 +160,11 @@
         </template>
 
         <template v-if="git.conflicted.length">
-          <div
-            class="flex h-[22px] cursor-pointer select-none items-center gap-[5px] px-2 text-xs font-[640] text-[var(--textDim)]"
-          >
+          <div :class="SEC_HEAD">
             Conflicts
-            <span
-              class="ml-auto rounded-[var(--r-sm)] bg-[var(--bgEl)] px-1.5 text-xs tabular-nums text-[var(--textFaint)]"
-            >
+            <Badge variant="secondary" :class="[COUNT_BADGE, 'ml-auto']">
               {{ git.conflicted.length }}
-            </span>
+            </Badge>
           </div>
           <ScmRows
             :nodes="conflictedNodes"
@@ -188,15 +178,12 @@
 
         <div
           v-if="!git.staged.length && !git.unstaged.length && !git.conflicted.length"
-          class="p-3.5 text-sm text-[var(--textFaint)]"
+          class="p-3.5 text-sm text-faint"
         >
           Không có thay đổi.
         </div>
 
-        <div
-          class="flex h-[22px] cursor-pointer select-none items-center gap-[5px] px-2 text-xs font-[640] text-[var(--textDim)]"
-          @click="commitsOpen = !commitsOpen"
-        >
+        <div :class="SEC_HEAD" @click="commitsOpen = !commitsOpen">
           <ChevronRight v-if="!commitsOpen" :size="10" class="flex-none" />
           <ChevronDown v-else :size="10" class="flex-none" />
           Commits
@@ -210,26 +197,22 @@
           >
             <GitGraph :size="12" />
           </ScmIconBtn>
-          <span
-            class="rounded-[var(--r-sm)] bg-[var(--bgEl)] px-1.5 text-xs tabular-nums text-[var(--textFaint)]"
-          >
+          <Badge variant="secondary" :class="COUNT_BADGE">
             {{ git.commits.length }}
-          </span>
+          </Badge>
         </div>
         <template v-if="commitsOpen">
           <div
             v-for="c in git.commits.slice(0, 5)"
             :key="c.sha || c.h"
-            class="flex h-[var(--lh-xl)] cursor-pointer items-center gap-2 whitespace-nowrap pl-3 pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
+            class="flex h-(--lh-xl) cursor-pointer items-center gap-2 whitespace-nowrap pl-3 pr-2.5 text-muted-foreground hover:bg-accent"
             :title="`${c.h} — ${c.m}`"
             @click="openCommit(c)"
           >
             <!-- mono-ok: commit SHA — chuỗi kỹ thuật -->
-            <span class="flex-none font-mono text-xs text-[var(--textFaint)]">{{ c.h }}</span>
+            <span class="flex-none font-mono text-xs text-faint">{{ c.h }}</span>
             <span class="truncate">{{ c.m }}</span>
-            <span class="ml-auto flex-none text-xs text-[var(--textFaint)]">
-              {{ c.a }} · {{ c.w }}
-            </span>
+            <span class="ml-auto flex-none text-xs text-faint">{{ c.a }} · {{ c.w }}</span>
           </div>
         </template>
       </template>
@@ -282,6 +265,12 @@ const { confirm } = useConfirm()
 const { t } = useI18n()
 
 const commitsOpen = ref(true)
+
+// Hàng tiêu đề section (Staged · Changes · Conflicts · Commits) + badge đếm — lặp 4
+// lần nên gom một chỗ. Cao = --lh-lg (22 @13, chẵn và giãn theo Appearance).
+const SEC_HEAD =
+  'group/sec flex h-(--lh-lg) cursor-pointer select-none items-center gap-1.5 px-2 text-xs font-semibold text-dim'
+const COUNT_BADGE = 'rounded-md px-1.5 py-0 font-normal tabular-nums text-faint'
 
 // ── Tree view ──────────────────────────────────────────────────────────────
 // Một cây per section (staged/unstaged/conflicted), compact dir đơn-con —

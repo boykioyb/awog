@@ -3,18 +3,19 @@
        Enter/blur commit, Esc huỷ; khi trùng tên `error` bật → viền đỏ, giữ
        focus cho sửa tiếp. -->
   <div
-    class="my-0.5 flex h-[var(--lh-xl)] items-center gap-1 pr-1.5"
+    class="my-0.5 flex h-(--lh-xl) items-center gap-1 pr-1.5"
     :style="{ paddingLeft: pad + 'px' }"
   >
-    <component :is="icon" :size="14" class="flex-none text-[color:var(--textFaint)]" />
+    <component :is="icon" :size="14" class="flex-none text-faint" />
     <!-- `min-h-0`: prototype.css ép input không-type min-height = --ctrl-h (36px)
          cho mọi control — reset để `h-5` thắng (VS Code: inline rename gọn,
-         không bị hàng control chung đẩy lên). -->
+         không bị hàng control chung đẩy lên). Input gộp class qua cn() nên màu
+         viền theo `error` ở :class thắng `border-input` gốc. -->
     <Input
       ref="inputEl"
       v-model="draft"
-      class="mr-1 h-5 min-h-0 min-w-0 flex-1 rounded-[var(--r-xs)] border bg-[color:var(--bgInput)] px-1.5 text-sm text-[color:var(--text)] outline-none placeholder:text-[color:var(--textFaint)]"
-      :class="error ? 'border-[color:var(--danger)]' : 'border-[color:var(--accentBorder)]'"
+      class="mr-1 h-5 min-h-0 min-w-0 flex-1 rounded-sm bg-muted px-1.5 text-sm text-foreground outline-none placeholder:text-faint"
+      :class="error ? 'border-destructive' : 'border-selected-border'"
       :placeholder="placeholder"
       spellcheck="false"
       @keydown.enter.prevent="commit"

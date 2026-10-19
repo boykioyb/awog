@@ -1,5 +1,5 @@
 <template>
-  <section class="page on" data-page="schedules">
+  <section class="flex min-w-0 flex-1 overflow-hidden" data-page="schedules">
     <LibraryView
       :items="schedules"
       :item-key="(s) => s.id"
@@ -9,19 +9,32 @@
       @new="openEditor(null)"
     >
       <template #row="{ item: s }">
-        <div class="lrow">
+        <!-- Dòng 1 chỉ chấm + tên: tên không bao giờ bị badge ép về 0 khi list hẹp
+             (badge chung dòng từng làm tên biến mất). Badge + giờ chạy kế xuống dòng 2. -->
+        <div class="flex items-center gap-2">
           <span
-            class="sdot"
-            :style="{ background: s.enabled ? 'var(--accent)' : 'var(--textFaint)' }"
+            class="size-2 flex-none rounded-full"
+            :class="s.enabled ? 'bg-primary' : 'bg-faint'"
           />
-          <span class="ttl">{{ s.name }}</span>
-          <span v-if="s.proposedBy" class="tag acc">{{ t('schedules.state.proposed') }}</span>
-          <span class="tag">{{ describeTrigger(s.trigger, t) }}</span>
-          <span v-if="s.lastStatus" class="tag" :class="{ acc: s.lastStatus === 'ok' }">
-            {{ t('schedules.status.' + s.lastStatus) }}
-          </span>
+          <span class="min-w-0 flex-1 truncate text-base font-medium">{{ s.name }}</span>
         </div>
-        <div class="sub">{{ nextLine(s) }}</div>
+        <div class="mt-1 flex flex-wrap items-center gap-1.5 pl-4 text-sm text-muted-foreground">
+          <Badge v-if="s.proposedBy" variant="outline" :class="['whitespace-nowrap', BADGE_ACC]">
+            {{ t('schedules.state.proposed') }}
+          </Badge>
+          <Badge variant="outline" class="whitespace-nowrap text-muted-foreground">
+            {{ describeTrigger(s.trigger, t) }}
+          </Badge>
+          <Badge
+            v-if="s.lastStatus"
+            variant="outline"
+            class="whitespace-nowrap"
+            :class="s.lastStatus === 'ok' ? BADGE_ACC : 'text-muted-foreground'"
+          >
+            {{ t('schedules.status.' + s.lastStatus) }}
+          </Badge>
+          <span class="min-w-0 truncate">{{ nextLine(s) }}</span>
+        </div>
       </template>
 
       <template #detail="{ item: s }">
@@ -77,6 +90,7 @@ import ScheduleEditor from '~/components/schedule/ScheduleEditor.vue'
 import ScheduleRunModal from '~/components/schedule/ScheduleRunModal.vue'
 import { describeTrigger, formatWhen, searchTextOf } from '~/components/schedule/schedule-format'
 import { useSchedulesStore, type Schedule, type ScheduleInput } from '~/stores/schedules'
+import Badge from '~/components/ui/badge/Badge.vue'
 
 const { t, locale } = useI18n()
 const store = useSchedulesStore()
@@ -85,6 +99,10 @@ const { schedules } = storeToRefs(store)
 const editorOpen = ref(false)
 const editTarget = ref<Schedule | null>(null)
 const pendingDelete = ref<Schedule | null>(null)
+
+// Badge nhấn màu brand (đề xuất của agent, lượt chạy gần nhất OK) — cùng kiểu badge tier
+// project ở trang Skills.
+const BADGE_ACC = 'border-primary/40 bg-primary/10 text-primary'
 
 // The page's own toast queue is gone — notifications go to the app-wide one.
 const { add: toast } = useToast()

@@ -4,12 +4,10 @@
        (OfficeDocView / OfficeSheetView) — không có trình xem Office thứ hai. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div
-      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim shadow-[inset_0_-1px_0_var(--border)] bg-[var(--bgEl)]"
+      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim bg-card shadow-[inset_0_-1px_0_var(--border)]"
     >
       <span class="truncate font-mono">{{ rel }}</span>
-      <span v-if="st.byteSize" class="flex-none text-[var(--textFaint)]">
-        · {{ formatBytes(st.byteSize) }}
-      </span>
+      <span v-if="st.byteSize" class="flex-none text-faint">· {{ formatBytes(st.byteSize) }}</span>
       <span v-if="office.truncated.value" class="flex-none text-warning">
         · {{ t('workbench.file.truncated') }}
       </span>
@@ -26,7 +24,7 @@
     </div>
     <div
       v-if="st.status === 'loading' || st.status === 'idle' || parsing"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center text-sm text-faint"
     >
       {{ t('workbench.file.loading') }}
     </div>
@@ -38,19 +36,19 @@
     </div>
     <div
       v-else-if="st.truncated || !st.base64"
-      class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-faint"
     >
       {{ t('workbench.office.tooLarge', { size: st.byteSize ? formatBytes(st.byteSize) : '—' }) }}
     </div>
     <div
       v-else-if="parseFailed"
-      class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-faint"
     >
       {{ t('common.preview.officeError') }}
     </div>
     <div
       v-else-if="office.isEmpty.value"
-      class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-faint"
     >
       {{ t('common.preview.officeEmpty') }}
     </div>

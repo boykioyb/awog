@@ -1,115 +1,142 @@
 <template>
-  <div class="scd">
-    <div class="dh">
-      <div class="scd-icn">
-        <Icon name="clock" style="width: var(--icon-sm); height: var(--icon-sm)" />
+  <div class="flex min-h-0 flex-1 flex-col">
+    <div class="flex h-12.5 flex-none items-center gap-2.5 border-b px-5.5">
+      <div class="grid size-6.5 flex-none place-items-center rounded-sm bg-primary/10 text-primary">
+        <Icon name="clock" class="size-3.5" />
       </div>
-      <div class="dt">{{ schedule.name }}</div>
-      <span class="tag" :class="{ acc: schedule.enabled }">
+      <div class="min-w-0 truncate text-lg font-semibold">{{ schedule.name }}</div>
+      <Badge variant="outline" :class="schedule.enabled ? BADGE_ACC : 'text-muted-foreground'">
         {{ schedule.enabled ? t('schedules.state.on') : t('schedules.state.off') }}
-      </span>
+      </Badge>
       <!-- Agent đề xuất (ADR 0108): công tắc mở form để xem lại, không bật thẳng. -->
-      <span v-if="schedule.proposedBy" class="tag acc" :title="t('schedules.state.proposed.hint')">
+      <Badge
+        v-if="schedule.proposedBy"
+        variant="outline"
+        :class="BADGE_ACC"
+        :title="t('schedules.state.proposed.hint')"
+      >
         {{ t('schedules.state.proposed') }}
-      </span>
+      </Badge>
       <!-- Lệnh chưa duyệt / đã đổi từ lần duyệt (ADR 0108): lượt chạy sẽ bị từ chối. -->
-      <span
+      <Badge
         v-if="schedule.job.kind === 'command' && !schedule.approved"
-        class="tag"
-        :style="{ color: 'var(--danger)' }"
+        variant="outline"
+        class="border-destructive/40 bg-destructive/10 text-destructive"
         :title="t('schedules.state.unapproved.hint')"
       >
         {{ t('schedules.state.unapproved') }}
-      </span>
-      <span style="flex: 1" />
-      <span
-        class="tog2"
-        :class="{ off: !schedule.enabled }"
+      </Badge>
+      <span class="flex-1" />
+      <!-- Controlled: `checked` bám prop; bấm chỉ emit `toggle` để page quyết định (lịch do
+           agent đề xuất thì mở form duyệt thay vì lật thẳng). -->
+      <Switch
+        :checked="schedule.enabled"
         :title="schedule.enabled ? t('schedules.disable') : t('schedules.enable')"
-        @click="emit('toggle')"
+        :aria-label="schedule.enabled ? t('schedules.disable') : t('schedules.enable')"
+        @update:checked="emit('toggle')"
       />
       <Button
         :title="t('schedules.runNow')"
-        class="scd-act"
+        :aria-label="t('schedules.runNow')"
+        class="text-muted-foreground"
         variant="outline"
         size="iconMd"
         @click="emit('run')"
       >
-        <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="play" class="size-3.5" />
       </Button>
       <Button
         :title="t('schedules.edit')"
-        class="scd-act"
+        :aria-label="t('schedules.edit')"
+        class="text-muted-foreground"
         variant="outline"
         size="iconMd"
         @click="emit('edit')"
       >
-        <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="edit" class="size-3.5" />
       </Button>
       <Button
         :title="t('schedules.delete')"
-        class="scd-act scd-danger"
+        :aria-label="t('schedules.delete')"
+        class="text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
         variant="outline"
         size="iconMd"
         @click="emit('delete')"
       >
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="trash" class="size-3.5" />
       </Button>
     </div>
 
-    <div class="dscroll">
+    <div class="flex-1 overflow-y-auto p-5.5">
       <!-- Giới hạn "app phải đang chạy" — nói ngay ở chỗ người dùng đặt lịch,
            không giấu trong tài liệu. -->
-      <div class="scd-note">
-        <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <div>
-          <div class="scd-note-t">{{ t('schedules.limit.title') }}</div>
-          <div class="scd-note-b">{{ t('schedules.limit.body') }}</div>
-        </div>
+      <Alert class="mb-3.5 text-muted-foreground">
+        <Icon name="info" />
+        <AlertTitle class="line-clamp-none text-base font-normal text-foreground">
+          {{ t('schedules.limit.title') }}
+        </AlertTitle>
+        <AlertDescription class="leading-(--lh-prose)">
+          {{ t('schedules.limit.body') }}
+        </AlertDescription>
+      </Alert>
+
+      <div class="grid grid-cols-[max-content_1fr] items-baseline gap-x-3 gap-y-2">
+        <span class="text-sm text-dim">{{ t('schedules.trigger') }}</span>
+        <span class="text-base text-foreground">{{ triggerLabel }}</span>
+        <span class="text-sm text-dim">{{ t('schedules.job') }}</span>
+        <span class="min-w-0 text-base wrap-anywhere text-foreground">{{ jobSummary }}</span>
+        <span class="text-sm text-dim">{{ t('schedules.next') }}</span>
+        <span class="text-base text-foreground">{{ nextLabel }}</span>
+        <span class="text-sm text-dim">{{ t('schedules.last') }}</span>
+        <span class="text-base text-foreground">{{ lastLabel }}</span>
       </div>
 
-      <div class="scd-grid">
-        <span class="scd-k">{{ t('schedules.trigger') }}</span>
-        <span class="scd-v">{{ triggerLabel }}</span>
-        <span class="scd-k">{{ t('schedules.job') }}</span>
-        <span class="scd-v">{{ jobSummary }}</span>
-        <span class="scd-k">{{ t('schedules.next') }}</span>
-        <span class="scd-v">{{ nextLabel }}</span>
-        <span class="scd-k">{{ t('schedules.last') }}</span>
-        <span class="scd-v">{{ lastLabel }}</span>
+      <div class="mt-5 mb-2 text-xs font-medium text-muted-foreground">
+        {{ t('schedules.history') }}
       </div>
-
-      <div class="scd-sec">{{ t('schedules.history') }}</div>
-      <div v-if="schedule.runs.length === 0" class="scd-empty">
+      <div v-if="schedule.runs.length === 0" class="text-sm text-faint">
         {{ t('schedules.history.empty') }}
       </div>
-      <!-- Bấm cả dòng ⇒ modal chi tiết lượt chạy + log (ScheduleRunModal). -->
-      <div
-        v-for="run in schedule.runs"
-        :key="run.id"
-        class="scd-run"
-        role="button"
-        tabindex="0"
-        :title="t('schedules.run.open')"
-        @click="emit('open-run', run.id)"
-        @keydown.enter="emit('open-run', run.id)"
-      >
-        <span class="scd-dot" :style="{ background: statusColor(run.status) }" />
-        <span class="scd-run-st">{{ t('schedules.status.' + run.status) }}</span>
-        <span class="scd-run-at">{{ when(run.startedAt) }}</span>
-        <span class="tag scd-run-tg">{{ t('schedules.trigger.' + run.trigger) }}</span>
-        <span v-if="run.catchUp" class="tag acc">{{ t('schedules.catchUp') }}</span>
-        <span style="flex: 1" />
-        <Button
-          v-if="run.sessionId"
-          :title="t('schedules.openSession.hint')"
-          variant="outline"
-          size="sm"
-          @click.stop="emit('open-session', run.sessionId)"
+      <div v-else class="divide-y border-t">
+        <!-- Bấm cả dòng ⇒ modal chi tiết lượt chạy + log (ScheduleRunModal). Dòng là vùng
+             bấm chứa nút "Mở phiên" bên trong nên không dùng Button bọc ngoài. -->
+        <div
+          v-for="run in schedule.runs"
+          :key="run.id"
+          class="flex cursor-pointer items-center gap-2 px-1.5 py-1.5 outline-none hover:bg-accent focus-visible:bg-accent"
+          role="button"
+          tabindex="0"
+          :title="t('schedules.run.open')"
+          @click="emit('open-run', run.id)"
+          @keydown.enter="emit('open-run', run.id)"
         >
-          {{ t('schedules.openSession') }}
-        </Button>
-        <span v-if="run.message" class="scd-run-msg" :title="run.message">{{ run.message }}</span>
+          <span class="size-2 flex-none rounded-full" :class="statusDotClass(run.status)" />
+          <span class="text-base text-foreground">{{ t('schedules.status.' + run.status) }}</span>
+          <span class="text-sm text-dim tabular-nums">{{ when(run.startedAt) }}</span>
+          <Badge variant="outline" class="text-muted-foreground">
+            {{ t('schedules.trigger.' + run.trigger) }}
+          </Badge>
+          <Badge v-if="run.catchUp" variant="outline" :class="BADGE_ACC">
+            {{ t('schedules.catchUp') }}
+          </Badge>
+          <span class="flex-1" />
+          <Button
+            v-if="run.sessionId"
+            :title="t('schedules.openSession.hint')"
+            variant="outline"
+            size="sm"
+            @click.stop="emit('open-session', run.sessionId)"
+          >
+            {{ t('schedules.openSession') }}
+          </Button>
+          <span
+            v-if="run.message"
+            class="max-w-[45%] truncate text-xs text-dim"
+            :title="run.message"
+          >
+            {{ run.message }}
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -121,8 +148,13 @@
 import { computed } from 'vue'
 import type { Schedule } from '~/stores/schedules'
 import { useProjects } from '~/composables/useProjects'
-import { describeTrigger, formatWhen, statusColor } from './schedule-format'
+import { describeTrigger, formatWhen, statusDotClass } from './schedule-format'
+import Alert from '~/components/ui/alert/Alert.vue'
+import AlertDescription from '~/components/ui/alert/AlertDescription.vue'
+import AlertTitle from '~/components/ui/alert/AlertTitle.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
 import Button from '~/components/ui/button/Button.vue'
+import Switch from '~/components/ui/switch/Switch.vue'
 
 const props = defineProps<{ schedule: Schedule }>()
 const emit = defineEmits<{
@@ -136,6 +168,9 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 const { projectName } = useProjects()
+
+// Badge nhấn màu brand (đang bật, đề xuất, chạy bù) — cùng kiểu badge tier project ở Skills.
+const BADGE_ACC = 'border-primary/40 bg-primary/10 text-primary'
 
 const triggerLabel = computed(() => describeTrigger(props.schedule.trigger, t))
 const when = (iso: string): string => formatWhen(iso, locale.value)
@@ -165,113 +200,3 @@ const lastLabel = computed(() => {
   return `${when(s.lastRunAt)} · ${status}`
 })
 </script>
-
-<style scoped>
-.scd {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-.scd-icn {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-sm);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.scd-act {
-  color: var(--textDim);
-}
-.scd-danger:hover {
-  color: var(--danger);
-  background: var(--dangerBg);
-}
-.scd-note {
-  display: flex;
-  gap: 9px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgEl);
-  color: var(--textDim);
-}
-.scd-note-t {
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.scd-note-b {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-}
-.scd-grid {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 7px 12px;
-  align-items: baseline;
-}
-.scd-k {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.scd-v {
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.scd-sec {
-  margin: 20px 0 8px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.scd-empty {
-  color: var(--textFaint);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.scd-run {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 6px;
-  border-top: 1px solid var(--border);
-  cursor: pointer;
-}
-.scd-run:hover,
-.scd-run:focus-visible {
-  background: var(--bgHover);
-  outline: none;
-}
-.scd-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.scd-run-st {
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.scd-run-at,
-.scd-run-tg {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.scd-run-msg {
-  max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-</style>

@@ -7,10 +7,10 @@
        tương đối chạy như trong trình duyệt. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <div
-      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim shadow-[inset_0_-1px_0_var(--border)] bg-[var(--bgEl)]"
+      class="flex h-8 flex-none items-center gap-2 px-3 text-xs text-dim bg-card shadow-[inset_0_-1px_0_var(--border)]"
     >
       <span class="truncate font-mono">{{ rel }}</span>
-      <span v-if="sizeLabel" class="flex-none text-[var(--textFaint)]">· {{ sizeLabel }}</span>
+      <span v-if="sizeLabel" class="flex-none text-faint">· {{ sizeLabel }}</span>
       <span v-if="st.truncated" class="flex-none text-warning">
         · {{ t('workbench.file.truncated') }}
       </span>
@@ -23,20 +23,22 @@
       />
       <template v-if="isHtml">
         <DocButtonGroup :options="modeOptions" :active="mode" @select="setMode" />
-        <button
-          class="flex-none rounded p-1.5 text-dim transition hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
-          type="button"
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="flex-none text-dim hover:text-foreground"
           :title="t('workbench.file.openInBrowser')"
+          :aria-label="t('workbench.file.openInBrowser')"
           @click="openInBrowser"
         >
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="external" />
+        </Button>
       </template>
     </div>
     <template v-if="isHtml && mode === 'preview'">
       <div
         v-if="!previewSrc"
-        class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-[var(--textFaint)]"
+        class="grid min-h-0 flex-1 place-items-center p-5 text-center text-sm text-faint"
       >
         {{ previewFailed ? t('workbench.file.previewDesktopOnly') : t('workbench.file.loading') }}
       </div>
@@ -63,7 +65,7 @@
     </div>
     <div
       v-else-if="st.status === 'loading' || st.status === 'idle'"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
+      class="grid min-h-0 flex-1 place-items-center text-sm text-faint"
     >
       {{ t('workbench.file.loading') }}
     </div>
@@ -73,10 +75,7 @@
     >
       {{ st.error }}
     </div>
-    <div
-      v-else-if="st.isBinary"
-      class="grid min-h-0 flex-1 place-items-center text-sm text-[var(--textFaint)]"
-    >
+    <div v-else-if="st.isBinary" class="grid min-h-0 flex-1 place-items-center text-sm text-faint">
       {{ t('workbench.file.binary') }}
     </div>
     <MonacoEditor

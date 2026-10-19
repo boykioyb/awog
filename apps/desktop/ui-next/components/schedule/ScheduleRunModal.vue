@@ -5,55 +5,66 @@
     :width="760"
     @close="emit('close')"
   >
-    <div v-if="run" class="srm">
-      <div class="srm-grid">
-        <span class="srm-k">{{ t('schedules.run.status') }}</span>
-        <span class="srm-v srm-st">
-          <span class="srm-dot" :style="{ background: statusColor(run.status) }" />
+    <div v-if="run" class="flex flex-col gap-3">
+      <div class="grid grid-cols-[max-content_1fr] gap-x-3.5 gap-y-1.5 text-base">
+        <span class="text-dim">{{ t('schedules.run.status') }}</span>
+        <span class="flex min-w-0 items-center gap-1.5 text-foreground">
+          <span class="size-2 flex-none rounded-full" :class="statusDotClass(run.status)" />
           {{ t('schedules.status.' + run.status) }}
         </span>
-        <span class="srm-k">{{ t('schedules.run.started') }}</span>
-        <span class="srm-v">{{ whenFull(run.startedAt) }}</span>
-        <span class="srm-k">{{ t('schedules.run.finished') }}</span>
-        <span class="srm-v">{{ run.finishedAt ? whenFull(run.finishedAt) : '—' }}</span>
-        <span class="srm-k">{{ t('schedules.run.duration') }}</span>
-        <span class="srm-v tnum">{{ duration }}</span>
-        <span class="srm-k">{{ t('schedules.run.trigger') }}</span>
-        <span class="srm-v">
+        <span class="text-dim">{{ t('schedules.run.started') }}</span>
+        <span :class="VALUE">{{ whenFull(run.startedAt) }}</span>
+        <span class="text-dim">{{ t('schedules.run.finished') }}</span>
+        <span :class="VALUE">{{ run.finishedAt ? whenFull(run.finishedAt) : '—' }}</span>
+        <span class="text-dim">{{ t('schedules.run.duration') }}</span>
+        <span :class="VALUE" class="tabular-nums">{{ duration }}</span>
+        <span class="text-dim">{{ t('schedules.run.trigger') }}</span>
+        <span :class="VALUE">
           {{ t('schedules.trigger.' + run.trigger) }}
           <template v-if="run.catchUp">· {{ t('schedules.catchUp') }}</template>
         </span>
         <template v-if="commandLine">
-          <span class="srm-k">{{ t('schedules.run.command') }}</span>
-          <span class="srm-v srm-code">{{ commandLine }}</span>
+          <span class="text-dim">{{ t('schedules.run.command') }}</span>
+          <!-- mono-ok: dòng lệnh thật — người dùng copy chạy lại trong terminal -->
+          <span :class="VALUE" class="font-mono text-sm">{{ commandLine }}</span>
         </template>
         <template v-if="run.message">
-          <span class="srm-k">{{ t('schedules.run.message') }}</span>
-          <span class="srm-v srm-msg">{{ run.message }}</span>
+          <span class="text-dim">{{ t('schedules.run.message') }}</span>
+          <span :class="VALUE" class="whitespace-pre-wrap">{{ run.message }}</span>
         </template>
       </div>
 
-      <div class="srm-sec">
-        <span>{{ t('schedules.log') }}</span>
-        <span style="flex: 1" />
-        <Button
-          v-if="logText"
-          variant="ghost"
-          size="sm"
-          :title="t('schedules.run.copyLog')"
-          @click="copyText(logText)"
-        >
-          {{ t('schedules.run.copyLog') }}
-        </Button>
+      <div class="flex flex-col gap-2">
+        <Separator />
+        <div class="flex items-center text-sm text-dim">
+          <span>{{ t('schedules.log') }}</span>
+          <span class="flex-1" />
+          <Button
+            v-if="logText"
+            variant="ghost"
+            size="sm"
+            :title="t('schedules.run.copyLog')"
+            @click="copyText(logText)"
+          >
+            {{ t('schedules.run.copyLog') }}
+          </Button>
+        </div>
       </div>
-      <div v-if="logState === 'loading'" class="srm-empty">{{ t('schedules.run.logLoading') }}</div>
-      <div v-else-if="logState === 'error'" class="srm-empty">
+      <div v-if="logState === 'loading'" class="text-sm text-dim">
+        {{ t('schedules.run.logLoading') }}
+      </div>
+      <div v-else-if="logState === 'error'" class="text-sm text-dim">
         {{ t('schedules.run.logError') }}
       </div>
-      <div v-else-if="!logText" class="srm-empty">
+      <div v-else-if="!logText" class="text-sm text-dim">
         {{ run.status === 'running' ? t('schedules.run.logPending') : t('schedules.run.noLog') }}
       </div>
-      <pre v-else class="srm-log">{{ logText }}</pre>
+      <!-- mono-ok: output thật của lệnh — người dùng copy-paste để dò lỗi -->
+      <pre
+        v-else
+        class="m-0 max-h-[50vh] overflow-auto rounded-md border bg-muted px-3 py-2.5 font-mono text-sm wrap-anywhere whitespace-pre-wrap text-foreground select-text"
+        >{{ logText }}</pre
+      >
     </div>
 
     <template #footer>
@@ -79,15 +90,20 @@
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import Button from '~/components/ui/button/Button.vue'
+import Separator from '~/components/ui/separator/Separator.vue'
 import { useSchedulesStore, type Schedule } from '~/stores/schedules'
 import { copyText } from '~/utils/clipboard'
-import { formatWhen, statusColor } from './schedule-format'
+import { formatWhen, statusDotClass } from './schedule-format'
 
 const props = defineProps<{ open: boolean; schedule: Schedule; runId: string | null }>()
 const emit = defineEmits<{ close: []; 'open-session': [sessionId: string] }>()
 
 const { t, locale } = useI18n()
 const store = useSchedulesStore()
+
+// Cột giá trị của lưới thông tin: co được trong ô 1fr và ngắt cả chuỗi dài không dấu cách
+// (đường dẫn, dòng lệnh).
+const VALUE = 'min-w-0 wrap-anywhere text-foreground'
 
 const run = computed(() => props.schedule.runs.find((r) => r.id === props.runId) ?? null)
 const when = (iso: string): string => formatWhen(iso, locale.value)
@@ -131,77 +147,3 @@ watch(
   { immediate: true },
 )
 </script>
-
-<style scoped>
-.srm {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.srm-grid {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 6px 14px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.srm-k {
-  color: var(--textDim);
-}
-.srm-v {
-  color: var(--text);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.srm-st {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.srm-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.srm-msg {
-  white-space: pre-wrap;
-}
-.srm-code {
-  /* mono-ok: dòng lệnh thật — người dùng copy chạy lại trong terminal */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.srm-sec {
-  display: flex;
-  align-items: center;
-  padding-top: 8px;
-  box-shadow: inset 0 1px 0 var(--border);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.srm-empty {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.srm-log {
-  margin: 0;
-  max-height: 50vh;
-  overflow: auto;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  /* mono-ok: output thật của lệnh — người dùng copy-paste để dò lỗi */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: text;
-}
-</style>

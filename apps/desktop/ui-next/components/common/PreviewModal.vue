@@ -4,23 +4,33 @@
        stacking context / overflow). Single instance, driven by `item` prop or the
        shared usePreview() store. -->
   <Teleport to="body">
-    <!-- In a popout window the modal IS the window: no dim backdrop, and a click on the
+    <!-- hook-ok: `.ovl.on` nằm trong OVERLAYS (composables/useEmbeddedBrowser.ts) — trang web
+         nhúng nhường chỗ khi preview mở; skin cũ của `.ovl` bị utility đè hết.
+         Overlay tự dựng, KHÔNG dùng Dialog reka: preview được mở chồng lên chính các Dialog
+         reka (ShareExportModal, modal đính kèm…), mà Dialog modal của reka khoá
+         pointer-events của body ⇒ một Dialog thứ hai teleport ra body sẽ không bấm được.
+         In a popout window the modal IS the window: no dim backdrop, and a click on the
          (edge-to-edge) surface must not close it — the OS chrome / header ✕ own that. -->
     <div
       v-if="shownItem"
-      class="ovl on pvovl data-[state=open]:animate-in data-[state=open]:fade-in-0"
-      :class="{ pvwin: windowMode }"
+      class="ovl on fixed inset-0 z-480 flex cursor-default justify-center [-webkit-app-region:no-drag] data-[state=open]:animate-in data-[state=open]:fade-in-0"
+      :class="overlayClass"
       data-state="open"
       @click.self="onOverlayClick"
     >
       <div
-        class="pvcard"
+        class="relative flex w-full flex-col overflow-hidden bg-background text-foreground"
+        :class="cardClass"
         role="dialog"
         aria-modal="true"
         :aria-label="shownItem.name"
         :style="windowMode ? undefined : { maxWidth: modalMaxW }"
       >
-        <div class="pvhead">
+        <!-- Header đè lên dải kéo cửa sổ của thanh trên ⇒ no-drag, nếu không mousedown
+             lên nút sẽ khởi động kéo cửa sổ và nuốt @click. -->
+        <div
+          class="flex flex-none items-center gap-2 border-b px-3 py-2 text-foreground [-webkit-app-region:no-drag]"
+        >
           <Button
             v-if="canGoBack"
             variant="ghost"
@@ -30,14 +40,13 @@
             :aria-label="t('common.back')"
             @click="goBack"
           >
-            <Icon name="chev-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="chev-left" />
           </Button>
-          <Icon
-            :name="headIcon"
-            class="shrink-0 text-muted-foreground"
-            style="width: var(--icon-md); height: var(--icon-md)"
-          />
-          <span class="pvname" :title="absPath">{{ headerPath }}</span>
+          <Icon :name="headIcon" class="size-4 shrink-0 text-muted-foreground" />
+          <!-- mono: đường dẫn file trong workspace — người dùng copy sang terminal/editor -->
+          <span class="min-w-0 truncate font-mono text-sm font-medium" :title="absPath">
+            {{ headerPath }}
+          </span>
           <Button
             v-if="hasWorkspaceFile"
             variant="ghost"
@@ -47,7 +56,7 @@
             :aria-label="t('common.preview.copyPath')"
             @click="copyPath"
           >
-            <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="copy" />
           </Button>
           <Button
             v-if="hasWorkspaceFile"
@@ -58,40 +67,55 @@
             :aria-label="t('common.preview.reveal')"
             @click="reveal"
           >
-            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="folder" />
           </Button>
-          <span v-if="meta" class="pvmeta">{{ meta }}</span>
-          <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
-          <span v-if="truncated" class="pvtrunc" :title="t('common.preview.truncated')">
-            {{ t('common.preview.truncated') }}
+          <!-- mono: "size · mime" của file -->
+          <span
+            v-if="meta"
+            class="min-w-0 truncate font-mono text-xs text-muted-foreground tabular-nums"
+          >
+            {{ meta }}
           </span>
+          <span
+            v-if="dirty"
+            class="flex-none text-xs text-warning"
+            :title="t('common.preview.unsaved')"
+          >
+            ●
+          </span>
+          <Badge
+            v-if="truncated"
+            variant="warning"
+            class="shrink-0 rounded-sm border-warning/30 font-normal whitespace-nowrap"
+            :title="t('common.preview.truncated')"
+          >
+            {{ t('common.preview.truncated') }}
+          </Badge>
           <Badge variant="secondary" class="ml-1 shrink-0">{{ shownItem.kind }}</Badge>
           <span class="flex-1" />
           <!-- Render|Raw segmented control — the header slot the proto gives markdown.
                html shares it too (same `view` state, same two modes). -->
-          <div
+          <ToggleGroup
             v-if="shownItem.kind === 'markdown' || shownItem.kind === 'html' || isCsv"
-            class="flex shrink-0 rounded-md border border-border p-0.5"
+            type="single"
+            :spacing="1"
+            class="shrink-0 gap-0 border p-0.5"
+            :model-value="view"
+            @update:model-value="pickView"
           >
-            <button
-              v-for="v in ['render', 'raw'] as const"
+            <ToggleGroupItem
+              v-for="v in VIEWS"
               :key="v"
-              type="button"
-              :class="[
-                'rounded px-2 py-0.5 text-xs capitalize transition-colors',
-                view === v
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              ]"
-              @click="view = v"
+              :value="v"
+              class="h-5.5 px-2 text-xs font-normal text-muted-foreground capitalize hover:bg-transparent hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
             >
               {{
                 isCsv
                   ? t(v === 'render' ? 'common.preview.csvTable' : 'common.preview.csvSource')
                   : t(v === 'render' ? 'common.render' : 'common.raw')
               }}
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
           <Button
             v-if="canCopyContent"
             variant="ghost"
@@ -104,7 +128,6 @@
             <Icon
               :name="contentCopied ? 'check' : 'copy'"
               :class="{ 'text-success': contentCopied }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
             />
           </Button>
           <Button
@@ -116,7 +139,7 @@
             :aria-label="t('common.preview.modalWidth', { w: modalWLabel })"
             @click="cycleModalW"
           >
-            <StretchHorizontal :size="14" />
+            <StretchHorizontal />
           </Button>
           <Button
             v-if="canOpenInWindow"
@@ -127,7 +150,7 @@
             :aria-label="t('common.preview.openInWindow')"
             @click="openInWindow"
           >
-            <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="external" />
           </Button>
           <Button
             v-if="canMinimize"
@@ -138,7 +161,7 @@
             :aria-label="t('common.preview.minimize')"
             @click="minimize"
           >
-            <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="minimize" />
           </Button>
           <Button
             variant="ghost"
@@ -148,7 +171,7 @@
             :aria-label="t('common.close')"
             @click="close"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="x" />
           </Button>
         </div>
 
@@ -165,34 +188,42 @@
           @close="closeFind"
         />
 
-        <div class="pvbody" :class="[bodyClass, { nbbody: isNotebook }]">
+        <div class="relative flex flex-auto flex-col" :class="bodyLayout">
           <!-- status placeholder: workspace file loading / failed / too big / binary.
                Loading shows a spinner; the other states keep the file icon. -->
-          <div v-if="statusMessage" class="pvempty">
-            <span v-if="loading" class="pvspin" />
-            <Icon v-else :name="headIcon" style="width: 32px; height: 32px" />
-            <div class="pvename">{{ shownItem.name }}</div>
-            <div class="pvehint">{{ statusMessage }}</div>
+          <div v-if="statusMessage" :class="EMPTY">
+            <span
+              v-if="loading"
+              class="size-6.5 animate-spin rounded-full border-2 border-border border-t-primary"
+            />
+            <Icon v-else :name="headIcon" class="size-8" />
+            <div :class="EMPTY_NAME">{{ shownItem.name }}</div>
+            <div :class="EMPTY_HINT">{{ statusMessage }}</div>
           </div>
 
           <!-- image: zoom / pan / rotate / flip. The viewport + <img> are measured by
-               fitImage() (natural size vs frame), hence the refs. -->
+               fitImage() (natural size vs frame), hence the refs. Khung là absolute inset-0
+               của thân (cần một hộp xác định) và cắt mọi thứ ảnh làm; KHÔNG để CSS định cỡ
+               ảnh — chỉ zoom (JS, `imgStyle`) định cỡ, vì max-height % trong grid/flex không
+               bao giờ có vùng xác định để bám. -->
           <div
             v-else-if="shownItem.kind === 'image' && effectiveSrc"
             ref="imgVp"
-            class="pvimgvp bg-muted/30"
+            class="absolute inset-0 cursor-grab touch-none overflow-hidden bg-muted/30 active:cursor-grabbing"
             @wheel="onWheel"
             @pointerdown="onPointerDown"
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
           >
-            <!-- .pvimgcenter keeps the picture centered even when it's bigger than the frame
-                 (see its CSS). @load: fit it to the frame once its box exists (onImageLoad). -->
-            <div class="pvimgcenter">
+            <!-- Căn giữa sống sót khi ảnh to hơn khung: đặt wrapper ở tâm khung rồi lùi lại
+                 nửa kích thước của CHÍNH nó (grid/flex sẽ "safe"-align về đầu khi item to hơn
+                 container cuộn). @load: fit it to the frame once its box exists (onImageLoad). -->
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 leading-0">
+              <!-- Cỡ tự nhiên — 100% là 1:1 pixel; fit/zoom/pan/xoay/lật đi qua transform. -->
               <img
                 ref="imgEl"
                 :src="effectiveSrc"
-                class="pvimg"
+                class="block max-h-none max-w-none origin-center"
                 :style="imgStyle"
                 :alt="shownItem.name"
                 @load="onImageLoad"
@@ -200,23 +231,26 @@
             </div>
           </div>
 
-          <!-- pdf: native embedded viewer (Chromium). -->
+          <!-- pdf: native embedded viewer (Chromium). <iframe> là replaced element: UA cho
+               300×150 nên inset-0 một mình không giãn — phải size-full tường minh. -->
           <iframe
             v-else-if="shownItem.kind === 'pdf' && effectiveSrc"
             :src="effectiveSrc"
-            class="pvpdf"
+            class="absolute inset-0 size-full border-0"
             :title="shownItem.name"
           />
 
           <!-- video: native player. effectiveSrc streams via media:// (Range-backed,
-               seekable) for workspace files, or an in-memory blob for drag-drops. -->
+               seekable) for workspace files, or an in-memory blob for drag-drops.
+               Letterbox trên nền đen; trần 62vh trên CHÍNH thẻ video (height % ở đây không
+               tin được vì thân co theo nội dung) để thanh điều khiển luôn nằm trong card. -->
           <div
             v-else-if="shownItem.kind === 'video' && effectiveSrc && !mediaError"
-            class="pvmediavp bg-black"
+            class="grid min-h-0 w-full flex-auto place-items-center overflow-hidden bg-black"
           >
             <video
               :src="effectiveSrc"
-              class="pvvideo"
+              class="block max-h-[62vh] max-w-full"
               controls
               preload="metadata"
               playsinline
@@ -225,15 +259,12 @@
           </div>
 
           <!-- audio: native player centered on a file card. -->
-          <div
-            v-else-if="shownItem.kind === 'audio' && effectiveSrc && !mediaError"
-            class="pvaudiovp"
-          >
-            <Icon name="play" style="width: 32px; height: 32px" />
-            <div class="pvename">{{ shownItem.name }}</div>
+          <div v-else-if="shownItem.kind === 'audio' && effectiveSrc && !mediaError" :class="EMPTY">
+            <Icon name="play" class="size-8" />
+            <div :class="EMPTY_NAME">{{ shownItem.name }}</div>
             <audio
               :src="effectiveSrc"
-              class="pvaudioel"
+              class="w-115 max-w-[80vw]"
               controls
               preload="metadata"
               @error="onMediaError"
@@ -242,57 +273,77 @@
 
           <!-- media unavailable: unsupported codec / decode error / no source →
                keep the toolbar (workspace files can still "open externally"). -->
-          <div v-else-if="shownItem.kind === 'video' || shownItem.kind === 'audio'" class="pvempty">
-            <Icon name="play" style="width: 32px; height: 32px" />
-            <div class="pvename">{{ shownItem.name }}</div>
-            <div class="pvehint">{{ t('common.preview.mediaError') }}</div>
+          <div v-else-if="shownItem.kind === 'video' || shownItem.kind === 'audio'" :class="EMPTY">
+            <Icon name="play" class="size-8" />
+            <div :class="EMPTY_NAME">{{ shownItem.name }}</div>
+            <div :class="EMPTY_HINT">{{ t('common.preview.mediaError') }}</div>
           </div>
 
           <!-- markdown rendered: outline (TOC) sidebar + scrollable content.
                TOC thu gọn được thành rail 34px — nút collapse nằm trên hàng label,
                rail giữ nút mở lại; bản thân aside đã "sticky" (không cuộn theo
-               .mdscroll vì là sibling flex). -->
+               vùng cuộn nội dung vì là sibling flex). -->
           <template v-else-if="shownItem.kind === 'markdown' && view === 'render'">
-            <aside v-if="headings.length && !outlineCollapsed" class="mdoutline bg-muted/30">
-              <div class="mdohead">
-                <div class="mdolabel">{{ t('common.outline') }}</div>
-                <button
-                  class="mdotgl"
+            <aside
+              v-if="headings.length && !outlineCollapsed"
+              class="w-60 flex-none overflow-y-auto border-r bg-muted/30 px-2 py-3.5"
+            >
+              <div class="flex items-center gap-1 px-1 pb-2">
+                <div class="min-w-0 flex-1 px-1 text-xs font-medium text-muted-foreground">
+                  {{ t('common.outline') }}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  class="size-6 flex-none text-muted-foreground"
                   :title="t('common.preview.collapseOutline')"
                   :aria-label="t('common.preview.collapseOutline')"
                   @click="outlineCollapsed = true"
                 >
-                  <PanelLeftClose :size="14" />
-                </button>
+                  <PanelLeftClose />
+                </Button>
               </div>
               <a
                 v-for="h in headings"
                 :key="h.id"
-                class="mdoitem"
-                :class="{ on: h.id === activeHeading }"
+                class="block cursor-pointer truncate rounded-sm py-1.5 pr-2.5 text-sm"
+                :class="
+                  h.id === activeHeading
+                    ? 'bg-selected text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                "
                 :style="{ paddingLeft: `${(h.level - 1) * 12 + 10}px` }"
                 @click="goto(h.id)"
               >
                 {{ h.text }}
               </a>
             </aside>
-            <button
+            <!-- Rail thu gọn: cả dải là nút mở lại (một đích 24px lẻ loi thì khó bấm). -->
+            <Button
               v-else-if="headings.length"
-              class="mdorail"
+              variant="ghost"
+              class="h-auto w-8.5 flex-none items-start self-stretch rounded-none border-r px-0 pt-3 pb-0 text-muted-foreground [&_svg]:size-3.5"
               :title="t('common.preview.expandOutline')"
               :aria-label="t('common.preview.expandOutline')"
               @click="outlineCollapsed = false"
             >
-              <PanelLeftOpen :size="14" />
-            </button>
+              <PanelLeftOpen />
+            </Button>
             <div
               ref="mdScroll"
-              class="mdscroll"
+              class="relative flex min-w-0 flex-1 flex-col items-center overflow-auto px-5 pt-5 pb-20"
               @scroll="onScroll"
               @mouseup="onPvSelect"
               @mousedown="onPvMouseDown"
             >
-              <div ref="mdBody" class="mdbody" :style="{ maxWidth: mdMaxWidth }" @click="onMdClick">
+              <!-- hook-ok: `.mdbody` — prose markdown dùng chung (assets/css/markdown.css) và
+                   resolvePvSelection() đọc qua closest('.mdbody') -->
+              <div
+                ref="mdBody"
+                class="mdbody w-full max-w-220 text-foreground"
+                :style="{ maxWidth: mdMaxWidth }"
+                @click="onMdClick"
+              >
                 <template v-for="(seg, i) in segments" :key="i">
                   <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
                   <pre
@@ -311,16 +362,16 @@
 
           <!-- xlsx → sheet grid + sheet tabs (fills the body, owns its scroll).
                Wrapper pins a definite box for the grid's height:100% chain —
-               same collapse .pvcode solves with absolute positioning. -->
-          <div v-else-if="showOfficeSheet" class="pvsheet">
+               same collapse the code viewer solves with absolute positioning. -->
+          <div v-else-if="showOfficeSheet" class="absolute inset-0">
             <OfficeSheetView :office="office" />
           </div>
 
           <!-- office file that parsed to nothing readable (empty doc / empty sheet) -->
-          <div v-else-if="officeEmpty" class="pvempty">
-            <Icon :name="headIcon" style="width: 32px; height: 32px" />
-            <div class="pvename">{{ shownItem.name }}</div>
-            <div class="pvehint">{{ t('common.preview.officeEmpty') }}</div>
+          <div v-else-if="officeEmpty" :class="EMPTY">
+            <Icon :name="headIcon" class="size-8" />
+            <div :class="EMPTY_NAME">{{ shownItem.name }}</div>
+            <div :class="EMPTY_HINT">{{ t('common.preview.officeEmpty') }}</div>
           </div>
 
           <!-- .ipynb → parsed cell list (markdown / highlighted code / outputs).
@@ -331,24 +382,28 @@
           <!-- html render → sandboxed, opaque-origin iframe (allow-scripts but NO
                allow-same-origin: the page's JS runs isolated, can't reach app:// or
                the parent). Relative/CDN assets won't resolve — "open in browser" is
-               the full-fidelity path. `:key` re-creates the frame on reload. -->
+               the full-fidelity path. `:key` re-creates the frame on reload.
+               Nền trắng (mặc định trình duyệt) để trang không tự đặt nền vẫn đọc được ở
+               dark mode; size-full tường minh vì iframe là replaced element. -->
           <iframe
             v-else-if="htmlRender"
             :key="htmlReloadKey"
-            class="pvhtml"
+            class="absolute inset-0 size-full border-0 bg-white"
             sandbox="allow-scripts allow-popups allow-forms allow-modals"
             :srcdoc="effectiveText"
             :title="shownItem.name"
           />
 
           <!-- CSV / TSV → bảng (lưới Excel dùng chung); công tắc Bảng | Mã nguồn ở header. -->
-          <div v-else-if="showCsvTable" class="pvsheet">
+          <div v-else-if="showCsvTable" class="absolute inset-0">
             <OfficeSheetView :office="csvTable" />
           </div>
 
           <!-- text / markdown-raw / html-raw / code → Monaco viewer/editor (§9).
-               Read-only unless edit mode is on (then `change`/`save` flow to the modal). -->
-          <div v-else-if="showCode" class="pvcode">
+               Read-only unless edit mode is on (then `change`/`save` flow to the modal).
+               Absolute inset-0: card co theo nội dung nên chiều cao thân KHÔNG xác định — một
+               chuỗi `height: 100%` sẽ sập về 0 và Monaco mount vào hộp 0×0. -->
+          <div v-else-if="showCode" class="absolute inset-0">
             <MonacoViewer
               ref="monacoRef"
               :value="editorValue"
@@ -361,26 +416,29 @@
 
           <!-- folder: lazy file tree of the dragged working directory. Clicking a
                file repoints this modal to that file. -->
-          <div v-else-if="shownItem.kind === 'folder'" class="pvfolder">
+          <div
+            v-else-if="shownItem.kind === 'folder'"
+            class="min-h-0 flex-1 overflow-auto px-3 py-3.5"
+          >
             <SessionFileTree v-if="treeRootNodes.length" :nodes="treeRootNodes" :ctrl="treeCtrl" />
-            <div v-else class="pvempty">
-              <span v-if="treeLoading" class="pvspin" />
-              <Icon v-else name="folder" style="width: 32px; height: 32px" />
-              <div class="pvename">{{ shownItem.name }}</div>
-              <div class="pvehint">
+            <div v-else :class="EMPTY">
+              <span
+                v-if="treeLoading"
+                class="size-6.5 animate-spin rounded-full border-2 border-border border-t-primary"
+              />
+              <Icon v-else name="folder" class="size-8" />
+              <div :class="EMPTY_NAME">{{ shownItem.name }}</div>
+              <div :class="EMPTY_HINT">
                 {{ treeLoading ? t('sessions.preview.loading') : t('common.preview.folderEmpty') }}
               </div>
             </div>
           </div>
 
           <!-- image whose data could not be read, or a non-previewable file -->
-          <div v-else class="pvempty">
-            <Icon
-              :name="shownItem.kind === 'image' ? 'clip' : 'rules'"
-              style="width: 32px; height: 32px"
-            />
-            <div class="pvename">{{ shownItem.name }}</div>
-            <div class="pvehint">
+          <div v-else :class="EMPTY">
+            <Icon :name="shownItem.kind === 'image' ? 'clip' : 'rules'" class="size-8" />
+            <div :class="EMPTY_NAME">{{ shownItem.name }}</div>
+            <div :class="EMPTY_HINT">
               {{
                 shownItem.kind === 'image'
                   ? t('common.preview.imageUnavailable')
@@ -393,56 +451,80 @@
         <!-- highlight prose in a rendered markdown preview → floating action bar
              (Translate + Copy MD). Gated on the view that can actually produce a
              selection, so no state left over from a previous item can surface it over
-             an image/video. -->
+             an image/video. Neo theo toạ độ viewport, nằm trên card nhưng dưới popover
+             dịch dùng chung (teleport ra body). -->
         <div
           v-if="pvSel && shownItem.kind === 'markdown' && view === 'render'"
-          class="pvselbar"
+          class="fixed z-120 inline-flex -translate-x-1/2 -translate-y-full items-center gap-1"
           :style="{ left: `${pvSel.x}px`, top: `${pvSel.y}px` }"
           @mousedown.prevent
         >
           <!-- Quote chỉ hiện khi bên mở là một message của session (truyền `quote`
                hook) — preview file thường không có nút này. -->
-          <button v-if="shownItem.quote" class="pvseltr" @click="onPvQuote">
-            <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Button
+            v-if="shownItem.quote"
+            variant="outline"
+            size="xs"
+            :class="SEL_BTN"
+            @click="onPvQuote"
+          >
+            <Icon name="quote" />
             {{ t('sessions.quote.action') }}
-          </button>
-          <button class="pvseltr" @click="onPvTranslate">
-            <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </Button>
+          <Button variant="outline" size="xs" :class="SEL_BTN" @click="onPvTranslate">
+            <Icon name="globe" />
             {{ t('translate.action') }}
-          </button>
-          <button class="pvseltr" @click="onPvCopyMarkdown">
-            <Icon
-              :name="pvMdCopied ? 'check' : 'copy'"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+          </Button>
+          <Button variant="outline" size="xs" :class="SEL_BTN" @click="onPvCopyMarkdown">
+            <Icon :name="pvMdCopied ? 'check' : 'copy'" />
             {{ pvMdCopied ? t('common.copied') : t('common.copyMarkdown') }}
-          </button>
+          </Button>
         </div>
 
         <!-- Preview trích dẫn ở góc (2026-09-15): tập trích dẫn đã ghim từ fullscreen,
              để người đọc thấy mình đã gom gì mà không phải rời màn hình. Chỉ hiện khi
-             bên mở là message của session (`quote` hook) VÀ đã có ít nhất một trích dẫn. -->
-        <div v-if="shownItem.quote && quoteEntries.length" class="pvquotes">
-          <div class="pvquotes-h">
-            <Icon name="quote" style="width: var(--icon-xs); height: var(--icon-xs)" />
+             bên mở là message của session (`quote` hook) VÀ đã có ít nhất một trích dẫn.
+             Neo trong card (absolute) chứ không fixed để cùng lớp với nội dung modal; trần
+             chiều cao + cuộn để tập trích dẫn dài không phủ kín màn đọc. -->
+        <div
+          v-if="shownItem.quote && quoteEntries.length"
+          class="absolute right-3.5 bottom-3.5 z-110 flex max-h-[45%] w-75 max-w-[calc(100%-1.75rem)] flex-col overflow-hidden rounded-lg border bg-popover shadow-md"
+        >
+          <div class="flex items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground">
+            <Icon name="quote" class="size-3" />
             <span>{{ t('common.preview.quotes', { n: quoteEntries.length }) }}</span>
           </div>
-          <div class="pvquotes-list">
-            <div v-for="(q, i) in quoteEntries" :key="i" class="pvquote">
-              <span class="pvquote-x">{{ q.excerpt }}</span>
-              <button class="pvquote-rm" :title="t('sessions.quote.remove')" @click="q.remove()">
-                <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              </button>
+          <div class="flex flex-col gap-1 overflow-y-auto p-1.5">
+            <div
+              v-for="(q, i) in quoteEntries"
+              :key="i"
+              class="flex items-start gap-1.5 rounded-md border-l-2 border-ring bg-muted px-2 py-1.5"
+            >
+              <!-- Kẹp 3 dòng: trích dẫn dài vẫn gọn trong thẻ, không kéo panel dài ra. -->
+              <span class="line-clamp-3 min-w-0 flex-1 text-sm text-foreground">
+                {{ q.excerpt }}
+              </span>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="size-5 flex-none text-muted-foreground hover:bg-destructive/10 hover:text-destructive [&_svg]:size-3"
+                :title="t('sessions.quote.remove')"
+                :aria-label="t('sessions.quote.remove')"
+                @click="q.remove()"
+              >
+                <Icon name="x" />
+              </Button>
             </div>
           </div>
         </div>
 
         <PreviewToolbar v-if="hasBar" :ctrl="ctrl" />
 
-        <!-- rename / move dialog -->
-        <div v-if="rename.open" class="pvov" @click.self="closeRename">
-          <div class="pvdlg">
-            <div class="pvdlgt">
+        <!-- rename / move dialog. Hộp con tự dựng (absolute trong card), không dùng Dialog
+             reka: Dialog teleport ra body ở z-170 sẽ nằm DƯỚI preview (z-480). -->
+        <div v-if="rename.open" :class="INNER_SCRIM" @click.self="closeRename">
+          <div :class="INNER_DLG">
+            <div class="font-semibold text-foreground">
               {{
                 t(
                   rename.mode === 'move'
@@ -458,30 +540,34 @@
               @keydown.enter="submitRename"
               @keydown.esc.stop="closeRename"
             />
-            <div v-if="rename.error" class="pvdlgerr">{{ rename.error }}</div>
-            <div class="pvdlgrow">
-              <button class="pvbtn" @click="closeRename">{{ t('common.cancel') }}</button>
-              <button class="pvbtn primary" @click="submitRename">{{ t('common.confirm') }}</button>
+            <div v-if="rename.error" class="text-sm text-destructive">{{ rename.error }}</div>
+            <div class="flex justify-end gap-2">
+              <Button variant="outline" size="sm" @click="closeRename">
+                {{ t('common.cancel') }}
+              </Button>
+              <Button size="sm" @click="submitRename">{{ t('common.confirm') }}</Button>
             </div>
           </div>
         </div>
 
         <!-- confirm (delete / discard unsaved edits) -->
-        <div v-if="confirmReq" class="pvov" @click.self="cancelConfirm">
-          <div class="pvdlg">
-            <div class="pvdlgt">{{ t(confirmReq.titleKey) }}</div>
-            <div class="pvdlgm">
+        <div v-if="confirmReq" :class="INNER_SCRIM" @click.self="cancelConfirm">
+          <div :class="INNER_DLG">
+            <div class="font-semibold text-foreground">{{ t(confirmReq.titleKey) }}</div>
+            <div class="text-sm text-muted-foreground">
               {{ t(confirmReq.messageKey, { name: shownItem?.name ?? '' }) }}
             </div>
-            <div class="pvdlgrow">
-              <button class="pvbtn" @click="cancelConfirm">{{ t('common.cancel') }}</button>
-              <button
-                class="pvbtn"
-                :class="confirmReq.danger ? 'danger' : 'primary'"
+            <div class="flex justify-end gap-2">
+              <Button variant="outline" size="sm" @click="cancelConfirm">
+                {{ t('common.cancel') }}
+              </Button>
+              <Button
+                size="sm"
+                :variant="confirmReq.danger ? 'destructive' : 'default'"
                 @click="runConfirm"
               >
                 {{ t(confirmReq.confirmKey) }}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -636,9 +722,58 @@ const headerPath = computed(() => {
   return it.path || it.name
 })
 // .ipynb body: the cell list needs the full body width and its own left-aligned
-// column, so it opts out of `.pvbody`'s centered prose layout. Local to the SFC —
+// column, so it opts out of the body's centered prose layout. Local to the SFC —
 // the controller's `bodyClass` covers the kinds it already knows about.
 const isNotebook = computed(() => shownItem.value?.kind === 'notebook' && !statusMessage.value)
+
+// ── Class khung (thuần trình bày) ────────────────────────────────────────────
+// Các biến thể dưới đây đè CÙNG nhóm utility (padding / overflow / căn / min-h), nên mỗi
+// nhóm chỉ nằm trong nhánh điều kiện — đặt một bản ở `class` tĩnh thì Vue nối cả hai và
+// utility đứng sau trong CSS thắng, không phải cái theo điều kiện.
+
+// Overlay: scrim mờ + card căn giữa; popout (windowMode) thì overlay CHÍNH là cửa sổ —
+// không có gì phía sau để làm mờ, nên nền đặc và card tràn hết.
+const overlayClass = computed(() =>
+  props.windowMode ? 'items-stretch bg-background p-0' : 'items-center bg-black/55 p-6',
+)
+// Card: max-w-3xl · max-h-85vh · rounded-xl · viền · shadow, co theo nội dung (thân tự
+// cuộn khi chạm trần 85vh). Popout: khung thuộc về cửa sổ OS nên bỏ viền/bo/bóng.
+const cardClass = computed(() =>
+  props.windowMode ? 'h-full' : 'max-h-[85vh] max-w-3xl rounded-xl border shadow-lg',
+)
+// Thân modal theo loại nội dung. `flex-auto` (basis auto, không phải 0%): card co theo
+// nội dung nên nội dung ngắn cho card ngắn. pb-20 chừa chỗ dưới PreviewToolbar nổi.
+const bodyLayout = computed(() => {
+  const b: { flush?: boolean; mdrender?: boolean; tree?: boolean } = bodyClass.value
+  // Cây thư mục: lấp thân, căn trái, cây tự cuộn.
+  if (b.tree) return 'min-h-0 items-stretch overflow-hidden p-0'
+  // Notebook: cột rộng hết thân, căn trái (NotebookView tự căn bề rộng đọc).
+  if (isNotebook.value) return 'min-h-0 items-stretch overflow-auto px-5 pt-5 pb-20'
+  if (b.mdrender) return 'min-h-0 flex-row items-stretch overflow-hidden p-0'
+  // Viewer tràn mép (ảnh/pdf/iframe/Monaco/bảng) không có chiều cao nội tại — thiếu sàn
+  // 60vh thì card co về còn header. Popout đã lấp cửa sổ nên bỏ sàn.
+  if (b.flush)
+    return `items-center overflow-hidden p-0 ${props.windowMode ? 'min-h-0' : 'min-h-[60vh]'}`
+  return 'min-h-0 items-center overflow-auto px-5 pt-5 pb-20'
+})
+// Placeholder trạng thái (đang tải / lỗi / rỗng) + thẻ audio: cột căn giữa, chữ mờ.
+const EMPTY = 'my-auto flex flex-col items-center gap-3 px-5 py-14 text-muted-foreground'
+// mono: tên file — người dùng copy sang terminal/editor.
+const EMPTY_NAME = 'font-mono text-sm text-foreground'
+const EMPTY_HINT = 'text-sm text-muted-foreground'
+// Nút của thanh hành động nổi cạnh vùng bôi đen.
+const SEL_BTN =
+  'gap-1.5 bg-popover px-2.5 text-sm font-normal text-popover-foreground shadow-md hover:border-ring hover:bg-popover hover:text-primary [&_svg]:size-3.5'
+// Hộp đổi tên / xác nhận: scrim trong card + thẻ căn giữa.
+const INNER_SCRIM = 'absolute inset-0 z-8 grid place-items-center bg-black/50'
+const INNER_DLG = 'flex w-110 max-w-[90%] flex-col gap-3 rounded-lg border bg-card p-4.5 shadow-lg'
+
+// Công tắc Render | Raw. ToggleGroup single cho phép bấm lại mục đang bật để bỏ chọn
+// (giá trị rỗng) — bỏ qua để luôn có một chế độ như nút cũ.
+const VIEWS = ['render', 'raw'] as const
+function pickView(v: unknown) {
+  if (v === 'render' || v === 'raw') view.value = v
+}
 
 const absPath = computed(() => {
   const it = shownItem.value
@@ -658,7 +793,7 @@ const canCopyContent = computed(() => {
   return !!effectiveText.value
 })
 // Độ rộng modal — header có nút cycle qua các preset (0 = tràn khung nhìn).
-// Inline maxWidth trên .pvcard ghi đè CSS `max-width: 768px`; popout
+// Inline maxWidth trên card ghi đè `max-w-3xl` (768px); popout
 // (windowMode) không áp vì card lúc đó chính là OS window.
 const MODAL_W = [880, 1180, 0] as const
 const modalWIdx = ref(1)
@@ -825,584 +960,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 </script>
 
 <style scoped>
-/* Proto chrome: centered dialog card over the shared `.ovl` scrim (p-6), not an
-   edge-to-edge sheet. The scrim keeps its global look (all modals share it; the
-   cute theme re-tints `.ovl` itself). */
-.pvovl {
-  /* `.ovl` mặc định z-100 — quá THẤP cho vùng "trên-modal": preview có thể mở
-     TỪ trong board item (`.wsed-ovl` 160), peek full (`.apeek.full` 400) hay
-     lượt-fullscreen (`.ftovl` 470) — dưới chúng thì modal bị đè chìm. Thang
-     teleported: ftovl 470 < pvovl 480 < select-popover 490 < lbox 540 < menu
-     570 < confirm 580. */
-  align-items: center;
-  padding: 24px;
-  cursor: default;
-  z-index: 480;
-  /* Modal phủ từ y=0 nên header đè lên dải kéo cửa sổ `.top` (`-webkit-app-region:
-     drag`). Vùng kéo tính ở tầng compositor bất kể z-index, nên mousedown lên nút
-     sẽ khởi động kéo cửa sổ và nuốt @click (Copy path / Reveal / Close không bấm
-     được). Modal không bao giờ cần làm tay kéo → carve toàn overlay thành no-drag. */
-  -webkit-app-region: no-drag;
-}
-/* Popout window (pages/preview.vue): the modal IS the whole window, so drop `.ovl`'s dim
-   backdrop — there is nothing behind it to dim, and the wash only muddies the content. */
-.pvovl.pvwin {
-  align-items: stretch;
-  padding: 0;
-  background: var(--background);
-}
-/* Card — the proto dialog shell: max-w-3xl · max-h-85vh · rounded-xl · border ·
-   shadow-2xl. Auto-height: shrink-wraps short content; the 85vh cap + .pvbody's
-   shrink/scroll take over past it. */
-.pvcard {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 768px;
-  max-height: 85vh;
-  background: var(--background);
-  color: var(--foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card); /* rounded-xl */
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-/* In a popout the card is again the window itself — chrome (radius/border/shadow)
-   belongs to the OS frame, not the content. */
-.pvwin .pvcard {
-  max-width: none;
-  max-height: none;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-/* Header — proto: flex items-center gap-2 px-3 py-2, hairline under. */
-.pvhead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--foreground);
-  flex: 0 0 auto;
-}
-.pvname {
-  /* mono-ok: workspace-relative file path being previewed */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.pvdirty {
-  color: var(--warning);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  flex: 0 0 auto;
-}
-/* Proto meta: mono xs muted, truncates when the header runs out of room. */
-.pvmeta {
-  /* mono-ok: "size · mime" meta */
-  font-family: var(--code);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-.pvtrunc {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--warning);
-  background: rgb(from var(--warning) r g b / 0.12);
-  border: 1px solid rgb(from var(--warning) r g b / 0.3);
-  border-radius: var(--r-xs); /* rounded-sm */
-  padding: 2px 7px;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.pvbody {
-  /* flex-basis auto (not flex:1's 0%): the auto-sized card sizes itself from this
-     content, so short content gives a short card; past the 85vh cap it shrinks
-     again and scrolls internally. */
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* p-5 + clearance under the floating PreviewToolbar so it never covers the
-     content's end. */
-  padding: 20px 20px 80px;
-  /* Positioning parent for the image viewport (see .pvimgvp) — it needs a definite box to
-     be absolutely sized against. */
-  position: relative;
-}
-.pvbody.flush {
-  padding: 0;
-  overflow: hidden;
-  /* Full-bleed viewers (image/pdf/iframe/Monaco/sheet) contribute no intrinsic
-     height — without a floor the shrink-wrap card would collapse to the header. */
-  min-height: 60vh;
-}
-/* Popout: the card fills the window already — a vh floor would clip the viewer in
-   a short window instead of shrinking with it. */
-.pvwin .pvbody.flush {
-  min-height: 0;
-}
-.pvbody.mdrender {
-  flex-direction: row;
-  align-items: stretch;
-  padding: 0;
-  overflow: hidden;
-}
-/* Notebook: full-width, left-aligned column that scrolls with the body (NotebookView
-   centers its own reading measure). */
-.pvbody.nbbody {
-  align-items: stretch;
-  padding: 20px 20px 80px;
-}
-/* Folder tree: fill the body, left-aligned, tree manages its own scroll. */
-.pvbody.tree {
-  align-items: stretch;
-  padding: 0;
-  overflow: hidden;
-}
-.pvfolder {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 14px 12px;
-}
-.mdoutline {
-  flex: 0 0 240px;
-  overflow-y: auto;
-  padding: 14px 8px;
-  border-right: 1px solid var(--border);
-  /* bg-muted/30 per the proto surface — alpha comes from the class on the aside,
-     so the var keeps working under every theme. */
-}
-/* Label row carries the collapse toggle — label flexes, toggle is a 24px ghost
-   icon button hugging the aside's right edge. */
-.mdohead {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 4px 8px;
-}
-.mdolabel {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-  padding: 0 4px;
-}
-.mdotgl {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.mdotgl:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-/* Collapsed rail — slim strip down the body's left edge; the whole strip is the
-   expand button (a 24px target alone would be fiddly). */
-.mdorail {
-  flex: 0 0 34px;
-  align-self: stretch;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 12px;
-  border: 0;
-  border-right: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.mdorail:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.mdoitem {
-  display: block;
-  padding: 5px 10px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mdoitem:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.mdoitem.on {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.mdscroll {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px 20px 80px;
-}
-/* Floating action bar (Translate + Copy MD) next to a text selection in the rendered
-   markdown (anchored to viewport coords; sits above the preview card, under the shared
-   translation popover teleported to body). */
-.pvselbar {
-  position: fixed;
-  z-index: 120;
-  transform: translate(-50%, -100%);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.pvseltr {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm); /* rounded-md */
-  box-shadow: var(--shadow-md);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.pvseltr:hover {
-  border-color: var(--ring);
-  color: var(--primary);
-}
-/* Panel preview trích dẫn ở góc dưới-phải của card (position: relative). Neo trong
-   card chứ không fixed để nó ở cùng lớp với nội dung modal và không đè lên UI khác
-   của app. Trần chiều cao + cuộn để một tập trích dẫn dài không phủ kín màn đọc. */
-.pvquotes {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  z-index: 110;
-  width: 300px;
-  max-width: calc(100% - 28px);
-  max-height: 45%;
-  display: flex;
-  flex-direction: column;
-  background: var(--popover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-}
-.pvquotes-h {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 11px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted-foreground);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.pvquotes-list {
-  overflow-y: auto;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pvquote {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--muted);
-  border-left: 2px solid var(--ring);
-}
-.pvquote-x {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--foreground);
-  /* Kẹp 3 dòng: một trích dẫn dài vẫn gọn trong thẻ, không kéo panel dài ra. */
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.pvquote-rm {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: var(--r-xs); /* rounded-sm */
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.pvquote-rm:hover {
-  background: rgb(from var(--destructive) r g b / 0.1);
-  color: var(--destructive);
-}
-/* Image viewport — a fixed frame (absolute inset 0 of the body) that clips whatever the
-   image does. It deliberately does NOT try to size the image: the previous attempts
-   (`max-height: 100%` inside a grid) never worked, because a percentage max-height needs a
-   DEFINITE area and neither a percentage-height flex item nor an `auto` grid row is one — the
-   row grew to the image's natural height, so nothing was constrained AND `place-items: center`
-   had nothing to center (the item filled the row), which is why a tall image sat pinned at the
-   bottom of the frame. The image is now sized only by zoom (JS), never by CSS. */
-.pvimgvp {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  cursor: grab;
-  touch-action: none;
-  /* Surface comes from `bg-muted/30` on the element (proto image surface). */
-}
-.pvimgvp:active {
-  cursor: grabbing;
-}
-/* Centering that survives an oversized image: the wrapper is placed at the frame's centre
-   and shifted back by half of ITS OWN size, so its centre coincides with the frame's centre
-   whatever the image measures. Grid/flex centering can't be trusted here — an item bigger
-   than a scroll container gets "safe" aligned to the start instead. Since the image's own
-   scale is applied about its centre, the picture stays centred at every zoom level. */
-.pvimgcenter {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  line-height: 0; /* design-token-ok: line-height: 0 removes the inline strut around the <img>. */
-}
-/* Natural size — so 100% means 1:1 pixels. Everything else (fit on open, zoom, pan, rotate,
-   flip) rides on the transform in `imgStyle`. */
-.pvimg {
-  display: block;
-  max-width: none;
-  max-height: none;
-  transform-origin: center center;
-}
-.pvpdf {
-  position: absolute;
-  inset: 0;
-  /* <iframe> is a replaced element: the UA stylesheet gives it width:300px ×
-     height:150px, so `inset:0` alone is over-constrained and the frame keeps
-     its intrinsic size anchored top-left. Explicit 100% × 100% wins. */
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-/* Video — letterboxed on a black canvas filling the body (flush). Old code sized
-   the player 100% × 100% + object-fit:contain, but height:100% is unreliable
-   here: .pvbody is shrink-wrap (flex-basis auto), so
-   the percentage resolved to `auto` and the <video> fell back to its INTRINSIC
-   size — a 1080p clip stood ~1080px tall inside an 85vh card and its native
-   control bar sat below the overflow-hidden fold. The proto rule instead caps
-   the ELEMENT at 62vh; max-width/max-height preserve the aspect ratio, and the
-   controls always land inside the card. */
-.pvmediavp {
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  /* Letterbox canvas: `bg-black` on the element (proto video surface). */
-}
-.pvvideo {
-  display: block;
-  max-width: 100%;
-  max-height: 62vh; /* proto max-h-[62vh] */
-}
-/* Audio — centered file card in the (non-flush) body. */
-.pvaudiovp {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin: auto 0;
-  padding: 56px 20px;
-  color: var(--muted-foreground);
-}
-.pvaudioel {
-  width: min(460px, 80vw);
-}
-/* HTML render — sandboxed iframe fills the body; white canvas (browser default) so
-   a page without its own background stays readable in dark mode. */
-.pvhtml {
-  position: absolute;
-  inset: 0;
-  /* Same replaced-element trap as .pvpdf — without explicit size the frame
-     renders at its UA default 300×150 instead of filling the body. */
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: #fff;
-}
-/* Monaco viewer fills the body edge-to-edge (body padding reset via `flush`).
-   Absolute like .pvimgvp: the shrink-wrap card leaves .pvbody's used height
-   INdefinite, so a `height: 100%` chain collapses to 0 — the editor then mounts
-   into a 0×0 host (and even the loading/error overlays get clipped by the body's
-   overflow:hidden, which is why a failed code preview reads as a blank card). */
-.pvcode {
-  position: absolute;
-  inset: 0;
-}
-/* Sheet grid — same definite-box need as .pvcode (its .osv root is height:100%). */
-.pvsheet {
-  position: absolute;
-  inset: 0;
-}
-/* Opaque/status card — proto: centered column, gap-3, py-14, muted text. */
-.pvempty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin: auto 0;
-  padding: 56px 20px;
-  color: var(--muted-foreground);
-}
-.pvename {
-  /* mono-ok: file name */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--foreground);
-}
-.pvehint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--muted-foreground);
-}
-/* Loading spinner (content fetch / folder tree load) inside the empty placeholder. */
-.pvspin {
-  width: 26px;
-  height: 26px;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: pv-spin 0.8s linear infinite;
-}
-@keyframes pv-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* rename / confirm dialogs (centered card over the scrim) */
-.pvov {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.5);
-}
-.pvdlg {
-  width: min(440px, 90%);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius); /* rounded-lg */
-  box-shadow: var(--shadow-lg);
-}
-.pvdlgt {
-  font-weight: 600;
-  color: var(--foreground);
-}
-.pvdlgm {
-  color: var(--muted-foreground);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.pvdlgerr {
-  color: var(--destructive);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.pvinput {
-  width: 100%;
-  padding: 9px 11px;
-  border-radius: var(--r-sm); /* rounded-md */
-  background: var(--background);
-  border: 1px solid var(--input);
-  color: var(--foreground);
-  /* mono-ok: rename input — a file name */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  outline: none;
-}
-.pvinput:focus-visible {
-  border-color: var(--input);
-  box-shadow: 0 0 0 1px var(--ring);
-}
-.pvdlgrow {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.pvbtn {
-  font-weight: 500;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  padding: 7px 14px;
-  border-radius: var(--r-sm); /* rounded-md */
-  border: 1px solid var(--border);
-  color: var(--muted-foreground);
-  background: transparent;
-  cursor: pointer;
-}
-.pvbtn:hover {
-  background: var(--accent-wash);
-  color: var(--accent-foreground);
-}
-.pvbtn.primary {
-  background: var(--primary);
-  border-color: transparent;
-  color: var(--primary-foreground);
-}
-.pvbtn.danger {
-  background: var(--destructive);
-  border-color: transparent;
-  color: var(--destructive-foreground);
-}
-
+/* style-ok: prose markdown render ra qua v-html (DOM của nội dung, class không chạm tới được) —
+   bản riêng của preview đè lên assets/css/markdown.css (h1 có gạch chân, link màu primary,
+   code/pre nền muted). */
 /* ── rendered markdown prose (v-html content → :deep) ─────────────────── */
 /* Ảnh link ngoài bị chặn trong file chỉ-xem (usePreviewModal blockRemoteImages). */
 .mdbody :deep(.pv-img-blocked) {

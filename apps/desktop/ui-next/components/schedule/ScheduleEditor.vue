@@ -5,53 +5,68 @@
     :width="560"
     @close="emit('cancel')"
   >
-    <div class="sef">
-      <div class="sef-field">
-        <label class="sef-label">{{ t('schedules.form.name') }}</label>
+    <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.name') }}</Label>
         <Input v-model="name" :placeholder="t('schedules.form.namePh')" />
       </div>
 
       <!-- ── Loại việc ── -->
-      <div class="sef-field">
-        <label class="sef-label">{{ t('schedules.form.jobKind') }}</label>
-        <div class="seg sef-seg">
-          <span :class="{ on: jobKind === 'session-prompt' }" @click="jobKind = 'session-prompt'">
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.jobKind') }}</Label>
+        <ToggleGroup
+          type="single"
+          :spacing="1"
+          class="w-full rounded-lg bg-muted p-0.5"
+          :model-value="jobKind"
+          @update:model-value="(v) => v && (jobKind = v as ScheduleJob['kind'])"
+        >
+          <ToggleGroupItem value="session-prompt" :class="SEG_ITEM">
             {{ t('schedules.job.sessionPrompt') }}
-          </span>
-          <span :class="{ on: jobKind === 'workflow-task' }" @click="jobKind = 'workflow-task'">
+          </ToggleGroupItem>
+          <ToggleGroupItem value="workflow-task" :class="SEG_ITEM">
             {{ t('schedules.job.workflowTask') }}
-          </span>
-          <span :class="{ on: jobKind === 'command' }" @click="jobKind = 'command'">
+          </ToggleGroupItem>
+          <ToggleGroupItem value="command" :class="SEG_ITEM">
             {{ t('schedules.job.command') }}
-          </span>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       <template v-if="jobKind === 'session-prompt'">
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.prompt') }}</label>
-          <textarea
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.prompt') }}
+          </Label>
+          <Textarea
             v-model="prompt"
-            class="sef-input sef-area"
+            class="min-h-24 resize-y text-base"
             :placeholder="t('schedules.form.promptPh')"
           />
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.sessionTitle') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.sessionTitle') }}
+          </Label>
           <Input v-model="sessionTitle" :placeholder="t('schedules.form.sessionTitlePh')" />
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.project') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.project') }}
+          </Label>
           <AppSelect v-model="projectId" :options="projectOptions" width="100%" />
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.mode') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.mode') }}</Label>
           <AppSelect v-model="mode" :options="modeOptions" width="100%" />
-          <div class="sef-hint">{{ t('schedules.form.mode.hint') }}</div>
+          <div class="text-xs text-dim">{{ t('schedules.form.mode.hint') }}</div>
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.model') }}</label>
-          <div class="sef-static">{{ modelSummary }}</div>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.model') }}</Label>
+          <!-- Chỉ đọc: cấu hình LLM chụp từ Settings → Defaults, không sửa ở form này. -->
+          <div class="rounded-md border border-dashed px-2 py-1.5 text-sm text-dim">
+            {{ modelSummary }}
+          </div>
         </div>
       </template>
 
@@ -63,75 +78,51 @@
       />
 
       <template v-else>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.project') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.project') }}
+          </Label>
           <AppSelect v-model="taskProjectId" :options="taskProjectOptions" width="100%" />
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.workflow') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.workflow') }}
+          </Label>
           <AppSelect v-model="workflowId" :options="workflowOptions" width="100%" />
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.taskTitle') }}</label>
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.taskTitle') }}
+          </Label>
           <Input v-model="taskTitle" />
         </div>
-        <div class="sef-field">
-          <label class="sef-label">{{ t('schedules.form.description') }}</label>
-          <textarea v-model="taskDescription" class="sef-input sef-area" />
+        <div class="flex flex-col gap-1.5">
+          <Label class="text-sm font-medium text-foreground">
+            {{ t('schedules.form.description') }}
+          </Label>
+          <Textarea v-model="taskDescription" class="min-h-24 resize-y text-base" />
         </div>
       </template>
 
       <!-- ── Biểu thức lịch ── -->
-      <div class="sef-field">
-        <label class="sef-label">{{ t('schedules.trigger') }}</label>
-        <div class="seg sef-seg">
-          <span :class="{ on: triggerKind === 'interval' }" @click="triggerKind = 'interval'">
-            {{ t('schedules.kind.interval') }}
-          </span>
-          <span :class="{ on: triggerKind === 'daily' }" @click="triggerKind = 'daily'">
-            {{ t('schedules.kind.daily') }}
-          </span>
-          <span :class="{ on: triggerKind === 'weekly' }" @click="triggerKind = 'weekly'">
-            {{ t('schedules.kind.weekly') }}
-          </span>
-        </div>
+      <ScheduleTriggerFields
+        v-model:trigger-kind="triggerKind"
+        v-model:interval-n="intervalN"
+        v-model:interval-unit="intervalUnit"
+        v-model:time="time"
+        v-model:weekdays="weekdays"
+      />
+
+      <div class="flex items-center justify-between gap-1.5">
+        <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.enabled') }}</Label>
+        <Switch
+          :checked="enabled"
+          :aria-label="t('schedules.form.enabled')"
+          @update:checked="(v: boolean) => (enabled = v)"
+        />
       </div>
 
-      <div v-if="triggerKind === 'interval'" class="sef-field">
-        <label class="sef-label">{{ t('schedules.form.every') }}</label>
-        <div class="sef-row">
-          <Input v-model.number="intervalN" type="number" min="1" class="sef-num" />
-          <AppSelect v-model="intervalUnit" :options="unitOptions" width="130px" />
-        </div>
-      </div>
-
-      <div v-else class="sef-field">
-        <label class="sef-label">{{ t('schedules.form.time') }}</label>
-        <Input v-model="time" placeholder="09:00" class="sef-num" />
-      </div>
-
-      <div v-if="triggerKind === 'weekly'" class="sef-field">
-        <label class="sef-label">{{ t('schedules.form.weekdays') }}</label>
-        <div class="sef-days">
-          <button
-            v-for="d in WEEKDAYS"
-            :key="d"
-            type="button"
-            class="sef-day"
-            :class="{ on: weekdays.includes(d) }"
-            @click="toggleWeekday(d)"
-          >
-            {{ t('schedules.day.' + d) }}
-          </button>
-        </div>
-      </div>
-
-      <label class="sef-check">
-        <input v-model="enabled" type="checkbox" />
-        {{ t('schedules.form.enabled') }}
-      </label>
-
-      <div v-if="error" class="sef-err">{{ error }}</div>
+      <div v-if="error" class="text-sm text-destructive">{{ error }}</div>
     </div>
 
     <template #footer>
@@ -154,11 +145,17 @@ import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import ScheduleCommandFields from './ScheduleCommandFields.vue'
+import ScheduleTriggerFields from './ScheduleTriggerFields.vue'
 import { useProjects } from '~/composables/useProjects'
 import { useSettingsStore } from '~/stores/settings'
 import { useWorkflowsStore } from '~/stores/workflows'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
+import Label from '~/components/ui/label/Label.vue'
+import Switch from '~/components/ui/switch/Switch.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
+import ToggleGroup from '~/components/ui/toggle-group/ToggleGroup.vue'
+import ToggleGroupItem from '~/components/ui/toggle-group/ToggleGroupItem.vue'
 import type {
   Schedule,
   ScheduleInput,
@@ -176,8 +173,11 @@ const { projects } = useProjects()
 const settings = useSettingsStore()
 const workflowsStore = useWorkflowsStore()
 
-const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0] as const
 const NO_PROJECT = ''
+
+// Segmented control chọn loại việc — cùng kiểu CommandEditor, chia đều cả bề ngang.
+const SEG_ITEM =
+  'h-6 flex-1 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 const name = ref('')
 const enabled = ref(true)
@@ -242,11 +242,6 @@ const modeOptions = computed(() => {
   return values.map((m) => ({ label: m, value: m }))
 })
 
-const unitOptions = computed(() => [
-  { label: t('schedules.form.unit.minutes'), value: 'minutes' },
-  { label: t('schedules.form.unit.hours'), value: 'hours' },
-])
-
 const modelSummary = computed(() => {
   const s = storedSettings.value ?? defaultSessionSettings()
   return `${s.provider} · ${s.modelId} · ${s.level}`
@@ -265,12 +260,6 @@ function defaultSessionSettings(): ScheduleSessionSettings {
   }
   if (acct.accountId) base.accountId = acct.accountId
   return base
-}
-
-function toggleWeekday(d: number): void {
-  weekdays.value = weekdays.value.includes(d)
-    ? weekdays.value.filter((x) => x !== d)
-    : [...weekdays.value, d].sort((a, b) => a - b)
 }
 
 // Nạp lại form mỗi lần modal mở: một modal dùng lại cho cả tạo lẫn sửa nên
@@ -454,98 +443,3 @@ async function onSave(): Promise<void> {
   })
 }
 </script>
-
-<style scoped>
-.sef {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.sef-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.sef-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sef-input {
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-family: inherit;
-}
-.sef-input:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
-.sef-area {
-  resize: vertical;
-  min-height: 6rem;
-}
-.sef-num {
-  width: 110px;
-}
-.sef-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sef-seg {
-  width: 100%;
-}
-.sef-static {
-  padding: 7px 9px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.sef-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.sef-days {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sef-day {
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
-}
-.sef-day.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.sef-check {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-  cursor: pointer;
-}
-.sef-err {
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-</style>

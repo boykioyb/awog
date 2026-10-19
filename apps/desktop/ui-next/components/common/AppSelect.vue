@@ -208,20 +208,22 @@ const menuHost = ref<HTMLElement | 'body'>('body')
 function resolveMenuHost(): HTMLElement | 'body' {
   return rootRef.value?.closest<HTMLElement>('[role="dialog"][data-state="open"]') ?? 'body'
 }
-// Gốc toạ độ của containing block cho `position: fixed` (viewport, hoặc phần tử có
-// transform/filter/contain). Trả cả kích thước để tính `bottom` khi lật menu lên trên.
+// Gốc toạ độ của containing block cho `position: fixed` (viewport, hoặc phần tử biến
+// thành containing block). ĐO thay vì đoán: một probe `fixed` ở (0,0) trong host nằm
+// đúng tại gốc đó. Trước đây chỉ xét `transform`/`filter`/`contain` — nhưng Tailwind v4
+// căn giữa DialogContent bằng thuộc tính `translate` riêng lẻ (transform vẫn `none`),
+// cùng `scale`/`rotate`/`will-change`/`backdrop-filter`… cũng tạo containing block ⇒ menu
+// bị cộng đúng độ lệch của hộp thoại (bay xuống góc phải). Trả cả chiều cao để tính
+// `bottom` khi lật menu lên trên.
 function fixedOrigin(): { x: number; y: number; h: number } {
   const host = menuHost.value
   if (host !== 'body') {
-    const cs = getComputedStyle(host)
-    const isContaining =
-      cs.transform !== 'none' ||
-      cs.filter !== 'none' ||
-      /paint|layout|strict|content/.test(cs.contain)
-    if (isContaining) {
-      const b = host.getBoundingClientRect()
-      return { x: b.left + host.clientLeft, y: b.top + host.clientTop, h: host.clientHeight }
-    }
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden'
+    host.appendChild(probe)
+    const p = probe.getBoundingClientRect()
+    probe.remove()
+    if (p.left !== 0 || p.top !== 0) return { x: p.left, y: p.top, h: host.clientHeight }
   }
   return { x: 0, y: 0, h: window.innerHeight }
 }

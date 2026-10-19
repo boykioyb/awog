@@ -1,26 +1,29 @@
 <template>
-  <div class="sef-field">
-    <label class="sef-label">{{ t('schedules.form.program') }}</label>
-    <Input v-model="program" :placeholder="t('schedules.form.programPh')" class="scf-code" />
+  <div class="flex flex-col gap-1.5">
+    <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.program') }}</Label>
+    <!-- mono-ok: đường dẫn chương trình — người dùng copy-paste vào terminal -->
+    <Input v-model="program" :placeholder="t('schedules.form.programPh')" class="font-mono" />
   </div>
-  <div class="sef-field">
-    <label class="sef-label">{{ t('schedules.form.args') }}</label>
+  <div class="flex flex-col gap-1.5">
+    <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.args') }}</Label>
     <!-- Mỗi dòng một tham số: không có shell nên không có quote/escape để đoán. -->
-    <textarea v-model="argsText" class="sef-input sef-area scf-code" />
-    <div class="sef-hint">{{ t('schedules.form.args.hint') }}</div>
+    <!-- mono-ok: tham số dòng lệnh — người dùng copy-paste vào terminal -->
+    <Textarea v-model="argsText" class="min-h-24 resize-y font-mono" />
+    <div class="text-xs text-dim">{{ t('schedules.form.args.hint') }}</div>
   </div>
-  <div class="sef-field">
-    <label class="sef-label">{{ t('schedules.form.timeout') }}</label>
-    <Input v-model.number="timeoutMinutes" type="number" min="1" max="60" class="sef-num" />
+  <div class="flex flex-col gap-1.5">
+    <Label class="text-sm font-medium text-foreground">{{ t('schedules.form.timeout') }}</Label>
+    <Input v-model.number="timeoutMinutes" type="number" min="1" max="60" class="w-28" />
   </div>
-  <div class="sef-hint">{{ t('schedules.form.command.hint') }}</div>
+  <div class="text-xs text-dim">{{ t('schedules.form.command.hint') }}</div>
 </template>
 
 <script setup lang="ts">
 // Ô nhập của job `command` trong ScheduleEditor — tách riêng cho editor khỏi phình.
-// Class `sef-*` là của ScheduleEditor (scoped style không xuyên vào đây nên khai lại
-// đúng phần dùng ở dưới).
+// Nhiều root (fragment): các field xếp thẳng vào cột flex `gap-3` của editor.
 import Input from '~/components/ui/input/Input.vue'
+import Label from '~/components/ui/label/Label.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
 
 const program = defineModel<string>('program', { required: true })
 const argsText = defineModel<string>('argsText', { required: true })
@@ -28,48 +31,3 @@ const timeoutMinutes = defineModel<number>('timeoutMinutes', { required: true })
 
 const { t } = useI18n()
 </script>
-
-<style scoped>
-/* Khai lại phần style của ScheduleEditor mà form này dùng: style scoped của cha không
-   xuyên vào con. */
-.sef-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.sef-label {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.sef-input {
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-}
-.sef-input:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
-.sef-area {
-  resize: vertical;
-  min-height: 6rem;
-}
-.sef-num {
-  width: 110px;
-}
-.sef-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.scf-code {
-  /* mono-ok: đường dẫn chương trình và tham số dòng lệnh — người dùng copy-paste vào terminal */
-  font-family: var(--code);
-}
-</style>
