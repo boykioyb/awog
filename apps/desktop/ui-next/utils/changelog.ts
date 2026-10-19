@@ -30,6 +30,36 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.43.1',
+    date: '2026-10-19',
+    highlight: {
+      en: 'The new look now reaches the last screens: file preview, Schedules and the Workbench explorer.',
+      vi: 'Giao diện mới giờ phủ nốt các màn còn lại: xem trước file, Lịch chạy và explorer của Workbench.',
+    },
+    items: [
+      {
+        kind: 'improved',
+        en: 'File preview, the Schedules page and the Workbench file tree, source control and document tabs now use the same buttons, inputs and colours as the rest of the app.',
+        vi: 'Xem trước file, trang Lịch chạy, cây file, Source Control và dải tab tài liệu của Workbench giờ dùng chung kiểu nút, ô nhập và màu với phần còn lại của app.',
+      },
+      {
+        kind: 'improved',
+        en: 'The open document tab in the Workbench is highlighted the same way as the active session tab.',
+        vi: 'Tab tài liệu đang mở trong Workbench được làm nổi giống tab phiên đang mở.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Schedule names no longer disappear in the list when a schedule has several labels.',
+        vi: 'Tên lịch không còn bị mất trong danh sách khi lịch có nhiều nhãn.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Searchable dropdowns inside dialogs (for example choosing a project when adding a Slack thread) open right under the field again instead of drifting to the corner of the window.',
+        vi: 'Dropdown có ô tìm trong hộp thoại (ví dụ chọn project khi thêm thread Slack) lại mở ngay dưới ô chọn, không còn bay xuống góc cửa sổ.',
+      },
+    ],
+  },
+  {
     version: '0.43.0',
     date: '2026-10-19',
     highlight: {
