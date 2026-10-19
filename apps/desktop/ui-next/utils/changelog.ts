@@ -30,6 +30,66 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.43.0',
+    date: '2026-10-19',
+    highlight: {
+      en: 'A cleaner, consistent look across the whole app: one set of buttons, inputs, spacing and colours everywhere, a new sidebar and title bar, and an easier-to-read session list.',
+      vi: 'Giao diện gọn và đồng bộ trên toàn app: một bộ nút, ô nhập, khoảng cách và màu dùng chung ở mọi nơi, sidebar và thanh tiêu đề mới, danh sách phiên dễ đọc hơn.',
+    },
+    items: [
+      {
+        kind: 'improved',
+        en: 'Every screen now uses the same buttons, inputs, menus, dialogs and spacing, so pages no longer look like they come from different apps.',
+        vi: 'Mọi màn hình giờ dùng chung một kiểu nút, ô nhập, menu, hộp thoại và khoảng cách, không còn mỗi trang một kiểu.',
+      },
+      {
+        kind: 'changed',
+        en: 'New navigation: a collapsible sidebar with icons, a full-width title bar with breadcrumb, and the macOS window buttons no longer cover any control.',
+        vi: 'Điều hướng mới: sidebar thu gọn về icon, thanh tiêu đề chạy hết bề ngang kèm breadcrumb, và các nút cửa sổ macOS không còn che nút nào.',
+      },
+      {
+        kind: 'changed',
+        en: 'The Cute theme is now a colour palette: same layout as the default theme, with its mint colours.',
+        vi: 'Theme Cute giờ là một bảng màu: bố cục giống theme mặc định, giữ tông màu mint.',
+      },
+      {
+        kind: 'improved',
+        en: 'Session list: grouped by Today, Yesterday, Previous 7 days and Older; each session shows its issue status as a coloured icon, with the time on the right and easier-to-read titles.',
+        vi: 'Danh sách phiên: nhóm theo Hôm nay, Hôm qua, 7 ngày qua và Cũ hơn; mỗi phiên hiện trạng thái issue bằng icon có màu, thời gian ở bên phải, tiêu đề dễ đọc hơn.',
+      },
+      {
+        kind: 'added',
+        en: 'Searching sessions also finds closed ones (click to reopen), and closed sessions can be deleted all at once.',
+        vi: 'Tìm phiên giờ tìm cả phiên đã đóng (bấm để mở lại), và xoá được tất cả phiên đã đóng trong một lần.',
+      },
+      {
+        kind: 'added',
+        en: 'Terminal snippets in the Workbench terminal, and the AI agent can now list, save, delete and run your snippets (saving, deleting and running still ask for your approval).',
+        vi: 'Snippet ngay trong terminal của Workbench, và agent AI giờ xem, lưu, xoá và chạy được snippet của bạn (lưu, xoá và chạy vẫn hỏi bạn duyệt).',
+      },
+      {
+        kind: 'added',
+        en: 'Schedules can run a program directly (no AI), with a run log and an on/off switch; the agent can propose a schedule for you to review.',
+        vi: 'Lịch chạy giờ chạy được một chương trình trực tiếp (không qua AI), có nhật ký lần chạy và công tắc bật/tắt; agent có thể đề xuất lịch để bạn duyệt.',
+      },
+      {
+        kind: 'improved',
+        en: 'Replying in a session whose issue is waiting for review moves it back to In progress automatically.',
+        vi: 'Trao đổi tiếp trong phiên có issue đang Chờ review sẽ tự chuyển issue về Đang làm.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Slash commands (/command) keep their short form in the conversation after reopening the app, instead of showing the full expanded text.',
+        vi: 'Lệnh / (slash command) giữ dạng gọn trong hội thoại sau khi mở lại app, không còn hiện nguyên văn nội dung đã mở rộng.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Session tabs no longer push the title bar buttons off screen, the active tab is clearly highlighted, and the search box expands again when focused.',
+        vi: 'Tab phiên không còn đẩy các nút trên thanh tiêu đề ra ngoài, tab đang mở được làm nổi rõ, và ô tìm kiếm lại giãn ra khi bấm vào.',
+      },
+    ],
+  },
+  {
     version: '0.42.0',
     date: '2026-10-17',
     highlight: {
